@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Dashboard - GSRA</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<header>
+    <div class="logo-slogan-container">
+        <a href="index.html" class="logo-link">
+            <img src="GSRA_Logo_ohne Hintergund.jpeg" alt="GSRA Logo" class="logo">
+        </a>
+        <div class="header-slogan">
+            <span class="text-blue">United by Speed.</span> 
+            <span class="text-yellow">Driven globally.</span>
+        </div>
+    </div>
+
+    <nav>
+        <a href="index.html">Home</a>
+        <a href="marktplatz.html">Marktplatz</a>
+        <a href="nachschlagewerk.html">Nachschlagewerk</a>
+        <a href="kalender.html">Kalender</a>
+        <a href="#" id="logoutBtn" class="login-btn">Logout</a>
+    </nav>
+</header>
+
+<main class="container">
+    <section class="hero-section">
+        <h1 class="hero-title">GSRA DASHBOARD</h1>
+        <p class="hero-subtitle">
+            <span class="text-white">Willkommen zurück: </span>
+            <span id="userEmail" class="text-yellow">Lade Benutzerdaten...</span>
+        </p>
+    </section>
+
+    <section class="card-grid">
+        <div class="card">
+            <h3>Pro-Bereich</h3>
+            <p>Zugriff auf Telemetrie-Analysen und Setup-Datenbanken.</p>
+        </div>
+        <div class="card">
+            <h3>Team-Planer</h3>
+            <p>Verwaltung von Events, Stints und internen Absprachen.</p>
+        </div>
+    </section>
+</main>
+
+<script>
+    const SUPABASE_URL = 'https://mqqyvpmddaastacldbyy.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_S0qff_7dIGbnyw33CsxwIA_qZy-9rjl';
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // Schutzmechanismus: Prüfen ob Nutzer eingeloggt ist
+    async function checkUser() {
+        const { data: { user } } = await supabaseClient.auth.getUser();
+
+        if (!user) {
+            window.location.href = 'login.html';
+        } else {
+            document.getElementById('userEmail').textContent = user.email;
+        }
+    }
+
+    // Abmelden
+    document.getElementById('logoutBtn').addEventListener('click', async (e) => {
+        e.preventDefault();
+        await supabaseClient.auth.signOut();
+        window.location.href = 'login.html';
+    });
+
+    checkUser();
+</script>
+
+</body>
+</html>

@@ -6,6 +6,8 @@
     <title>Team-Login - GSRA</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Supabase JS Client SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
@@ -29,24 +31,69 @@
     </nav>
 </header>
 
-    <main class="container">
-        <section style="max-width: 450px; margin: 40px auto; background-color: var(--gray-light); padding: 30px; border-radius: 6px; border: 1.5px solid var(--border-color);">
-            <h2 style="margin-bottom: 15px; border-left: none; padding-left: 0;">Member & Team Login</h2>
-            <p style="font-size: 14px; margin-bottom: 25px;">Exklusiver Zugang für das Team und Pro-Mitglieder zur Event-Planung und den internen Absprachen.</p>
+<main class="container">
+    <section style="max-width: 450px; margin: 40px auto; background-color: var(--bg-card); padding: 30px; border-radius: 6px; border: 1.5px solid var(--border-subtle); text-align: left;">
+        <h2 style="margin-bottom: 15px; border-bottom: 2px solid var(--gsra-blue); padding-bottom: 5px;">Member & Team Login</h2>
+        <p style="font-size: 14px; margin-bottom: 25px; color: var(--text-muted);">Exklusiver Zugang für das Team und Pro-Mitglieder zur Event-Planung und den internen Absprachen.</p>
+        
+        <form id="loginForm" style="display: flex; flex-direction: column; gap: 15px;">
+            <div>
+                <label style="display: block; font-size: 14px; font-weight: bold; margin-bottom: 5px; color: var(--text-light);">E-Mail-Adresse</label>
+                <input type="email" id="email" placeholder="name@gsra.de" required style="width: 100%; padding: 10px; background-color: var(--bg-main); border: 1px solid var(--border-subtle); border-radius: 4px; font-size: 14px; color: var(--text-light);">
+            </div>
+            <div>
+                <label style="display: block; font-size: 14px; font-weight: bold; margin-bottom: 5px; color: var(--text-light);">Passwort</label>
+                <input type="password" id="password" placeholder="••••••••" required style="width: 100%; padding: 10px; background-color: var(--bg-main); border: 1px solid var(--border-subtle); border-radius: 4px; font-size: 14px; color: var(--text-light);">
+            </div>
             
-            <form style="display: flex; flex-direction: column; gap: 15px;">
-                <div>
-                    <label style="display: block; font-size: 14px; font-weight: bold; margin-bottom: 5px; color: var(--text-dark);">E-Mail-Adresse</label>
-                    <input type="email" placeholder="name@gsra.de" style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px;">
-                </div>
-                <div>
-                    <label style="display: block; font-size: 14px; font-weight: bold; margin-bottom: 5px; color: var(--text-dark);">Passwort</label>
-                    <input type="password" placeholder="••••••••" style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px;">
-                </div>
-                <button type="submit" style="background-color: var(--accent-blue); color: var(--bg-white); border: none; padding: 12px; border-radius: 4px; font-weight: bold; font-size: 16px; cursor: pointer; margin-top: 10px;">Anmelden</button>
-            </form>
-        </section>
-    </main>
+            <button type="submit" style="background-color: var(--gsra-blue); color: var(--text-light); border: none; padding: 12px; border-radius: 4px; font-weight: bold; font-size: 16px; cursor: pointer; margin-top: 10px;">Anmelden</button>
+            <button type="button" id="signUpBtn" style="background-color: transparent; color: var(--gsra-yellow); border: 1px solid var(--gsra-yellow); padding: 10px; border-radius: 4px; font-weight: bold; font-size: 14px; cursor: pointer;">Neues Konto erstellen</button>
+        </form>
+    </section>
+</main>
+
+<script>
+    const SUPABASE_URL = 'https://mqqyvpmddaastacldbyy.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_S0qff_7dIGbnyw33CsxwIA_qZy-9rjl';
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const loginForm = document.getElementById('loginForm');
+
+    // Login-Prozess
+    loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+
+        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+
+        if (error) {
+            alert('Login fehlgeschlagen: ' + error.message);
+        } else {
+            window.location.href = 'dashboard.html';
+        }
+    });
+
+    // Registrierungs-Prozess
+    document.getElementById('signUpBtn').addEventListener('click', async () => {
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+
+        if (!email || !password) {
+            alert('Bitte gib E-Mail und Passwort ein.');
+            return;
+        }
+
+        const { data, error } = await supabaseClient.auth.signUp({ email, password });
+
+        if (error) {
+            alert('Registrierung fehlgeschlagen: ' + error.message);
+        } else {
+            alert('Konto erfolgreich erstellt! Du wirst jetzt angemeldet.');
+            window.location.href = 'dashboard.html';
+        }
+    });
+</script>
 
 </body>
 </html>
