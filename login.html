@@ -6,8 +6,9 @@
     <title>Team-Login - GSRA</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Supabase JS Client SDK -->
+    <!-- Supabase SDK & Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-client.js"></script>
 </head>
 <body>
 
@@ -53,9 +54,14 @@
 </main>
 
 <script>
-    const SUPABASE_URL = 'https://mqqyvpmddaastacldbyy.supabase.co';
-    const SUPABASE_ANON_KEY = 'sb_publishable_S0qff_7dIGbnyw33CsxwIA_qZy-9rjl';
-    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // Falls der Nutzer bereits eingeloggt ist, direkt zum Dashboard
+    async function checkSession() {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+            window.location.href = 'dashboard.html';
+        }
+    }
+    checkSession();
 
     const loginForm = document.getElementById('loginForm');
 
@@ -65,7 +71,7 @@
         const email = document.getElementById('email').value;
         const password = document.getElementById('password').value;
 
-        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
         if (error) {
             alert('Login fehlgeschlagen: ' + error.message);
@@ -84,7 +90,7 @@
             return;
         }
 
-        const { data, error } = await supabaseClient.auth.signUp({ email, password });
+        const { data, error } = await supabase.auth.signUp({ email, password });
 
         if (error) {
             alert('Registrierung fehlgeschlagen: ' + error.message);

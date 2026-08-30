@@ -6,7 +6,9 @@
     <title>User Dashboard - GSRA</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Supabase SDK & Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-client.js"></script>
 </head>
 <body>
 
@@ -52,13 +54,9 @@
 </main>
 
 <script>
-    const SUPABASE_URL = 'https://mqqyvpmddaastacldbyy.supabase.co';
-    const SUPABASE_ANON_KEY = 'sb_publishable_S0qff_7dIGbnyw33CsxwIA_qZy-9rjl';
-    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
     // Schutzmechanismus: Prüfen ob Nutzer eingeloggt ist
     async function checkUser() {
-        const { data: { user } } = await supabaseClient.auth.getUser();
+        const { data: { user } } = await supabase.auth.getUser();
 
         if (!user) {
             window.location.href = 'login.html';
@@ -70,7 +68,7 @@
     // Abmelden
     document.getElementById('logoutBtn').addEventListener('click', async (e) => {
         e.preventDefault();
-        await supabaseClient.auth.signOut();
+        await supabase.auth.signOut();
         window.location.href = 'login.html';
     });
 
