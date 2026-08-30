@@ -1,149 +1,209 @@
-<!DOCTYPE html>
+ <!DOCTYPE html>
+
 <html lang="de">
+
 <head>
+
     <meta charset="UTF-8">
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login / Registrierung | GSRA</title>
-    
+
+    <title>Team-Login - GSRA</title>
+
     <link rel="stylesheet" href="style.css">
+
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Supabase SDK zur Behebung des Button-Fehlers -->
+
+    <!-- Supabase SDK & Client -->
+
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script src="supabase-client.js"></script>
+
 </head>
+
 <body>
 
-    <header>
-        <div class="logo-slogan-container">
-            <a href="index.html" class="logo-link">
-                <img src="logo.jpg" alt="GSRA Logo" class="logo">
-            </a>
-            <span class="header-slogan text-yellow">GLOBAL SIMRACING ALLIANCE</span>
-        </div>
-        
-        <nav>
-            <a href="index.html">Home</a>
-            <a href="dashboard.html">Dashboard</a>
-            <a href="nachschlagewerk.html">Nachschlagewerk</a>
-            <a href="marktplatz.html">Marktplatz</a>
-            <a href="kalender.html">Rennkalender</a>
-            <a href="login.html" class="login-btn">Login</a>
-        </nav>
-    </header>
 
-    <div class="container">
-        
-        <div style="max-width: 450px; margin: 40px auto;" class="card">
-            
-            <!-- UMSCHALTER ZWISCHEN LOGIN UND REGISTRIERUNG -->
-            <div style="display: flex; border-bottom: 1px solid var(--border-subtle); margin-bottom: 25px;">
-                <button id="tab-login-btn" type="button" onclick="switchTab('login')" style="flex: 1; padding: 12px; background: none; border: none; color: var(--gsra-yellow); font-weight: bold; cursor: pointer; border-bottom: 2px solid var(--gsra-yellow);">LOGIN</button>
-                <button id="tab-register-btn" type="button" onclick="switchTab('register')" style="flex: 1; padding: 12px; background: none; border: none; color: var(--text-muted); font-weight: bold; cursor: pointer;">REGISTRIEREN</button>
-            </div>
 
-            <!-- ANZEIGE FÜR STATUSMELDUNGEN -->
-            <div id="auth-message" style="display: none; padding: 10px; margin-bottom: 15px; border-radius: 4px; font-size: 14px; text-align: center;"></div>
+<header>
 
-            <!-- LOGIN FORMULAR -->
-            <form id="login-form">
-                <div style="margin-bottom: 15px; text-align: left;">
-                    <label style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">E-Mail-Adresse</label>
-                    <input type="email" id="login-email" required style="width: 100%; padding: 10px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px; box-sizing: border-box;">
-                </div>
-                <div style="margin-bottom: 20px; text-align: left;">
-                    <label style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">Passwort</label>
-                    <input type="password" id="login-password" required style="width: 100%; padding: 10px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px; box-sizing: border-box;">
-                </div>
-                <button type="submit" class="login-btn" style="width: 100%; padding: 12px; cursor: pointer;">ANMELDEN</button>
-            </form>
+    <div class="logo-slogan-container">
 
-            <!-- REGISTRIERUNG FORMULAR -->
-            <form id="register-form" style="display: none;">
-                <div style="margin-bottom: 15px; text-align: left;">
-                    <label style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">Fahrerneigung / Displayname</label>
-                    <input type="text" id="register-username" placeholder="z. B. Max Mustermann" required style="width: 100%; padding: 10px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px; box-sizing: border-box;">
-                </div>
-                <div style="margin-bottom: 15px; text-align: left;">
-                    <label style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">E-Mail-Adresse</label>
-                    <input type="email" id="register-email" required style="width: 100%; padding: 10px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px; box-sizing: border-box;">
-                </div>
-                <div style="margin-bottom: 20px; text-align: left;">
-                    <label style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">Passwort (min. 6 Zeichen)</label>
-                    <input type="password" id="register-password" required style="width: 100%; padding: 10px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px; box-sizing: border-box;">
-                </div>
-                <button type="submit" class="login-btn" style="width: 100%; padding: 12px; cursor: pointer;">KONTO ERSTELLEN</button>
-            </form>
+        <a href="index.html" class="logo-link">
+
+            <img src="GSRA_Logo_ohne Hintergund.jpeg" alt="GSRA Logo" class="logo">
+
+        </a>
+
+        <div class="header-slogan">
+
+            <span class="text-blue">United by Speed.</span>
+
+            <span class="text-yellow">Driven globally.</span>
 
         </div>
 
     </div>
 
-    <script src="supabase-client.js"></script>
-    <script>
-        function showMessage(msg, isError = false) {
-            const box = document.getElementById('auth-message');
-            box.style.display = 'block';
-            box.style.background = isError ? 'rgba(255, 77, 77, 0.2)' : 'rgba(77, 255, 120, 0.2)';
-            box.style.border = isError ? '1px solid #ff4d4d' : '1px solid #4dff78';
-            box.style.color = isError ? '#ff4d4d' : '#4dff78';
-            box.textContent = msg;
+
+
+    <nav>
+
+        <a href="index.html">Home</a>
+
+        <a href="marktplatz.html">Marktplatz</a>
+
+        <a href="nachschlagewerk.html">Nachschlagewerk</a>
+
+        <a href="kalender.html">Kalender</a>
+
+        <a href="login.html" class="login-btn">Login</a>
+
+    </nav>
+
+</header>
+
+
+
+<main class="container">
+
+    <section style="max-width: 450px; margin: 40px auto; background-color: var(--bg-card); padding: 30px; border-radius: 6px; border: 1.5px solid var(--border-subtle); text-align: left;">
+
+        <h2 style="margin-bottom: 15px; border-bottom: 2px solid var(--gsra-blue); padding-bottom: 5px;">Member & Team Login</h2>
+
+        <p style="font-size: 14px; margin-bottom: 25px; color: var(--text-muted);">Exklusiver Zugang für das Team und Pro-Mitglieder zur Event-Planung und den internen Absprachen.</p>
+
+       
+
+        <form id="loginForm" style="display: flex; flex-direction: column; gap: 15px;">
+
+            <div>
+
+                <label style="display: block; font-size: 14px; font-weight: bold; margin-bottom: 5px; color: var(--text-light);">E-Mail-Adresse</label>
+
+                <input type="email" id="email" placeholder="name@gsra.de" required style="width: 100%; padding: 10px; background-color: var(--bg-main); border: 1px solid var(--border-subtle); border-radius: 4px; font-size: 14px; color: var(--text-light);">
+
+            </div>
+
+            <div>
+
+                <label style="display: block; font-size: 14px; font-weight: bold; margin-bottom: 5px; color: var(--text-light);">Passwort</label>
+
+                <input type="password" id="password" placeholder="••••••••" required style="width: 100%; padding: 10px; background-color: var(--bg-main); border: 1px solid var(--border-subtle); border-radius: 4px; font-size: 14px; color: var(--text-light);">
+
+            </div>
+
+           
+
+            <button type="submit" style="background-color: var(--gsra-blue); color: var(--text-light); border: none; padding: 12px; border-radius: 4px; font-weight: bold; font-size: 16px; cursor: pointer; margin-top: 10px;">Anmelden</button>
+
+            <button type="button" id="signUpBtn" style="background-color: transparent; color: var(--gsra-yellow); border: 1px solid var(--gsra-yellow); padding: 10px; border-radius: 4px; font-weight: bold; font-size: 14px; cursor: pointer;">Neues Konto erstellen</button>
+
+        </form>
+
+    </section>
+
+</main>
+
+
+
+<script>
+
+    // Falls der Nutzer bereits eingeloggt ist, direkt zum Dashboard
+
+    async function checkSession() {
+
+        const { data: { session } } = await supabase.auth.getSession();
+
+        if (session) {
+
+            window.location.href = 'dashboard.html';
+
         }
 
-        function switchTab(tab) {
-            document.getElementById('auth-message').style.display = 'none';
-            if (tab === 'login') {
-                document.getElementById('login-form').style.display = 'block';
-                document.getElementById('register-form').style.display = 'none';
-                document.getElementById('tab-login-btn').style.color = 'var(--gsra-yellow)';
-                document.getElementById('tab-login-btn').style.borderBottom = '2px solid var(--gsra-yellow)';
-                document.getElementById('tab-register-btn').style.color = 'var(--text-muted)';
-                document.getElementById('tab-register-btn').style.borderBottom = 'none';
-            } else {
-                document.getElementById('login-form').style.display = 'none';
-                document.getElementById('register-form').style.display = 'block';
-                document.getElementById('tab-register-btn').style.color = 'var(--gsra-yellow)';
-                document.getElementById('tab-register-btn').style.borderBottom = '2px solid var(--gsra-yellow)';
-                document.getElementById('tab-login-btn').style.color = 'var(--text-muted)';
-                document.getElementById('tab-login-btn').style.borderBottom = 'none';
-            }
+    }
+
+    checkSession();
+
+
+
+    const loginForm = document.getElementById('loginForm');
+
+
+
+    // Login-Prozess
+
+    loginForm.addEventListener('submit', async (e) => {
+
+        e.preventDefault();
+
+        const email = document.getElementById('email').value;
+
+        const password = document.getElementById('password').value;
+
+
+
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+
+
+        if (error) {
+
+            alert('Login fehlgeschlagen: ' + error.message);
+
+        } else {
+
+            window.location.href = 'dashboard.html';
+
         }
 
-        // LOGIN FUNKTION
-        document.getElementById('login-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const email = document.getElementById('login-email').value;
-            const password = document.getElementById('login-password').value;
+    });
 
-            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-            if (error) {
-                showMessage("Login fehlgeschlagen: " + error.message, true);
-            } else {
-                showMessage("Login erfolgreich! Leite weiter...", false);
-                setTimeout(() => {
-                    window.location.href = 'dashboard.html';
-                }, 1000);
-            }
-        });
 
-        // REGISTRIERUNG FUNKTION
-        document.getElementById('register-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const username = document.getElementById('register-username').value;
-            const email = document.getElementById('register-email').value;
-            const password = document.getElementById('register-password').value;
+    // Registrierungs-Prozess
 
-            const { data, error } = await supabase.auth.signUp({
-                email,
-                password,
-                options: { data: { username: username } }
-            });
+    document.getElementById('signUpBtn').addEventListener('click', async () => {
 
-            if (error) {
-                showMessage("Registrierung fehlgeschlagen: " + error.message, true);
-            } else {
-                showMessage("Registrierung erfolgreich! Bitte prüfe deine E-Mails oder melde dich an.", false);
-            }
-        });
-    </script>
+        const email = document.getElementById('email').value;
+
+        const password = document.getElementById('password').value;
+
+
+
+        if (!email || !password) {
+
+            alert('Bitte gib E-Mail und Passwort ein.');
+
+            return;
+
+        }
+
+
+
+        const { data, error } = await supabase.auth.signUp({ email, password });
+
+
+
+        if (error) {
+
+            alert('Registrierung fehlgeschlagen: ' + error.message);
+
+        } else {
+
+            alert('Konto erfolgreich erstellt! Du wirst jetzt angemeldet.');
+
+            window.location.href = 'dashboard.html';
+
+        }
+
+    });
+
+</script>
+
+
+
 </body>
+
 </html>
