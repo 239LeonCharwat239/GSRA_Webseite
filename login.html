@@ -7,7 +7,7 @@
     
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Supabase JS CDN -->
+    <!-- Supabase SDK zur Behebung des Button-Fehlers -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
@@ -36,11 +36,11 @@
             
             <!-- UMSCHALTER ZWISCHEN LOGIN UND REGISTRIERUNG -->
             <div style="display: flex; border-bottom: 1px solid var(--border-subtle); margin-bottom: 25px;">
-                <button id="tab-login-btn" onclick="switchTab('login')" style="flex: 1; padding: 12px; background: none; border: none; color: var(--gsra-yellow); font-weight: bold; cursor: pointer; border-bottom: 2px solid var(--gsra-yellow);">LOGIN</button>
-                <button id="tab-register-btn" onclick="switchTab('register')" style="flex: 1; padding: 12px; background: none; border: none; color: var(--text-muted); font-weight: bold; cursor: pointer;">REGISTRIEREN</button>
+                <button id="tab-login-btn" type="button" onclick="switchTab('login')" style="flex: 1; padding: 12px; background: none; border: none; color: var(--gsra-yellow); font-weight: bold; cursor: pointer; border-bottom: 2px solid var(--gsra-yellow);">LOGIN</button>
+                <button id="tab-register-btn" type="button" onclick="switchTab('register')" style="flex: 1; padding: 12px; background: none; border: none; color: var(--text-muted); font-weight: bold; cursor: pointer;">REGISTRIEREN</button>
             </div>
 
-            <!-- ANZEIGE FÜR FEHLER UND ERFOLGSMELDUNGEN -->
+            <!-- ANZEIGE FÜR STATUSMELDUNGEN -->
             <div id="auth-message" style="display: none; padding: 10px; margin-bottom: 15px; border-radius: 4px; font-size: 14px; text-align: center;"></div>
 
             <!-- LOGIN FORMULAR -->
@@ -107,16 +107,13 @@
             }
         }
 
-        // LOGIN SUBMIT
+        // LOGIN FUNKTION
         document.getElementById('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('login-email').value;
             const password = document.getElementById('login-password').value;
 
-            const { data, error } = await supabase.auth.signInWithPassword({
-                email,
-                password
-            });
+            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
             if (error) {
                 showMessage("Login fehlgeschlagen: " + error.message, true);
@@ -128,7 +125,7 @@
             }
         });
 
-        // REGISTRIERUNG SUBMIT
+        // REGISTRIERUNG FUNKTION
         document.getElementById('register-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const username = document.getElementById('register-username').value;
@@ -138,9 +135,7 @@
             const { data, error } = await supabase.auth.signUp({
                 email,
                 password,
-                options: {
-                    data: { username: username }
-                }
+                options: { data: { username: username } }
             });
 
             if (error) {
