@@ -3,103 +3,157 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Team-Login - GSRA</title>
+    <title>Login & Registrierung | GSRA</title>
+    
+    <!-- GSRA Master Stylesheet -->
     <link rel="stylesheet" href="style.css">
+    
+    <!-- Font Awesome für Social Media Icons & Symbole -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Supabase SDK & Client -->
+    
+    <!-- Supabase JS CDN (Wichtig für die Datenbank-Anbindung) -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="supabase-client.js"></script>
 </head>
 <body>
 
-<header>
-    <div class="logo-slogan-container">
-        <a href="index.html" class="logo-link">
-            <img src="GSRA_Logo_ohne Hintergund.jpeg" alt="GSRA Logo" class="logo">
-        </a>
-        <div class="header-slogan">
-            <span class="text-blue">United by Speed.</span> 
-            <span class="text-yellow">Driven globally.</span>
+    <!-- =========================================
+         HEADER & LOGO
+    ========================================= -->
+    <header>
+        <div class="logo-slogan-container">
+            <a href="index.html" class="logo-link">
+                <img src="logo.jpg" alt="GSRA Logo" class="logo">
+            </a>
+            <span class="header-slogan text-yellow">GLOBAL SIMRACING ALLIANCE</span>
         </div>
+        
+        <nav>
+            <a href="index.html">Home</a>
+            <a href="dashboard.html">Dashboard</a>
+            <a href="nachschlagewerk.html">Nachschlagewerk</a>
+            <a href="marktplatz.html">Marktplatz</a>
+            <a href="kalender.html">Rennkalender</a>
+            <a href="login.html" class="login-btn">Login</a>
+        </nav>
+    </header>
+
+    <!-- =========================================
+         MAIN CONTENT / AUTHENTIFIZIERUNG
+    ========================================= -->
+    <div class="container">
+        
+        <section class="hero-section">
+            <h1 class="hero-title">WILLKOMMEN BEI DER <span class="text-blue">GSRA</span></h1>
+            <p class="hero-subtitle text-yellow">Melde dich an oder erstelle ein Konto, um alle Features zu nutzen.</p>
+        </section>
+
+        <div class="card-grid" style="max-width: 900px; margin: 0 auto; align-items: start;">
+            
+            <!-- ANMELDE-FORMULAR -->
+            <div class="card">
+                <h3><i class="fa-solid fa-right-to-bracket text-blue"></i> ANMELDEN</h3>
+                <p style="font-size: 14px; margin-bottom: 20px;">Gib deine Daten ein, um dich einzuloggen.</p>
+                
+                <form id="login-form">
+                    <div style="margin-bottom: 15px; text-align: left;">
+                        <label style="color: var(--text-light); font-size: 14px; font-weight: 600;">E-Mail Adresse</label>
+                        <input type="email" id="login-email" required style="width: 100%; padding: 12px; margin-top: 5px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
+                    </div>
+                    
+                    <div style="margin-bottom: 20px; text-align: left;">
+                        <label style="color: var(--text-light); font-size: 14px; font-weight: 600;">Passwort</label>
+                        <input type="password" id="login-password" required style="width: 100%; padding: 12px; margin-top: 5px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
+                    </div>
+
+                    <button type="submit" class="login-btn" style="width: 100%; cursor: pointer;">EINLOGGEN</button>
+                </form>
+            </div>
+
+            <!-- REGISTRIERUNGS-FORMULAR -->
+            <div class="card" style="border-top-color: var(--gsra-yellow);">
+                <h3><i class="fa-solid fa-user-plus text-yellow"></i> REGISTRIEREN</h3>
+                <p style="font-size: 14px; margin-bottom: 20px;">Erstelle ein neues Konto für die GSRA Platform.</p>
+                
+                <form id="register-form">
+                    <div style="margin-bottom: 15px; text-align: left;">
+                        <label style="color: var(--text-light); font-size: 14px; font-weight: 600;">Benutzername</label>
+                        <input type="text" id="reg-username" required style="width: 100%; padding: 12px; margin-top: 5px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
+                    </div>
+
+                    <div style="margin-bottom: 15px; text-align: left;">
+                        <label style="color: var(--text-light); font-size: 14px; font-weight: 600;">Vollständiger Name</label>
+                        <input type="text" id="reg-fullname" required style="width: 100%; padding: 12px; margin-top: 5px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
+                    </div>
+
+                    <div style="margin-bottom: 15px; text-align: left;">
+                        <label style="color: var(--text-light); font-size: 14px; font-weight: 600;">E-Mail Adresse</label>
+                        <input type="email" id="reg-email" required style="width: 100%; padding: 12px; margin-top: 5px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
+                    </div>
+                    
+                    <div style="margin-bottom: 20px; text-align: left;">
+                        <label style="color: var(--text-light); font-size: 14px; font-weight: 600;">Passwort</label>
+                        <input type="password" id="reg-password" required style="width: 100%; padding: 12px; margin-top: 5px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
+                    </div>
+
+                    <button type="submit" class="login-btn" style="width: 100%; cursor: pointer;">KONTO ERSTELLEN</button>
+                </form>
+            </div>
+
+        </div>
+
     </div>
 
-    <nav>
-        <a href="index.html">Home</a>
-        <a href="marktplatz.html">Marktplatz</a>
-        <a href="nachschlagewerk.html">Nachschlagewerk</a>
-        <a href="kalender.html">Kalender</a>
-        <a href="login.html" class="login-btn">Login</a>
-    </nav>
-</header>
+    <!-- =========================================
+         SUPABASE INFRASTRUKTUR & SKRIPTE
+    ========================================= -->
+    <script src="supabase-client.js"></script>
+    
+    <script>
+        // Login-Event Listener
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
 
-<main class="container">
-    <section style="max-width: 450px; margin: 40px auto; background-color: var(--bg-card); padding: 30px; border-radius: 6px; border: 1.5px solid var(--border-subtle); text-align: left;">
-        <h2 style="margin-bottom: 15px; border-bottom: 2px solid var(--gsra-blue); padding-bottom: 5px;">Member & Team Login</h2>
-        <p style="font-size: 14px; margin-bottom: 25px; color: var(--text-muted);">Exklusiver Zugang für das Team und Pro-Mitglieder zur Event-Planung und den internen Absprachen.</p>
-        
-        <form id="loginForm" style="display: flex; flex-direction: column; gap: 15px;">
-            <div>
-                <label style="display: block; font-size: 14px; font-weight: bold; margin-bottom: 5px; color: var(--text-light);">E-Mail-Adresse</label>
-                <input type="email" id="email" placeholder="name@gsra.de" required style="width: 100%; padding: 10px; background-color: var(--bg-main); border: 1px solid var(--border-subtle); border-radius: 4px; font-size: 14px; color: var(--text-light);">
-            </div>
-            <div>
-                <label style="display: block; font-size: 14px; font-weight: bold; margin-bottom: 5px; color: var(--text-light);">Passwort</label>
-                <input type="password" id="password" placeholder="••••••••" required style="width: 100%; padding: 10px; background-color: var(--bg-main); border: 1px solid var(--border-subtle); border-radius: 4px; font-size: 14px; color: var(--text-light);">
-            </div>
-            
-            <button type="submit" style="background-color: var(--gsra-blue); color: var(--text-light); border: none; padding: 12px; border-radius: 4px; font-weight: bold; font-size: 16px; cursor: pointer; margin-top: 10px;">Anmelden</button>
-            <button type="button" id="signUpBtn" style="background-color: transparent; color: var(--gsra-yellow); border: 1px solid var(--gsra-yellow); padding: 10px; border-radius: 4px; font-weight: bold; font-size: 14px; cursor: pointer;">Neues Konto erstellen</button>
-        </form>
-    </section>
-</main>
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email: email,
+                password: password
+            });
 
-<script>
-    // Falls der Nutzer bereits eingeloggt ist, direkt zum Dashboard
-    async function checkSession() {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-            window.location.href = 'dashboard.html';
-        }
-    }
-    checkSession();
+            if (error) {
+                alert("Login-Fehler: " + error.message);
+            } else {
+                alert("Erfolgreich eingeloggt!");
+                window.location.href = "dashboard.html";
+            }
+        });
 
-    const loginForm = document.getElementById('loginForm');
+        // Registrierungs-Event Listener
+        document.getElementById('register-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('reg-username').value;
+            const fullName = document.getElementById('reg-fullname').value;
+            const email = document.getElementById('reg-email').value;
+            const password = document.getElementById('reg-password').value;
 
-    // Login-Prozess
-    loginForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const email = document.getElementById('email').value;
-        const password = document.getElementById('password').value;
+            const { data, error } = await supabase.auth.signUp({
+                email: email,
+                password: password,
+                options: {
+                    data: {
+                        username: username,
+                        full_name: fullName
+                    }
+                }
+            });
 
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-
-        if (error) {
-            alert('Login fehlgeschlagen: ' + error.message);
-        } else {
-            window.location.href = 'dashboard.html';
-        }
-    });
-
-    // Registrierungs-Prozess
-    document.getElementById('signUpBtn').addEventListener('click', async () => {
-        const email = document.getElementById('email').value;
-        const password = document.getElementById('password').value;
-
-        if (!email || !password) {
-            alert('Bitte gib E-Mail und Passwort ein.');
-            return;
-        }
-
-        const { data, error } = await supabase.auth.signUp({ email, password });
-
-        if (error) {
-            alert('Registrierung fehlgeschlagen: ' + error.message);
-        } else {
-            alert('Konto erfolgreich erstellt! Du wirst jetzt angemeldet.');
-            window.location.href = 'dashboard.html';
-        }
-    });
-</script>
-
+            if (error) {
+                alert("Registrierungs-Fehler: " + error.message);
+            } else {
+                alert("Registrierung erfolgreich! Bitte überprüfe dein E-Mail-Postfach zur Bestätigung.");
+                document.getElementById('register-form').reset();
+            }
+        });
+    </script>
 </body>
 </html>
