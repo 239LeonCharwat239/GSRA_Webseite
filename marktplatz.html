@@ -3,66 +3,189 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hardware-Marktplatz - GSRA</title>
+    <title>Marktplatz | GSRA</title>
+    
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
-<header>
-    <div class="logo-slogan-container">
-        <a href="index.html" class="logo-link">
-            <img src="GSRA_Logo_ohne Hintergund.jpeg" alt="GSRA Logo" class="logo">
-        </a>
-        <div class="header-slogan">
-            <span class="text-blue">United by Speed.</span> 
-            <span class="text-yellow">Driven globally.</span>
+    <header>
+        <div class="logo-slogan-container">
+            <a href="index.html" class="logo-link">
+                <img src="logo.jpg" alt="GSRA Logo" class="logo">
+            </a>
+            <span class="header-slogan text-yellow">GLOBAL SIMRACING ALLIANCE</span>
         </div>
+        
+        <nav>
+            <a href="index.html">Home</a>
+            <a href="dashboard.html">Dashboard</a>
+            <a href="nachschlagewerk.html">Nachschlagewerk</a>
+            <a href="marktplatz.html">Marktplatz</a>
+            <a href="kalender.html">Rennkalender</a>
+            <a href="login.html" class="login-btn">Login</a>
+        </nav>
+    </header>
+
+    <div class="container">
+        
+        <section class="hero-section">
+            <h1 class="hero-title">HARDWARE <span class="text-blue">MARKTPLATZ</span></h1>
+            <p class="hero-subtitle text-yellow">Kaufe und verkaufe SimRacing-Equipment innerhalb der Community.</p>
+        </section>
+
+        <!-- ANGEBOT ERSTELLEN FORMULAR -->
+        <div id="create-item-section" class="card" style="display: none; max-width: 800px; margin: 0 auto 40px auto; border-top-color: var(--gsra-blue); text-align: left;">
+            <h3><i class="fa-solid fa-plus-circle text-blue"></i> NEUES ANGEBOT ERSTELLEN</h3>
+            <form id="create-item-form" style="margin-top: 15px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div>
+                        <label style="color: #fff; font-size: 13px;">Titel des Angebots</label>
+                        <input type="text" id="item-title" placeholder="z.B. Fanatec DD Pro Base" required style="width: 100%; padding: 10px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
+                    </div>
+                    <div>
+                        <label style="color: #fff; font-size: 13px;">Preis (€)</label>
+                        <input type="number" step="0.01" id="item-price" placeholder="450.00" required style="width: 100%; padding: 10px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
+                    </div>
+                </div>
+                <div style="margin-top: 15px;">
+                    <label style="color: #fff; font-size: 13px;">Beschreibung & Kontaktadresse</label>
+                    <textarea id="item-description" rows="3" placeholder="Zustand des Artikels, Lieferumfang, Kontaktmöglichkeit..." required style="width: 100%; padding: 10px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;"></textarea>
+                </div>
+                <button type="submit" class="login-btn" style="margin-top: 15px; cursor: pointer;">IN DEN MARKTPLATZ STELLEN</button>
+            </form>
+        </div>
+
+        <div id="login-warning" class="card" style="text-align: center; margin-bottom: 30px; display: none;">
+            <p style="color: var(--text-muted); margin: 0;">Du musst <a href="login.html" class="text-yellow">eingeloggt sein</a>, um Angebote zu erstellen.</p>
+        </div>
+
+        <!-- MARKTPLATZ ITEMS GRID -->
+        <h2 style="text-align: left; margin-bottom: 20px;">AKTUELLE ANGEBOTE</h2>
+        <div id="marketplace-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px;">
+            <p style="color: var(--text-muted);">Lade Marktplatz-Einträge...</p>
+        </div>
+
     </div>
 
-    <nav>
-        <a href="index.html">Home</a>
-        <a href="marktplatz.html">Marktplatz</a>
-        <a href="nachschlagewerk.html">Nachschlagewerk</a>
-        <a href="kalender.html">Kalender</a>
-        <a href="login.html" class="login-btn">Login</a>
-    </nav>
-</header>
+    <script src="supabase-client.js"></script>
+    <script>
+        let currentUser = null;
+        let isAdmin = false;
 
-    <main class="container">
-        <!-- Seitenkopf -->
-        <section style="margin-bottom: 40px;">
-            <h2>Hardware-Marktplatz</h2>
-            <p>Der spezialisierte Marktplatz für Simracing-Equipment. Von Wheelbases und Pedalen bis hin zu Rigs und Lenkrädern – sicher vermittelt für die Community.</p>
-        </section>
+        async function initMarketplace() {
+            const { data: { user } } = await supabase.auth.getUser();
+            currentUser = user;
 
-        <!-- Filter- oder Aktionsleiste -->
-        <section style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; flex-wrap: wrap; gap: 15px;">
-            <div style="font-weight: bold; color: var(--text-dark);">
-                Kategorien: <span style="color: var(--accent-blue); cursor: pointer; margin-left: 10px;">Alle</span> <span style="color: #666; cursor: pointer; margin-left: 10px;">Wheelbases</span> <span style="color: #666; cursor: pointer; margin-left: 10px;">Pedale</span> <span style="color: #666; cursor: pointer; margin-left: 10px;">Lenkräder</span> <span style="color: #666; cursor: pointer; margin-left: 10px;">Rigs</span>
-            </div>
-            <div style="background-color: var(--accent-red); color: var(--bg-white); padding: 10px 20px; border-radius: 4px; font-weight: bold; cursor: pointer;">
-                + Hardware inserieren
-            </div>
-        </section>
+            if (user) {
+                document.getElementById('create-item-section').style.display = 'block';
+                
+                // Rollenprüfung für Admin-Funktionen
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('role')
+                    .eq('id', user.id)
+                    .single();
+                
+                if (profile && profile.role === 'admin') {
+                    isAdmin = true;
+                }
+            } else {
+                document.getElementById('login-warning').style.display = 'block';
+            }
 
-        <!-- Raster für Inserate -->
-        <section style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
-            <div style="background-color: var(--gray-light); padding: 20px; border-radius: 6px; border: 1.5px solid var(--border-color);">
-                <div style="font-size: 14px; color: var(--accent-blue); font-weight: bold; margin-bottom: 5px;">[Kategorie]</div>
-                <h3 style="margin-bottom: 10px; font-size: 18px; color: var(--text-dark);">[Hardware-Bezeichnung]</h3>
-                <p style="font-size: 14px; margin-bottom: 15px;">Zustand, Kompatibilität (z. B. PC / Direct Drive) und kurze Beschreibung des Equipments.</p>
-                <div style="font-weight: bold; font-size: 16px; color: var(--text-dark);">[Preis] €</div>
-            </div>
+            fetchItems();
+        }
 
-            <div style="background-color: var(--gray-light); padding: 20px; border-radius: 6px; border: 1.5px solid var(--border-color);">
-                <div style="font-size: 14px; color: var(--accent-blue); font-weight: bold; margin-bottom: 5px;">[Kategorie]</div>
-                <h3 style="margin-bottom: 10px; font-size: 18px; color: var(--text-dark);">[Hardware-Bezeichnung]</h3>
-                <p style="font-size: 14px; margin-bottom: 15px;">Zustand, Kompatibilität (z. B. PC / Direct Drive) und kurze Beschreibung des Equipments.</p>
-                <div style="font-weight: bold; font-size: 16px; color: var(--text-dark);">[Preis] €</div>
-            </div>
-        </section>
-    </main>
+        async function fetchItems() {
+            const { data, error } = await supabase
+                .from('marketplace_items')
+                .select('*')
+                .order('created_at', { ascending: false });
 
+            if (error) {
+                console.error("Fehler beim Laden:", error);
+                return;
+            }
+
+            renderItems(data);
+        }
+
+        function renderItems(items) {
+            const grid = document.getElementById('marketplace-grid');
+            grid.innerHTML = '';
+
+            if (items.length === 0) {
+                grid.innerHTML = `<p style="color: var(--text-muted); grid-column: 1/-1;">Derzeit sind keine Angebote vorhanden.</p>`;
+                return;
+            }
+
+            items.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.style.textAlign = 'left';
+                card.style.display = 'flex';
+                card.style.flexDirection = 'column';
+                card.style.justifyContent = 'space-between';
+
+                const isOwner = currentUser && currentUser.id === item.seller_id;
+                const canDelete = isOwner || isAdmin;
+
+                card.innerHTML = `
+                    <div>
+                        <div style="display: flex; justify-content: space-between; align-items: start;">
+                            <h3 style="margin: 0; color: #fff;">${item.title}</h3>
+                            <span class="text-yellow" style="font-size: 1.2rem; font-weight: bold;">${item.price.toFixed(2)} €</span>
+                        </div>
+                        <p style="color: var(--text-muted); font-size: 14px; margin-top: 15px; white-space: pre-line;">${item.description}</p>
+                    </div>
+                    <div style="margin-top: 20px; border-top: 1px solid var(--border-subtle); padding-top: 10px; display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 12px; color: var(--text-muted);">Erstellt: ${new Date(item.created_at).toLocaleDateString('de-DE')}</span>
+                        ${canDelete ? `<button onclick="deleteItem('${item.id}')" style="background: none; border: none; color: #ff4d4d; cursor: pointer;"><i class="fa-solid fa-trash"></i> Löschen</button>` : ''}
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        // Neues Angebot Absenden
+        document.getElementById('create-item-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const title = document.getElementById('item-title').value;
+            const price = parseFloat(document.getElementById('item-price').value);
+            const description = document.getElementById('item-description').value;
+
+            const { error } = await supabase.from('marketplace_items').insert([{
+                title,
+                price,
+                description,
+                seller_id: currentUser.id
+            }]);
+
+            if (error) {
+                alert("Fehler beim Erstellen: " + error.message);
+            } else {
+                alert("Angebot erfolgreich eingestellt!");
+                document.getElementById('create-item-form').reset();
+                fetchItems();
+            }
+        });
+
+        // Angebot Löschen
+        async function deleteItem(itemId) {
+            if (confirm("Möchtest du dieses Angebot wirklich löschen?")) {
+                const { error } = await supabase.from('marketplace_items').delete().eq('id', itemId);
+                if (error) {
+                    alert("Fehler beim Löschen: " + error.message);
+                } else {
+                    fetchItems();
+                }
+            }
+        }
+
+        initMarketplace();
+    </script>
 </body>
 </html>
