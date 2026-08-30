@@ -3,22 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login & Registrierung | GSRA</title>
+    <title>Login / Registrierung | GSRA</title>
     
-    <!-- GSRA Master Stylesheet -->
     <link rel="stylesheet" href="style.css">
-    
-    <!-- Font Awesome für Social Media Icons & Symbole -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- Supabase JS CDN (Wichtig für die Datenbank-Anbindung) -->
+    <!-- Supabase JS CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
-    <!-- =========================================
-         HEADER & LOGO
-    ========================================= -->
     <header>
         <div class="logo-slogan-container">
             <a href="index.html" class="logo-link">
@@ -37,121 +30,123 @@
         </nav>
     </header>
 
-    <!-- =========================================
-         MAIN CONTENT / AUTHENTIFIZIERUNG
-    ========================================= -->
     <div class="container">
         
-        <section class="hero-section">
-            <h1 class="hero-title">WILLKOMMEN BEI DER <span class="text-blue">GSRA</span></h1>
-            <p class="hero-subtitle text-yellow">Melde dich an oder erstelle ein Konto, um alle Features zu nutzen.</p>
-        </section>
-
-        <div class="card-grid" style="max-width: 900px; margin: 0 auto; align-items: start;">
+        <div style="max-width: 450px; margin: 40px auto;" class="card">
             
-            <!-- ANMELDE-FORMULAR -->
-            <div class="card">
-                <h3><i class="fa-solid fa-right-to-bracket text-blue"></i> ANMELDEN</h3>
-                <p style="font-size: 14px; margin-bottom: 20px;">Gib deine Daten ein, um dich einzuloggen.</p>
-                
-                <form id="login-form">
-                    <div style="margin-bottom: 15px; text-align: left;">
-                        <label style="color: var(--text-light); font-size: 14px; font-weight: 600;">E-Mail Adresse</label>
-                        <input type="email" id="login-email" required style="width: 100%; padding: 12px; margin-top: 5px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
-                    </div>
-                    
-                    <div style="margin-bottom: 20px; text-align: left;">
-                        <label style="color: var(--text-light); font-size: 14px; font-weight: 600;">Passwort</label>
-                        <input type="password" id="login-password" required style="width: 100%; padding: 12px; margin-top: 5px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
-                    </div>
-
-                    <button type="submit" class="login-btn" style="width: 100%; cursor: pointer;">EINLOGGEN</button>
-                </form>
+            <!-- UMSCHALTER ZWISCHEN LOGIN UND REGISTRIERUNG -->
+            <div style="display: flex; border-bottom: 1px solid var(--border-subtle); margin-bottom: 25px;">
+                <button id="tab-login-btn" onclick="switchTab('login')" style="flex: 1; padding: 12px; background: none; border: none; color: var(--gsra-yellow); font-weight: bold; cursor: pointer; border-bottom: 2px solid var(--gsra-yellow);">LOGIN</button>
+                <button id="tab-register-btn" onclick="switchTab('register')" style="flex: 1; padding: 12px; background: none; border: none; color: var(--text-muted); font-weight: bold; cursor: pointer;">REGISTRIEREN</button>
             </div>
 
-            <!-- REGISTRIERUNGS-FORMULAR -->
-            <div class="card" style="border-top-color: var(--gsra-yellow);">
-                <h3><i class="fa-solid fa-user-plus text-yellow"></i> REGISTRIEREN</h3>
-                <p style="font-size: 14px; margin-bottom: 20px;">Erstelle ein neues Konto für die GSRA Platform.</p>
-                
-                <form id="register-form">
-                    <div style="margin-bottom: 15px; text-align: left;">
-                        <label style="color: var(--text-light); font-size: 14px; font-weight: 600;">Benutzername</label>
-                        <input type="text" id="reg-username" required style="width: 100%; padding: 12px; margin-top: 5px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
-                    </div>
+            <!-- ANZEIGE FÜR FEHLER UND ERFOLGSMELDUNGEN -->
+            <div id="auth-message" style="display: none; padding: 10px; margin-bottom: 15px; border-radius: 4px; font-size: 14px; text-align: center;"></div>
 
-                    <div style="margin-bottom: 15px; text-align: left;">
-                        <label style="color: var(--text-light); font-size: 14px; font-weight: 600;">Vollständiger Name</label>
-                        <input type="text" id="reg-fullname" required style="width: 100%; padding: 12px; margin-top: 5px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
-                    </div>
+            <!-- LOGIN FORMULAR -->
+            <form id="login-form">
+                <div style="margin-bottom: 15px; text-align: left;">
+                    <label style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">E-Mail-Adresse</label>
+                    <input type="email" id="login-email" required style="width: 100%; padding: 10px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px; box-sizing: border-box;">
+                </div>
+                <div style="margin-bottom: 20px; text-align: left;">
+                    <label style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">Passwort</label>
+                    <input type="password" id="login-password" required style="width: 100%; padding: 10px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px; box-sizing: border-box;">
+                </div>
+                <button type="submit" class="login-btn" style="width: 100%; padding: 12px; cursor: pointer;">ANMELDEN</button>
+            </form>
 
-                    <div style="margin-bottom: 15px; text-align: left;">
-                        <label style="color: var(--text-light); font-size: 14px; font-weight: 600;">E-Mail Adresse</label>
-                        <input type="email" id="reg-email" required style="width: 100%; padding: 12px; margin-top: 5px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
-                    </div>
-                    
-                    <div style="margin-bottom: 20px; text-align: left;">
-                        <label style="color: var(--text-light); font-size: 14px; font-weight: 600;">Passwort</label>
-                        <input type="password" id="reg-password" required style="width: 100%; padding: 12px; margin-top: 5px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
-                    </div>
-
-                    <button type="submit" class="login-btn" style="width: 100%; cursor: pointer;">KONTO ERSTELLEN</button>
-                </form>
-            </div>
+            <!-- REGISTRIERUNG FORMULAR -->
+            <form id="register-form" style="display: none;">
+                <div style="margin-bottom: 15px; text-align: left;">
+                    <label style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">Fahrerneigung / Displayname</label>
+                    <input type="text" id="register-username" placeholder="z. B. Max Mustermann" required style="width: 100%; padding: 10px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px; box-sizing: border-box;">
+                </div>
+                <div style="margin-bottom: 15px; text-align: left;">
+                    <label style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">E-Mail-Adresse</label>
+                    <input type="email" id="register-email" required style="width: 100%; padding: 10px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px; box-sizing: border-box;">
+                </div>
+                <div style="margin-bottom: 20px; text-align: left;">
+                    <label style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">Passwort (min. 6 Zeichen)</label>
+                    <input type="password" id="register-password" required style="width: 100%; padding: 10px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px; box-sizing: border-box;">
+                </div>
+                <button type="submit" class="login-btn" style="width: 100%; padding: 12px; cursor: pointer;">KONTO ERSTELLEN</button>
+            </form>
 
         </div>
 
     </div>
 
-    <!-- =========================================
-         SUPABASE INFRASTRUKTUR & SKRIPTE
-    ========================================= -->
     <script src="supabase-client.js"></script>
-    
     <script>
-        // Login-Event Listener
+        function showMessage(msg, isError = false) {
+            const box = document.getElementById('auth-message');
+            box.style.display = 'block';
+            box.style.background = isError ? 'rgba(255, 77, 77, 0.2)' : 'rgba(77, 255, 120, 0.2)';
+            box.style.border = isError ? '1px solid #ff4d4d' : '1px solid #4dff78';
+            box.style.color = isError ? '#ff4d4d' : '#4dff78';
+            box.textContent = msg;
+        }
+
+        function switchTab(tab) {
+            document.getElementById('auth-message').style.display = 'none';
+            if (tab === 'login') {
+                document.getElementById('login-form').style.display = 'block';
+                document.getElementById('register-form').style.display = 'none';
+                document.getElementById('tab-login-btn').style.color = 'var(--gsra-yellow)';
+                document.getElementById('tab-login-btn').style.borderBottom = '2px solid var(--gsra-yellow)';
+                document.getElementById('tab-register-btn').style.color = 'var(--text-muted)';
+                document.getElementById('tab-register-btn').style.borderBottom = 'none';
+            } else {
+                document.getElementById('login-form').style.display = 'none';
+                document.getElementById('register-form').style.display = 'block';
+                document.getElementById('tab-register-btn').style.color = 'var(--gsra-yellow)';
+                document.getElementById('tab-register-btn').style.borderBottom = '2px solid var(--gsra-yellow)';
+                document.getElementById('tab-login-btn').style.color = 'var(--text-muted)';
+                document.getElementById('tab-login-btn').style.borderBottom = 'none';
+            }
+        }
+
+        // LOGIN SUBMIT
         document.getElementById('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('login-email').value;
             const password = document.getElementById('login-password').value;
 
             const { data, error } = await supabase.auth.signInWithPassword({
-                email: email,
-                password: password
+                email,
+                password
             });
 
             if (error) {
-                alert("Login-Fehler: " + error.message);
+                showMessage("Login fehlgeschlagen: " + error.message, true);
             } else {
-                alert("Erfolgreich eingeloggt!");
-                window.location.href = "dashboard.html";
+                showMessage("Login erfolgreich! Leite weiter...", false);
+                setTimeout(() => {
+                    window.location.href = 'dashboard.html';
+                }, 1000);
             }
         });
 
-        // Registrierungs-Event Listener
+        // REGISTRIERUNG SUBMIT
         document.getElementById('register-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const username = document.getElementById('reg-username').value;
-            const fullName = document.getElementById('reg-fullname').value;
-            const email = document.getElementById('reg-email').value;
-            const password = document.getElementById('reg-password').value;
+            const username = document.getElementById('register-username').value;
+            const email = document.getElementById('register-email').value;
+            const password = document.getElementById('register-password').value;
 
             const { data, error } = await supabase.auth.signUp({
-                email: email,
-                password: password,
+                email,
+                password,
                 options: {
-                    data: {
-                        username: username,
-                        full_name: fullName
-                    }
+                    data: { username: username }
                 }
             });
 
             if (error) {
-                alert("Registrierungs-Fehler: " + error.message);
+                showMessage("Registrierung fehlgeschlagen: " + error.message, true);
             } else {
-                alert("Registrierung erfolgreich! Bitte überprüfe dein E-Mail-Postfach zur Bestätigung.");
-                document.getElementById('register-form').reset();
+                showMessage("Registrierung erfolgreich! Bitte prüfe deine E-Mails oder melde dich an.", false);
             }
         });
     </script>
