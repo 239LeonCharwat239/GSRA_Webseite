@@ -342,3 +342,41 @@ p {
     transform: scale(1.2) translateY(-4px);
     filter: drop-shadow(0 0 12px rgba(145, 70, 255, 0.6)); 
 }
+
+/* Fix für Header & Navigation Alignment */
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 30px;
+    background-color: var(--bg-card, #0d1b2a);
+    border-bottom: 2px solid var(--border-subtle, #1b263b);
+}
+
+header nav {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+header nav a {
+    color: var(--text-light, #ffffff);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s;
+}
+
+header nav a:hover {
+    color: var(--gsra-yellow, #ffc107);
+}
+
+/* Standardisierter Button für Login / Logout */
+.login-btn, #logoutBtn {
+    background-color: var(--gsra-yellow, #ffc107) !important;
+    color: #111 !important;
+    padding: 8px 16px !important;
+    border-radius: 4px !important;
+    font-weight: bold !important;
+    text-decoration: none !important;
+    display: inline-block;
+}
