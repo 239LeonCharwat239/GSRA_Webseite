@@ -41,11 +41,11 @@ body {
     padding: 60px 20px;
     width: 100%;
     flex: 1;
-    text-align: center; /* Globale Zentrierung für einen sauberen Look */
+    text-align: center;
 }
 
 /* =========================================
-   FARB-KLASSEN (Exakt Blau & Gelb)
+   FARB-KLASSEN
 ========================================= */
 .text-blue {
     color: var(--gsra-blue) !important;
@@ -62,18 +62,20 @@ body {
 }
 
 /* =========================================
-   HEADER & PERFEKT ZENTRIERTES LOGO
+   HEADER & NAVIGATION (Vereinheitlicht & Bugfrei)
 ========================================= */
 header {
     background-color: #000000;
-    height: 85px; 
+    min-height: 85px; 
     display: flex;
+    justify-content: space-between;
     align-items: center;
-    padding: 0 40px;
+    padding: 10px 40px;
     border-bottom: 3px solid var(--gsra-blue);
     position: relative;
     z-index: 100;
     box-shadow: 0 4px 25px rgba(0, 0, 0, 0.9);
+    width: 100%;
 }
 
 .logo-slogan-container {
@@ -83,44 +85,38 @@ header {
 }
 
 .logo-link {
-    display: block;
+    display: flex;
+    align-items: center;
 }
 
-/* Logo exakt vertikal zentriert */
 header .logo {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    left: 40px;
-    height: 120px;
+    height: 60px; /* Stabile, einheitliche Höhe ohne Überlappen */
     width: auto;
-    z-index: 101;
-    filter: drop-shadow(0px 6px 10px rgba(0,0,0,0.8));
+    filter: drop-shadow(0px 4px 8px rgba(0,0,0,0.8));
     transition: transform 0.3s ease;
 }
 
 header .logo:hover {
-    transform: translateY(-50%) scale(1.03);
+    transform: scale(1.04);
 }
 
 /* Slogan */
 .header-slogan {
-    margin-left: 135px;
     font-size: 14px;
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 1.5px;
     white-space: nowrap;
+    display: flex;
+    flex-direction: column;
 }
 
-/* =========================================
-   NAVIGATION (Blau) & LOGIN (Gelb)
-========================================= */
+/* Navigations-Leiste */
 nav {
-    margin-left: auto; 
     display: flex;
     align-items: center;
-    gap: 28px;
+    gap: 22px;
+    flex-wrap: nowrap; /* Verhindert das Umbrechen in die zweite Zeile */
 }
 
 nav a {
@@ -130,6 +126,7 @@ nav a {
     font-size: 14px;
     text-transform: uppercase;
     letter-spacing: 1.2px;
+    white-space: nowrap;
     transition: all 0.3s ease;
     position: relative;
 }
@@ -153,29 +150,37 @@ nav a:hover::after {
     width: 100%;
 }
 
-/* Exklusiv gelber Login Button */
-.login-btn {
+/* Einheitlicher Gelber Login / Logout Button */
+.login-btn, #logoutBtn {
     color: #000000 !important;
-    background-color: var(--gsra-yellow);
-    padding: 10px 22px;
-    border-radius: 4px;
-    font-weight: 700;
-    border: 2px solid var(--gsra-yellow);
+    background-color: var(--gsra-yellow) !important;
+    padding: 9px 20px !important;
+    border-radius: 4px !important;
+    font-weight: 700 !important;
+    font-size: 14px !important;
+    text-transform: uppercase !important;
+    letter-spacing: 1px !important;
+    border: 2px solid var(--gsra-yellow) !important;
+    white-space: nowrap !important;
+    cursor: pointer !important;
+    display: inline-block !important;
+    text-decoration: none !important;
+    transition: all 0.3s ease !important;
 }
 
-.login-btn::after {
-    display: none;
+.login-btn::after, #logoutBtn::after {
+    display: none !important;
 }
 
-.login-btn:hover {
-    background-color: transparent;
+.login-btn:hover, #logoutBtn:hover {
+    background-color: transparent !important;
     color: var(--gsra-yellow) !important;
-    box-shadow: var(--yellow-glow);
+    box-shadow: var(--yellow-glow) !important;
     transform: translateY(-2px);
 }
 
 /* =========================================
-   HERO & TEXT-STYLING (Spannend & Zentriert)
+   HERO & TEXT-STYLING
 ========================================= */
 .hero-section {
     padding: 40px 0;
@@ -250,7 +255,7 @@ p {
 }
 
 /* =========================================
-   RENNKALENDER TABELLE (Clean, Ohne Beispiele)
+   RENNKALENDER TABELLE
 ========================================= */
 .event-table {
     width: 100%;
@@ -285,7 +290,7 @@ p {
 }
 
 /* =========================================
-   SOCIAL MEDIA ICONS (Original Markenfarben)
+   SOCIAL MEDIA ICONS
 ========================================= */
 .social-section {
     margin-top: 60px;
@@ -312,7 +317,6 @@ p {
     transition: all 0.3s ease;
 }
 
-/* Hover-Effekte in den echten Markenfarben */
 .icon-youtube:hover { 
     color: #FF0000 !important; 
     transform: scale(1.2) translateY(-4px);
@@ -341,42 +345,4 @@ p {
     color: #9146FF !important; 
     transform: scale(1.2) translateY(-4px);
     filter: drop-shadow(0 0 12px rgba(145, 70, 255, 0.6)); 
-}
-
-/* Fix für Header & Navigation Alignment */
-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 15px 30px;
-    background-color: var(--bg-card, #0d1b2a);
-    border-bottom: 2px solid var(--border-subtle, #1b263b);
-}
-
-header nav {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-}
-
-header nav a {
-    color: var(--text-light, #ffffff);
-    text-decoration: none;
-    font-weight: 500;
-    transition: color 0.2s;
-}
-
-header nav a:hover {
-    color: var(--gsra-yellow, #ffc107);
-}
-
-/* Standardisierter Button für Login / Logout */
-.login-btn, #logoutBtn {
-    background-color: var(--gsra-yellow, #ffc107) !important;
-    color: #111 !important;
-    padding: 8px 16px !important;
-    border-radius: 4px !important;
-    font-weight: bold !important;
-    text-decoration: none !important;
-    display: inline-block;
 }

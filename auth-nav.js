@@ -1,42 +1,40 @@
 // auth-nav.js
 window.addEventListener('load', async () => {
-    // Falls Supabase geladen ist, Session prüfen
     if (typeof supabase !== 'undefined' && supabase.auth) {
         const { data: { session } } = await supabase.auth.getSession();
         
-        // Alle Links/Buttons in der Navigation suchen, die für den Login/Logout zuständig sind
         const nav = document.querySelector('header nav');
         if (!nav) return;
 
+        // Login / Logout Tausch
         let authBtn = nav.querySelector('.login-btn, #logoutBtn, a[href="login.html"]');
 
         if (session) {
-            // Nutzer ist EINGELOGGT:
-            // 1. Dashboard-Link hinzufügen, falls nicht vorhanden
+            // Wenn eingeloggt: Dashboard anzeigen (falls noch nicht drin)
             if (!nav.querySelector('a[href="dashboard.html"]')) {
                 const dashLink = document.createElement('a');
                 dashLink.href = 'dashboard.html';
                 dashLink.textContent = 'Dashboard';
-                nav.insertBefore(dashLink, nav.lastElementChild);
+                
+                // Vor dem Login/Logout Button einfügen
+                if (authBtn) {
+                    nav.insertBefore(dashLink, authBtn);
+                } else {
+                    nav.appendChild(dashLink);
+                }
             }
 
-            // 2. Button zu "Logout" umwandeln
-            if (authBtn) {
-                authBtn.outerHTML = `<button id="logoutBtn" class="login-btn" style="background-color: var(--gsra-yellow); color: #000; border: none; padding: 8px 16px; border-radius: 4px; font-weight: bold; cursor: pointer;">Logout</button>`;
-            }
-
-            // Logout Event Listener binden
-            const newLogoutBtn = document.getElementById('logoutBtn');
-            if (newLogoutBtn) {
-                newLogoutBtn.addEventListener('click', async () => {
+            // Login-Button durch Logout ersetzen
+            if (authBtn && authBtn.id !== 'logoutBtn') {
+                const logoutBtn = document.createElement('button');
+                logoutBtn.id = 'logoutBtn';
+                logoutBtn.className = 'login-btn';
+                logoutBtn.textContent = 'Logout';
+                logoutBtn.addEventListener('click', async () => {
                     await supabase.auth.signOut();
                     window.location.href = 'index.html';
                 });
-            }
-        } else {
-            // Nutzer ist AUSGELOGGT:
-            if (authBtn && authBtn.id === 'logoutBtn') {
-                authBtn.outerHTML = `<a href="login.html" class="login-btn">Login</a>`;
+                authBtn.replaceWith(logoutBtn);
             }
         }
     }
