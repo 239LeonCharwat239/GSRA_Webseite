@@ -6,6 +6,7 @@
     <title>Team-Login - GSRA</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <!-- Supabase SDK & Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-client.js"></script>
@@ -54,12 +55,15 @@
 </main>
 
 <script>
-    document.addEventListener('DOMContentLoaded', async () => {
-        // Falls der Nutzer bereits eingeloggt ist, direkt zum Dashboard
-        if (window.supabase) {
-            const { data: { session } } = await supabase.auth.getSession();
+    window.addEventListener('load', async () => {
+        const client = window.supabase;
+
+        // Session-Prüfung
+        if (client && client.auth) {
+            const { data: { session } } = await client.auth.getSession();
             if (session) {
                 window.location.href = 'dashboard.html';
+                return;
             }
         }
 
@@ -72,7 +76,7 @@
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
 
-            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+            const { data, error } = await client.auth.signInWithPassword({ email, password });
 
             if (error) {
                 alert('Login fehlgeschlagen: ' + error.message);
@@ -91,13 +95,15 @@
                 return;
             }
 
-            const { data, error } = await supabase.auth.signUp({ email, password });
+            const { data, error } = await client.auth.signUp({ email, password });
 
             if (error) {
                 alert('Registrierung fehlgeschlagen: ' + error.message);
             } else {
-                alert('Konto erfolgreich erstellt! Du wirst jetzt angemeldet.');
-                window.location.href = 'dashboard.html';
+                alert('Konto erfolgreich erstellt! Du wirst weitergeleitet.');
+                if (data.session) {
+                    window.location.href = 'dashboard.html';
+                }
             }
         });
     });
