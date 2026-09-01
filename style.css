@@ -62,7 +62,7 @@ body {
 }
 
 /* =========================================
-   HEADER & NAVIGATION (Vereinheitlicht & Bugfrei)
+   HEADER & NAVIGATION (Logo vergrößert, Slogan einzeilig)
 ========================================= */
 header {
     background-color: #000000;
@@ -81,7 +81,7 @@ header {
 .logo-slogan-container {
     display: flex;
     align-items: center;
-    gap: 20px;
+    gap: 25px;
 }
 
 .logo-link {
@@ -90,17 +90,18 @@ header {
 }
 
 header .logo {
-    height: 60px; /* Stabile, einheitliche Höhe ohne Überlappen */
+    height: 75px; /* Vergrößert auf 75px */
     width: auto;
     filter: drop-shadow(0px 4px 8px rgba(0,0,0,0.8));
     transition: transform 0.3s ease;
+    display: block;
 }
 
 header .logo:hover {
     transform: scale(1.04);
 }
 
-/* Slogan */
+/* Slogan in einer durchgehenden Zeile */
 .header-slogan {
     font-size: 14px;
     font-weight: 800;
@@ -108,7 +109,8 @@ header .logo:hover {
     letter-spacing: 1.5px;
     white-space: nowrap;
     display: flex;
-    flex-direction: column;
+    flex-direction: row; /* Stellt den Text nebeneinander dar */
+    gap: 8px;            /* Abstand zwischen "UNITED BY SPEED." und "DRIVEN GLOBALLY." */
 }
 
 /* Navigations-Leiste */
@@ -116,7 +118,7 @@ nav {
     display: flex;
     align-items: center;
     gap: 22px;
-    flex-wrap: nowrap; /* Verhindert das Umbrechen in die zweite Zeile */
+    flex-wrap: nowrap;
 }
 
 nav a {
