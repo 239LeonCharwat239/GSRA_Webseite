@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Global Simracing Alliance - Setups</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+  <!-- Navigation -->
+  <header>
+    <nav id="main-nav">
+      <a href="index.html">Home</a>
+      <a href="kalender.html">Rennkalender</a>
+      <a href="nachschlagewerk.html">Nachschlagewerk</a>
+      <a href="setups.html" class="active">Setups</a>
+      <a href="marktplatz.html">Marktplatz</a>
+      <div id="auth-buttons"></div>
+    </nav>
+  </header>
+
+  <main class="container">
+    <h1>Setup Database</h1>
+
+    <!-- Upload Section (Nutzbar für eingeloggte User) -->
+    <section id="setup-upload-section" class="card">
+      <h2>Neues Setup hochladen</h2>
+      <form id="setup-form">
+        <div class="form-group">
+          <label for="setup-title">Titel / Name</label>
+          <input type="text" id="setup-title" placeholder="z. B. Safe Race Setup V1" required>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="setup-car">Fahrzeug</label>
+            <input type="text" id="setup-car" placeholder="z. B. Dallara F3, GT3..." required>
+          </div>
+          <div class="form-group">
+            <label for="setup-track">Strecke</label>
+            <input type="text" id="setup-track" placeholder="z. B. Spa-Francorchamps" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="setup-file">.sto Setup-Datei</label>
+          <input type="file" id="setup-file" accept=".sto" required>
+        </div>
+
+        <button type="submit" id="upload-btn" class="btn-primary">Setup veröffentlichen</button>
+      </form>
+    </section>
+
+    <hr>
+
+    <!-- Filter & Suche -->
+    <section class="filter-section">
+      <input type="text" id="search-input" placeholder="Nach Auto oder Strecke suchen...">
+    </section>
+
+    <!-- Setup Liste / Grid -->
+    <section id="setups-list" class="grid-container">
+      <!-- Dynamische Ausgabe der Setups via JS -->
+    </section>
+  </main>
+
+  <script src="supabase-client.js"></script>
+  <script src="auth-nav.js"></script>
+  <script src="setups.js"></script>
+</body>
+</html>
