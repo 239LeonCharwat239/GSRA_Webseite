@@ -1,127 +1,100 @@
 document.addEventListener('DOMContentLoaded', () => {
-  fetchSetups();
+    const uploadForm = document.getElementById('setupUploadForm');
+    const statusText = document.getElementById('uploadStatus');
+    const searchInput = document.getElementById('searchSetup');
 
-  const form = document.getElementById('setup-form');
-  if (form) {
-    form.addEventListener('submit', handleUpload);
-  }
+    if (uploadForm) {
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
+                alert('Bitte melde dich an, um Setups hochzuladen.');
+                return;
+            }
 
-  const searchInput = document.getElementById('search-input');
-  if (searchInput) {
-    searchInput.addEventListener('input', (e) => filterSetups(e.target.value));
-  }
+            const car = document.getElementById('carModel').value;
+            const track = document.getElementById('trackName').value;
+            const fileInput = document.getElementById('setupFile');
+            const file = fileInput.files[0];
+
+            if (!file) return;
+
+            statusText.style.color = '#ffcc00';
+            statusText.textContent = 'Upload läuft...';
+
+            const filePath = `${car.replaceAll(' ', '_')}_${track.replaceAll(' ', '_')}_${Date.now()}.sto`;
+
+            const { data: storageData, error: storageError } = await supabase.storage
+                .from('setups')
+                .upload(filePath, file);
+
+            if (storageError) {
+                statusText.style.color = '#ff4d4d';
+                statusText.textContent = 'Fehler beim Upload: ' + storageError.message;
+                return;
+            }
+
+            const { data: urlData } = supabase.storage.from('setups').getPublicUrl(filePath);
+
+            const { error: dbError } = await supabase
+                .from('setups')
+                .insert([
+                    { car_model: car, track_name: track, file_url: urlData.publicUrl, file_name: file.name, uploader_id: user.id }
+                ]);
+
+            if (dbError) {
+                statusText.style.color = '#ff4d4d';
+                statusText.textContent = 'Fehler beim Speichern der Daten: ' + dbError.message;
+            } else {
+                statusText.style.color = '#00ff88';
+                statusText.textContent = 'Setup erfolgreich hochgeladen!';
+                uploadForm.reset();
+                loadSetups();
+            }
+        });
+    }
+
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            const items = document.querySelectorAll('#setupList li[data-search]');
+            items.forEach(item => {
+                const match = item.getAttribute('data-search').toLowerCase().includes(query);
+                item.style.display = match ? 'flex' : 'none';
+            });
+        });
+    }
+
+    loadSetups();
 });
 
-let allSetups = [];
+async function loadSetups() {
+    const list = document.getElementById('setupList');
+    if (!list) return;
 
-// 1. Setups aus Supabase laden
-async function fetchSetups() {
-  const { data, error } = await supabase
-    .from('setups')
-    .select('*')
-    .order('created_at', { ascending: false });
+    const { data, error } = await supabase
+        .from('setups')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-  if (error) {
-    console.error('Fehler beim Laden der Setups:', error);
-    return;
-  }
+    if (error || !data) {
+        list.innerHTML = '<li style="color: #ff4d4d; text-align: center; padding: 15px;">Setups konnten nicht geladen werden.</li>';
+        return;
+    }
 
-  allSetups = data;
-  renderSetups(allSetups);
-}
+    if (data.length === 0) {
+        list.innerHTML = '<li style="color: var(--text-muted); text-align: center; padding: 15px;">Noch keine Setups hochgeladen.</li>';
+        return;
+    }
 
-// 2. Setups im Frontend rendern
-function renderSetups(setups) {
-  const list = document.getElementById('setups-list');
-  list.innerHTML = '';
-
-  if (setups.length === 0) {
-    list.innerHTML = '<p>Keine Setups vorhanden.</p>';
-    return;
-  }
-
-  setups.forEach(setup => {
-    const card = document.createElement('div');
-    card.className = 'card setup-card';
-    card.innerHTML = `
-      <h3>${escapeHtml(setup.title)}</h3>
-      <p><strong>Auto:</strong> ${escapeHtml(setup.car)}</p>
-      <p><strong>Strecke:</strong> ${escapeHtml(setup.track)}</p>
-      <a href="${setup.file_url}" download class="btn-secondary">.sto Datei herunterladen</a>
-    `;
-    list.appendChild(card);
-  });
-}
-
-// 3. Setup Upload verarbeiten
-async function handleUpload(e) {
-  e.preventDefault();
-
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    alert('Bitte melde dich an, um Setups hochzuladen.');
-    return;
-  }
-
-  const title = document.getElementById('setup-title').value;
-  const car = document.getElementById('setup-car').value;
-  const track = document.getElementById('setup-track').value;
-  const fileInput = document.getElementById('setup-file');
-  const file = fileInput.files[0];
-
-  if (!file) return;
-
-  const fileExt = file.name.split('.').pop();
-  const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-  const filePath = `user_uploads/${fileName}`;
-
-  // File in Supabase Storage hochladen
-  const { error: uploadError } = await supabase.storage
-    .from('setups')
-    .upload(filePath, file);
-
-  if (uploadError) {
-    alert('Upload fehlgeschlagen: ' + uploadError.message);
-    return;
-  }
-
-  // Öffentliche URL generieren
-  const { data: urlData } = supabase.storage
-    .from('setups')
-    .getPublicUrl(filePath);
-
-  // Eintrag in DB erstellen
-  const { error: dbError } = await supabase
-    .from('setups')
-    .insert([{
-      title,
-      car,
-      track,
-      file_url: urlData.publicUrl,
-      uploader_id: user.id
-    }]);
-
-  if (dbError) {
-    alert('Datenbankfehler: ' + dbError.message);
-  } else {
-    alert('Setup erfolgreich hochgeladen!');
-    document.getElementById('setup-form').reset();
-    fetchSetups();
-  }
-}
-
-// Hilfsfunktion gegen XSS
-function escapeHtml(str) {
-  return str.replace(/[&<>'"]/g, 
-    tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
-  );
-}
-
-// Filter-Funktion
-function filterSetups(query) {
-  const q = query.toLowerCase();
-  const filtered = allSetups.filter(s => 
-    s.car.toLowerCase().includes(q) || s.track.toLowerCase().includes(q) || s.title.toLowerCase().includes(q)
-  );
-  renderSetups(filtered);
+    list.innerHTML = data.map(item => `
+        <li data-search="${item.car_model} ${item.track_name} ${item.file_name}" style="padding: 12px 16px; background: rgba(0,0,0,0.3); margin-bottom: 8px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--border-subtle);">
+            <div>
+                <strong style="color: var(--gsra-yellow); font-size: 15px;">${item.car_model}</strong> – <span style="color: #fff; font-size: 15px;">${item.track_name}</span>
+                <br><small style="color: var(--text-muted); font-size: 12px;">${item.file_name}</small>
+            </div>
+            <a href="${item.file_url}" download class="login-btn" style="padding: 6px 12px; font-size: 12px; text-decoration: none;">Download .sto</a>
+        </li>
+    `).join('');
 }

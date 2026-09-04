@@ -1,73 +1,83 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Global Simracing Alliance - Setups</title>
-  <link rel="stylesheet" href="style.css">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setups | GSRA</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-client.js"></script>
+    <script src="auth-nav.js"></script>
 </head>
 <body>
 
-  <!-- Navigation -->
-  <header>
+<header>
+    <div class="logo-slogan-container">
+        <a href="index.html" class="logo-link">
+            <img src="GSRA_Logo_ohne Hintergund.jpeg" alt="GSRA Logo" class="logo">
+        </a>
+        <div class="header-slogan">
+            <span class="text-blue">UNITED BY SPEED.</span> 
+            <span class="text-yellow">DRIVEN GLOBALLY.</span>
+        </div>
+    </div>
+
     <nav>
-    <a href="index.html">Home</a>
-    <a href="marktplatz.html">Marktplatz</a>
-    <a href="setups.html">Setups</a>
-    <a href="nachschlagewerk.html">Nachschlagewerk</a>
-    <a href="kalender.html">Rennkalender</a>
-    <a href="login.html" class="login-btn">Login</a>
+        <a href="index.html">HOME</a>
+        <a href="marktplatz.html">MARKTPLATZ</a>
+        <a href="setups.html" class="active">SETUPS</a>
+        <a href="nachschlagewerk.html">NACHSCHLAGEWERK</a>
+        <a href="kalender.html">RENNKALENDER</a>
+        <a href="dashboard.html">DASHBOARD</a>
+        <div id="auth-buttons"></div>
     </nav>
-  </header>
+</header>
 
-  <main class="container">
-    <h1>Setup Database</h1>
-
-    <!-- Upload Section (Nutzbar für eingeloggte User) -->
-    <section id="setup-upload-section" class="card">
-      <h2>Neues Setup hochladen</h2>
-      <form id="setup-form">
-        <div class="form-group">
-          <label for="setup-title">Titel / Name</label>
-          <input type="text" id="setup-title" placeholder="z. B. Safe Race Setup V1" required>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label for="setup-car">Fahrzeug</label>
-            <input type="text" id="setup-car" placeholder="z. B. Dallara F3, GT3..." required>
-          </div>
-          <div class="form-group">
-            <label for="setup-track">Strecke</label>
-            <input type="text" id="setup-track" placeholder="z. B. Spa-Francorchamps" required>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label for="setup-file">.sto Setup-Datei</label>
-          <input type="file" id="setup-file" accept=".sto" required>
-        </div>
-
-        <button type="submit" id="upload-btn" class="btn-primary">Setup veröffentlichen</button>
-      </form>
+<div class="container">
+    <section class="hero-section">
+        <h1 class="hero-title">TELEMETRIE & <span class="text-blue">SETUPS</span></h1>
+        <p class="hero-subtitle text-yellow">Lade erprobte .sto-Dateien herunter oder teile deine eigenen Abstimmungen.</p>
     </section>
 
-    <hr>
+    <!-- UPLOAD CARD (Design wie im alten Dashboard) -->
+    <div class="card" style="max-width: 800px; margin: 0 auto 30px auto;">
+        <h3><i class="fa-solid fa-file-arrow-up text-blue"></i> .sto Setup-Datei hochladen</h3>
+        
+        <form id="setupUploadForm" style="margin-top: 20px; display: flex; flex-direction: column; gap: 15px;">
+            <div>
+                <label style="display: block; text-align: left; margin-bottom: 5px; font-size: 13px; color: var(--text-muted);">Fahrzeug (z.B. Dallara F3, GT3 EVO)</label>
+                <input type="text" id="carModel" placeholder="Fahrzeug eingeben..." required style="width: 100%; padding: 12px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
+            </div>
 
-    <!-- Filter & Suche -->
-    <section class="filter-section">
-      <input type="text" id="search-input" placeholder="Nach Auto oder Strecke suchen...">
-    </section>
+            <div>
+                <label style="display: block; text-align: left; margin-bottom: 5px; font-size: 13px; color: var(--text-muted);">Strecke (z.B. Spa-Francorchamps, Monza)</label>
+                <input type="text" id="trackName" placeholder="Strecke eingeben..." required style="width: 100%; padding: 12px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
+            </div>
 
-    <!-- Setup Liste / Grid -->
-    <section id="setups-list" class="grid-container">
-      <!-- Dynamische Ausgabe der Setups via JS -->
-    </section>
-  </main>
+            <div style="text-align: left;">
+                <label style="display: block; margin-bottom: 5px; font-size: 13px; color: var(--text-muted);">Wähle die .sto Datei aus:</label>
+                <input type="file" id="setupFile" accept=".sto" required style="width: 100%; padding: 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
+            </div>
 
-  <script src="supabase-client.js"></script>
-  <script src="auth-nav.js"></script>
-  <script src="setups.js"></script>
+            <button type="submit" class="btn-yellow" style="margin-top: 10px; padding: 12px; font-weight: bold; cursor: pointer; border: none; border-radius: 4px; background: var(--gsra-yellow); color: #000;">SETUP VERÖFFENTLICHEN</button>
+            <p id="uploadStatus" style="font-size: 14px; margin-top: 5px;"></p>
+        </form>
+    </div>
+
+    <!-- LISTE DER SETUPS (Design wie im alten Dashboard) -->
+    <div class="card" style="max-width: 800px; margin: 0 auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h3 style="margin: 0;"><i class="fa-solid fa-download text-yellow"></i> Verfügbare Team-Setups</h3>
+            <input type="text" id="searchSetup" placeholder="Suchen..." style="padding: 6px 12px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px; width: 180px;">
+        </div>
+
+        <ul id="setupList" style="list-style: none; padding: 0; margin: 0; text-align: left;">
+            <li style="color: var(--text-muted); text-align: center; padding: 15px;">Lade Setups...</li>
+        </ul>
+    </div>
+</div>
+
+<script src="setups.js"></script>
 </body>
 </html>
