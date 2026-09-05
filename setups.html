@@ -46,13 +46,38 @@
         
         <form id="setupUploadForm" style="margin-top: 20px; display: flex; flex-direction: column; gap: 15px;">
             <div>
-                <label style="display: block; text-align: left; margin-bottom: 5px; font-size: 13px; color: var(--text-muted);">Fahrzeug (z.B. Dallara F3, GT3 EVO)</label>
-                <input type="text" id="carModel" placeholder="Fahrzeug eingeben..." required style="width: 100%; padding: 12px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
+                <label style="display: block; text-align: left; margin-bottom: 5px; font-size: 13px; color: var(--text-muted);">Simulation</label>
+                <select id="simSelect" required style="width: 100%; padding: 12px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
+                    <option value="iRacing">iRacing</option>
+                    <option value="ACC">Assetto Corsa Competizione</option>
+                    <option value="Assetto Corsa">Assetto Corsa</option>
+                    <option value="Le Mans Ultimate">Le Mans Ultimate</option>
+                    <option value="Automobilista 2">Automobilista 2</option>
+                </select>
             </div>
 
             <div>
-                <label style="display: block; text-align: left; margin-bottom: 5px; font-size: 13px; color: var(--text-muted);">Strecke (z.B. Spa-Francorchamps, Monza)</label>
-                <input type="text" id="trackName" placeholder="Strecke eingeben..." required style="width: 100%; padding: 12px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
+                <label style="display: block; text-align: left; margin-bottom: 5px; font-size: 13px; color: var(--text-muted);">Fahrzeug</label>
+                <select id="carSelect" style="width: 100%; padding: 12px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
+                    <option value="Dallara F3">Dallara F3</option>
+                    <option value="GT3 EVO">GT3 EVO</option>
+                    <option value="Formula Vee">Formula Vee</option>
+                    <option value="Super Formula">Super Formula</option>
+                    <option value="CUSTOM">Sonstiges / Custom Mod...</option>
+                </select>
+                <input type="text" id="carCustomInput" placeholder="Fahrzeugname eingeben..." style="display: none; width: 100%; padding: 12px; margin-top: 8px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
+            </div>
+
+            <div>
+                <label style="display: block; text-align: left; margin-bottom: 5px; font-size: 13px; color: var(--text-muted);">Strecke</label>
+                <select id="trackSelect" style="width: 100%; padding: 12px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
+                    <option value="Spa-Francorchamps">Spa-Francorchamps</option>
+                    <option value="Monza">Monza</option>
+                    <option value="Nürburgring GP">Nürburgring GP</option>
+                    <option value="Silverstone">Silverstone</option>
+                    <option value="CUSTOM">Sonstiges / Custom Mod...</option>
+                </select>
+                <input type="text" id="trackCustomInput" placeholder="Streckenname eingeben..." style="display: none; width: 100%; padding: 12px; margin-top: 8px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
             </div>
 
             <div style="text-align: left;">
