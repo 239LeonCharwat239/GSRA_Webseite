@@ -9,6 +9,69 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-client.js"></script>
     <script src="auth-nav.js"></script>
+    <style>
+        .combo-box-container {
+            position: relative;
+            width: 100%;
+        }
+        .combo-box-input {
+            width: 100%;
+            padding: 12px;
+            background: rgba(0,0,0,0.4);
+            border: 1px solid var(--border-subtle);
+            color: #fff;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .combo-box-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            max-height: 220px;
+            overflow-y: auto;
+            background: #121620;
+            border: 1px solid var(--border-subtle);
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+            z-index: 100;
+            display: none;
+        }
+        .combo-option {
+            padding: 10px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .combo-option:hover {
+            background: rgba(255,204,0,0.15);
+            color: var(--gsra-yellow);
+        }
+        .layout-tag {
+            font-size: 11px;
+            background: rgba(255,255,255,0.1);
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: var(--text-muted);
+        }
+        .vote-btn {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border-subtle);
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: 0.2s;
+            font-size: 13px;
+        }
+        .vote-btn:hover {
+            background: rgba(255,255,255,0.2);
+        }
+        .vote-btn.like-btn:hover { color: #00ff88; border-color: #00ff88; }
+        .vote-btn.dislike-btn:hover { color: #ff4d4d; border-color: #ff4d4d; }
+    </style>
 </head>
 <body>
 
@@ -56,28 +119,20 @@
                 </select>
             </div>
 
-            <div>
-                <label style="display: block; text-align: left; margin-bottom: 5px; font-size: 13px; color: var(--text-muted);">Fahrzeug</label>
-                <select id="carSelect" style="width: 100%; padding: 12px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
-                    <option value="Dallara F3">Dallara F3</option>
-                    <option value="GT3 EVO">GT3 EVO</option>
-                    <option value="Formula Vee">Formula Vee</option>
-                    <option value="Super Formula">Super Formula</option>
-                    <option value="CUSTOM">Sonstiges / Custom Mod...</option>
-                </select>
-                <input type="text" id="carCustomInput" placeholder="Fahrzeugname eingeben..." style="display: none; width: 100%; padding: 12px; margin-top: 8px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
+            <div style="text-align: left;">
+                <label style="display: block; margin-bottom: 5px; font-size: 13px; color: var(--text-muted);">Fahrzeug</label>
+                <div class="combo-box-container">
+                    <input type="text" id="carInput" class="combo-box-input" placeholder="Fahrzeug suchen oder eingeben..." required autocomplete="off">
+                    <div id="carDropdown" class="combo-box-dropdown"></div>
+                </div>
             </div>
 
-            <div>
-                <label style="display: block; text-align: left; margin-bottom: 5px; font-size: 13px; color: var(--text-muted);">Strecke</label>
-                <select id="trackSelect" style="width: 100%; padding: 12px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
-                    <option value="Spa-Francorchamps">Spa-Francorchamps</option>
-                    <option value="Monza">Monza</option>
-                    <option value="Nürburgring GP">Nürburgring GP</option>
-                    <option value="Silverstone">Silverstone</option>
-                    <option value="CUSTOM">Sonstiges / Custom Mod...</option>
-                </select>
-                <input type="text" id="trackCustomInput" placeholder="Streckenname eingeben..." style="display: none; width: 100%; padding: 12px; margin-top: 8px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
+            <div style="text-align: left;">
+                <label style="display: block; margin-bottom: 5px; font-size: 13px; color: var(--text-muted);">Strecke & Layout</label>
+                <div class="combo-box-container">
+                    <input type="text" id="trackInput" class="combo-box-input" placeholder="Strecke oder Layout suchen..." required autocomplete="off">
+                    <div id="trackDropdown" class="combo-box-dropdown"></div>
+                </div>
             </div>
 
             <div style="text-align: left;">

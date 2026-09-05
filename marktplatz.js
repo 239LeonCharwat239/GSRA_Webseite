@@ -6,7 +6,8 @@ async function initMarketplace() {
     currentUser = user;
 
     if (user) {
-        document.getElementById('create-item-section').style.display = 'block';
+        const createSec = document.getElementById('create-item-section');
+        if (createSec) createSec.style.display = 'block';
         
         const { data: profile } = await supabase
             .from('profiles')
@@ -18,7 +19,8 @@ async function initMarketplace() {
             isAdmin = true;
         }
     } else {
-        document.getElementById('login-warning').style.display = 'block';
+        const loginWarn = document.getElementById('login-warning');
+        if (loginWarn) loginWarn.style.display = 'block';
     }
 
     fetchItems();
@@ -40,6 +42,7 @@ async function fetchItems() {
 
 function renderItems(items) {
     const grid = document.getElementById('marketplace-grid');
+    if (!grid) return;
     grid.innerHTML = '';
 
     if (items.length === 0) {
@@ -61,7 +64,6 @@ function renderItems(items) {
         const condition = item.condition || 'Keine Angabe';
         const imageUrls = item.images || [];
 
-        // Bild-Vorschau für Karte
         const coverImage = imageUrls.length > 0 
             ? `<img src="${imageUrls[0]}" style="width: 100%; height: 160px; object-fit: cover; border-radius: 6px; margin-bottom: 12px; border: 1px solid var(--border-subtle);">`
             : `<div style="width: 100%; height: 120px; background: rgba(255,255,255,0.03); display: flex; justify-content: center; align-items: center; border-radius: 6px; margin-bottom: 12px; color: var(--text-muted);"><i class="fa-solid fa-image fa-2x"></i></div>`;
@@ -87,50 +89,52 @@ function renderItems(items) {
     });
 }
 
-document.getElementById('create-item-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const title = document.getElementById('item-title').value;
-    const category = document.getElementById('item-category').value;
-    const condition = document.getElementById('item-condition').value;
-    const price = parseFloat(document.getElementById('item-price').value);
-    const description = document.getElementById('item-description').value;
-    const imageFiles = document.getElementById('item-images').files;
+const createForm = document.getElementById('create-item-form');
+if (createForm) {
+    createForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const title = document.getElementById('item-title').value;
+        const category = document.getElementById('item-category').value;
+        const condition = document.getElementById('item-condition').value;
+        const price = parseFloat(document.getElementById('item-price').value);
+        const description = document.getElementById('item-description').value;
+        const imageFiles = document.getElementById('item-images').files;
 
-    let imageUrls = [];
+        let imageUrls = [];
 
-    // Mehrere Bilder hochladen (falls ausgewählt)
-    if (imageFiles.length > 0) {
-        for (let i = 0; i < Math.min(imageFiles.length, 10); i++) {
-            const file = imageFiles[i];
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${currentUser.id}_${Date.now()}_${i}.${fileExt}`;
-            
-            const { data, error } = await supabase.storage.from('marketplace-images').upload(fileName, file);
-            if (!error) {
-                const { data: urlData } = supabase.storage.from('marketplace-images').getPublicUrl(fileName);
-                imageUrls.push(urlData.publicUrl);
+        if (imageFiles.length > 0) {
+            for (let i = 0; i < Math.min(imageFiles.length, 10); i++) {
+                const file = imageFiles[i];
+                const fileExt = file.name.split('.').pop();
+                const fileName = `${currentUser.id}_${Date.now()}_${i}.${fileExt}`;
+                
+                const { data, error } = await supabase.storage.from('marketplace-images').upload(fileName, file);
+                if (!error) {
+                    const { data: urlData } = supabase.storage.from('marketplace-images').getPublicUrl(fileName);
+                    imageUrls.push(urlData.publicUrl);
+                }
             }
         }
-    }
 
-    const { error } = await supabase.from('marketplace_items').insert([{
-        title,
-        category,
-        condition,
-        price,
-        description,
-        images: imageUrls,
-        seller_id: currentUser.id
-    }]);
+        const { error } = await supabase.from('marketplace_items').insert([{
+            title,
+            category,
+            condition,
+            price,
+            description,
+            images: imageUrls,
+            seller_id: currentUser.id
+        }]);
 
-    if (error) {
-        alert("Fehler beim Erstellen: " + error.message);
-    } else {
-        alert("Angebot erfolgreich eingestellt!");
-        document.getElementById('create-item-form').reset();
-        fetchItems();
-    }
-});
+        if (error) {
+            alert("Fehler beim Erstellen: " + error.message);
+        } else {
+            alert("Angebot erfolgreich eingestellt!");
+            createForm.reset();
+            fetchItems();
+        }
+    });
+}
 
 async function openModal(itemId) {
     const { data: item, error } = await supabase
@@ -168,11 +172,12 @@ async function openModal(itemId) {
 }
 
 function closeModal() {
-    document.getElementById('item-modal').style.display = 'none';
+    const modal = document.getElementById('item-modal');
+    if (modal) modal.style.display = 'none';
 }
 
 async function deleteItem(e, itemId) {
-    e.stopPropagation(); // Verhindert das Öffnen des Modals
+    e.stopPropagation();
     if (confirm("Möchtest du dieses Angebot wirklich löschen?")) {
         const { error } = await supabase.from('marketplace_items').delete().eq('id', itemId);
         if (error) {
