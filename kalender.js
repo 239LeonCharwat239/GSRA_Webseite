@@ -47,28 +47,14 @@ function renderEvents(events) {
         return;
     }
 
-    const now = new Date();
-
     events.forEach(ev => {
         const eventDate = new Date(ev.event_date);
-        const isUpcoming = eventDate >= now;
         
         const dateFormatted = eventDate.toLocaleString('de-DE', {
             day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
         });
 
         const row = document.createElement('tr');
-        row.style.transition = 'all 0.25s ease';
-        row.style.borderLeft = isUpcoming ? '3px solid var(--gsra-yellow)' : '3px solid transparent';
-        
-        row.addEventListener('mouseenter', () => {
-            row.style.background = 'rgba(255, 204, 0, 0.08)';
-            row.style.boxShadow = '0 0 12px rgba(0, 180, 216, 0.2)';
-        });
-        row.addEventListener('mouseleave', () => {
-            row.style.background = 'transparent';
-            row.style.boxShadow = 'none';
-        });
 
         row.innerHTML = `
             <td style="font-weight: bold; color: var(--gsra-yellow);">${dateFormatted} Uhr</td>
@@ -76,7 +62,7 @@ function renderEvents(events) {
             <td><span class="text-blue" style="font-weight: bold;">${ev.simulation}</span></td>
             <td>${ev.track}</td>
             <td>${ev.server_password ? `<code style="background: rgba(0,0,0,0.5); padding: 2px 6px; border-radius: 3px; color: #00ff88;">${ev.server_password}</code>` : '<span style="opacity: 0.5;">Kein PW</span>'}</td>
-            ${isAdmin ? `<td style="text-align: right;"><button onclick="deleteEvent('${ev.id}')" style="background: none; border: none; color: #ff4d4d; cursor: pointer;"><i class="fa-solid fa-trash"></i></button></td>` : ''}
+            ${isAdmin ? `<td style="text-align: right;"><button onclick="deleteEvent('${ev.id}')" class="btn-delete"><i class="fa-solid fa-trash-can"></i></button></td>` : ''}
         `;
         list.appendChild(row);
     });

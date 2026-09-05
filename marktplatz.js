@@ -27,17 +27,18 @@ async function initMarketplace() {
 }
 
 async function fetchItems() {
+    // Einfache direkte Abfrage ohne potenziell fehlerhafte Join-Relations
     const { data, error } = await supabase
         .from('marketplace_items')
-        .select('*, profiles(email)')
+        .select('*')
         .order('created_at', { ascending: false });
 
     if (error) {
-        console.error("Fehler beim Laden:", error);
+        console.error("Fehler beim Laden der Marktplatz-Angebote:", error);
         return;
     }
 
-    renderItems(data);
+    renderItems(data || []);
 }
 
 function renderItems(items) {
@@ -139,7 +140,7 @@ if (createForm) {
 async function openModal(itemId) {
     const { data: item, error } = await supabase
         .from('marketplace_items')
-        .select('*, profiles(email)')
+        .select('*')
         .eq('id', itemId)
         .single();
 
@@ -150,9 +151,6 @@ async function openModal(itemId) {
     document.getElementById('modal-condition').textContent = item.condition || 'Keine Angabe';
     document.getElementById('modal-price').textContent = `${Number(item.price).toFixed(2)} €`;
     document.getElementById('modal-description').textContent = item.description;
-    
-    const sellerEmail = item.profiles ? item.profiles.email : 'Unbekannt';
-    document.getElementById('modal-seller').innerHTML = `Verkäufer-E-Mail: <strong>${sellerEmail}</strong>`;
 
     const gallery = document.getElementById('modal-gallery');
     gallery.innerHTML = '';

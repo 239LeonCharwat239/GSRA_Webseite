@@ -10,6 +10,59 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-client.js"></script>
     <script src="auth-nav.js"></script>
+
+    <style>
+        /* Datums- & Uhrzeit-Eingabefeld */
+        input[type="datetime-local"] {
+            background-color: #181d28 !important;
+            border: 1px solid var(--border-subtle) !important;
+            color: #ffffff !important;
+            padding: 10px !important;
+            border-radius: 4px !important;
+            font-family: inherit;
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+
+        input[type="datetime-local"]:focus, 
+        input[type="datetime-local"]:hover {
+            border-color: var(--gsra-yellow) !important;
+            box-shadow: 0 0 8px rgba(255, 204, 0, 0.3);
+            outline: none;
+        }
+
+        /* Styling für das Kalender-Icon im Input */
+        input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+            filter: invert(1) sepia(1) saturate(5) hue-rotate(175deg);
+            cursor: pointer;
+            opacity: 0.85;
+            transition: transform 0.2s ease, opacity 0.2s ease;
+        }
+
+        input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+            opacity: 1;
+            transform: scale(1.15);
+        }
+
+        /* Mülleimer-Button mit Marktplatz-Red-Glow-Effekt */
+        .btn-delete {
+            background: rgba(255, 77, 77, 0.1);
+            border: 1px solid #ff4d4d;
+            color: #ff4d4d;
+            padding: 6px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s ease;
+        }
+
+        .btn-delete:hover {
+            background: #ff4d4d;
+            color: #ffffff;
+            box-shadow: 0 0 10px rgba(255, 77, 77, 0.6);
+            transform: translateY(-1px);
+        }
+    </style>
 </head>
 <body>
 
@@ -67,7 +120,7 @@
                     </div>
                     <div>
                         <label style="color: #fff; font-size: 13px;">Datum & Uhrzeit</label>
-                        <input type="datetime-local" id="ev-date" required style="width: 100%; padding: 10px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
+                        <input type="datetime-local" id="ev-date" required style="width: 100%;">
                     </div>
                 </div>
                 <div style="margin-top: 15px;">
