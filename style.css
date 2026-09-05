@@ -182,7 +182,7 @@ nav a:hover::after {
 }
 
 /* =========================================
-   MÜLLEIMER BUTTON & HOVER-EFFEKT
+   MÜLLEIMER BUTTON & HOVER-EFFEKT (Globale Anwendung)
 ========================================= */
 .btn-delete {
     background: transparent;
@@ -213,6 +213,144 @@ nav a:hover::after {
 
 .btn-delete:hover i {
     transform: scale(1.2) rotate(-10deg);
+}
+
+/* =========================================
+   MARKTPLATZ MODAL (DETAILS-ANZEIGE)
+========================================= */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(5px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    padding: 20px;
+}
+
+.modal-content {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-top: 4px solid var(--gsra-blue);
+    border-radius: 10px;
+    max-width: 800px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 30px;
+    position: relative;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+    text-align: left;
+}
+
+.modal-close {
+    position: absolute;
+    top: 15px;
+    right: 20px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 24px;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.modal-close:hover {
+    color: #ff4d4d;
+}
+
+.gallery-container {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+}
+
+.gallery-image {
+    height: 220px;
+    border-radius: 6px;
+    object-fit: cover;
+    border: 1px solid var(--border-subtle);
+}
+
+.marketplace-card-clickable {
+    cursor: pointer;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.marketplace-card-clickable:hover {
+    transform: translateY(-4px);
+    border-color: var(--gsra-blue);
+}
+
+/* =========================================
+   DYNAMISCHE DURCHSUCHBARE DROPDOWNS & LAYOUTS
+========================================= */
+.searchable-select {
+    position: relative;
+}
+
+.searchable-select input {
+    width: 100%;
+    padding: 10px;
+    background: #0b0c10;
+    border: 1px solid var(--border-subtle);
+    color: #fff;
+    border-radius: 4px;
+}
+
+.select-options-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    max-height: 220px;
+    overflow-y: auto;
+    background: #15161a;
+    border: 1px solid var(--gsra-blue);
+    border-radius: 0 0 6px 6px;
+    z-index: 100;
+    display: none;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.8);
+}
+
+.select-option-item {
+    padding: 10px 14px;
+    cursor: pointer;
+    color: #fff;
+    font-size: 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background 0.2s ease;
+}
+
+.select-option-item:hover {
+    background: var(--gsra-blue);
+}
+
+/* Sub-Badge für Strecken-Layouts */
+.select-option-layout {
+    font-size: 11px;
+    background: rgba(255, 204, 0, 0.15);
+    color: var(--gsra-yellow);
+    padding: 2px 7px;
+    border-radius: 3px;
+    font-weight: 600;
+    border: 1px solid rgba(255, 204, 0, 0.3);
+}
+
+.select-option-item:hover .select-option-layout {
+    background: #ffffff;
+    color: #000000;
+    border-color: #ffffff;
 }
 
 /* =========================================
