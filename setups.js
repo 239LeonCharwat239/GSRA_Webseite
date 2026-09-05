@@ -1,6 +1,83 @@
 let currentUser = null;
 let isAdmin = false;
 
+// iRacing Daten-Listen
+const iracingData = {
+    tracks: [
+        "Acura Grand Prix of Long Beach", "Atlanta Motor Speedway", "Auto Club Speedway", 
+        "Autodromo Internazionale Enzo e Dino Ferrari (Imola)", "Autódromo José Carlos Pace (Interlagos)", 
+        "Autodromo Nazionale di Monza", "Barber Motorsports Park", "Bark River International Raceway", 
+        "Brands Hatch Circuit", "Bristol Motor Speedway", "Canadian Tire Motorsport Park (Mosport)", 
+        "Cedar Lake Speedway", "Chicagoland Speedway", "Chicago Street Course", "Chili Bowl", 
+        "Circuit de Barcelona-Catalunya", "Circuit de Lédenon", "Circuit de Nevers Magny-Cours", 
+        "Circuit de Spa-Francorchamps", "Circuit des 24 Heures du Mans", "Circuit Gilles Villeneuve", 
+        "Circuit of the Americas", "Circuito de Jerez - Ángel Nieto", "Circuito de Navarra", 
+        "CM.com Circuit Zandvoort", "Circuit Zolder", "Crandon International Off-Road Raceway", 
+        "Darlington Raceway", "Daytona International Speedway", "Detroit Grand Prix at Belle Isle", 
+        "Donington Park Racing Circuit", "Eldora Speedway", "Fairbury Speedway", 
+        "Federated Auto Parts Raceway at I-55", "Fuji International Speedway", 
+        "Hockenheimring Baden-Württemberg", "Homestead-Miami Speedway", "Hungaroring", 
+        "Huset's Speedway", "Indianapolis Motor Speedway", "Iowa Speedway", "iRacing Superspeedway", 
+        "Irwindale Speedway & Event Center", "Kansas Speedway", "Kentucky Speedway", 
+        "Kevin Harvick's Kern Raceway", "Knockhill Racing Circuit", "Kokomo Speedway", 
+        "Lånkebanen (Hell RX)", "Las Vegas Motor Speedway", "Lernerville Speedway", 
+        "Limaland Motorsports Park", "Lime Rock Park", "Lincoln Speedway", 
+        "Lucas Oil Indianapolis Raceway Park", "Lucas Oil Speedway", "Martinsville Speedway", 
+        "Michelin Raceway Road Atlanta", "Michigan International Speedway", "Mid-Ohio Sports Car Course", 
+        "Millbridge Speedway", "MotorLand Aragón", "Motorsport Arena Oschersleben", 
+        "Mount Panorama Motor Racing Circuit (Bathurst)", "Mount Washington Auto Road", 
+        "Myrtle Beach Speedway", "Nashville Fairgrounds Speedway", "Nashville Superspeedway", 
+        "New Hampshire Motor Speedway", "New Jersey Motorsports Park", "North Wilkesboro Speedway", 
+        "Nürburgring (Combined / Grand-Prix-Strecke / Nordschleife)", "Okayama International Circuit", 
+        "Oran Park Raceway", "Oswego Speedway", "Oulton Park Circuit", "Phillip Island Circuit", 
+        "Phoenix Raceway", "Pocono Raceway", "Port Royal Speedway", "Red Bull Ring", 
+        "Richmond Raceway", "Road America", "Rockingham Speedway", "Rudskogen Motorsenter", 
+        "Sandown International Motor Raceway", "Sebring International Raceway", "Snetterton Circuit", 
+        "Sonoma Raceway", "Southern Ohio Speedway", "Slinger Speedway", "Stafford Motor Speedway", 
+        "Subida al Pikes Peak", "Talladega Superspeedway", "Texas Motor Speedway", "The Bullring", 
+        "The Dirt Track at Charlotte", "The Milwaukee Mile", "Thompson Speedway Motorsports Park", 
+        "Tsukuba Circuit", "Twin Ring Motegi", "USA International Speedway", "Volusia Speedway Park", 
+        "Watkins Glen International", "Weedsport Speedway", "Wild Horse Pass Motorsports Park", 
+        "Wild West Motorsports Park", "Williams Grove Speedway", "World Wide Technology Raceway at Gateway", 
+        "Winton Motor Raceway"
+    ],
+    cars: [
+        "1987 NASCAR Buick LeSabre", "1987 NASCAR Chevrolet Monte Carlo", "1987 NASCAR Ford Thunderbird", 
+        "Acura ARX-06 GTP", "Acura NSX GT3 EVO 22", "Aston Martin DBR9 GT1", 
+        "Aston Martin Vantage GT3 / GT3 EVO", "Aston Martin Vantage GT4", "Audi 90 GTO", 
+        "Audi R8 LMS EVO II GT3", "Audi R18 e-tron quattro", "Audi RS 3 LMS TCR / Gen2 TCR", 
+        "BMW M Hybrid V8", "BMW M2 CS Racing / M2 Racing (G87)", "BMW M4 GT3 / GT3 EVO", 
+        "BMW M4 GT4", "BMW M8 GTE", "BMW Z4 GT3", "Cadillac CTS-V Racecar", "Cadillac V-Series.R GTP", 
+        "Chevrolet Corvette C6.R GT1", "Chevrolet Corvette C7 Daytona Prototype", "Chevrolet Corvette C8.R GTE", 
+        "Chevrolet Corvette Z06 GT3.R", "Dallara F3", "Dallara iR-01", "Dallara iR-02 / Formula iR", 
+        "Dallara IR18 (IndyCar)", "Dallara P217 LMP2", "Dirt 358 Small Block Modified", 
+        "Dirt Big Block Modified", "Dirt Late Model (Pro / Super)", "Dirt Midget", 
+        "Dirt Outlaw Micro Sprint (Winged / Non-Winged)", "Dirt Sprint Car (410 / 360 / 305)", 
+        "Dirt Street Stock", "Dirt UMP Modified", "Ferrari 296 GT3", "Ferrari 488 GT3 Evo 2020", 
+        "Ferrari 488 GTE", "FIA Cross Car", "Ford Fiesta RS WRC", "Ford GT GT2 / GT3", "Ford GT GTE", 
+        "Ford Mustang FR500S", "Ford Mustang GT3", "Ford Mustang Supercar", "Formula Vee", 
+        "Global Mazda MX-5 Cup", "Honda Civic Type R TCR", "Honda Performance Development ARX-01c", 
+        "Hyundai Elantra N TCR", "Hyundai Veloster N TCR", "Indigo / Super Late Model", "HPD ARX-01c", 
+        "Kia Optima", "Lamborghini Huracán GT3 EVO", "Legends Ford '34 Coupe", "Ligier JS P320", 
+        "Lotus 49", "Lotus 79", "Lucas Oil Off Road Pro 2 / Pro 2 Lite / Pro 4", "Mazda MX-5 Roadster / Cup", 
+        "McLaren 570S GT4", "McLaren 720S GT3 EVO", "McLaren MP4-12C GT3", "McLaren MP4-30", 
+        "Mercedes-AMG GT3 / GT3 EVO", "Mercedes-AMG GT4", "Mercedes-AMG W12 E Performance", 
+        "Mercedes-AMG W13 E Performance", "Mini Stock / Mini Stock Dirt", "NASCAR ARCA Menards Series Car", 
+        "NASCAR Cup Series Chevrolet Camaro ZL1", "NASCAR Cup Series Ford Mustang Dark Horse", 
+        "NASCAR Cup Series Toyota Camry XSE", "NASCAR Late Model Stock Car", 
+        "NASCAR Modified / Whelen Tour Modified", 
+        "NASCAR Truck Series Chevrolet Silverado / Ford F-150 / Toyota Tundra", 
+        "NASCAR Xfinity Series Chevrolet Camaro / Ford Mustang / Toyota Supra", "Nissan GTP ZX-T", 
+        "Nissan R92CP", "Pontiac Solstice Club Sport", "Porsche 718 Cayman GT4 Clubsport", 
+        "Porsche 911 GT3 Cup (991.2 & 992)", "Porsche 911 GT3 R (992)", "Porsche 911 RSR", 
+        "Porsche 919 Hybrid", "Porsche 963 GTP", "Porsche Mission R", "Radical SR8 V8 / SR10", 
+        "Ray FF1600 (Formula Ford)", "Renault Clio Cup", "SRX (Superstar Racing Experience)", 
+        "SCCA Spec Racer Ford", "Skip Barber Formula 2000", "Stock Car Pro Series Chevrolet Cruze / Toyota Corolla", 
+        "Subaru WRX STI Rallycross", "Supercars Holden ZB Commodore / Ford Mustang", "Toyota GR86", 
+        "Ultra / Street Stock", "Volkswagen Beetle / Beetle Lite", "Volkswagen Jetta TDI", "Williams FW31"
+    ]
+};
+
 document.addEventListener('DOMContentLoaded', async () => {
     const uploadForm = document.getElementById('setupUploadForm');
     const statusText = document.getElementById('uploadStatus');
@@ -26,17 +103,28 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    function updateDropdownsForSim(simName) {
+        if (!carSelect || !trackSelect) return;
+
+        if (simName === 'iRacing') {
+            carSelect.innerHTML = iracingData.cars.map(c => `<option value="${c}">${c}</option>`).join('') + '<option value="CUSTOM">-- Manuell eingeben --</option>';
+            trackSelect.innerHTML = iracingData.tracks.map(t => `<option value="${t}">${t}</option>`).join('') + '<option value="CUSTOM">-- Manuell eingeben --</option>';
+            
+            carCustomInput.style.display = 'none';
+            trackCustomInput.style.display = 'none';
+        } else {
+            carSelect.innerHTML = '<option value="CUSTOM">-- Freie Eingabe --</option>';
+            trackSelect.innerHTML = '<option value="CUSTOM">-- Freie Eingabe --</option>';
+            
+            carCustomInput.style.display = 'block';
+            trackCustomInput.style.display = 'block';
+        }
+    }
+
     if (simSelect) {
+        updateDropdownsForSim(simSelect.value);
         simSelect.addEventListener('change', (e) => {
-            if (e.target.value === 'Assetto Corsa') {
-                carSelect.value = 'CUSTOM';
-                carCustomInput.style.display = 'block';
-                trackSelect.value = 'CUSTOM';
-                trackCustomInput.style.display = 'block';
-            } else {
-                carCustomInput.style.display = carSelect.value === 'CUSTOM' ? 'block' : 'none';
-                trackCustomInput.style.display = trackSelect.value === 'CUSTOM' ? 'block' : 'none';
-            }
+            updateDropdownsForSim(e.target.value);
         });
     }
 
@@ -111,8 +199,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 statusText.style.color = '#00ff88';
                 statusText.textContent = 'Setup erfolgreich hochgeladen!';
                 uploadForm.reset();
-                carCustomInput.style.display = 'none';
-                trackCustomInput.style.display = 'none';
+                updateDropdownsForSim(simSelect.value);
                 loadSetups();
             }
         });
@@ -171,7 +258,7 @@ async function loadSetups() {
                         <button onclick="voteSetup('${item.id}', 'dislike')" style="background: none; border: none; color: #ff4d4d; cursor: pointer;"><i class="fa-solid fa-thumbs-down"></i> ${dislikes}</button>
                     </div>
                     <a href="${item.file_url}" download class="login-btn" style="padding: 6px 12px; font-size: 12px; text-decoration: none;">Download .sto</a>
-                    ${canDelete ? `<button onclick="deleteSetup('${item.id}')" style="background: none; border: none; color: #ff4d4d; cursor: pointer; margin-left: 5px;"><i class="fa-solid fa-trash"></i></button>` : ''}
+                    ${canDelete ? `<button onclick="deleteSetup('${item.id}')" class="btn-delete"><i class="fa-solid fa-trash-can"></i></button>` : ''}
                 </div>
             </li>
         `;
@@ -210,3 +297,5 @@ async function deleteSetup(setupId) {
         }
     }
 }
+
+loadSetups();

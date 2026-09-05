@@ -58,12 +58,14 @@ function renderItems(items) {
         const isOwner = currentUser && currentUser.id === item.seller_id;
         const canDelete = isOwner || isAdmin;
         const category = item.category || 'Hardware';
+        const condition = item.condition || 'Keine Angabe';
 
         card.innerHTML = `
             <div>
                 <div style="display: flex; justify-content: space-between; align-items: start;">
                     <div>
                         <span style="font-size: 11px; background: var(--gsra-blue); color: #fff; padding: 2px 6px; border-radius: 3px; font-weight: bold;">${category}</span>
+                        <span style="font-size: 11px; background: rgba(255,255,255,0.1); color: var(--gsra-yellow); padding: 2px 6px; border-radius: 3px; font-weight: bold; margin-left: 4px;">${condition}</span>
                         <h3 style="margin: 5px 0 0 0; color: #fff;">${item.title}</h3>
                     </div>
                     <span class="text-yellow" style="font-size: 1.2rem; font-weight: bold;">${Number(item.price).toFixed(2)} €</span>
@@ -72,7 +74,7 @@ function renderItems(items) {
             </div>
             <div style="margin-top: 20px; border-top: 1px solid var(--border-subtle); padding-top: 10px; display: flex; justify-content: space-between; align-items: center;">
                 <span style="font-size: 12px; color: var(--text-muted);">Erstellt: ${new Date(item.created_at).toLocaleDateString('de-DE')}</span>
-                ${canDelete ? `<button onclick="deleteItem('${item.id}')" style="background: none; border: none; color: #ff4d4d; cursor: pointer;"><i class="fa-solid fa-trash"></i> Löschen</button>` : ''}
+                ${canDelete ? `<button onclick="deleteItem('${item.id}')" class="btn-delete"><i class="fa-solid fa-trash-can"></i> Löschen</button>` : ''}
             </div>
         `;
         grid.appendChild(card);
@@ -83,12 +85,14 @@ document.getElementById('create-item-form').addEventListener('submit', async (e)
     e.preventDefault();
     const title = document.getElementById('item-title').value;
     const category = document.getElementById('item-category').value;
+    const condition = document.getElementById('item-condition').value;
     const price = parseFloat(document.getElementById('item-price').value);
     const description = document.getElementById('item-description').value;
 
     const { error } = await supabase.from('marketplace_items').insert([{
         title,
         category,
+        condition,
         price,
         description,
         seller_id: currentUser.id

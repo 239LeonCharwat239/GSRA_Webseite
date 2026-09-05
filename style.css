@@ -38,7 +38,7 @@ body {
 .container {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 60px 20px;
+    padding: 120px 20px 60px 20px; /* Abstands-Anpassung wegen sticky Header */
     width: 100%;
     flex: 1;
     text-align: center;
@@ -62,7 +62,7 @@ body {
 }
 
 /* =========================================
-   HEADER & NAVIGATION (Logo vergrößert, Slogan einzeilig)
+   HEADER & NAVIGATION (Fixiert am oberen Bildschirmrand)
 ========================================= */
 header {
     background-color: #000000;
@@ -72,8 +72,11 @@ header {
     align-items: center;
     padding: 10px 40px;
     border-bottom: 3px solid var(--gsra-blue);
-    position: relative;
-    z-index: 100;
+    position: fixed; /* Fixierung oben */
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
     box-shadow: 0 4px 25px rgba(0, 0, 0, 0.9);
     width: 100%;
 }
@@ -90,7 +93,7 @@ header {
 }
 
 header .logo {
-    height: 75px; /* Vergrößert auf 75px */
+    height: 75px;
     width: auto;
     filter: drop-shadow(0px 4px 8px rgba(0,0,0,0.8));
     transition: transform 0.3s ease;
@@ -101,7 +104,6 @@ header .logo:hover {
     transform: scale(1.04);
 }
 
-/* Slogan in einer durchgehenden Zeile */
 .header-slogan {
     font-size: 14px;
     font-weight: 800;
@@ -109,11 +111,10 @@ header .logo:hover {
     letter-spacing: 1.5px;
     white-space: nowrap;
     display: flex;
-    flex-direction: row; /* Stellt den Text nebeneinander dar */
-    gap: 8px;            /* Abstand zwischen "UNITED BY SPEED." und "DRIVEN GLOBALLY." */
+    flex-direction: row;
+    gap: 8px;
 }
 
-/* Navigations-Leiste */
 nav {
     display: flex;
     align-items: center;
@@ -152,7 +153,6 @@ nav a:hover::after {
     width: 100%;
 }
 
-/* Einheitlicher Gelber Login / Logout Button */
 .login-btn, #logoutBtn {
     color: #000000 !important;
     background-color: var(--gsra-yellow) !important;
@@ -179,6 +179,40 @@ nav a:hover::after {
     color: var(--gsra-yellow) !important;
     box-shadow: var(--yellow-glow) !important;
     transform: translateY(-2px);
+}
+
+/* =========================================
+   MÜLLEIMER BUTTON & HOVER-EFFEKT
+========================================= */
+.btn-delete {
+    background: transparent;
+    border: 1px solid rgba(255, 77, 77, 0.3);
+    color: #ff4d4d;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.25s ease;
+}
+
+.btn-delete i {
+    transition: transform 0.25s ease;
+}
+
+.btn-delete:hover {
+    background: rgba(255, 77, 77, 0.15);
+    border-color: #ff4d4d;
+    color: #ff6b6b;
+    box-shadow: 0 0 10px rgba(255, 77, 77, 0.3);
+    transform: translateY(-1px);
+}
+
+.btn-delete:hover i {
+    transform: scale(1.2) rotate(-10deg);
 }
 
 /* =========================================
@@ -225,7 +259,7 @@ p {
 }
 
 /* =========================================
-   CARDS (Für Marktplatz, Nachschlagewerk)
+   CARDS
 ========================================= */
 .card-grid {
     display: grid;
