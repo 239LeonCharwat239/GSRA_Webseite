@@ -1,209 +1,180 @@
-let currentUser = null;
-let isAdmin = false;
+document.addEventListener('DOMContentLoaded', async () => {
+    await loadMarketplaceItems();
 
-async function initMarketplace() {
-    const { data: { user } } = await supabase.auth.getUser();
-    currentUser = user;
-
-    if (user) {
-        const createSec = document.getElementById('create-item-section');
-        if (createSec) createSec.style.display = 'block';
-        
-        const { data: profile } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', user.id)
-            .single();
-        
-        if (profile && profile.role === 'admin') {
-            isAdmin = true;
-        }
-    } else {
-        const loginWarn = document.getElementById('login-warning');
-        if (loginWarn) loginWarn.style.display = 'block';
+    const form = document.getElementById('create-item-form');
+    if (form) {
+        form.addEventListener('submit', handleCreateItem);
     }
+});
 
-    fetchItems();
-}
+async function loadMarketplaceItems() {
+    const grid = document.getElementById('marketplace-grid');
+    if (!grid) return;
 
-async function fetchItems() {
-    const { data, error } = await supabase
-        .from('marketplace_items')
+    const { data: items, error } = await supabaseClient
+        .from('marketplace')
         .select('*')
         .order('created_at', { ascending: false });
 
     if (error) {
-        console.error("Fehler beim Laden der Marktplatz-Angebote:", error);
+        console.error('Fehler beim Laden:', error);
+        grid.innerHTML = '<p style="color: #ff4d4d;">Fehler beim Laden der Angebote.</p>';
         return;
     }
 
-    renderItems(data || []);
-}
+    if (!items || items.length === 0) {
+        grid.innerHTML = '<p style="color: var(--text-muted);">Aktuell keine Angebote verfügbar.</p>';
+        return;
+    }
 
-function renderItems(items) {
-    const grid = document.getElementById('marketplace-grid');
-    if (!grid) return;
     grid.innerHTML = '';
 
-    if (items.length === 0) {
-        grid.innerHTML = `<p style="color: var(--text-muted); grid-column: 1/-1;">Derzeit sind keine Angebote vorhanden.</p>`;
-        return;
-    }
-
     items.forEach(item => {
+        let imageUrl = 'https://via.placeholder.com/300x200?text=Kein+Bild';
+        
+        let images = item.images || item.image_urls;
+        if (typeof images === 'string') {
+            try { images = JSON.parse(images); } catch(e) { images = [images]; }
+        }
+
+        if (Array.isArray(images) && images.length > 0 && images[0]) {
+            imageUrl = images[0];
+        }
+
         const card = document.createElement('div');
         card.className = 'card marketplace-card-clickable';
-        card.style.textAlign = 'left';
-        card.style.display = 'flex';
-        card.style.flexDirection = 'column';
-        card.style.justifyContent = 'space-between';
-
-        const isOwner = currentUser && currentUser.id === item.seller_id;
-        const canDelete = isOwner || isAdmin;
-        const category = item.category || 'Hardware';
-        const condition = item.condition || 'Keine Angabe';
-        const imageUrls = item.images || [];
-
-        const coverImage = imageUrls.length > 0 
-            ? `<img src="${imageUrls[0]}" style="width: 100%; height: 160px; object-fit: cover; border-radius: 6px; margin-bottom: 12px; border: 1px solid var(--border-subtle);">`
-            : `<div style="width: 100%; height: 120px; background: rgba(255,255,255,0.03); display: flex; justify-content: center; align-items: center; border-radius: 6px; margin-bottom: 12px; color: var(--text-muted);"><i class="fa-solid fa-image fa-2x"></i></div>`;
+        card.onclick = () => openItemModal(item);
 
         card.innerHTML = `
-            <div onclick="openModal('${item.id}')" style="cursor: pointer;">
-                ${coverImage}
-                <div style="display: flex; justify-content: space-between; align-items: start;">
-                    <div>
-                        <span style="font-size: 11px; background: var(--gsra-blue); color: #fff; padding: 2px 6px; border-radius: 3px; font-weight: bold;">${category}</span>
-                        <span style="font-size: 11px; background: rgba(255,255,255,0.1); color: var(--gsra-yellow); padding: 2px 6px; border-radius: 3px; font-weight: bold; margin-left: 4px;">${condition}</span>
-                        <h3 style="margin: 5px 0 0 0; color: #fff;">${item.title}</h3>
-                    </div>
-                    <span class="text-yellow" style="font-size: 1.2rem; font-weight: bold;">${Number(item.price).toFixed(2)} €</span>
-                </div>
+            <div style="height: 180px; overflow: hidden; border-radius: 6px; margin-bottom: 12px; background: #000;">
+                <img src="${imageUrl}" alt="${item.title}" style="width: 100%; height: 100%; object-fit: cover;">
             </div>
-            <div style="margin-top: 20px; border-top: 1px solid var(--border-subtle); padding-top: 10px; display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-size: 12px; color: var(--text-muted);">Erstellt: ${new Date(item.created_at).toLocaleDateString('de-DE')}</span>
-                ${canDelete ? `<button onclick="deleteItem(event, '${item.id}')" class="btn-delete"><i class="fa-solid fa-trash-can"></i> Löschen</button>` : ''}
-            </div>
+            <span style="font-size: 11px; background: var(--gsra-blue); color: #fff; padding: 2px 6px; border-radius: 3px; font-weight: bold;">${item.category || 'Hardware'}</span>
+            <h3 style="margin: 8px 0 4px 0; font-size: 18px; color: #fff;">${item.title}</h3>
+            <p style="color: var(--gsra-yellow); font-size: 20px; font-weight: bold; margin-bottom: 8px;">${item.price ? item.price + ' €' : 'VB'}</p>
+            <p style="font-size: 12px; color: var(--text-muted); margin: 0;">Zustand: ${item.condition || 'Gebraucht'}</p>
         `;
+
         grid.appendChild(card);
     });
 }
 
-const createForm = document.getElementById('create-item-form');
-if (createForm) {
-    createForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
+async function handleCreateItem(e) {
+    e.preventDefault();
+
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    if (submitBtn.disabled) return; // Verhindert doppeltes Absenden
+
+    // Button sperren & Ladetext
+    submitBtn.disabled = true;
+    const originalBtnText = submitBtn.innerText;
+    submitBtn.innerText = 'WIRD HOCHGELADEN...';
+
+    try {
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        if (!user) {
+            alert('Bitte melde dich an, um ein Angebot zu erstellen.');
+            return;
+        }
+
         const title = document.getElementById('item-title').value;
         const category = document.getElementById('item-category').value;
-        const condition = document.getElementById('item-condition').value;
         const price = parseFloat(document.getElementById('item-price').value);
+        const condition = document.getElementById('item-condition').value;
         const description = document.getElementById('item-description').value;
-        const imageFiles = document.getElementById('item-images').files;
+        const fileInput = document.getElementById('item-images');
+        
+        const uploadedUrls = [];
 
-        let imageUrls = [];
-
-        if (imageFiles.length > 0) {
-            for (let i = 0; i < Math.min(imageFiles.length, 10); i++) {
-                const file = imageFiles[i];
-                const fileExt = file.name.split('.').pop();
-                const fileName = `${currentUser.id}_${Date.now()}_${i}.${fileExt}`;
+        // Bildupload abwickeln
+        if (fileInput.files.length > 0) {
+            const files = Array.from(fileInput.files).slice(0, 10);
+            for (const file of files) {
+                const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
                 
-                const { data, error } = await supabase.storage.from('marketplace-images').upload(fileName, file);
-                if (!error) {
-                    const { data: urlData } = supabase.storage.from('marketplace-images').getPublicUrl(fileName);
-                    imageUrls.push(urlData.publicUrl);
+                const { data, error } = await supabaseClient
+                    .storage
+                    .from('marketplace-images')
+                    .upload(fileName, file);
+
+                if (!error && data) {
+                    const { data: publicUrlData } = supabaseClient
+                        .storage
+                        .from('marketplace-images')
+                        .getPublicUrl(fileName);
+                    
+                    if (publicUrlData?.publicUrl) {
+                        uploadedUrls.push(publicUrlData.publicUrl);
+                    }
                 }
             }
         }
 
-        const { error } = await supabase.from('marketplace_items').insert([{
-            title,
-            category,
-            condition,
-            price,
-            description,
-            images: imageUrls,
-            seller_id: currentUser.id
-        }]);
+        // Eintrag in Datenbank
+        const { error: dbError } = await supabaseClient
+            .from('marketplace')
+            .insert([{
+                user_id: user.id,
+                title: title,
+                category: category,
+                price: price,
+                condition: condition,
+                description: description,
+                images: uploadedUrls,
+                seller_name: user.email ? user.email.split('@')[0] : 'Community Mitglied'
+            }]);
 
-        if (error) {
-            alert("Fehler beim Erstellen: " + error.message);
-        } else {
-            alert("Angebot erfolgreich eingestellt!");
-            createForm.reset();
-            fetchItems();
-        }
-    });
+        if (dbError) throw dbError;
+
+        document.getElementById('create-item-form').reset();
+        await loadMarketplaceItems();
+
+    } catch (err) {
+        console.error('Fehler beim Erstellen:', err);
+        alert('Fehler beim Speichern des Angebots.');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerText = originalBtnText;
+    }
 }
 
-async function openModal(itemId) {
-    const { data: item, error } = await supabase
-        .from('marketplace_items')
-        .select('*')
-        .eq('id', itemId)
-        .single();
+function openItemModal(item) {
+    const modal = document.getElementById('item-modal');
+    if (!modal) return;
 
-    if (error || !item) return;
-
-    document.getElementById('modal-title').textContent = item.title;
-    document.getElementById('modal-category').textContent = item.category || 'Hardware';
-    document.getElementById('modal-condition').textContent = item.condition || 'Keine Angabe';
-    document.getElementById('modal-price').textContent = `${Number(item.price).toFixed(2)} €`;
-    document.getElementById('modal-description').textContent = item.description;
-
-    // Verkäufernamen abfragen
-    const modalSeller = document.getElementById('modal-seller');
-    if (modalSeller) {
-        const { data: profile } = await supabase
-            .from('profiles')
-            .select('username, display_name')
-            .eq('id', item.seller_id)
-            .single();
-        
-        const sellerName = profile ? (profile.display_name || profile.username || 'Unbekannt') : 'Unbekannter Verkäufer';
-        modalSeller.textContent = `Verkäufer: ${sellerName}`;
-    }
+    document.getElementById('modal-title').innerText = item.title;
+    document.getElementById('modal-category').innerText = item.category || 'Hardware';
+    document.getElementById('modal-condition').innerText = item.condition || 'Gebraucht';
+    document.getElementById('modal-price').innerText = item.price ? `${item.price} €` : 'VB';
+    document.getElementById('modal-description').innerText = item.description || '';
+    document.getElementById('modal-seller').innerText = item.seller_name || 'Verkäufer';
 
     const gallery = document.getElementById('modal-gallery');
     gallery.innerHTML = '';
-    
-    if (item.images && item.images.length > 0) {
-        item.images.forEach(url => {
-            const img = document.createElement('img');
-            img.src = url;
-            img.className = 'gallery-image';
-            gallery.appendChild(img);
-        });
-    } else {
-        gallery.innerHTML = `<p style="color: var(--text-muted); font-size: 13px;">Keine Bilder vorhanden.</p>`;
+
+    let images = item.images || item.image_urls;
+    if (typeof images === 'string') {
+        try { images = JSON.parse(images); } catch(e) { images = [images]; }
     }
 
-    document.getElementById('item-modal').style.display = 'flex';
+    if (Array.isArray(images) && images.length > 0) {
+        images.forEach(url => {
+            if (url) {
+                const img = document.createElement('img');
+                img.src = url;
+                img.className = 'gallery-image';
+                img.onclick = () => window.open(url, '_blank');
+                gallery.appendChild(img);
+            }
+        });
+    } else {
+        gallery.innerHTML = '<p style="color: var(--text-muted);">Keine Bilder verfügbar.</p>';
+    }
+
+    modal.style.display = 'flex';
 }
 
 function closeModal() {
     const modal = document.getElementById('item-modal');
     if (modal) modal.style.display = 'none';
 }
-
-// Modal schließen bei Klick ins Overlay
-window.addEventListener('click', (e) => {
-    const modal = document.getElementById('item-modal');
-    if (e.target === modal) {
-        closeModal();
-    }
-});
-
-async function deleteItem(e, itemId) {
-    e.stopPropagation();
-    if (confirm("Möchtest du dieses Angebot wirklich löschen?")) {
-        const { error } = await supabase.from('marketplace_items').delete().eq('id', itemId);
-        if (error) {
-            alert("Fehler beim Löschen: " + error.message);
-        } else {
-            fetchItems();
-        }
-    }
-}
-
-initMarketplace();
