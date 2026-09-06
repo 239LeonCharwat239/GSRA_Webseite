@@ -38,7 +38,7 @@ body {
 .container {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 120px 20px 60px 20px; /* Abstands-Anpassung wegen sticky Header */
+    padding: 120px 20px 60px 20px;
     width: 100%;
     flex: 1;
     text-align: center;
@@ -62,7 +62,7 @@ body {
 }
 
 /* =========================================
-   HEADER & NAVIGATION (Fixiert am oberen Bildschirmrand)
+   HEADER & NAVIGATION
 ========================================= */
 header {
     background-color: #000000;
@@ -72,7 +72,7 @@ header {
     align-items: center;
     padding: 10px 40px;
     border-bottom: 3px solid var(--gsra-blue);
-    position: fixed; /* Fixierung oben */
+    position: fixed;
     top: 0;
     left: 0;
     right: 0;
@@ -182,11 +182,59 @@ nav a:hover::after {
 }
 
 /* =========================================
-   MÜLLEIMER BUTTON & HOVER-EFFEKT (Globale Anwendung)
+   FORMULAR-INPUTS & KALENDER-PICKER (Spezifisch für Anforderung 1)
+========================================= */
+#create-event-form input,
+#create-event-form select,
+#create-item-form input,
+#create-item-form select,
+#create-item-form textarea {
+    width: 100%;
+    height: 42px;
+    padding: 10px 12px;
+    background: #0b0c10 !important;
+    border: 1px solid var(--border-subtle) !important;
+    color: #ffffff !important;
+    border-radius: 4px !important;
+    font-family: inherit;
+    font-size: 14px;
+    box-sizing: border-box;
+    outline: none;
+}
+
+#create-item-form textarea {
+    height: auto !important;
+}
+
+input[type="datetime-local"] {
+    appearance: none;
+    -webkit-appearance: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* Kalendersymbol exakt an den rechten Rand positionieren */
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.8);
+    cursor: pointer;
+    opacity: 0.7;
+    margin-left: auto;
+    transition: transform 0.2s ease, filter 0.2s ease, opacity 0.2s ease;
+}
+
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+    transform: scale(1.25);
+    filter: invert(0.7) sepia(1) saturate(5) hue-rotate(175deg);
+}
+
+/* =========================================
+   MÜLLEIMER BUTTON & HOVER-EFFEKT
 ========================================= */
 .btn-delete {
-    background: transparent;
-    border: 1px solid rgba(255, 77, 77, 0.3);
+    background: rgba(255, 77, 77, 0.1);
+    border: 1px solid #ff4d4d;
     color: #ff4d4d;
     padding: 6px 12px;
     border-radius: 4px;
@@ -204,10 +252,9 @@ nav a:hover::after {
 }
 
 .btn-delete:hover {
-    background: rgba(255, 77, 77, 0.15);
-    border-color: #ff4d4d;
-    color: #ff6b6b;
-    box-shadow: 0 0 10px rgba(255, 77, 77, 0.3);
+    background: #ff4d4d;
+    color: #ffffff;
+    box-shadow: 0 0 10px rgba(255, 77, 77, 0.6);
     transform: translateY(-1px);
 }
 
@@ -216,7 +263,7 @@ nav a:hover::after {
 }
 
 /* =========================================
-   MARKTPLATZ MODAL (DETAILS-ANZEIGE)
+   MARKTPLATZ MODAL & KARTEN (Spezifisch für Anforderung 2)
 ========================================= */
 .modal-overlay {
     position: fixed;
@@ -297,71 +344,7 @@ nav a:hover::after {
 }
 
 /* =========================================
-   DYNAMISCHE DURCHSUCHBARE DROPDOWNS & LAYOUTS
-========================================= */
-.searchable-select {
-    position: relative;
-}
-
-.searchable-select input {
-    width: 100%;
-    padding: 10px;
-    background: #0b0c10;
-    border: 1px solid var(--border-subtle);
-    color: #fff;
-    border-radius: 4px;
-}
-
-.select-options-list {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    max-height: 220px;
-    overflow-y: auto;
-    background: #15161a;
-    border: 1px solid var(--gsra-blue);
-    border-radius: 0 0 6px 6px;
-    z-index: 100;
-    display: none;
-    box-shadow: 0 8px 20px rgba(0,0,0,0.8);
-}
-
-.select-option-item {
-    padding: 10px 14px;
-    cursor: pointer;
-    color: #fff;
-    font-size: 14px;
-    border-bottom: 1px solid rgba(255,255,255,0.04);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    transition: background 0.2s ease;
-}
-
-.select-option-item:hover {
-    background: var(--gsra-blue);
-}
-
-/* Sub-Badge für Strecken-Layouts */
-.select-option-layout {
-    font-size: 11px;
-    background: rgba(255, 204, 0, 0.15);
-    color: var(--gsra-yellow);
-    padding: 2px 7px;
-    border-radius: 3px;
-    font-weight: 600;
-    border: 1px solid rgba(255, 204, 0, 0.3);
-}
-
-.select-option-item:hover .select-option-layout {
-    background: #ffffff;
-    color: #000000;
-    border-color: #ffffff;
-}
-
-/* =========================================
-   HERO & TEXT-STYLING
+   HERO & GENERAL CARDS
 ========================================= */
 .hero-section {
     padding: 40px 0;
@@ -403,9 +386,6 @@ p {
     margin: 0 auto 25px auto;
 }
 
-/* =========================================
-   CARDS
-========================================= */
 .card-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
