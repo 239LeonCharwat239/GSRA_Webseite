@@ -65,7 +65,6 @@ async function handleCreateItem(e) {
     const submitBtn = e.target.querySelector('button[type="submit"]');
     if (!submitBtn || submitBtn.disabled) return;
 
-    // Klick sofort sperren
     submitBtn.disabled = true;
     const originalBtnText = submitBtn.innerText;
     submitBtn.innerText = 'WIRD HOCHGELADEN...';
