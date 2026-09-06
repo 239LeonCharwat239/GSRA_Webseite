@@ -27,7 +27,6 @@ async function initMarketplace() {
 }
 
 async function fetchItems() {
-    // Einfache direkte Abfrage ohne potenziell fehlerhafte Join-Relations
     const { data, error } = await supabase
         .from('marketplace_items')
         .select('*')
@@ -70,7 +69,7 @@ function renderItems(items) {
             : `<div style="width: 100%; height: 120px; background: rgba(255,255,255,0.03); display: flex; justify-content: center; align-items: center; border-radius: 6px; margin-bottom: 12px; color: var(--text-muted);"><i class="fa-solid fa-image fa-2x"></i></div>`;
 
         card.innerHTML = `
-            <div onclick="openModal('${item.id}')">
+            <div onclick="openModal('${item.id}')" style="cursor: pointer;">
                 ${coverImage}
                 <div style="display: flex; justify-content: space-between; align-items: start;">
                     <div>
@@ -152,6 +151,19 @@ async function openModal(itemId) {
     document.getElementById('modal-price').textContent = `${Number(item.price).toFixed(2)} €`;
     document.getElementById('modal-description').textContent = item.description;
 
+    // Verkäufernamen abfragen
+    const modalSeller = document.getElementById('modal-seller');
+    if (modalSeller) {
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('username, display_name')
+            .eq('id', item.seller_id)
+            .single();
+        
+        const sellerName = profile ? (profile.display_name || profile.username || 'Unbekannt') : 'Unbekannter Verkäufer';
+        modalSeller.textContent = `Verkäufer: ${sellerName}`;
+    }
+
     const gallery = document.getElementById('modal-gallery');
     gallery.innerHTML = '';
     
@@ -173,6 +185,14 @@ function closeModal() {
     const modal = document.getElementById('item-modal');
     if (modal) modal.style.display = 'none';
 }
+
+// Modal schließen bei Klick ins Overlay
+window.addEventListener('click', (e) => {
+    const modal = document.getElementById('item-modal');
+    if (e.target === modal) {
+        closeModal();
+    }
+});
 
 async function deleteItem(e, itemId) {
     e.stopPropagation();
