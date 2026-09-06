@@ -266,9 +266,9 @@ nav a:hover::after {
 
 .gallery-container {
     display: flex;
-    gap: 10px;
+    gap: 12px;
     overflow-x: auto;
-    padding-bottom: 10px;
+    padding-bottom: 12px;
     margin-bottom: 20px;
 }
 
@@ -277,6 +277,13 @@ nav a:hover::after {
     border-radius: 6px;
     object-fit: cover;
     border: 1px solid var(--border-subtle);
+    cursor: pointer;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.gallery-image:hover {
+    transform: scale(1.02);
+    border-color: var(--gsra-blue);
 }
 
 .marketplace-card-clickable {
