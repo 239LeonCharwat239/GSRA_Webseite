@@ -2,8 +2,6 @@
    GSRA - Messenger Logik (Supabase Realtime)
 ========================================= */
 
-const supabase = window.supabase;
-
 let currentUser = null;
 let activeChatId = null;
 let messageSubscription = null;
@@ -17,6 +15,7 @@ const sendBtn = document.getElementById("sendBtn");
 const chatForm = document.getElementById("chatForm");
 
 document.addEventListener("DOMContentLoaded", async () => {
+    const supabase = window.supabase;
     if (!supabase) return;
 
     const { data: { session } } = await supabase.auth.getSession();
@@ -29,12 +28,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
     }
 
-    loadUserChats();
-    checkUrlParameters();
+    // Erst URL-Parameter prüfen (erstellt ggf. neuen Chat), dann Übersicht laden
+    await checkUrlParameters();
+    await loadUserChats();
 });
 
 // 1. URL Parameter verarbeiten (Anfrage von Marktplatz)
 async function checkUrlParameters() {
+    const supabase = window.supabase;
     const urlParams = new URLSearchParams(window.location.search);
     const sellerId = urlParams.get("sellerId");
     const sellerName = urlParams.get("sellerName") || "Verkäufer";
@@ -70,7 +71,8 @@ async function checkUrlParameters() {
 
 // 2. Chat-Übersicht laden
 async function loadUserChats() {
-    if (!chatsList || !currentUser) return;
+    const supabase = window.supabase;
+    if (!chatsList || !currentUser || !supabase) return;
 
     const { data: chats, error } = await supabase
         .from("chats")
@@ -99,6 +101,7 @@ async function loadUserChats() {
         item.addEventListener("click", () => {
             activeChatId = chat.id;
             openChat(chat.id, `Nutzer (${otherUserId ? otherUserId.substring(0, 6) : ''})`);
+            loadUserChats(); // Aktualisiert aktive Markierung
         });
 
         chatsList.appendChild(item);
@@ -107,6 +110,7 @@ async function loadUserChats() {
 
 // 3. Chat öffnen & Nachrichten abonnieren
 async function openChat(chatId, recipientName, itemContext = null) {
+    const supabase = window.supabase;
     if (chatHeader) chatHeader.innerText = `Chat mit ${recipientName}`;
     if (messageInput) messageInput.disabled = false;
     if (sendBtn) sendBtn.disabled = false;
@@ -141,7 +145,7 @@ function renderMessages(messages, itemContext) {
     chatMessages.innerHTML = "";
 
     if (messages.length === 0 && itemContext) {
-        chatMessages.innerHTML = `<p style="text-align: center; color: var(--gsra-yellow); font-size: 13px; margin: auto;">Starte die Konversation bezüglich "${itemContext}"</p>`;
+        chatMessages.innerHTML = `<p class="chat-placeholder" style="text-align: center; color: var(--gsra-yellow); font-size: 13px; margin: auto;">Starte die Konversation bezüglich "${itemContext}"</p>`;
         return;
     }
 
@@ -151,6 +155,12 @@ function renderMessages(messages, itemContext) {
 function appendSingleMessage(msg) {
     if (!chatMessages) return;
 
+    // Platzhalter entfernen, falls vorhanden
+    const placeholder = chatMessages.querySelector(".chat-placeholder");
+    if (placeholder) {
+        placeholder.remove();
+    }
+
     const bubble = document.createElement("div");
     const isOwn = msg.sender_id === currentUser.id;
 
@@ -158,10 +168,15 @@ function appendSingleMessage(msg) {
 
     const timeStr = msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
 
-    bubble.innerHTML = `
-        <div>${msg.text}</div>
-        <span class="message-time">${timeStr}</span>
-    `;
+    const textDiv = document.createElement("div");
+    textDiv.innerText = msg.text;
+
+    const timeSpan = document.createElement("span");
+    timeSpan.className = "message-time";
+    timeSpan.innerText = timeStr;
+
+    bubble.appendChild(textDiv);
+    bubble.appendChild(timeSpan);
 
     chatMessages.appendChild(bubble);
     chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -171,9 +186,10 @@ function appendSingleMessage(msg) {
 if (chatForm) {
     chatForm.addEventListener("submit", async (e) => {
         e.preventDefault();
+        const supabase = window.supabase;
         const text = messageInput.value.trim();
 
-        if (!text || !activeChatId || !currentUser) return;
+        if (!text || !activeChatId || !currentUser || !supabase) return;
 
         messageInput.value = "";
 
@@ -191,6 +207,7 @@ if (chatForm) {
                 updated_at: new Date().toISOString()
             }).eq("id", activeChatId);
 
+            loadUserChats(); // Aktualisiert die Vorschau in der linken Seitenleiste
         } catch (err) {
             console.error("Fehler beim Senden:", err);
         }

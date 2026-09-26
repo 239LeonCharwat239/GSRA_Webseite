@@ -2,10 +2,19 @@
    GSRA - Marketplace Logik & Galerie (Supabase)
 ========================================= */
 
-const supabase = window.supabase;
-
 let currentUser = null;
 let allItems = [];
+
+// Hilfsfunktion zum Schutz vor XSS / kaputtem HTML
+function escapeHtml(str) {
+    if (!str) return "";
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
 
 // DOM-Elemente
 const marketplaceGrid = document.getElementById("marketplaceGrid");
@@ -32,6 +41,7 @@ const createItemForm = document.getElementById("create-item-form");
 
 // Auth Session initialisieren & synchron halten
 document.addEventListener("DOMContentLoaded", async () => {
+    const supabase = window.supabase;
     if (!supabase) {
         console.error("Supabase Client nicht gefunden!");
         return;
@@ -49,7 +59,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 // 1. Marktplatz Artikel laden
 async function loadMarketplaceItems() {
-    if (!marketplaceGrid) return;
+    const supabase = window.supabase;
+    if (!marketplaceGrid || !supabase) return;
     marketplaceGrid.innerHTML = "<p>Lade Marktplatz-Angebote...</p>";
 
     try {
@@ -85,12 +96,13 @@ function renderMarketplaceItems(items) {
         const images = item.image_urls || item.imageUrls || [];
         const coverImage = images.length > 0 ? images[0] : 'placeholder.png';
         const formattedPrice = parseFloat(item.price || 0).toFixed(2);
+        const seller = item.seller_name || item.sellerName || "Anonym";
 
         card.innerHTML = `
-            <img src="${coverImage}" alt="${item.title}" style="width: 100%; height: 180px; object-fit: cover; border-radius: 6px; margin-bottom: 12px; border: 1px solid var(--border-subtle);">
-            <h3>${item.title}</h3>
-            <p style="font-size: 13px; color: var(--gsra-blue); font-weight: bold; margin-bottom: 5px;">${item.category}</p>
-            <p style="font-size: 13px; margin-bottom: 15px;">Verkäufer: ${item.seller_name || item.sellerName || "Anonym"}</p>
+            <img src="${escapeHtml(coverImage)}" alt="${escapeHtml(item.title)}" style="width: 100%; height: 180px; object-fit: cover; border-radius: 6px; margin-bottom: 12px; border: 1px solid var(--border-subtle);">
+            <h3>${escapeHtml(item.title)}</h3>
+            <p style="font-size: 13px; color: var(--gsra-blue); font-weight: bold; margin-bottom: 5px;">${escapeHtml(item.category)}</p>
+            <p style="font-size: 13px; margin-bottom: 15px;">Verkäufer: ${escapeHtml(seller)}</p>
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <span class="text-yellow" style="font-size: 20px; font-weight: bold;">${formattedPrice} €</span>
                 <span style="font-size: 12px; color: var(--text-muted);"><i class="fa-solid fa-images"></i> ${images.length} Bilder</span>
@@ -122,6 +134,7 @@ if (searchMarketplace) searchMarketplace.addEventListener("input", filterItems);
 
 // 4. Modal: Detailansicht
 function openDetailModal(item) {
+    const supabase = window.supabase;
     if (!itemDetailModal) return;
 
     const sellerName = item.seller_name || item.sellerName || 'Verkäufer';
@@ -218,6 +231,7 @@ if (closeCreateModalBtn) {
 if (createItemForm) {
     createItemForm.addEventListener("submit", async (e) => {
         e.preventDefault();
+        const supabase = window.supabase;
 
         if (!currentUser) {
             alert("Du musst angemeldet sein.");
@@ -229,6 +243,7 @@ if (createItemForm) {
         const price = parseFloat(document.getElementById("itemPrice").value);
         const description = document.getElementById("itemDescription").value;
         const fileInput = document.getElementById("itemImages");
+        const submitBtn = createItemForm.querySelector("button[type='submit']");
 
         const files = Array.from(fileInput.files);
 
@@ -243,7 +258,10 @@ if (createItemForm) {
         }
 
         try {
-            alert("Bilder werden hochgeladen... Bitte kurz warten.");
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerText = "Bilder werden hochgeladen...";
+            }
 
             const uploadPromises = files.map(async (file) => {
                 const fileExt = file.name.split('.').pop();
@@ -257,7 +275,7 @@ if (createItemForm) {
             });
 
             const imageUrls = await Promise.all(uploadPromises);
-            const sellerName = currentUser.user_metadata?.full_name || currentUser.email.split('@')[0];
+            const sellerName = currentUser.user_metadata?.full_name || (currentUser.email ? currentUser.email.split('@')[0] : "Anonym");
 
             const { error: insertError } = await supabase.from("marketplace").insert([{
                 title,
@@ -278,6 +296,11 @@ if (createItemForm) {
         } catch (error) {
             console.error("Fehler beim Erstellen des Angebots:", error);
             alert("Fehler beim Erstellen des Angebots.");
+        } finally {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerText = "Angebot veröffentlichen";
+            }
         }
     });
 }
