@@ -1,26 +1,8 @@
 /* =========================================
-   GSRA - Marketplace Logik & Galerie
+   GSRA - Marketplace Logik & Galerie (Supabase)
 ========================================= */
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getFirestore, collection, addDoc, getDocs, query, orderBy, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
-
-// Firebase Konfiguration
-const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT_ID.appspot.com",
-    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-    appId: "YOUR_APP_ID"
-};
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const storage = getStorage(app);
+const supabase = window.supabase;
 
 let currentUser = null;
 let allItems = [];
@@ -48,32 +30,45 @@ const openItemModalBtn = document.getElementById("openItemModalBtn");
 const closeCreateModalBtn = document.getElementById("closeCreateModalBtn");
 const createItemForm = document.getElementById("create-item-form");
 
-// Auth-Status für Marktplatz-Funktionen nutzen (Navigation wird von auth-nav.js gesteuert)
-onAuthStateChanged(auth, (user) => {
-    currentUser = user;
+// Auth Session initialisieren & synchron halten
+document.addEventListener("DOMContentLoaded", async () => {
+    if (!supabase) {
+        console.error("Supabase Client nicht gefunden!");
+        return;
+    }
+
+    const { data: { session } } = await supabase.auth.getSession();
+    currentUser = session?.user || null;
+
+    supabase.auth.onAuthStateChange((_event, session) => {
+        currentUser = session?.user || null;
+    });
+
+    loadMarketplaceItems();
 });
 
-// 1. Marktplatz Artikel aus Firestore laden
+// 1. Marktplatz Artikel laden
 async function loadMarketplaceItems() {
     if (!marketplaceGrid) return;
     marketplaceGrid.innerHTML = "<p>Lade Marktplatz-Angebote...</p>";
+
     try {
-        const q = query(collection(db, "marketplace"), orderBy("createdAt", "desc"));
-        const querySnapshot = await getDocs(q);
-        allItems = [];
+        const { data, error } = await supabase
+            .from("marketplace")
+            .select("*")
+            .order("created_at", { ascending: false });
 
-        querySnapshot.forEach((docSnap) => {
-            allItems.push({ id: docSnap.id, ...docSnap.data() });
-        });
+        if (error) throw error;
 
+        allItems = data || [];
         renderMarketplaceItems(allItems);
     } catch (error) {
         console.error("Fehler beim Laden der Artikel:", error);
-        marketplaceGrid.innerHTML = "<p>Fehler beim Laden der Marktplatz-Daten.</p>";
+        marketplaceGrid.innerHTML = "<p>Keine Angebote vorhanden oder Verbindungsfehler.</p>";
     }
 }
 
-// 2. Artikel-Karten darstellen
+// 2. Artikel-Karten rendern
 function renderMarketplaceItems(items) {
     if (!marketplaceGrid) return;
     marketplaceGrid.innerHTML = "";
@@ -87,17 +82,18 @@ function renderMarketplaceItems(items) {
         const card = document.createElement("div");
         card.className = "card marketplace-card-clickable";
 
-        const coverImage = (item.imageUrls && item.imageUrls.length > 0) ? item.imageUrls[0] : 'placeholder.png';
+        const images = item.image_urls || item.imageUrls || [];
+        const coverImage = images.length > 0 ? images[0] : 'placeholder.png';
         const formattedPrice = parseFloat(item.price || 0).toFixed(2);
 
         card.innerHTML = `
             <img src="${coverImage}" alt="${item.title}" style="width: 100%; height: 180px; object-fit: cover; border-radius: 6px; margin-bottom: 12px; border: 1px solid var(--border-subtle);">
             <h3>${item.title}</h3>
             <p style="font-size: 13px; color: var(--gsra-blue); font-weight: bold; margin-bottom: 5px;">${item.category}</p>
-            <p style="font-size: 13px; margin-bottom: 15px;">Verkäufer: ${item.sellerName || "Anonym"}</p>
+            <p style="font-size: 13px; margin-bottom: 15px;">Verkäufer: ${item.seller_name || item.sellerName || "Anonym"}</p>
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <span class="text-yellow" style="font-size: 20px; font-weight: bold;">${formattedPrice} €</span>
-                <span style="font-size: 12px; color: var(--text-muted);"><i class="fa-solid fa-images"></i> ${item.imageUrls ? item.imageUrls.length : 0} Bilder</span>
+                <span style="font-size: 12px; color: var(--text-muted);"><i class="fa-solid fa-images"></i> ${images.length} Bilder</span>
             </div>
         `;
 
@@ -106,15 +102,15 @@ function renderMarketplaceItems(items) {
     });
 }
 
-// 3. Filter-Funktionalität
+// 3. Filter-Funktion
 function filterItems() {
     const categoryValue = filterCategory ? filterCategory.value : "all";
     const searchValue = searchMarketplace ? searchMarketplace.value.toLowerCase() : "";
 
     const filtered = allItems.filter((item) => {
         const matchesCategory = categoryValue === "all" || item.category === categoryValue;
-        const matchesSearch = item.title.toLowerCase().includes(searchValue) ||
-                              item.description.toLowerCase().includes(searchValue);
+        const matchesSearch = (item.title || "").toLowerCase().includes(searchValue) ||
+                              (item.description || "").toLowerCase().includes(searchValue);
         return matchesCategory && matchesSearch;
     });
 
@@ -124,16 +120,19 @@ function filterItems() {
 if (filterCategory) filterCategory.addEventListener("change", filterItems);
 if (searchMarketplace) searchMarketplace.addEventListener("input", filterItems);
 
-// 4. Modal: Detailansicht & Messenger-Verknüpfung
+// 4. Modal: Detailansicht
 function openDetailModal(item) {
     if (!itemDetailModal) return;
 
+    const sellerName = item.seller_name || item.sellerName || 'Verkäufer';
+    const sellerId = item.seller_id || item.sellerId;
+    const images = item.image_urls || item.imageUrls || [];
+
     modalTitle.innerText = item.title;
-    modalMeta.innerText = `Kategorie: ${item.category} | Verkäufer: ${item.sellerName || 'Anonym'}`;
+    modalMeta.innerText = `Kategorie: ${item.category} | Verkäufer: ${sellerName}`;
     modalDescription.innerText = item.description;
     modalPrice.innerText = `${parseFloat(item.price || 0).toFixed(2)} €`;
 
-    const images = item.imageUrls || [];
     modalGalleryStrip.innerHTML = "";
 
     if (images.length > 0) {
@@ -155,33 +154,33 @@ function openDetailModal(item) {
         modalMainImage.src = "placeholder.png";
     }
 
-    // Messenger Weiterleitung
     modalContactBtn.onclick = () => {
         if (!currentUser) {
             alert("Bitte logge dich ein, um dem Verkäufer eine Nachricht zu senden.");
             return;
         }
-        if (currentUser.uid === item.sellerId) {
+        if (currentUser.id === sellerId) {
             alert("Das ist dein eigenes Angebot.");
             return;
         }
         
-        const url = `messenger.html?sellerId=${item.sellerId}&sellerName=${encodeURIComponent(item.sellerName || 'Verkäufer')}&itemTitle=${encodeURIComponent(item.title)}`;
+        const url = `messenger.html?sellerId=${sellerId}&sellerName=${encodeURIComponent(sellerName)}&itemTitle=${encodeURIComponent(item.title)}`;
         window.location.href = url;
     };
 
-    // Löschen Button (nur für Ersteller)
-    if (currentUser && currentUser.uid === item.sellerId) {
+    if (currentUser && currentUser.id === sellerId) {
         modalDeleteBtn.style.display = "inline-flex";
         modalDeleteBtn.onclick = async () => {
             if (confirm("Möchtest du dieses Angebot wirklich löschen?")) {
                 try {
-                    await deleteDoc(doc(db, "marketplace", item.id));
+                    const { error } = await supabase.from("marketplace").delete().eq("id", item.id);
+                    if (error) throw error;
                     alert("Angebot gelöscht.");
                     itemDetailModal.style.display = "none";
                     loadMarketplaceItems();
                 } catch (e) {
                     console.error("Fehler beim Löschen:", e);
+                    alert("Fehler beim Löschen des Angebots.");
                 }
             }
         };
@@ -215,7 +214,7 @@ if (closeCreateModalBtn) {
     });
 }
 
-// 6. Angebot Speichern & Multi-Image Upload
+// 6. Angebot Speichern & Bild-Upload
 if (createItemForm) {
     createItemForm.addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -247,23 +246,30 @@ if (createItemForm) {
             alert("Bilder werden hochgeladen... Bitte kurz warten.");
 
             const uploadPromises = files.map(async (file) => {
-                const storageRef = ref(storage, `marketplace/${Date.now()}_${file.name}`);
-                const snapshot = await uploadBytes(storageRef, file);
-                return await getDownloadURL(snapshot.ref);
+                const fileExt = file.name.split('.').pop();
+                const filePath = `marketplace/${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
+                
+                const { error: uploadError } = await supabase.storage.from("marketplace").upload(filePath, file);
+                if (uploadError) throw uploadError;
+
+                const { data } = supabase.storage.from("marketplace").getPublicUrl(filePath);
+                return data.publicUrl;
             });
 
             const imageUrls = await Promise.all(uploadPromises);
+            const sellerName = currentUser.user_metadata?.full_name || currentUser.email.split('@')[0];
 
-            await addDoc(collection(db, "marketplace"), {
+            const { error: insertError } = await supabase.from("marketplace").insert([{
                 title,
                 category,
                 price,
                 description,
-                imageUrls,
-                sellerId: currentUser.uid,
-                sellerName: currentUser.displayName || currentUser.email.split('@')[0],
-                createdAt: new Date().toISOString()
-            });
+                image_urls: imageUrls,
+                seller_id: currentUser.id,
+                seller_name: sellerName
+            }]);
+
+            if (insertError) throw insertError;
 
             alert("Angebot erfolgreich erstellt!");
             createItemForm.reset();
@@ -275,5 +281,3 @@ if (createItemForm) {
         }
     });
 }
-
-window.addEventListener("DOMContentLoaded", loadMarketplaceItems);
