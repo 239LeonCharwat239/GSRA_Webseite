@@ -647,3 +647,17 @@ p {
         display: none;
     }
 }
+
+/* =========================================
+   Zusatz für Dashboard & Auth-Steuerung
+========================================= */
+.grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 30px;
+    text-align: left;
+}
+
+.auth-only {
+    display: none; /* Wird über JS gesteuert */
+}
