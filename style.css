@@ -145,11 +145,11 @@ nav a::after {
     transition: width 0.3s ease;
 }
 
-nav a:hover {
+nav a:hover, nav a.active {
     color: var(--gsra-blue);
 }
 
-nav a:hover::after {
+nav a:hover::after, nav a.active::after {
     width: 100%;
 }
 
@@ -182,13 +182,16 @@ nav a:hover::after {
 }
 
 /* =========================================
-   FORMULAR-INPUTS & KALENDER-PICKER (Spezifisch für Anforderung 1)
+   FORMULAR-INPUTS & KALENDER-PICKER (Anforderung 1: Exakt rechtsbündig)
 ========================================= */
 #create-event-form input,
 #create-event-form select,
 #create-item-form input,
 #create-item-form select,
-#create-item-form textarea {
+#create-item-form textarea,
+#create-setup-form input,
+#create-setup-form select,
+#create-setup-form textarea {
     width: 100%;
     height: 42px;
     padding: 10px 12px;
@@ -202,30 +205,34 @@ nav a:hover::after {
     outline: none;
 }
 
-#create-item-form textarea {
+#create-item-form textarea,
+#create-setup-form textarea {
     height: auto !important;
 }
 
+/* Kalender-Picker Icon exakt ganz rechts platzieren */
+input[type="date"],
 input[type="datetime-local"] {
-    appearance: none;
-    -webkit-appearance: none;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    position: relative;
+    padding-right: 40px !important;
 }
 
-/* Kalendersymbol exakt an den rechten Rand positionieren */
+input[type="date"]::-webkit-calendar-picker-indicator,
 input[type="datetime-local"]::-webkit-calendar-picker-indicator {
-    filter: invert(0.8);
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    filter: invert(0.85);
     cursor: pointer;
-    opacity: 0.7;
-    margin-left: auto;
+    opacity: 0.8;
     transition: transform 0.2s ease, filter 0.2s ease, opacity 0.2s ease;
 }
 
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
 input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
     opacity: 1;
-    transform: scale(1.25);
+    transform: translateY(-50%) scale(1.25);
     filter: invert(0.7) sepia(1) saturate(5) hue-rotate(175deg);
 }
 
@@ -263,7 +270,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
 }
 
 /* =========================================
-   MARKTPLATZ MODAL & KARTEN (Spezifisch für Anforderung 2)
+   MARKTPLATZ MODAL & GALERIE (Anforderung 2: Bis zu 10 Bilder & Details)
 ========================================= */
 .modal-overlay {
     position: fixed;
@@ -285,7 +292,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
     border: 1px solid var(--border-subtle);
     border-top: 4px solid var(--gsra-blue);
     border-radius: 10px;
-    max-width: 800px;
+    max-width: 850px;
     width: 100%;
     max-height: 90vh;
     overflow-y: auto;
@@ -302,7 +309,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
     background: transparent;
     border: none;
     color: var(--text-muted);
-    font-size: 24px;
+    font-size: 26px;
     cursor: pointer;
     transition: color 0.2s;
 }
@@ -311,36 +318,53 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
     color: #ff4d4d;
 }
 
+/* Hauptbild in der Detailansicht */
+.modal-main-image {
+    width: 100%;
+    max-height: 400px;
+    object-fit: contain;
+    background: #000;
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+    margin-bottom: 12px;
+}
+
+/* Galerie-Strip mit Vorschaubildern (Thumbnails) */
 .gallery-container {
     display: flex;
-    gap: 12px;
+    gap: 10px;
     overflow-x: auto;
-    padding-bottom: 12px;
+    padding-bottom: 8px;
     margin-bottom: 20px;
 }
 
-.gallery-image {
-    height: 220px;
+.gallery-thumbnail {
+    width: 75px;
+    height: 75px;
     border-radius: 6px;
     object-fit: cover;
-    border: 1px solid var(--border-subtle);
+    border: 2px solid var(--border-subtle);
     cursor: pointer;
-    transition: transform 0.2s ease, border-color 0.2s ease;
+    opacity: 0.7;
+    transition: transform 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+    flex-shrink: 0;
 }
 
-.gallery-image:hover {
-    transform: scale(1.02);
+.gallery-thumbnail:hover, .gallery-thumbnail.active {
+    opacity: 1;
+    transform: scale(1.05);
     border-color: var(--gsra-blue);
 }
 
 .marketplace-card-clickable {
     cursor: pointer;
-    transition: transform 0.2s ease, border-color 0.2s ease;
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .marketplace-card-clickable:hover {
-    transform: translateY(-4px);
+    transform: translateY(-5px);
     border-color: var(--gsra-blue);
+    box-shadow: var(--blue-glow);
 }
 
 /* =========================================
@@ -396,7 +420,7 @@ p {
 
 .card {
     background: var(--bg-card);
-    padding: 35px 30px;
+    padding: 25px;
     border-radius: 10px;
     border: 1px solid var(--border-subtle);
     border-top: 4px solid var(--gsra-blue);
@@ -406,8 +430,8 @@ p {
 
 .card h3 {
     color: var(--text-light);
-    margin-bottom: 15px;
-    font-size: 22px;
+    margin-bottom: 10px;
+    font-size: 20px;
 }
 
 .card:hover {

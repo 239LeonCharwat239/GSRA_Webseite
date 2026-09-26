@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GSRA - Marktplatz</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+
+    <!-- HEADER & NAVIGATION -->
+    <header>
+        <div class="logo-slogan-container">
+            <a href="index.html" class="logo-link">
+                <img src="logo.png" alt="GSRA Logo" class="logo">
+            </a>
+            <div class="header-slogan">
+                <span class="text-blue">German</span>
+                <span class="text-yellow">SimRacing</span>
+                <span class="text-white">Association</span>
+            </div>
+        </div>
+        <nav>
+            <a href="index.html">Home</a>
+            <a href="events.html">Rennkalender</a>
+            <a href="marketplace.html" class="active">Marktplatz</a>
+            <a href="setups.html">Setups</a>
+            <a href="community.html">Community</a>
+            <a href="login.html" class="login-btn" id="loginNavBtn">Login</a>
+            <button id="logoutBtn" style="display: none;">Logout</button>
+        </nav>
+    </header>
+
+    <!-- MAIN CONTAINER -->
+    <main class="container">
+        <section class="hero-section">
+            <h1 class="hero-title">GSRA <span class="text-blue">Marktplatz</span></h1>
+            <p class="hero-subtitle">Kaufe und verkaufe SimRacing-Hardware, Pedale, Lenkräder und Zubehör direkt in der Community.</p>
+        </section>
+
+        <!-- FILTER & AKTIONEN -->
+        <section style="display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-bottom: 30px; flex-wrap: wrap;">
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <select id="filterCategory" style="padding: 8px 12px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
+                    <option value="all">Alle Kategorien</option>
+                    <option value="Wheelbases">Wheelbases & Lenkräder</option>
+                    <option value="Pedale">Pedale</option>
+                    <option value="Rigs">Rigs & Sitze</option>
+                    <option value="Monitore">Monitore & VR</option>
+                    <option value="Zubehoer">Zubehör & Sonstiges</option>
+                </select>
+
+                <input type="text" id="searchMarketplace" placeholder="Suche Artikel..." style="padding: 8px 12px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px; min-width: 220px;">
+            </div>
+
+            <button id="openItemModalBtn" class="login-btn" style="cursor: pointer;">+ Angebot Erstellen</button>
+        </section>
+
+        <!-- KARTEN GRID -->
+        <section>
+            <h2>Aktuelle <span class="text-yellow">Angebote</span></h2>
+            <div id="marketplaceGrid" class="card-grid">
+                <!-- Dynamisch geladene Marktplatz-Karten -->
+            </div>
+        </section>
+    </main>
+
+    <!-- MODAL 1: GROSSE DETAIL-ANSICHT MIT GALERIE (BIS ZU 10 BILDER) & MESSENGER -->
+    <div id="itemDetailModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <button class="modal-close" id="closeDetailModalBtn">&times;</button>
+            
+            <h2 id="modalTitle" class="text-blue" style="margin-bottom: 5px;">Artikel Titel</h2>
+            <p id="modalMeta" style="font-size: 14px; color: var(--text-muted); margin-bottom: 15px;"></p>
+
+            <!-- Hauptbild Container -->
+            <div>
+                <img id="modalMainImage" src="placeholder.png" alt="Hauptbild" class="modal-main-image">
+            </div>
+
+            <!-- Bildergalerie-Strip (Thumbnails) -->
+            <div id="modalGalleryStrip" class="gallery-container">
+                <!-- Dynamische Miniaturbilder -->
+            </div>
+
+            <div style="background: #0b0c10; padding: 20px; border-radius: 8px; border: 1px solid var(--border-subtle); margin-bottom: 20px;">
+                <h4 style="color: #fff; margin-bottom: 10px; font-size: 16px;">Beschreibung:</h4>
+                <p id="modalDescription" style="text-align: left; max-width: 100%; margin: 0; white-space: pre-line;"></p>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; border-top: 1px solid var(--border-subtle); padding-top: 15px;">
+                <div>
+                    <span style="font-size: 14px; color: var(--text-muted);">Preis: </span>
+                    <span id="modalPrice" style="font-size: 24px; font-weight: bold; color: var(--gsra-yellow);">0,00 €</span>
+                </div>
+
+                <div style="display: flex; gap: 10px;">
+                    <!-- Verkäufer Direkt-Anschreiben / Messenger -->
+                    <button id="modalContactBtn" class="login-btn" style="display: flex; align-items: center; gap: 8px;">
+                        <i class="fa-solid fa-envelope"></i> Verkäufer kontaktieren
+                    </button>
+                    <!-- Löschen Button (NUR sichtbar für den Ersteller) -->
+                    <button id="modalDeleteBtn" class="btn-delete" style="display: none;">
+                        <i class="fa-solid fa-trash"></i> Löschen
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: ANGEBOT ERSTELLEN (MIT MULTI-UPLOAD BIS ZU 10 BILDER) -->
+    <div id="itemCreateModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <button class="modal-close" id="closeCreateModalBtn">&times;</button>
+            <h2>Artikel <span class="text-blue">Inserieren</span></h2>
+            <p style="margin-bottom: 20px;">Verkaufe dein Equipment in der GSRA-Community.</p>
+
+            <form id="create-item-form" style="display: flex; flex-direction: column; gap: 15px; text-align: left;">
+                <div>
+                    <label style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">Titel des Angebots*</label>
+                    <input type="text" id="itemTitle" placeholder="z.B. Fanatec Direct Drive Wheelbase 8Nm" required>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div>
+                        <label style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">Kategorie*</label>
+                        <select id="itemCategory" required>
+                            <option value="Wheelbases">Wheelbases & Lenkräder</option>
+                            <option value="Pedale">Pedale</option>
+                            <option value="Rigs">Rigs & Sitze</option>
+                            <option value="Monitore">Monitore & VR</option>
+                            <option value="Zubehoer">Zubehör & Sonstiges</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">Preis (€)*</label>
+                        <input type="number" id="itemPrice" step="0.01" min="0" placeholder="z.B. 350.00" required>
+                    </div>
+                </div>
+
+                <div>
+                    <label style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">Beschreibung & Zustand*</label>
+                    <textarea id="itemDescription" rows="4" placeholder="Beschreibe den Zustand, Alter, Abholung/Versand..." required></textarea>
+                </div>
+
+                <div>
+                    <label style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">Produktbilder (Maximal 10 Bilder auswählen)*</label>
+                    <input type="file" id="itemImages" accept="image/*" multiple required style="padding: 6px;">
+                </div>
+
+                <button type="submit" class="login-btn" style="margin-top: 10px; width: 100%;">Angebot Veröffentlichen</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- SOCIAL MEDIA -->
+    <section class="social-section">
+        <h2>Folge <span class="text-yellow">GSRA</span></h2>
+        <p class="social-subtext">Bleibe immer auf dem Laufenden auf unseren Social-Media-Kanälen.</p>
+        <div class="social-container">
+            <a href="#" class="icon-youtube"><i class="fab fa-youtube"></i></a>
+            <a href="#" class="icon-instagram"><i class="fab fa-instagram"></i></a>
+            <a href="#" class="icon-discord"><i class="fab fa-discord"></i></a>
+            <a href="#" class="icon-reddit"><i class="fab fa-reddit"></i></a>
+            <a href="#" class="icon-twitch"><i class="fab fa-twitch"></i></a>
+        </div>
+    </section>
+
+    <script type="module" src="marketplace.js"></script>
+</body>
+</html>
