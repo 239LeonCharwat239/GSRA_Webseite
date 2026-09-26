@@ -6,31 +6,36 @@
     <title>GSRA - Dashboard</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Supabase SDK & Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-client.js"></script>
+    <script src="auth-nav.js"></script>
 </head>
 <body>
 
-    <!-- HEADER & NAVIGATION -->
+    <!-- EINHEITLICHER HEADER -->
     <header>
         <div class="logo-slogan-container">
             <a href="index.html" class="logo-link">
-                <img src="logo.png" alt="GSRA Logo" class="logo">
+                <img src="GSRA_Logo_ohne Hintergund.jpeg" alt="GSRA Logo" class="logo">
             </a>
             <div class="header-slogan">
-                <span class="text-blue">German</span>
-                <span class="text-yellow">SimRacing</span>
-                <span class="text-white">Association</span>
+                <span class="text-blue">UNITED BY SPEED.</span> 
+                <span class="text-yellow">DRIVEN GLOBALLY.</span>
             </div>
         </div>
         <nav>
             <a href="index.html">Home</a>
-            <a href="events.html">Rennkalender</a>
             <a href="marktplatz.html">Marktplatz</a>
             <a href="setups.html">Setups</a>
-            <a href="community.html">Community</a>
-            <a href="dashboard.html" class="active">Dashboard</a>
-            <a href="messenger.html">Messenger</a>
+            <a href="nachschlagewerk.html">Nachschlagewerk</a>
+            <a href="kalender.html">Rennkalender</a>
+            <!-- auth-only Klasse sorgt für Sichtbarkeit nur nach Login -->
+            <a href="dashboard.html" class="active auth-only" style="display: none;">Dashboard</a>
+            <a href="messenger.html" class="auth-only" style="display: none;">Messenger</a>
             <a href="login.html" class="login-btn" id="loginNavBtn">Login</a>
-            <button id="logoutBtn" class="logout-btn" style="display: none;">Logout</button>
+            <button id="logoutBtn" class="login-btn" style="display: none;">Logout</button>
         </nav>
     </header>
 
@@ -64,8 +69,7 @@
         </div>
     </main>
 
-    <!-- Skripte -->
-    <script type="module" src="auth-nav.js"></script>
+    <!-- Dein Dashboard-spezifisches Skript zum Laden der Benutzerdaten -->
     <script type="module" src="dashboard.js"></script>
 </body>
 </html>

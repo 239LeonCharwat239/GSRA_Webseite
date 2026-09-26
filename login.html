@@ -24,17 +24,17 @@
             <span class="text-yellow">DRIVEN GLOBALLY.</span>
         </div>
     </div>
-<nav>
-    <a href="index.html">Home</a>
-    <a href="marktplatz.html">Marktplatz</a>
-    <a href="setups.html">Setups</a>
-    <a href="nachschlagewerk.html">Nachschlagewerk</a>
-    <a href="kalender.html">Rennkalender</a>
-    <a href="dashboard.html">Dashboard</a>
-    <a href="messenger.html">Messenger</a>
-    <a href="login.html" class="login-btn" id="loginNavBtn">Login</a>
-    <button id="logoutBtn" class="login-btn" style="display: none;">Logout</button>
-</nav>
+    <nav>
+        <a href="index.html">Home</a>
+        <a href="marktplatz.html">Marktplatz</a>
+        <a href="setups.html">Setups</a>
+        <a href="nachschlagewerk.html">Nachschlagewerk</a>
+        <a href="kalender.html">Rennkalender</a>
+        <a href="dashboard.html" class="auth-only" style="display: none;">Dashboard</a>
+        <a href="messenger.html" class="auth-only" style="display: none;">Messenger</a>
+        <a href="login.html" class="login-btn" id="loginNavBtn">Login</a>
+        <button id="logoutBtn" class="login-btn" style="display: none;">Logout</button>
+    </nav>
 </header>
 
 <main class="container">
@@ -62,7 +62,6 @@
     window.addEventListener('load', async () => {
         const client = window.supabase;
 
-        // Session-Prüfung
         if (client && client.auth) {
             const { data: { session } } = await client.auth.getSession();
             if (session) {
@@ -74,7 +73,6 @@
         const loginForm = document.getElementById('loginForm');
         const signUpBtn = document.getElementById('signUpBtn');
 
-        // Login-Prozess
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('email').value;
@@ -89,7 +87,6 @@
             }
         });
 
-        // Registrierungs-Prozess
         signUpBtn.addEventListener('click', async () => {
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
