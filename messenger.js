@@ -15,7 +15,7 @@ const sendBtn = document.getElementById("sendBtn");
 const chatForm = document.getElementById("chatForm");
 
 document.addEventListener("DOMContentLoaded", async () => {
-    const supabase = window.supabase;
+    const supabase = window.supabaseClient || window.supabase;
     if (!supabase) return;
 
     const { data: { session } } = await supabase.auth.getSession();
@@ -35,7 +35,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 // 1. URL Parameter verarbeiten (Anfrage von Marktplatz)
 async function checkUrlParameters() {
-    const supabase = window.supabase;
+    const supabase = window.supabaseClient || window.supabase;
     const urlParams = new URLSearchParams(window.location.search);
     const sellerId = urlParams.get("sellerId");
     const sellerName = urlParams.get("sellerName") || "Verkäufer";
@@ -71,7 +71,7 @@ async function checkUrlParameters() {
 
 // 2. Chat-Übersicht laden
 async function loadUserChats() {
-    const supabase = window.supabase;
+    const supabase = window.supabaseClient || window.supabase;
     if (!chatsList || !currentUser || !supabase) return;
 
     const { data: chats, error } = await supabase
@@ -110,7 +110,7 @@ async function loadUserChats() {
 
 // 3. Chat öffnen & Nachrichten abonnieren
 async function openChat(chatId, recipientName, itemContext = null) {
-    const supabase = window.supabase;
+    const supabase = window.supabaseClient || window.supabase;
     if (chatHeader) chatHeader.innerText = `Chat mit ${recipientName}`;
     if (messageInput) messageInput.disabled = false;
     if (sendBtn) sendBtn.disabled = false;
@@ -186,7 +186,7 @@ function appendSingleMessage(msg) {
 if (chatForm) {
     chatForm.addEventListener("submit", async (e) => {
         e.preventDefault();
-        const supabase = window.supabase;
+        const supabase = window.supabaseClient || window.supabase;
         const text = messageInput.value.trim();
 
         if (!text || !activeChatId || !currentUser || !supabase) return;

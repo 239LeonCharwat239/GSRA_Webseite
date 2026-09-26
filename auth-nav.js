@@ -3,7 +3,7 @@
 ========================================= */
 
 document.addEventListener("DOMContentLoaded", async () => {
-    const client = window.supabase;
+    const client = window.supabaseClient || window.supabase;
     
     if (!client) {
         console.error("Supabase Client nicht gefunden!");

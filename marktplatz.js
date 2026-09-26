@@ -41,7 +41,7 @@ const createItemForm = document.getElementById("create-item-form");
 
 // Auth Session initialisieren & synchron halten
 document.addEventListener("DOMContentLoaded", async () => {
-    const supabase = window.supabase;
+    const supabase = window.supabaseClient || window.supabase;
     if (!supabase) {
         console.error("Supabase Client nicht gefunden!");
         return;
@@ -59,7 +59,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 // 1. Marktplatz Artikel laden
 async function loadMarketplaceItems() {
-    const supabase = window.supabase;
+    const supabase = window.supabaseClient || window.supabase;
     if (!marketplaceGrid || !supabase) return;
     marketplaceGrid.innerHTML = "<p>Lade Marktplatz-Angebote...</p>";
 
@@ -134,7 +134,7 @@ if (searchMarketplace) searchMarketplace.addEventListener("input", filterItems);
 
 // 4. Modal: Detailansicht
 function openDetailModal(item) {
-    const supabase = window.supabase;
+    const supabase = window.supabaseClient || window.supabase;
     if (!itemDetailModal) return;
 
     const sellerName = item.seller_name || item.sellerName || 'Verkäufer';
@@ -210,6 +210,12 @@ if (closeDetailModalBtn) {
     });
 }
 
+// Schließen bei Klick außerhalb des Modals
+window.addEventListener("click", (e) => {
+    if (e.target === itemDetailModal) itemDetailModal.style.display = "none";
+    if (e.target === itemCreateModal) itemCreateModal.style.display = "none";
+});
+
 // 5. Modal: Angebot Erstellen
 if (openItemModalBtn) {
     openItemModalBtn.addEventListener("click", () => {
@@ -231,7 +237,7 @@ if (closeCreateModalBtn) {
 if (createItemForm) {
     createItemForm.addEventListener("submit", async (e) => {
         e.preventDefault();
-        const supabase = window.supabase;
+        const supabase = window.supabaseClient || window.supabase;
 
         if (!currentUser) {
             alert("Du musst angemeldet sein.");
