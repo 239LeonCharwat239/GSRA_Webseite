@@ -3,7 +3,7 @@
 ========================================= */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getFirestore, collection, addDoc, getDocs, query, orderBy, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
@@ -48,31 +48,14 @@ const openItemModalBtn = document.getElementById("openItemModalBtn");
 const closeCreateModalBtn = document.getElementById("closeCreateModalBtn");
 const createItemForm = document.getElementById("create-item-form");
 
-// Auth-Status Prüfung
+// Auth-Status für Marktplatz-Funktionen nutzen (Navigation wird von auth-nav.js gesteuert)
 onAuthStateChanged(auth, (user) => {
     currentUser = user;
-    const loginNavBtn = document.getElementById("loginNavBtn");
-    const logoutBtn = document.getElementById("logoutBtn");
-
-    if (user) {
-        if (loginNavBtn) loginNavBtn.style.display = "none";
-        if (logoutBtn) logoutBtn.style.display = "inline-block";
-    } else {
-        if (loginNavBtn) loginNavBtn.style.display = "inline-block";
-        if (logoutBtn) logoutBtn.style.display = "none";
-    }
 });
-
-// Logout Listener
-const logoutBtn = document.getElementById("logoutBtn");
-if (logoutBtn) {
-    logoutBtn.addEventListener("click", () => {
-        signOut(auth).then(() => window.location.reload());
-    });
-}
 
 // 1. Marktplatz Artikel aus Firestore laden
 async function loadMarketplaceItems() {
+    if (!marketplaceGrid) return;
     marketplaceGrid.innerHTML = "<p>Lade Marktplatz-Angebote...</p>";
     try {
         const q = query(collection(db, "marketplace"), orderBy("createdAt", "desc"));
@@ -90,8 +73,9 @@ async function loadMarketplaceItems() {
     }
 }
 
-// 2. Artikel-Karten auf der Seite darstellen
+// 2. Artikel-Karten darstellen
 function renderMarketplaceItems(items) {
+    if (!marketplaceGrid) return;
     marketplaceGrid.innerHTML = "";
 
     if (items.length === 0) {
@@ -103,9 +87,8 @@ function renderMarketplaceItems(items) {
         const card = document.createElement("div");
         card.className = "card marketplace-card-clickable";
 
-        // Haupt-Vorschaubild (Erstes aus dem Array)
         const coverImage = (item.imageUrls && item.imageUrls.length > 0) ? item.imageUrls[0] : 'placeholder.png';
-        const formattedPrice = parseFloat(item.price).toFixed(2);
+        const formattedPrice = parseFloat(item.price || 0).toFixed(2);
 
         card.innerHTML = `
             <img src="${coverImage}" alt="${item.title}" style="width: 100%; height: 180px; object-fit: cover; border-radius: 6px; margin-bottom: 12px; border: 1px solid var(--border-subtle);">
@@ -118,7 +101,6 @@ function renderMarketplaceItems(items) {
             </div>
         `;
 
-        // Klick auf Karte öffnet die große Detail-Ansicht
         card.addEventListener("click", () => openDetailModal(item));
         marketplaceGrid.appendChild(card);
     });
@@ -126,8 +108,8 @@ function renderMarketplaceItems(items) {
 
 // 3. Filter-Funktionalität
 function filterItems() {
-    const categoryValue = filterCategory.value;
-    const searchValue = searchMarketplace.value.toLowerCase();
+    const categoryValue = filterCategory ? filterCategory.value : "all";
+    const searchValue = searchMarketplace ? searchMarketplace.value.toLowerCase() : "";
 
     const filtered = allItems.filter((item) => {
         const matchesCategory = categoryValue === "all" || item.category === categoryValue;
@@ -142,21 +124,20 @@ function filterItems() {
 if (filterCategory) filterCategory.addEventListener("change", filterItems);
 if (searchMarketplace) searchMarketplace.addEventListener("input", filterItems);
 
-// 4. Modal 1: Große Detailansicht mit Galerie (bis zu 10 Bilder) & Messenger
+// 4. Modal: Detailansicht & Messenger-Verknüpfung
 function openDetailModal(item) {
+    if (!itemDetailModal) return;
+
     modalTitle.innerText = item.title;
     modalMeta.innerText = `Kategorie: ${item.category} | Verkäufer: ${item.sellerName || 'Anonym'}`;
     modalDescription.innerText = item.description;
-    modalPrice.innerText = `${parseFloat(item.price).toFixed(2)} €`;
+    modalPrice.innerText = `${parseFloat(item.price || 0).toFixed(2)} €`;
 
     const images = item.imageUrls || [];
     modalGalleryStrip.innerHTML = "";
 
     if (images.length > 0) {
-        // Erstmals das erste Bild anzeigen
         modalMainImage.src = images[0];
-
-        // Thumbnails für bis zu 10 Bilder generieren
         images.forEach((imgUrl, index) => {
             const thumb = document.createElement("img");
             thumb.src = imgUrl;
@@ -174,19 +155,22 @@ function openDetailModal(item) {
         modalMainImage.src = "placeholder.png";
     }
 
- // Messenger Button Aktion in openDetailModal()
-modalContactBtn.onclick = () => {
-    if (!currentUser) {
-        alert("Bitte logge dich ein, um dem Verkäufer eine Nachricht zu senden.");
-        return;
-    }
-    
-    // Direktes Weiterleiten in den Messenger mit Kontext-Daten
-    const url = `messenger.html?sellerId=${item.sellerId}&sellerName=${encodeURIComponent(item.sellerName || 'Verkäufer')}&itemTitle=${encodeURIComponent(item.title)}`;
-    window.location.href = url;
-};
+    // Messenger Weiterleitung
+    modalContactBtn.onclick = () => {
+        if (!currentUser) {
+            alert("Bitte logge dich ein, um dem Verkäufer eine Nachricht zu senden.");
+            return;
+        }
+        if (currentUser.uid === item.sellerId) {
+            alert("Das ist dein eigenes Angebot.");
+            return;
+        }
+        
+        const url = `messenger.html?sellerId=${item.sellerId}&sellerName=${encodeURIComponent(item.sellerName || 'Verkäufer')}&itemTitle=${encodeURIComponent(item.title)}`;
+        window.location.href = url;
+    };
 
-    // Löschen Button (nur für den Besitzer sichtbar)
+    // Löschen Button (nur für Ersteller)
     if (currentUser && currentUser.uid === item.sellerId) {
         modalDeleteBtn.style.display = "inline-flex";
         modalDeleteBtn.onclick = async () => {
@@ -214,7 +198,7 @@ if (closeDetailModalBtn) {
     });
 }
 
-// 5. Modal 2: Angebot Erstellen
+// 5. Modal: Angebot Erstellen
 if (openItemModalBtn) {
     openItemModalBtn.addEventListener("click", () => {
         if (!currentUser) {
@@ -231,7 +215,7 @@ if (closeCreateModalBtn) {
     });
 }
 
-// 6. Multi-Image Upload (Bis zu 10 Bilder) & Angebot in Firestore speichern
+// 6. Angebot Speichern & Multi-Image Upload
 if (createItemForm) {
     createItemForm.addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -268,10 +252,8 @@ if (createItemForm) {
                 return await getDownloadURL(snapshot.ref);
             });
 
-            // Alle Bilder hochladen und URLs sammeln
             const imageUrls = await Promise.all(uploadPromises);
 
-            // In Firestore speichern
             await addDoc(collection(db, "marketplace"), {
                 title,
                 category,
@@ -279,7 +261,7 @@ if (createItemForm) {
                 description,
                 imageUrls,
                 sellerId: currentUser.uid,
-                sellerName: currentUser.displayName || currentUser.email,
+                sellerName: currentUser.displayName || currentUser.email.split('@')[0],
                 createdAt: new Date().toISOString()
             });
 
@@ -294,5 +276,4 @@ if (createItemForm) {
     });
 }
 
-// Initialer Aufruf
 window.addEventListener("DOMContentLoaded", loadMarketplaceItems);

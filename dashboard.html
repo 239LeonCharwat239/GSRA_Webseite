@@ -3,74 +3,69 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>User Dashboard - GSRA</title>
+    <title>GSRA - Dashboard</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="supabase-client.js"></script>
-    <script src="auth-nav.js"></script>
 </head>
 <body>
 
-<header>
-    <div class="logo-slogan-container">
-        <a href="index.html" class="logo-link">
-            <img src="GSRA_Logo_ohne Hintergund.jpeg" alt="GSRA Logo" class="logo">
-        </a>
-        <div class="header-slogan">
-            <span class="text-blue">UNITED BY SPEED.</span> 
-            <span class="text-yellow">DRIVEN GLOBALLY.</span>
+    <!-- HEADER & NAVIGATION -->
+    <header>
+        <div class="logo-slogan-container">
+            <a href="index.html" class="logo-link">
+                <img src="logo.png" alt="GSRA Logo" class="logo">
+            </a>
+            <div class="header-slogan">
+                <span class="text-blue">German</span>
+                <span class="text-yellow">SimRacing</span>
+                <span class="text-white">Association</span>
+            </div>
         </div>
-    </div>
+        <nav>
+            <a href="index.html">Home</a>
+            <a href="events.html">Rennkalender</a>
+            <a href="marktplatz.html">Marktplatz</a>
+            <a href="setups.html">Setups</a>
+            <a href="community.html">Community</a>
+            <a href="dashboard.html" class="active">Dashboard</a>
+            <a href="messenger.html">Messenger</a>
+            <a href="login.html" class="login-btn" id="loginNavBtn">Login</a>
+            <button id="logoutBtn" class="logout-btn" style="display: none;">Logout</button>
+        </nav>
+    </header>
 
-<nav>
-    <a href="index.html">Home</a>
-    <a href="marktplatz.html">Marktplatz</a>
-    <a href="setups.html">Setups</a>
-    <a href="nachschlagewerk.html">Nachschlagewerk</a>
-    <a href="kalender.html">Rennkalender</a>
-    <a href="dashboard.html" class="active">Dashboard</a>
-    <a href="messenger.html">Messenger</a>
-    <a href="login.html" class="login-btn" id="loginNavBtn">Login</a>
-    <button id="logoutBtn" class="login-btn" style="display: none;">Logout</button>
-</nav>
-</header>
+    <main class="container">
+        <h1 class="hero-title">Fahrer <span class="text-blue">Dashboard</span></h1>
+        <p style="margin-bottom: 20px;">Verwalte deine Profildaten, verknüpfte Konten und deine Aktivitäten.</p>
 
-<main class="container">
-    <section class="hero-section">
-        <h1 class="hero-title">GSRA DASHBOARD</h1>
-        <p class="hero-subtitle">
-            <span class="text-white">Willkommen zurück: </span>
-            <span id="userEmail" class="text-yellow">Lade Benutzerdaten...</span>
-        </p>
-    </section>
+        <div class="grid-2">
+            <!-- Profil Übersicht -->
+            <div class="card">
+                <h3><i class="fa-solid fa-user-gear text-blue"></i> Profil Informationen</h3>
+                <div style="margin-top: 15px; display: flex; flex-direction: column; gap: 10px;">
+                    <p><strong>Benutzername:</strong> <span id="dashUsername">Lade...</span></p>
+                    <p><strong>E-Mail:</strong> <span id="dashEmail">Lade...</span></p>
+                    <p><strong>Mitglied seit:</strong> <span id="dashCreated">Lade...</span></p>
+                </div>
+            </div>
 
-    <section class="card-grid">
-        <div class="card">
-            <h3>Pro-Bereich</h3>
-            <p>Zugriff auf Telemetrie-Analysen und interne Team-Ressourcen.</p>
+            <!-- Schnellzugriff / Aktivitäten -->
+            <div class="card">
+                <h3><i class="fa-solid fa-gauge-high text-yellow"></i> Schnellzugriff</h3>
+                <div style="margin-top: 15px; display: flex; flex-direction: column; gap: 10px;">
+                    <a href="messenger.html" class="login-btn" style="text-align: center; text-decoration: none;">
+                        <i class="fa-solid fa-comments"></i> Zum Messenger
+                    </a>
+                    <a href="marktplatz.html" class="login-btn" style="text-align: center; text-decoration: none; background: #222; border: 1px solid var(--border-subtle);">
+                        <i class="fa-solid fa-store"></i> Eigene Angebote verwalten
+                    </a>
+                </div>
+            </div>
         </div>
-        <div class="card">
-            <h3>Team-Planer</h3>
-            <p>Verwaltung von Events, Stints und internen Absprachen.</p>
-        </div>
-    </section>
-</main>
+    </main>
 
-<script>
-    // Schutzmechanismus: Prüfen ob Nutzer eingeloggt ist
-    async function checkUser() {
-        const { data: { user } } = await supabase.auth.getUser();
-
-        if (!user) {
-            window.location.href = 'login.html';
-        } else {
-            document.getElementById('userEmail').textContent = user.email;
-        }
-    }
-
-    checkUser();
-</script>
-
+    <!-- Skripte -->
+    <script type="module" src="auth-nav.js"></script>
+    <script type="module" src="dashboard.js"></script>
 </body>
 </html>

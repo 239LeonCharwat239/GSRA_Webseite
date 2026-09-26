@@ -5,7 +5,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { 
-    getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, setDoc, doc, getDoc 
+    getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, setDoc, doc 
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -23,7 +23,6 @@ const db = getFirestore(app);
 
 let currentUser = null;
 let activeChatId = null;
-let activeRecipientId = null;
 let unsubscribeMessages = null;
 
 // DOM Elemente
@@ -34,7 +33,7 @@ const messageInput = document.getElementById("messageInput");
 const sendBtn = document.getElementById("sendBtn");
 const chatForm = document.getElementById("chatForm");
 
-// Auth Status
+// Auth Status prüfen
 onAuthStateChanged(auth, async (user) => {
     currentUser = user;
     if (!user) {
@@ -47,20 +46,17 @@ onAuthStateChanged(auth, async (user) => {
     checkUrlParameters();
 });
 
-// 1. Parameter aus URL auslesen (falls Klick auf Marktplatz "Verkäufer kontaktieren")
+// 1. Parameter aus URL auslesen (Marktplatz-Anfrage)
 async function checkUrlParameters() {
     const urlParams = new URLSearchParams(window.location.search);
     const sellerId = urlParams.get("sellerId");
     const sellerName = urlParams.get("sellerName") || "Verkäufer";
     const itemTitle = urlParams.get("itemTitle");
 
-    if (sellerId && sellerId !== currentUser.uid) {
-        // Chat-ID aus beiden User-UIDs zusammensetzen
+    if (sellerId && currentUser && sellerId !== currentUser.uid) {
         const chatId = [currentUser.uid, sellerId].sort().join("_");
         activeChatId = chatId;
-        activeRecipientId = sellerId;
 
-        // Chat-Dokument initialisieren
         await setDoc(doc(db, "chats", chatId), {
             participants: [currentUser.uid, sellerId],
             updatedAt: serverTimestamp(),
@@ -73,6 +69,8 @@ async function checkUrlParameters() {
 
 // 2. Liste aller Unterhaltungen des Nutzers laden
 function loadUserChats() {
+    if (!chatsList) return;
+
     const q = query(
         collection(db, "chats"),
         where("participants", "array-contains", currentUser.uid)
@@ -100,8 +98,7 @@ function loadUserChats() {
 
             item.addEventListener("click", () => {
                 activeChatId = chatDoc.id;
-                activeRecipientId = otherUserId;
-                openChat(chatDoc.id, `User (${otherUserId.substring(0, 6)})`);
+                openChat(chatDoc.id, `User (${otherUserId ? otherUserId.substring(0, 6) : ''})`);
             });
 
             chatsList.appendChild(item);
@@ -109,11 +106,11 @@ function loadUserChats() {
     });
 }
 
-// 3. Chatfenster öffnen und Echtzeit-Nachrichten abonnieren
+// 3. Chatfenster öffnen und Nachrichten abonnieren
 function openChat(chatId, recipientName, itemContext = null) {
-    chatHeader.innerText = `Chat mit ${recipientName}`;
-    messageInput.disabled = false;
-    sendBtn.disabled = false;
+    if (chatHeader) chatHeader.innerText = `Chat mit ${recipientName}`;
+    if (messageInput) messageInput.disabled = false;
+    if (sendBtn) sendBtn.disabled = false;
 
     if (unsubscribeMessages) unsubscribeMessages();
 
@@ -123,10 +120,11 @@ function openChat(chatId, recipientName, itemContext = null) {
     );
 
     unsubscribeMessages = onSnapshot(messagesQuery, (snapshot) => {
+        if (!chatMessages) return;
         chatMessages.innerHTML = "";
 
         if (snapshot.empty && itemContext) {
-            chatMessages.innerHTML = `<p style="text-align: center; color: var(--gsra-yellow); font-size: 13px;">Starte die Konversation bezüglich "${itemContext}"</p>`;
+            chatMessages.innerHTML = `<p style="text-align: center; color: var(--gsra-yellow); font-size: 13px; margin: auto;">Starte die Konversation bezüglich "${itemContext}"</p>`;
         }
 
         snapshot.forEach((msgDoc) => {
@@ -146,35 +144,34 @@ function openChat(chatId, recipientName, itemContext = null) {
             chatMessages.appendChild(bubble);
         });
 
-        // Automatisch nach unten scrollen
         chatMessages.scrollTop = chatMessages.scrollHeight;
     });
 }
 
 // 4. Nachricht senden
-chatForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const text = messageInput.value.trim();
+if (chatForm) {
+    chatForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const text = messageInput.value.trim();
 
-    if (!text || !activeChatId) return;
+        if (!text || !activeChatId || !currentUser) return;
 
-    messageInput.value = "";
+        messageInput.value = "";
 
-    try {
-        // Nachricht in Sub-Collection speichern
-        await addDoc(collection(db, "chats", activeChatId, "messages"), {
-            senderId: currentUser.uid,
-            text: text,
-            timestamp: serverTimestamp()
-        });
+        try {
+            await addDoc(collection(db, "chats", activeChatId, "messages"), {
+                senderId: currentUser.uid,
+                text: text,
+                timestamp: serverTimestamp()
+            });
 
-        // Chat-Header/Last Message aktualisieren
-        await setDoc(doc(db, "chats", activeChatId), {
-            lastMessage: text,
-            updatedAt: serverTimestamp()
-        }, { merge: true });
+            await setDoc(doc(db, "chats", activeChatId), {
+                lastMessage: text,
+                updatedAt: serverTimestamp()
+            }, { merge: true });
 
-    } catch (err) {
-        console.error("Fehler beim Senden:", err);
-    }
-});
+        } catch (err) {
+            console.error("Fehler beim Senden:", err);
+        }
+    });
+}
