@@ -14,7 +14,7 @@
 </head>
 <body>
 
-    <!-- EINHEITLICHER HEADER -->
+    <!-- HEADER -->
     <header>
         <div class="logo-slogan-container">
             <a href="index.html" class="logo-link">
@@ -31,11 +31,10 @@
             <a href="setups.html">Setups</a>
             <a href="nachschlagewerk.html">Nachschlagewerk</a>
             <a href="kalender.html">Rennkalender</a>
-            <!-- auth-only Klasse sorgt für Sichtbarkeit nur nach Login -->
-            <a href="dashboard.html" class="active auth-only" style="display: none;">Dashboard</a>
-            <a href="messenger.html" class="auth-only" style="display: none;">Messenger</a>
+            <a href="dashboard.html" class="active auth-only">Dashboard</a>
+            <a href="messenger.html" class="auth-only">Messenger</a>
             <a href="login.html" class="login-btn" id="loginNavBtn">Login</a>
-            <button id="logoutBtn" class="login-btn" style="display: none;">Logout</button>
+            <button id="logoutBtn" class="login-btn">Logout</button>
         </nav>
     </header>
 
@@ -48,9 +47,9 @@
             <div class="card">
                 <h3><i class="fa-solid fa-user-gear text-blue"></i> Profil Informationen</h3>
                 <div style="margin-top: 15px; display: flex; flex-direction: column; gap: 10px;">
-                    <p><strong>Benutzername:</strong> <span id="dashUsername">Lade...</span></p>
-                    <p><strong>E-Mail:</strong> <span id="dashEmail">Lade...</span></p>
-                    <p><strong>Mitglied seit:</strong> <span id="dashCreated">Lade...</span></p>
+                    <p><strong>Benutzername:</strong> <span id="dashUsername">-</span></p>
+                    <p><strong>E-Mail:</strong> <span id="dashEmail">-</span></p>
+                    <p><strong>Mitglied seit:</strong> <span id="dashCreated">-</span></p>
                 </div>
             </div>
 
@@ -69,7 +68,7 @@
         </div>
     </main>
 
-    <!-- Dein Dashboard-spezifisches Skript zum Laden der Benutzerdaten -->
-    <script type="module" src="dashboard.js"></script>
+    <!-- Dashboard-spezifisches Skript zum Laden der Benutzerdaten -->
+    <script src="dashboard.js"></script>
 </body>
 </html>

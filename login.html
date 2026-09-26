@@ -30,79 +30,98 @@
         <a href="setups.html">Setups</a>
         <a href="nachschlagewerk.html">Nachschlagewerk</a>
         <a href="kalender.html">Rennkalender</a>
-        <a href="dashboard.html" class="auth-only" style="display: none;">Dashboard</a>
-        <a href="messenger.html" class="auth-only" style="display: none;">Messenger</a>
-        <a href="login.html" class="login-btn" id="loginNavBtn">Login</a>
-        <button id="logoutBtn" class="login-btn" style="display: none;">Logout</button>
+        <a href="dashboard.html" class="auth-only">Dashboard</a>
+        <a href="messenger.html" class="auth-only">Messenger</a>
+        <a href="login.html" class="login-btn active" id="loginNavBtn">Login</a>
+        <button id="logoutBtn" class="login-btn">Logout</button>
     </nav>
 </header>
 
 <main class="container">
     <section style="max-width: 450px; margin: 40px auto; background-color: var(--bg-card); padding: 30px; border-radius: 6px; border: 1.5px solid var(--border-subtle); text-align: left;">
         <h2 style="margin-bottom: 15px; border-bottom: 2px solid var(--gsra-blue); padding-bottom: 5px;">Member & Team Login</h2>
-        <p style="font-size: 14px; margin-bottom: 25px; color: var(--text-muted);">Exklusiver Zugang für das Team und Pro-Mitglieder zur Event-Planung und den internen Absprachen.</p>
+        <p style="font-size: 14px; margin-bottom: 25px; color: var(--text-muted);">Exklusiver Zugang für das Team und Mitglieder zur Event-Planung und Aktivitätenverwaltung.</p>
         
         <form id="loginForm" style="display: flex; flex-direction: column; gap: 15px;">
+            <div id="usernameGroup" style="display: none;">
+                <label style="display: block; font-size: 14px; font-weight: bold; margin-bottom: 5px; color: var(--text-light);">Benutzername / Name</label>
+                <input type="text" id="username" placeholder="z. B. Max Mustermann" style="width: 100%; padding: 10px; background-color: var(--bg-main); border: 1px solid var(--border-subtle); border-radius: 4px; font-size: 14px; color: var(--text-light);">
+            </div>
+
             <div>
                 <label style="display: block; font-size: 14px; font-weight: bold; margin-bottom: 5px; color: var(--text-light);">E-Mail-Adresse</label>
                 <input type="email" id="email" placeholder="name@gsra.de" required style="width: 100%; padding: 10px; background-color: var(--bg-main); border: 1px solid var(--border-subtle); border-radius: 4px; font-size: 14px; color: var(--text-light);">
             </div>
+            
             <div>
                 <label style="display: block; font-size: 14px; font-weight: bold; margin-bottom: 5px; color: var(--text-light);">Passwort</label>
                 <input type="password" id="password" placeholder="••••••••" required style="width: 100%; padding: 10px; background-color: var(--bg-main); border: 1px solid var(--border-subtle); border-radius: 4px; font-size: 14px; color: var(--text-light);">
             </div>
             
-            <button type="submit" style="background-color: var(--gsra-blue); color: var(--text-light); border: none; padding: 12px; border-radius: 4px; font-weight: bold; font-size: 16px; cursor: pointer; margin-top: 10px;">Anmelden</button>
-            <button type="button" id="signUpBtn" style="background-color: transparent; color: var(--gsra-yellow); border: 1px solid var(--gsra-yellow); padding: 10px; border-radius: 4px; font-weight: bold; font-size: 14px; cursor: pointer;">Neues Konto erstellen</button>
+            <button type="submit" id="submitBtn" style="background-color: var(--gsra-blue); color: var(--text-light); border: none; padding: 12px; border-radius: 4px; font-weight: bold; font-size: 16px; cursor: pointer; margin-top: 10px;">Anmelden</button>
+            <button type="button" id="toggleModeBtn" style="background-color: transparent; color: var(--gsra-yellow); border: 1px solid var(--gsra-yellow); padding: 10px; border-radius: 4px; font-weight: bold; font-size: 14px; cursor: pointer;">Kein Konto? Jetzt registrieren</button>
         </form>
     </section>
 </main>
 
 <script>
-    window.addEventListener('load', async () => {
+    document.addEventListener('DOMContentLoaded', async () => {
         const client = window.supabase;
-
-        if (client && client.auth) {
-            const { data: { session } } = await client.auth.getSession();
-            if (session) {
-                window.location.href = 'dashboard.html';
-                return;
-            }
-        }
+        let isSignUpMode = false;
 
         const loginForm = document.getElementById('loginForm');
-        const signUpBtn = document.getElementById('signUpBtn');
+        const usernameGroup = document.getElementById('usernameGroup');
+        const usernameInput = document.getElementById('username');
+        const submitBtn = document.getElementById('submitBtn');
+        const toggleModeBtn = document.getElementById('toggleModeBtn');
 
-        loginForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-
-            const { data, error } = await client.auth.signInWithPassword({ email, password });
-
-            if (error) {
-                alert('Login fehlgeschlagen: ' + error.message);
+        // Umschalten zwischen Anmelden und Registrieren
+        toggleModeBtn.addEventListener('click', () => {
+            isSignUpMode = !isSignUpMode;
+            if (isSignUpMode) {
+                usernameGroup.style.display = 'block';
+                usernameInput.setAttribute('required', 'true');
+                submitBtn.textContent = 'Konto erstellen';
+                toggleModeBtn.textContent = 'Bereits registriert? Zum Login';
             } else {
-                window.location.href = 'dashboard.html';
+                usernameGroup.style.display = 'none';
+                usernameInput.removeAttribute('required');
+                submitBtn.textContent = 'Anmelden';
+                toggleModeBtn.textContent = 'Kein Konto? Jetzt registrieren';
             }
         });
 
-        signUpBtn.addEventListener('click', async () => {
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value.trim();
+            const username = usernameInput.value.trim();
 
-            if (!email || !password) {
-                alert('Bitte gib E-Mail und Passwort ein.');
-                return;
-            }
+            if (isSignUpMode) {
+                // Registrierung mit Benutzernamen in user_metadata
+                const { data, error } = await client.auth.signUp({
+                    email,
+                    password,
+                    options: {
+                        data: {
+                            username: username
+                        }
+                    }
+                });
 
-            const { data, error } = await client.auth.signUp({ email, password });
-
-            if (error) {
-                alert('Registrierung fehlgeschlagen: ' + error.message);
+                if (error) {
+                    alert('Registrierung fehlgeschlagen: ' + error.message);
+                } else {
+                    alert('Konto erfolgreich erstellt!');
+                    window.location.href = 'dashboard.html';
+                }
             } else {
-                alert('Konto erfolgreich erstellt! Du wirst weitergeleitet.');
-                if (data.session) {
+                // Login
+                const { data, error } = await client.auth.signInWithPassword({ email, password });
+
+                if (error) {
+                    alert('Login fehlgeschlagen: ' + error.message);
+                } else {
                     window.location.href = 'dashboard.html';
                 }
             }

@@ -1,19 +1,16 @@
 /* =========================================
-   GSRA - Master Design (Phase 1 Final)
+   GSRA - Master Design (Final)
 ========================================= */
 
 :root {
-    /* Exakte GSRA Markenfarben */
-    --gsra-blue: #0055ff;        /* Reine Blau-Markenfarbe */
-    --gsra-yellow: #ffcc00;      /* Reine Gelb-Markenfarbe */
+    --gsra-blue: #0055ff;
+    --gsra-yellow: #ffcc00;
     
-    /* Hintergründe & Text */
-    --bg-main: #0b0c10;          /* Tiefes Schwarzgrau */
-    --bg-card: #15161a;          /* Dunkler Karten-Hintergrund */
-    --text-light: #ffffff;       /* Reines Weiß */
-    --text-muted: #a0a5b1;       /* Edles Grau für Fließtext */
+    --bg-main: #0b0c10;
+    --bg-card: #15161a;
+    --text-light: #ffffff;
+    --text-muted: #a0a5b1;
     
-    /* Effekte */
     --border-subtle: rgba(255, 255, 255, 0.08);
     --blue-glow: 0 0 15px rgba(0, 85, 255, 0.4);
     --yellow-glow: 0 0 15px rgba(255, 204, 0, 0.4);
@@ -38,7 +35,7 @@ body {
 .container {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 120px 20px 60px 20px;
+    padding: 130px 20px 60px 20px;
     width: 100%;
     flex: 1;
     text-align: center;
@@ -62,7 +59,7 @@ body {
 }
 
 /* =========================================
-   HEADER & NAVIGATION
+   HEADER & NAVIGATION (LAYOUT FIX)
 ========================================= */
 header {
     background-color: #000000;
@@ -70,7 +67,7 @@ header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 10px 40px;
+    padding: 10px 30px;
     border-bottom: 3px solid var(--gsra-blue);
     position: fixed;
     top: 0;
@@ -79,12 +76,14 @@ header {
     z-index: 1000;
     box-shadow: 0 4px 25px rgba(0, 0, 0, 0.9);
     width: 100%;
+    gap: 20px;
 }
 
 .logo-slogan-container {
     display: flex;
     align-items: center;
-    gap: 25px;
+    gap: 20px;
+    flex-shrink: 0;
 }
 
 .logo-link {
@@ -93,7 +92,7 @@ header {
 }
 
 header .logo {
-    height: 75px;
+    height: 70px;
     width: auto;
     filter: drop-shadow(0px 4px 8px rgba(0,0,0,0.8));
     transition: transform 0.3s ease;
@@ -105,30 +104,32 @@ header .logo:hover {
 }
 
 .header-slogan {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 1.5px;
+    letter-spacing: 1.2px;
     white-space: nowrap;
     display: flex;
     flex-direction: row;
-    gap: 8px;
+    gap: 6px;
+    margin-right: 15px;
 }
 
 nav {
     display: flex;
     align-items: center;
-    gap: 22px;
-    flex-wrap: nowrap;
+    gap: 16px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
 }
 
 nav a {
     text-decoration: none;
     color: var(--text-light);
     font-weight: 600;
-    font-size: 14px;
+    font-size: 13px;
     text-transform: uppercase;
-    letter-spacing: 1.2px;
+    letter-spacing: 1px;
     white-space: nowrap;
     transition: all 0.3s ease;
     position: relative;
@@ -153,19 +154,19 @@ nav a:hover::after, nav a.active::after {
     width: 100%;
 }
 
+/* BUTTON FIX: !important bei display entfernt */
 .login-btn, #logoutBtn {
     color: #000000 !important;
     background-color: var(--gsra-yellow) !important;
-    padding: 9px 20px !important;
+    padding: 8px 16px !important;
     border-radius: 4px !important;
     font-weight: 700 !important;
-    font-size: 14px !important;
+    font-size: 13px !important;
     text-transform: uppercase !important;
     letter-spacing: 1px !important;
     border: 2px solid var(--gsra-yellow) !important;
     white-space: nowrap !important;
     cursor: pointer !important;
-    display: inline-block !important;
     text-decoration: none !important;
     transition: all 0.3s ease !important;
 }
@@ -182,7 +183,7 @@ nav a:hover::after, nav a.active::after {
 }
 
 /* =========================================
-   FORMULAR-INPUTS & KALENDER-PICKER
+   FORMULAR-INPUTS
 ========================================= */
 #create-event-form input,
 #create-event-form select,
@@ -210,7 +211,6 @@ nav a:hover::after, nav a.active::after {
     height: auto !important;
 }
 
-/* Kalender-Picker Icon exakt ganz rechts platzieren */
 input[type="date"],
 input[type="datetime-local"] {
     position: relative;
@@ -237,7 +237,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
 }
 
 /* =========================================
-   MÜLLEIMER BUTTON & HOVER-EFFEKT
+   MÜLLEIMER BUTTON
 ========================================= */
 .btn-delete {
     background: rgba(255, 77, 77, 0.1);
@@ -649,7 +649,7 @@ p {
 }
 
 /* =========================================
-   Zusatz für Dashboard & Auth-Steuerung
+   ZUSATZ FÜR DASHBOARD & AUTH
 ========================================= */
 .grid-2 {
     display: grid;
@@ -659,5 +659,5 @@ p {
 }
 
 .auth-only {
-    display: none; /* Wird über JS gesteuert */
+    display: none;
 }
