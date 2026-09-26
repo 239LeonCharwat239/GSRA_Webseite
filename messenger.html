@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GSRA - Messenger</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .chat-container {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            height: 70vh;
+            background: var(--bg-card);
+            border-radius: 10px;
+            border: 1px solid var(--border-subtle);
+            overflow: hidden;
+            margin-top: 20px;
+        }
+
+        .chat-sidebar {
+            background: #0d0e12;
+            border-right: 1px solid var(--border-subtle);
+            overflow-y: auto;
+        }
+
+        .chat-user-item {
+            padding: 15px;
+            border-bottom: 1px solid var(--border-subtle);
+            cursor: pointer;
+            transition: background 0.2s;
+            text-align: left;
+        }
+
+        .chat-user-item:hover, .chat-user-item.active {
+            background: rgba(0, 85, 255, 0.15);
+            border-left: 4px solid var(--gsra-blue);
+        }
+
+        .chat-window {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            background: #0b0c10;
+        }
+
+        .chat-header {
+            padding: 15px 20px;
+            background: #15161a;
+            border-bottom: 1px solid var(--border-subtle);
+            text-align: left;
+            font-weight: bold;
+            color: #fff;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .message-bubble {
+            max-width: 65%;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            line-height: 1.4;
+            word-wrap: break-word;
+        }
+
+        .message-own {
+            align-self: flex-end;
+            background: var(--gsra-blue);
+            color: #fff;
+            border-bottom-right-radius: 2px;
+        }
+
+        .message-other {
+            align-self: flex-start;
+            background: #1f2128;
+            color: #fff;
+            border-bottom-left-radius: 2px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .message-time {
+            font-size: 10px;
+            opacity: 0.7;
+            margin-top: 4px;
+            text-align: right;
+            display: block;
+        }
+
+        .chat-input-area {
+            padding: 15px;
+            background: #15161a;
+            border-top: 1px solid var(--border-subtle);
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input-area input {
+            flex: 1;
+            padding: 10px 14px;
+            background: #0b0c10;
+            border: 1px solid var(--border-subtle);
+            color: #fff;
+            border-radius: 4px;
+            outline: none;
+        }
+
+        @media (max-width: 768px) {
+            .chat-container {
+                grid-template-columns: 1fr;
+            }
+            .chat-sidebar {
+                display: none; /* In mobiler Ansicht einklappbar */
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- HEADER & NAVIGATION -->
+    <header>
+        <div class="logo-slogan-container">
+            <a href="index.html" class="logo-link">
+                <img src="logo.png" alt="GSRA Logo" class="logo">
+            </a>
+            <div class="header-slogan">
+                <span class="text-blue">German</span>
+                <span class="text-yellow">SimRacing</span>
+                <span class="text-white">Association</span>
+            </div>
+        </div>
+        <nav>
+            <a href="index.html">Home</a>
+            <a href="events.html">Rennkalender</a>
+            <a href="marktplatz.html">Marktplatz</a>
+            <a href="setups.html">Setups</a>
+            <a href="community.html">Community</a>
+            <a href="messenger.html" class="active">Messenger</a>
+            <a href="login.html" class="login-btn" id="loginNavBtn">Login</a>
+            <button id="logoutBtn" style="display: none;">Logout</button>
+        </nav>
+    </header>
+
+    <main class="container">
+        <h1 class="hero-title">GSRA <span class="text-blue">Messenger</span></h1>
+        <p style="margin-bottom: 10px;">Direkte Kommunikation für Marktplatz-Angebote und Community-Nachrichten.</p>
+
+        <div class="chat-container">
+            <!-- Linke Leiste: Unterhaltungen -->
+            <div class="chat-sidebar" id="chatSidebar">
+                <div style="padding: 15px; color: var(--gsra-yellow); font-size: 14px; font-weight: bold; border-bottom: 1px solid var(--border-subtle);">
+                    Deine Chats
+                </div>
+                <div id="chatsList">
+                    <p style="padding: 15px; font-size: 13px; color: var(--text-muted);">Lade Unterhaltungen...</p>
+                </div>
+            </div>
+
+            <!-- Rechtes Fenster: Aktiver Chat -->
+            <div class="chat-window">
+                <div class="chat-header" id="chatHeader">
+                    Wähle einen Chat aus oder starte eine Anfrage über den Marktplatz.
+                </div>
+
+                <div class="chat-messages" id="chatMessages">
+                <p style="text-align: center; color: var(--text-muted); margin: auto;">Keine Nachricht ausgewählt.</p>
+
+                <form class="chat-input-area" id="chatForm">
+                    <input type="text" id="messageInput" placeholder="Nachricht schreiben..." autocomplete="off" disabled>
+                    <button type="submit" class="login-btn" id="sendBtn" disabled>Senden</button>
+                </form>
+            </div>
+        </div>
+    </main>
+
+    <script type="module" src="messenger.js"></script>
+</body>
+</html>

@@ -174,15 +174,17 @@ function openDetailModal(item) {
         modalMainImage.src = "placeholder.png";
     }
 
-    // Messenger Button Aktion
-    modalContactBtn.onclick = () => {
-        if (!currentUser) {
-            alert("Bitte logge dich ein, um dem Verkäufer eine Nachricht zu senden.");
-            return;
-        }
-        alert(`Kontakt zu ${item.sellerName || 'Verkäufer'} wird über den Messenger hergestellt...`);
-        // Hier folgt der Messenger-Aufruf (z.B. openChatWithUser(item.sellerId))
-    };
+ // Messenger Button Aktion in openDetailModal()
+modalContactBtn.onclick = () => {
+    if (!currentUser) {
+        alert("Bitte logge dich ein, um dem Verkäufer eine Nachricht zu senden.");
+        return;
+    }
+    
+    // Direktes Weiterleiten in den Messenger mit Kontext-Daten
+    const url = `messenger.html?sellerId=${item.sellerId}&sellerName=${encodeURIComponent(item.sellerName || 'Verkäufer')}&itemTitle=${encodeURIComponent(item.title)}`;
+    window.location.href = url;
+};
 
     // Löschen Button (nur für den Besitzer sichtbar)
     if (currentUser && currentUser.uid === item.sellerId) {
