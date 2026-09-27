@@ -16,6 +16,9 @@ function escapeHtml(str) {
         .replace(/'/g, "&#039;");
 }
 
+// Inline SVG-Platzhalter (verhindert 404 placeholder.png Fehler)
+const DEFAULT_PLACEHOLDER = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='250' viewBox='0 0 400 250'><rect width='100%' height='100%' fill='%231a1a1a'/><text x='50%' y='50%' fill='%23666666' font-size='16' text-anchor='middle' dy='.3em'>Kein Bild vorhanden</text></svg>";
+
 // DOM-Elemente
 const marketplaceGrid = document.getElementById("marketplaceGrid");
 const filterCategory = document.getElementById("filterCategory");
@@ -94,12 +97,12 @@ function renderMarketplaceItems(items) {
         card.className = "card marketplace-card-clickable";
 
         const images = item.image_urls || item.imageUrls || [];
-        const coverImage = images.length > 0 ? images[0] : 'placeholder.png';
+        const coverImage = images.length > 0 ? images[0] : DEFAULT_PLACEHOLDER;
         const formattedPrice = parseFloat(item.price || 0).toFixed(2);
         const seller = item.seller_name || item.sellerName || "Anonym";
 
         card.innerHTML = `
-            <img src="${escapeHtml(coverImage)}" alt="${escapeHtml(item.title)}" style="width: 100%; height: 180px; object-fit: cover; border-radius: 6px; margin-bottom: 12px; border: 1px solid var(--border-subtle);">
+            <img src="${escapeHtml(coverImage)}" alt="${escapeHtml(item.title)}" style="width: 100%; height: 180px; object-fit: cover; border-radius: 6px; margin-bottom: 12px; border: 1px solid var(--border-subtle);" onerror="this.src='${DEFAULT_PLACEHOLDER}'">
             <h3>${escapeHtml(item.title)}</h3>
             <p style="font-size: 13px; color: var(--gsra-blue); font-weight: bold; margin-bottom: 5px;">${escapeHtml(item.category)}</p>
             <p style="font-size: 13px; margin-bottom: 15px;">Verkäufer: ${escapeHtml(seller)}</p>
@@ -141,9 +144,9 @@ function openDetailModal(item) {
     const sellerId = item.seller_id || item.sellerId;
     const images = item.image_urls || item.imageUrls || [];
 
-    modalTitle.innerText = item.title;
-    modalMeta.innerText = `Kategorie: ${item.category} | Verkäufer: ${sellerName}`;
-    modalDescription.innerText = item.description;
+    modalTitle.innerText = item.title || "";
+    modalMeta.innerText = `Kategorie: ${item.category || 'Allgemein'} | Verkäufer: ${sellerName}`;
+    modalDescription.innerText = item.description || "";
     modalPrice.innerText = `${parseFloat(item.price || 0).toFixed(2)} €`;
 
     modalGalleryStrip.innerHTML = "";
@@ -164,7 +167,7 @@ function openDetailModal(item) {
             modalGalleryStrip.appendChild(thumb);
         });
     } else {
-        modalMainImage.src = "placeholder.png";
+        modalMainImage.src = DEFAULT_PLACEHOLDER;
     }
 
     modalContactBtn.onclick = () => {
@@ -271,12 +274,12 @@ if (createItemForm) {
 
             const uploadPromises = files.map(async (file) => {
                 const fileExt = file.name.split('.').pop();
-                const filePath = `marketplace/${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
+                const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
                 
-                const { error: uploadError } = await supabase.storage.from("marketplace").upload(filePath, file);
+                const { error: uploadError } = await supabase.storage.from("marketplace").upload(fileName, file);
                 if (uploadError) throw uploadError;
 
-                const { data } = supabase.storage.from("marketplace").getPublicUrl(filePath);
+                const { data } = supabase.storage.from("marketplace").getPublicUrl(fileName);
                 return data.publicUrl;
             });
 
@@ -301,7 +304,7 @@ if (createItemForm) {
             loadMarketplaceItems();
         } catch (error) {
             console.error("Fehler beim Erstellen des Angebots:", error);
-            alert("Fehler beim Erstellen des Angebots.");
+            alert("Fehler beim Erstellen des Angebots: " + (error.message || "Überprüfe deine Internetverbindung oder Supabase-Rechte."));
         } finally {
             if (submitBtn) {
                 submitBtn.disabled = false;

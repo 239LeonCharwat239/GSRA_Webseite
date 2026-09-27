@@ -42,11 +42,13 @@ async function checkUrlParameters() {
     const itemTitle = urlParams.get("itemTitle");
 
     if (sellerId && currentUser && sellerId !== currentUser.id) {
-        let { data: existingChat } = await supabase
+        let { data: existingChat, error: fetchErr } = await supabase
             .from("chats")
             .select("*")
             .or(`and(user1_id.eq.${currentUser.id},user2_id.eq.${sellerId}),and(user1_id.eq.${sellerId},user2_id.eq.${currentUser.id})`)
             .maybeSingle();
+
+        if (fetchErr) console.warn("Hinweis beim Chat-Suchen:", fetchErr);
 
         if (!existingChat) {
             const { data: newChat, error } = await supabase
@@ -78,7 +80,7 @@ async function loadUserChats() {
         .from("chats")
         .select("*")
         .or(`user1_id.eq.${currentUser.id},user2_id.eq.${currentUser.id}`)
-        .order("updated_at", { ascending: false });
+        .order("created_at", { ascending: false });
 
     if (error || !chats || chats.length === 0) {
         chatsList.innerHTML = `<p style="padding: 15px; font-size: 13px; color: var(--text-muted);">Keine aktiven Chats.</p>`;
@@ -101,7 +103,7 @@ async function loadUserChats() {
         item.addEventListener("click", () => {
             activeChatId = chat.id;
             openChat(chat.id, `Nutzer (${otherUserId ? otherUserId.substring(0, 6) : ''})`);
-            loadUserChats(); // Aktualisiert aktive Markierung
+            loadUserChats();
         });
 
         chatsList.appendChild(item);
@@ -117,6 +119,7 @@ async function openChat(chatId, recipientName, itemContext = null) {
 
     if (messageSubscription) {
         supabase.removeChannel(messageSubscription);
+        messageSubscription = null;
     }
 
     const { data: messages } = await supabase
@@ -155,21 +158,20 @@ function renderMessages(messages, itemContext) {
 function appendSingleMessage(msg) {
     if (!chatMessages) return;
 
-    // Platzhalter entfernen, falls vorhanden
     const placeholder = chatMessages.querySelector(".chat-placeholder");
     if (placeholder) {
         placeholder.remove();
     }
 
     const bubble = document.createElement("div");
-    const isOwn = msg.sender_id === currentUser.id;
+    const isOwn = msg.sender_id === currentUser?.id;
 
     bubble.className = `message-bubble ${isOwn ? 'message-own' : 'message-other'}`;
 
     const timeStr = msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
 
     const textDiv = document.createElement("div");
-    textDiv.innerText = msg.text;
+    textDiv.innerText = msg.text || "";
 
     const timeSpan = document.createElement("span");
     timeSpan.className = "message-time";
@@ -203,11 +205,10 @@ if (chatForm) {
             if (msgError) throw msgError;
 
             await supabase.from("chats").update({
-                last_message: text,
-                updated_at: new Date().toISOString()
+                last_message: text
             }).eq("id", activeChatId);
 
-            loadUserChats(); // Aktualisiert die Vorschau in der linken Seitenleiste
+            loadUserChats();
         } catch (err) {
             console.error("Fehler beim Senden:", err);
         }
