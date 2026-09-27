@@ -16,7 +16,7 @@ function escapeHtml(str) {
         .replace(/'/g, "&#039;");
 }
 
-// Inline SVG-Platzhalter (verhindert 404 placeholder.png Fehler)
+// Inline SVG-Platzhalter
 const DEFAULT_PLACEHOLDER = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='250' viewBox='0 0 400 250'><rect width='100%' height='100%' fill='%231a1a1a'/><text x='50%' y='50%' fill='%23666666' font-size='16' text-anchor='middle' dy='.3em'>Kein Bild vorhanden</text></svg>";
 
 // DOM-Elemente
@@ -96,15 +96,20 @@ function renderMarketplaceItems(items) {
         const card = document.createElement("div");
         card.className = "card marketplace-card-clickable";
 
-        const images = item.image_urls || item.imageUrls || [];
+        // Unterstützt sowohl 'images' (deine Supabase-Spalte) als auch Fallbacks
+        const images = item.images || item.image_urls || item.imageUrls || [];
         const coverImage = images.length > 0 ? images[0] : DEFAULT_PLACEHOLDER;
         const formattedPrice = parseFloat(item.price || 0).toFixed(2);
         const seller = item.seller_name || item.sellerName || "Anonym";
+        const condition = item.condition || "Gebraucht";
 
         card.innerHTML = `
             <img src="${escapeHtml(coverImage)}" alt="${escapeHtml(item.title)}" style="width: 100%; height: 180px; object-fit: cover; border-radius: 6px; margin-bottom: 12px; border: 1px solid var(--border-subtle);" onerror="this.src='${DEFAULT_PLACEHOLDER}'">
             <h3>${escapeHtml(item.title)}</h3>
-            <p style="font-size: 13px; color: var(--gsra-blue); font-weight: bold; margin-bottom: 5px;">${escapeHtml(item.category)}</p>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                <span style="font-size: 13px; color: var(--gsra-blue); font-weight: bold;">${escapeHtml(item.category)}</span>
+                <span style="font-size: 11px; background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; color: #ccc;">Zustand: ${escapeHtml(condition)}</span>
+            </div>
             <p style="font-size: 13px; margin-bottom: 15px;">Verkäufer: ${escapeHtml(seller)}</p>
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <span class="text-yellow" style="font-size: 20px; font-weight: bold;">${formattedPrice} €</span>
@@ -141,11 +146,12 @@ function openDetailModal(item) {
     if (!itemDetailModal) return;
 
     const sellerName = item.seller_name || item.sellerName || 'Verkäufer';
-    const sellerId = item.seller_id || item.sellerId;
-    const images = item.image_urls || item.imageUrls || [];
+    const sellerId = item.user_id || item.seller_id || item.sellerId;
+    const images = item.images || item.image_urls || item.imageUrls || [];
+    const condition = item.condition || 'Gebraucht';
 
     modalTitle.innerText = item.title || "";
-    modalMeta.innerText = `Kategorie: ${item.category || 'Allgemein'} | Verkäufer: ${sellerName}`;
+    modalMeta.innerText = `Kategorie: ${item.category || 'Allgemein'} | Zustand: ${condition} | Verkäufer: ${sellerName}`;
     modalDescription.innerText = item.description || "";
     modalPrice.innerText = `${parseFloat(item.price || 0).toFixed(2)} €`;
 
@@ -180,7 +186,7 @@ function openDetailModal(item) {
             return;
         }
         
-        const url = `messenger.html?sellerId=${sellerId}&sellerName=${encodeURIComponent(sellerName)}&itemTitle=${encodeURIComponent(item.title)}`;
+        const url = `messenger.html?sellerId=${encodeURIComponent(sellerId)}&sellerName=${encodeURIComponent(sellerName)}&itemTitle=${encodeURIComponent(item.title)}`;
         window.location.href = url;
     };
 
@@ -213,7 +219,6 @@ if (closeDetailModalBtn) {
     });
 }
 
-// Schließen bei Klick außerhalb des Modals
 window.addEventListener("click", (e) => {
     if (e.target === itemDetailModal) itemDetailModal.style.display = "none";
     if (e.target === itemCreateModal) itemCreateModal.style.display = "none";
@@ -249,6 +254,7 @@ if (createItemForm) {
 
         const title = document.getElementById("itemTitle").value;
         const category = document.getElementById("itemCategory").value;
+        const condition = document.getElementById("itemCondition").value;
         const price = parseFloat(document.getElementById("itemPrice").value);
         const description = document.getElementById("itemDescription").value;
         const fileInput = document.getElementById("itemImages");
@@ -286,13 +292,16 @@ if (createItemForm) {
             const imageUrls = await Promise.all(uploadPromises);
             const sellerName = currentUser.user_metadata?.full_name || (currentUser.email ? currentUser.email.split('@')[0] : "Anonym");
 
+            // Exakter Insert passend zu deinen Supabase-Spaltennamen:
+            // user_id, seller_name, title, category, condition, price, description, images
             const { error: insertError } = await supabase.from("marketplace").insert([{
-                title,
-                category,
-                price,
-                description,
-                image_urls: imageUrls,
-                seller_id: currentUser.id,
+                title: title,
+                category: category,
+                condition: condition,
+                price: price,
+                description: description,
+                images: imageUrls,
+                user_id: currentUser.id,
                 seller_name: sellerName
             }]);
 
@@ -304,11 +313,11 @@ if (createItemForm) {
             loadMarketplaceItems();
         } catch (error) {
             console.error("Fehler beim Erstellen des Angebots:", error);
-            alert("Fehler beim Erstellen des Angebots: " + (error.message || "Überprüfe deine Internetverbindung oder Supabase-Rechte."));
+            alert("Fehler beim Erstellen des Angebots: " + (error.message || "Überprüfe deine Rechte oder Storage Policies."));
         } finally {
             if (submitBtn) {
                 submitBtn.disabled = false;
-                submitBtn.innerText = "Angebot veröffentlichen";
+                submitBtn.innerText = "Angebot Veröffentlichen";
             }
         }
     });

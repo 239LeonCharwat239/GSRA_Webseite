@@ -76,7 +76,7 @@
             <p id="modalMeta" style="font-size: 14px; color: var(--text-muted); margin-bottom: 15px;"></p>
 
             <div>
-                <img id="modalMainImage" src="placeholder.png" alt="Hauptbild" class="modal-main-image">
+                <img id="modalMainImage" src="" alt="Hauptbild" class="modal-main-image">
             </div>
 
             <div id="modalGalleryStrip" class="gallery-container"></div>
@@ -117,7 +117,7 @@
                     <input type="text" id="itemTitle" placeholder="z.B. Fanatec Direct Drive Wheelbase 8Nm" required>
                 </div>
 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
                     <div>
                         <label for="itemCategory" style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">Kategorie*</label>
                         <select id="itemCategory" required>
@@ -129,13 +129,22 @@
                         </select>
                     </div>
                     <div>
+                        <label for="itemCondition" style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">Zustand*</label>
+                        <select id="itemCondition" required>
+                            <option value="Gebraucht">Gebraucht</option>
+                            <option value="Wie neu">Wie neu</option>
+                            <option value="Neu">Neu (OVP)</option>
+                            <option value="Defekt">Defekt / Ersatzteil</option>
+                        </select>
+                    </div>
+                    <div>
                         <label for="itemPrice" style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">Preis (€)*</label>
                         <input type="number" id="itemPrice" step="0.01" min="0" placeholder="z.B. 350.00" required>
                     </div>
                 </div>
 
                 <div>
-                    <label for="itemDescription" style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">Beschreibung & Zustand*</label>
+                    <label for="itemDescription" style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">Beschreibung & Details*</label>
                     <textarea id="itemDescription" rows="4" placeholder="Beschreibe den Zustand, Alter, Abholung/Versand..." required></textarea>
                 </div>
 
@@ -149,16 +158,16 @@
         </div>
     </div>
 
-    <!-- SOCIAL MEDIA -->
+    <!-- SOCIAL MEDIA SECTION -->
     <section class="social-section">
         <h2>Folge <span class="text-yellow">GSRA</span></h2>
         <p class="social-subtext">Bleibe immer auf dem Laufenden auf unseren Social-Media-Kanälen.</p>
         <div class="social-container">
-            <a href="#" class="icon-youtube"><i class="fab fa-youtube"></i></a>
-            <a href="#" class="icon-instagram"><i class="fab fa-instagram"></i></a>
-            <a href="#" class="icon-discord"><i class="fab fa-discord"></i></a>
-            <a href="#" class="icon-reddit"><i class="fab fa-reddit"></i></a>
-            <a href="#" class="icon-twitch"><i class="fab fa-twitch"></i></a>
+            <a href="https://www.instagram.com/official.gsra/" target="_blank" class="icon-instagram" aria-label="Instagram"><i class="fab fa-instagram"></i></a>
+            <a href="https://www.youtube.com/@GlobalSimracingAlliance" target="_blank" class="icon-youtube" aria-label="YouTube"><i class="fab fa-youtube"></i></a>
+            <a href="https://www.reddit.com/r/GSRA/" target="_blank" class="icon-reddit" aria-label="Reddit"><i class="fab fa-reddit"></i></a>
+            <a href="https://discord.gg/QDMa5qUCBX" target="_blank" class="icon-discord" aria-label="Discord"><i class="fab fa-discord"></i></a>
+            <a href="https://www.twitch.tv/global_simracing_alliance" target="_blank" class="icon-twitch" aria-label="Twitch"><i class="fab fa-twitch"></i></a>
         </div>
     </section>
 
