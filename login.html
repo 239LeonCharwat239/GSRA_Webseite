@@ -33,7 +33,7 @@
         <a href="dashboard.html" class="auth-only">Dashboard</a>
         <a href="messenger.html" class="auth-only">Messenger</a>
         <a href="login.html" class="login-btn active" id="loginNavBtn">Login</a>
-        <button id="logoutBtn" class="login-btn">Logout</button>
+        <button id="logoutBtn" class="login-btn" style="display: none;">Logout</button>
     </nav>
 </header>
 
@@ -66,8 +66,13 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', async () => {
-        const client = window.supabase;
+        const client = window.supabaseClient || window.supabase;
         let isSignUpMode = false;
+
+        if (!client) {
+            console.error("Supabase Client nicht bereit.");
+            return;
+        }
 
         const loginForm = document.getElementById('loginForm');
         const usernameGroup = document.getElementById('usernameGroup');
@@ -111,9 +116,11 @@
 
                 if (error) {
                     alert('Registrierung fehlgeschlagen: ' + error.message);
-                } else {
+                } else if (data.session) {
                     alert('Konto erfolgreich erstellt!');
                     window.location.href = 'dashboard.html';
+                } else {
+                    alert('Konto erstellt! Bitte überprüfe deine E-Mails zur Bestätigung.');
                 }
             } else {
                 // Login

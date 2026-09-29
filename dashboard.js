@@ -3,8 +3,8 @@
 ========================================= */
 
 document.addEventListener("DOMContentLoaded", async () => {
-    // Supabase-Client abrufen
-    const client = window.supabase;
+    // Supabase-Client abrufen (einheitlicher Fallback wie in den anderen Skripten)
+    const client = window.supabaseClient || window.supabase;
 
     if (!client) {
         console.error("Supabase Client nicht gefunden!");
