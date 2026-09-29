@@ -2,7 +2,7 @@
    GSRA - Zentrale Auth- & Navigationssteuerung (Supabase)
 ========================================= */
 
-document.addEventListener("DOMContentLoaded", async () => {
+const initAuthNav = async () => {
     const client = window.supabaseClient || window.supabase;
     
     if (!client) {
@@ -54,4 +54,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             window.location.href = "login.html";
         });
     }
-});
+};
+
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initAuthNav);
+} else {
+    initAuthNav();
+}
