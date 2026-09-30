@@ -150,64 +150,68 @@ function openDetailModal(item) {
     const images = item.images || item.image_urls || item.imageUrls || [];
     const condition = item.condition || 'Gebraucht';
 
-    modalTitle.innerText = item.title || "";
-    modalMeta.innerText = `Kategorie: ${item.category || 'Allgemein'} | Zustand: ${condition} | Verkäufer: ${sellerName}`;
-    modalDescription.innerText = item.description || "";
-    modalPrice.innerText = `${parseFloat(item.price || 0).toFixed(2)} €`;
+    if (modalTitle) modalTitle.innerText = item.title || "";
+    if (modalMeta) modalMeta.innerText = `Kategorie: ${item.category || 'Allgemein'} | Zustand: ${condition} | Verkäufer: ${sellerName}`;
+    if (modalDescription) modalDescription.innerText = item.description || "";
+    if (modalPrice) modalPrice.innerText = `${parseFloat(item.price || 0).toFixed(2)} €`;
 
-    modalGalleryStrip.innerHTML = "";
+    if (modalGalleryStrip) modalGalleryStrip.innerHTML = "";
 
     if (images.length > 0) {
-        modalMainImage.src = images[0];
+        if (modalMainImage) modalMainImage.src = images[0];
         images.forEach((imgUrl, index) => {
             const thumb = document.createElement("img");
             thumb.src = imgUrl;
             thumb.className = `gallery-thumbnail ${index === 0 ? 'active' : ''}`;
 
             thumb.addEventListener("click", () => {
-                modalMainImage.src = imgUrl;
+                if (modalMainImage) modalMainImage.src = imgUrl;
                 document.querySelectorAll(".gallery-thumbnail").forEach(t => t.classList.remove("active"));
                 thumb.classList.add("active");
             });
 
-            modalGalleryStrip.appendChild(thumb);
+            if (modalGalleryStrip) modalGalleryStrip.appendChild(thumb);
         });
     } else {
-        modalMainImage.src = DEFAULT_PLACEHOLDER;
+        if (modalMainImage) modalMainImage.src = DEFAULT_PLACEHOLDER;
     }
 
-    modalContactBtn.onclick = () => {
-        if (!currentUser) {
-            alert("Bitte logge dich ein, um dem Verkäufer eine Nachricht zu senden.");
-            return;
-        }
-        if (currentUser.id === sellerId) {
-            alert("Das ist dein eigenes Angebot.");
-            return;
-        }
-        
-        const url = `messenger.html?sellerId=${encodeURIComponent(sellerId)}&sellerName=${encodeURIComponent(sellerName)}&itemTitle=${encodeURIComponent(item.title)}`;
-        window.location.href = url;
-    };
-
-    if (currentUser && currentUser.id === sellerId) {
-        modalDeleteBtn.style.display = "inline-flex";
-        modalDeleteBtn.onclick = async () => {
-            if (confirm("Möchtest du dieses Angebot wirklich löschen?")) {
-                try {
-                    const { error } = await supabase.from("marketplace").delete().eq("id", item.id);
-                    if (error) throw error;
-                    alert("Angebot gelöscht.");
-                    itemDetailModal.style.display = "none";
-                    loadMarketplaceItems();
-                } catch (e) {
-                    console.error("Fehler beim Löschen:", e);
-                    alert("Fehler beim Löschen des Angebots.");
-                }
+    if (modalContactBtn) {
+        modalContactBtn.onclick = () => {
+            if (!currentUser) {
+                alert("Bitte logge dich ein, um dem Verkäufer eine Nachricht zu senden.");
+                return;
             }
+            if (currentUser.id === sellerId) {
+                alert("Das ist dein eigenes Angebot.");
+                return;
+            }
+            
+            const url = `messenger.html?sellerId=${encodeURIComponent(sellerId)}&sellerName=${encodeURIComponent(sellerName)}&itemTitle=${encodeURIComponent(item.title)}`;
+            window.location.href = url;
         };
-    } else {
-        modalDeleteBtn.style.display = "none";
+    }
+
+    if (modalDeleteBtn) {
+        if (currentUser && currentUser.id === sellerId) {
+            modalDeleteBtn.style.display = "inline-flex";
+            modalDeleteBtn.onclick = async () => {
+                if (confirm("Möchtest du dieses Angebot wirklich löschen?")) {
+                    try {
+                        const { error } = await supabase.from("marketplace").delete().eq("id", item.id);
+                        if (error) throw error;
+                        alert("Angebot gelöscht.");
+                        itemDetailModal.style.display = "none";
+                        loadMarketplaceItems();
+                    } catch (e) {
+                        console.error("Fehler beim Löschen:", e);
+                        alert("Fehler beim Löschen des Angebots.");
+                    }
+                }
+            };
+        } else {
+            modalDeleteBtn.style.display = "none";
+        }
     }
 
     itemDetailModal.style.display = "flex";
@@ -252,15 +256,21 @@ if (createItemForm) {
             return;
         }
 
-        const title = document.getElementById("itemTitle").value;
-        const category = document.getElementById("itemCategory").value;
-        const condition = document.getElementById("itemCondition").value;
-        const price = parseFloat(document.getElementById("itemPrice").value);
-        const description = document.getElementById("itemDescription").value;
+        const titleInput = document.getElementById("itemTitle");
+        const categoryInput = document.getElementById("itemCategory");
+        const conditionInput = document.getElementById("itemCondition");
+        const priceInput = document.getElementById("itemPrice");
+        const descriptionInput = document.getElementById("itemDescription");
         const fileInput = document.getElementById("itemImages");
         const submitBtn = createItemForm.querySelector("button[type='submit']");
 
-        const files = Array.from(fileInput.files);
+        const title = titleInput ? titleInput.value : "";
+        const category = categoryInput ? categoryInput.value : "";
+        const condition = conditionInput ? conditionInput.value : "";
+        const price = priceInput ? parseFloat(priceInput.value) : 0;
+        const description = descriptionInput ? descriptionInput.value : "";
+
+        const files = fileInput && fileInput.files ? Array.from(fileInput.files) : [];
 
         if (files.length === 0) {
             alert("Bitte wähle mindestens ein Bild aus.");
@@ -292,8 +302,6 @@ if (createItemForm) {
             const imageUrls = await Promise.all(uploadPromises);
             const sellerName = currentUser.user_metadata?.full_name || (currentUser.email ? currentUser.email.split('@')[0] : "Anonym");
 
-            // Exakter Insert passend zu deinen Supabase-Spaltennamen:
-            // user_id, seller_name, title, category, condition, price, description, images
             const { error: insertError } = await supabase.from("marketplace").insert([{
                 title: title,
                 category: category,

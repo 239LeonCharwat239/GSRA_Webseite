@@ -6,10 +6,15 @@
     <title>GSRA - Messenger</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Supabase SDK & Auth -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-client.js"></script>
+    <script src="auth-nav.js"></script>
 </head>
 <body>
 
-    <!-- HEADER & NAVIGATION -->
+    <!-- HEADER -->
     <header>
         <div class="logo-slogan-container">
             <a href="index.html" class="logo-link">
@@ -26,7 +31,7 @@
             <a href="setups.html">Setups</a>
             <a href="nachschlagewerk.html">Nachschlagewerk</a>
             <a href="kalender.html">Rennkalender</a>
-            <a href="dashboard.html" class="auth-only" style="display: none;">Dashboard</a>
+            <a href="dashboard.html">Dashboard</a>
             <a href="messenger.html" class="active">Messenger</a>
             <a href="login.html" class="login-btn" id="loginNavBtn">Login</a>
             <button id="logoutBtn" class="login-btn" style="display: none;">Logout</button>
@@ -35,41 +40,57 @@
 
     <main class="container">
         <h1 class="hero-title">GSRA <span class="text-blue">Messenger</span></h1>
-        <p style="margin-bottom: 10px;">Direkte Kommunikation für Marktplatz-Angebote und Community-Nachrichten.</p>
 
-        <div class="chat-container">
-            <!-- Linke Leiste: Unterhaltungen -->
-            <div class="chat-sidebar" id="chatSidebar">
-                <div style="padding: 15px; color: var(--gsra-yellow); font-size: 14px; font-weight: bold; border-bottom: 1px solid var(--border-subtle);">
-                    Deine Chats
-                </div>
-                <div id="chatsList">
-                    <p style="padding: 15px; font-size: 13px; color: var(--text-muted);">Lade Unterhaltungen...</p>
-                </div>
+        <!-- HINWEIS FÜR UNEINGELOGGTE BESUCHER -->
+        <div id="guestNotice" class="card" style="display: none; text-align: center; padding: 40px 20px; border: 1.5px solid var(--gsra-blue); margin-top: 20px;">
+            <i class="fa-solid fa-comments text-blue" style="font-size: 3rem; margin-bottom: 15px;">
+                
+            </i>
+            <h2 style="margin-bottom: 10px;">Direkte Kommunikation im GSRA-Team & Marktplatz</h2>
+            <p style="max-width: 600px; margin: 0 auto 25px auto; color: var(--text-muted); line-height: 1.6;">
+                Der GSRA Messenger ermöglicht dir direkte Nachrichten für Marktplatz-Angebote sowie den Austausch mit anderen Fahrern. Melde dich an, um Nachrichten zu schreiben oder Anfragen zu stellen.
+            </p>
+            <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
+                <a href="login.html" class="login-btn" style="text-decoration: none; padding: 12px 25px;">
+                    <i class="fa-solid fa-right-to-bracket"></i> Jetzt Anmelden
+                </a>
             </div>
+        </div>
 
-            <!-- Rechtes Fenster: Aktiver Chat -->
-            <div class="chat-window">
-                <div class="chat-header" id="chatHeader">
-                    Wähle einen Chat aus oder starte eine Anfrage über den Marktplatz.
+        <!-- DIESER BEREICH WIRD NUR EINGELOGGTEN BENUTZERN ANGEZEIGT -->
+        <div id="userContent" style="display: none;">
+            <p style="margin-bottom: 10px;">Direkte Kommunikation für Marktplatz-Angebote und Community-Nachrichten.</p>
+
+            <div class="chat-container">
+                <!-- Linke Leiste: Unterhaltungen -->
+                <div class="chat-sidebar" id="chatSidebar">
+                    <div style="padding: 15px; color: var(--gsra-yellow); font-size: 14px; font-weight: bold; border-bottom: 1px solid var(--border-subtle);">
+                        Deine Chats
+                    </div>
+                    <div id="chatsList">
+                        <p style="padding: 15px; font-size: 13px; color: var(--text-muted);">Lade Unterhaltungen...</p>
+                    </div>
                 </div>
 
-                <div class="chat-messages" id="chatMessages">
-                    <p style="text-align: center; color: var(--text-muted); margin: auto;">Keine Nachricht ausgewählt.</p>
-                </div>
+                <!-- Rechtes Fenster: Aktiver Chat -->
+                <div class="chat-window">
+                    <div class="chat-header" id="chatHeader">
+                        Wähle einen Chat aus oder starte eine Anfrage über den Marktplatz.
+                    </div>
 
-                <form class="chat-input-area" id="chatForm">
-                    <input type="text" id="messageInput" placeholder="Nachricht schreiben..." autocomplete="off" disabled>
-                    <button type="submit" class="login-btn" id="sendBtn" disabled>Senden</button>
-                </form>
+                    <div class="chat-messages" id="chatMessages">
+                        <p style="text-align: center; color: var(--text-muted); margin: auto;">Keine Nachricht ausgewählt.</p>
+                    </div>
+
+                    <form class="chat-input-area" id="chatForm">
+                        <input type="text" id="messageInput" placeholder="Nachricht schreiben..." autocomplete="off" disabled>
+                        <button type="submit" class="login-btn" id="sendBtn" disabled>Senden</button>
+                    </form>
+                </div>
             </div>
         </div>
     </main>
 
-    <!-- SUPABASE SDK & JAVASCRIPT -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="supabase-client.js"></script>
-    <script src="auth-nav.js"></script>
     <script src="messenger.js"></script>
 </body>
 </html>

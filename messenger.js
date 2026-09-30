@@ -6,6 +6,17 @@ let currentUser = null;
 let activeChatId = null;
 let messageSubscription = null;
 
+// Hilfsfunktion zum Schutz vor XSS / kaputtem HTML
+function escapeHtml(str) {
+    if (!str) return "";
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
 // DOM-Elemente
 const chatsList = document.getElementById("chatsList");
 const chatHeader = document.getElementById("chatHeader");
@@ -93,10 +104,13 @@ async function loadUserChats() {
         const item = document.createElement("div");
         item.className = `chat-user-item ${chat.id === activeChatId ? 'active' : ''}`;
         
+        const shortUserId = otherUserId ? escapeHtml(otherUserId.substring(0, 6)) : 'Chat';
+        const lastMsg = escapeHtml(chat.last_message || 'Keine Nachrichten');
+
         item.innerHTML = `
-            <div style="color: #fff; font-weight: bold; font-size: 14px;">Nutzer (${otherUserId ? otherUserId.substring(0, 6) : 'Chat'})</div>
+            <div style="color: #fff; font-weight: bold; font-size: 14px;">Nutzer (${shortUserId})</div>
             <div style="font-size: 12px; color: var(--text-muted); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
-                ${chat.last_message || 'Keine Nachrichten'}
+                ${lastMsg}
             </div>
         `;
 
@@ -148,7 +162,7 @@ function renderMessages(messages, itemContext) {
     chatMessages.innerHTML = "";
 
     if (messages.length === 0 && itemContext) {
-        chatMessages.innerHTML = `<p class="chat-placeholder" style="text-align: center; color: var(--gsra-yellow); font-size: 13px; margin: auto;">Starte die Konversation bezüglich "${itemContext}"</p>`;
+        chatMessages.innerHTML = `<p class="chat-placeholder" style="text-align: center; color: var(--gsra-yellow); font-size: 13px; margin: auto;">Starte die Konversation bezüglich "${escapeHtml(itemContext)}"</p>`;
         return;
     }
 
@@ -189,11 +203,12 @@ if (chatForm) {
     chatForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         const supabase = window.supabaseClient || window.supabase;
-        const text = messageInput.value.trim();
+        const inputEl = document.getElementById("messageInput");
+        const text = inputEl ? inputEl.value.trim() : "";
 
         if (!text || !activeChatId || !currentUser || !supabase) return;
 
-        messageInput.value = "";
+        if (inputEl) inputEl.value = "";
 
         try {
             const { error: msgError } = await supabase.from("messages").insert([{

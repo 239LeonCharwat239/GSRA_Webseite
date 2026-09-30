@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- Supabase SDK & Client -->
+    <!-- Supabase SDK & Auth -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-client.js"></script>
     <script src="auth-nav.js"></script>
@@ -31,44 +31,66 @@
             <a href="setups.html">Setups</a>
             <a href="nachschlagewerk.html">Nachschlagewerk</a>
             <a href="kalender.html">Rennkalender</a>
-            <a href="dashboard.html" class="active auth-only">Dashboard</a>
-            <a href="messenger.html" class="auth-only">Messenger</a>
+            <a href="dashboard.html" class="active">Dashboard</a>
+            <a href="messenger.html">Messenger</a>
             <a href="login.html" class="login-btn" id="loginNavBtn">Login</a>
-            <button id="logoutBtn" class="login-btn">Logout</button>
+            <button id="logoutBtn" class="login-btn" style="display: none;">Logout</button>
         </nav>
     </header>
 
     <main class="container">
         <h1 class="hero-title">Fahrer <span class="text-blue">Dashboard</span></h1>
-        <p style="margin-bottom: 20px;">Verwalte deine Profildaten, verknüpfte Konten und deine Aktivitäten.</p>
 
-        <div class="grid-2">
-            <!-- Profil Übersicht -->
-            <div class="card">
-                <h3><i class="fa-solid fa-user-gear text-blue"></i> Profil Informationen</h3>
-                <div style="margin-top: 15px; display: flex; flex-direction: column; gap: 10px;">
-                    <p><strong>Benutzername:</strong> <span id="dashUsername">-</span></p>
-                    <p><strong>E-Mail:</strong> <span id="dashEmail">-</span></p>
-                    <p><strong>Mitglied seit:</strong> <span id="dashCreated">-</span></p>
-                </div>
+        <!-- HINWEIS FÜR UNEINGELOGGTE BESUCHER -->
+        <div id="guestNotice" class="card" style="display: none; text-align: center; padding: 40px 20px; border: 1.5px solid var(--gsra-yellow); margin-top: 20px;">
+            <i class="fa-solid fa-id-card text-yellow" style="font-size: 3rem; margin-bottom: 15px;">
+                
+            </i>
+            <h2 style="margin-bottom: 10px;">Willkommen im GSRA Fahrer-Dashboard!</h2>
+            <p style="max-width: 600px; margin: 0 auto 25px auto; color: var(--text-muted); line-height: 1.6;">
+                Im Dashboard verwaltest du deine persönlichen Profildaten, verknüpften Konten und deine Aktivitäten auf dem Marktplatz und im Messenger.
+            </p>
+            <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
+                <a href="login.html" class="login-btn" style="text-decoration: none; padding: 12px 25px;">
+                    <i class="fa-solid fa-right-to-bracket"></i> Jetzt Anmelden
+                </a>
+                <a href="login.html" class="login-btn" style="text-decoration: none; padding: 12px 25px; background: transparent; border: 1px solid var(--gsra-yellow); color: var(--gsra-yellow);">
+                    Konto erstellen
+                </a>
             </div>
+        </div>
 
-            <!-- Schnellzugriff / Aktivitäten -->
-            <div class="card">
-                <h3><i class="fa-solid fa-gauge-high text-yellow"></i> Schnellzugriff</h3>
-                <div style="margin-top: 15px; display: flex; flex-direction: column; gap: 10px;">
-                    <a href="messenger.html" class="login-btn" style="text-align: center; text-decoration: none;">
-                        <i class="fa-solid fa-comments"></i> Zum Messenger
-                    </a>
-                    <a href="marktplatz.html" class="login-btn" style="text-align: center; text-decoration: none; background: #222; border: 1px solid var(--border-subtle);">
-                        <i class="fa-solid fa-store"></i> Eigene Angebote verwalten
-                    </a>
+        <!-- DIESER BEREICH WIRD NUR EINGELOGGTEN BENUTZERN ANGEZEIGT -->
+        <div id="userContent" style="display: none;">
+            <p style="margin-bottom: 20px;">Verwalte deine Profildaten, verknüpfte Konten und deine Aktivitäten.</p>
+
+            <div class="grid-2">
+                <!-- Profil Übersicht -->
+                <div class="card">
+                    <h3><i class="fa-solid fa-user-gear text-blue"></i> Profil Informationen</h3>
+                    <div style="margin-top: 15px; display: flex; flex-direction: column; gap: 10px;">
+                        <p><strong>Benutzername:</strong> <span id="dashUsername">Lade...</span></p>
+                        <p><strong>E-Mail:</strong> <span id="dashEmail">Lade...</span></p>
+                        <p><strong>Mitglied seit:</strong> <span id="dashCreated">Lade...</span></p>
+                    </div>
+                </div>
+
+                <!-- Schnellzugriff -->
+                <div class="card">
+                    <h3><i class="fa-solid fa-gauge-high text-yellow"></i> Schnellzugriff</h3>
+                    <div style="margin-top: 15px; display: flex; flex-direction: column; gap: 10px;">
+                        <a href="messenger.html" class="login-btn" style="text-align: center; text-decoration: none;">
+                            <i class="fa-solid fa-comments"></i> Zum Messenger
+                        </a>
+                        <a href="marktplatz.html" class="login-btn" style="text-align: center; text-decoration: none; background: #222; border: 1px solid var(--border-subtle);">
+                            <i class="fa-solid fa-store"></i> Eigene Angebote verwalten
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
     </main>
 
-    <!-- Dashboard-spezifisches Skript zum Laden der Benutzerdaten -->
     <script src="dashboard.js"></script>
 </body>
 </html>
