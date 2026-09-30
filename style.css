@@ -269,6 +269,39 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
 }
 
 /* =========================================
+   MARKTPLATZ GRID & BILDER
+========================================= */
+#marketplaceGrid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 25px;
+    margin-top: 30px;
+    text-align: left;
+}
+
+.marketplace-card-img {
+    width: 100%;
+    height: 200px;
+    object-fit: cover;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    border: 1px solid var(--border-subtle);
+    background-color: #000000;
+}
+
+@media (max-width: 992px) {
+    #marketplaceGrid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    #marketplaceGrid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* =========================================
    MARKTPLATZ MODAL & GALERIE
 ========================================= */
 .modal-overlay {
@@ -356,6 +389,9 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
 .marketplace-card-clickable {
     cursor: pointer;
     transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
 }
 
 .marketplace-card-clickable:hover {

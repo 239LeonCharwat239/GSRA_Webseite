@@ -96,7 +96,6 @@ function renderMarketplaceItems(items) {
         const card = document.createElement("div");
         card.className = "card marketplace-card-clickable";
 
-        // Unterstützt sowohl 'images' (deine Supabase-Spalte) als auch Fallbacks
         const images = item.images || item.image_urls || item.imageUrls || [];
         const coverImage = images.length > 0 ? images[0] : DEFAULT_PLACEHOLDER;
         const formattedPrice = parseFloat(item.price || 0).toFixed(2);
@@ -104,14 +103,14 @@ function renderMarketplaceItems(items) {
         const condition = item.condition || "Gebraucht";
 
         card.innerHTML = `
-            <img src="${escapeHtml(coverImage)}" alt="${escapeHtml(item.title)}" style="width: 100%; height: 180px; object-fit: cover; border-radius: 6px; margin-bottom: 12px; border: 1px solid var(--border-subtle);" onerror="this.src='${DEFAULT_PLACEHOLDER}'">
+            <img src="${escapeHtml(coverImage)}" alt="${escapeHtml(item.title)}" class="marketplace-card-img" onerror="this.src='${DEFAULT_PLACEHOLDER}'">
             <h3>${escapeHtml(item.title)}</h3>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
                 <span style="font-size: 13px; color: var(--gsra-blue); font-weight: bold;">${escapeHtml(item.category)}</span>
                 <span style="font-size: 11px; background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; color: #ccc;">Zustand: ${escapeHtml(condition)}</span>
             </div>
             <p style="font-size: 13px; margin-bottom: 15px;">Verkäufer: ${escapeHtml(seller)}</p>
-            <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: auto;">
                 <span class="text-yellow" style="font-size: 20px; font-weight: bold;">${formattedPrice} €</span>
                 <span style="font-size: 12px; color: var(--text-muted);"><i class="fa-solid fa-images"></i> ${images.length} Bilder</span>
             </div>
