@@ -12,16 +12,28 @@ const initAuthNav = async () => {
 
     const loginNavBtn = document.getElementById("loginNavBtn");
     const logoutBtn = document.getElementById("logoutBtn");
+    const guestNotice = document.getElementById("guestNotice");
+    const userContent = document.getElementById("userContent");
 
     const updateUI = (session) => {
-        // Alle Navigationslinks bleiben für JEDEN sichtbar!
-        // Nur der Login/Logout-Button wechselt je nach Status.
+        // 1. Navigation: Login/Logout-Button je nach Status umschalten
         if (session) {
             if (loginNavBtn) loginNavBtn.style.setProperty("display", "none", "important");
             if (logoutBtn) logoutBtn.style.setProperty("display", "inline-block", "important");
         } else {
             if (loginNavBtn) loginNavBtn.style.setProperty("display", "inline-block", "important");
             if (logoutBtn) logoutBtn.style.setProperty("display", "none", "important");
+        }
+
+        // 2. Seiteninhalt: Gast-Hinweis vs. Mitglieder-Inhalt automatisch umschalten
+        if (guestNotice && userContent) {
+            if (session) {
+                guestNotice.style.display = "none";
+                userContent.style.display = "block";
+            } else {
+                guestNotice.style.display = "block";
+                userContent.style.display = "none";
+            }
         }
     };
 
