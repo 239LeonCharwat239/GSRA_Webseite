@@ -50,6 +50,8 @@ const DEFAULT_PLACEHOLDER = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.o
 const marketplaceGrid = document.getElementById("marketplaceGrid");
 const filterCategory = document.getElementById("filterCategory");
 const searchMarketplace = document.getElementById("searchMarketplace");
+const minPriceInput = document.getElementById("minPrice");
+const maxPriceInput = document.getElementById("maxPrice");
 
 // Detail Modal Elemente
 const itemDetailModal = document.getElementById("itemDetailModal");
@@ -148,16 +150,21 @@ function renderMarketplaceItems(items) {
     });
 }
 
-// 3. Filter-Funktion
+// 3. Filter-Funktion (Kategorie, Suche & Preis-Spanne)
 function filterItems() {
     const categoryValue = filterCategory ? filterCategory.value : "all";
     const searchValue = searchMarketplace ? searchMarketplace.value.toLowerCase() : "";
+    const minPrice = minPriceInput && minPriceInput.value !== "" ? parseFloat(minPriceInput.value) : 0;
+    const maxPrice = maxPriceInput && maxPriceInput.value !== "" ? parseFloat(maxPriceInput.value) : Infinity;
 
     const filtered = allItems.filter((item) => {
+        const itemPrice = parseFloat(item.price || 0);
         const matchesCategory = categoryValue === "all" || item.category === categoryValue;
         const matchesSearch = (item.title || "").toLowerCase().includes(searchValue) ||
                               (item.description || "").toLowerCase().includes(searchValue);
-        return matchesCategory && matchesSearch;
+        const matchesPrice = itemPrice >= minPrice && itemPrice <= maxPrice;
+
+        return matchesCategory && matchesSearch && matchesPrice;
     });
 
     renderMarketplaceItems(filtered);
@@ -165,6 +172,8 @@ function filterItems() {
 
 if (filterCategory) filterCategory.addEventListener("change", filterItems);
 if (searchMarketplace) searchMarketplace.addEventListener("input", filterItems);
+if (minPriceInput) minPriceInput.addEventListener("input", filterItems);
+if (maxPriceInput) maxPriceInput.addEventListener("input", filterItems);
 
 // 4. Modal: Detailansicht
 function openDetailModal(item) {

@@ -182,7 +182,7 @@ nav a:hover::after, nav a.active::after {
 }
 
 /* =========================================
-   FORMULAR-INPUTS
+   FORMULAR-INPUTS & TEXTAREA FIX
 ========================================= */
 #create-event-form input,
 #create-event-form select,
@@ -207,7 +207,8 @@ nav a:hover::after, nav a.active::after {
 
 #create-item-form textarea,
 #create-setup-form textarea {
-    height: auto !important;
+    height: 110px !important;
+    resize: none !important;
 }
 
 input[type="date"],
@@ -303,7 +304,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
 }
 
 /* =========================================
-   MARKTPLATZ MODAL & GALERIE
+   MARKTPLATZ MODAL & GALERIE (RÄNDER FIX)
 ========================================= */
 .modal-overlay {
     position: fixed;
@@ -366,7 +367,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
     display: flex;
     gap: 10px;
     overflow-x: auto;
-    padding-bottom: 8px;
+    padding: 6px;
     margin-bottom: 20px;
 }
 

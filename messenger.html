@@ -3,18 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GSRA - Messenger</title>
+    <title>GSRA - Marktplatz</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- Supabase SDK & Auth -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="supabase-client.js"></script>
-    <script src="auth-nav.js"></script>
 </head>
 <body>
 
-    <!-- HEADER -->
+    <!-- HEADER & NAVIGATION -->
     <header>
         <div class="logo-slogan-container">
             <a href="index.html" class="logo-link">
@@ -27,68 +22,161 @@
         </div>
         <nav>
             <a href="index.html">Home</a>
-            <a href="marktplatz.html">Marktplatz</a>
+            <a href="marktplatz.html" class="active">Marktplatz</a>
             <a href="setups.html">Setups</a>
             <a href="nachschlagewerk.html">Nachschlagewerk</a>
             <a href="kalender.html">Rennkalender</a>
             <a href="dashboard.html">Dashboard</a>
-            <a href="messenger.html" class="active">Messenger</a>
+            <a href="messenger.html">Messenger</a>
             <a href="login.html" class="login-btn" id="loginNavBtn">Login</a>
             <button id="logoutBtn" class="login-btn" style="display: none;">Logout</button>
         </nav>
     </header>
 
+    <!-- MAIN CONTAINER -->
     <main class="container">
-        <h1 class="hero-title">GSRA <span class="text-blue">Messenger</span></h1>
+        <section class="hero-section">
+            <h1 class="hero-title">GSRA <span class="text-blue">Marktplatz</span></h1>
+            <p class="hero-subtitle">Kaufe und verkaufe SimRacing-Hardware, Pedale, Lenkräder und Zubehör direkt in der Community.</p>
+        </section>
 
-        <!-- HINWEIS FÜR UNEINGELOGGTE BESUCHER -->
-        <div id="guestNotice" class="card" style="display: none; text-align: center; padding: 40px 20px; border: 1.5px solid var(--gsra-blue); margin-top: 20px;">
-            <i class="fa-solid fa-comments text-blue" style="font-size: 3rem; margin-bottom: 15px;"></i>
-            <h2 style="margin-bottom: 10px;">Direkte Kommunikation im GSRA-Team & Marktplatz</h2>
-            <p style="max-width: 600px; margin: 0 auto 25px auto; color: var(--text-muted); line-height: 1.6;">
-                Der GSRA Messenger ermöglicht dir direkte Nachrichten für Marktplatz-Angebote sowie den Austausch mit anderen Fahrern. Melde dich an, um Nachrichten zu schreiben oder Anfragen zu stellen.
-            </p>
-            <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
-                <a href="login.html" class="login-btn" style="text-decoration: none; padding: 12px 25px;">
-                    <i class="fa-solid fa-right-to-bracket"></i> Jetzt Anmelden
-                </a>
+        <!-- FILTER & AKTIONEN -->
+        <section style="display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-bottom: 30px; flex-wrap: wrap;">
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                <select id="filterCategory" style="padding: 8px 12px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
+                    <option value="all">Alle Kategorien</option>
+                    <option value="Wheelbases">Wheelbases & Lenkräder</option>
+                    <option value="Pedale">Pedale</option>
+                    <option value="Rigs">Rigs & Sitze</option>
+                    <option value="Monitore">Monitore & VR</option>
+                    <option value="Zubehoer">Zubehör & Sonstiges</option>
+                </select>
+
+                <input type="text" id="searchMarketplace" placeholder="Suche Artikel..." style="padding: 8px 12px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px; min-width: 220px;">
+                <input type="number" id="minPrice" placeholder="Min €" style="padding: 8px 12px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px; width: 100px;">
+                <input type="number" id="maxPrice" placeholder="Max €" style="padding: 8px 12px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px; width: 100px;">
             </div>
-        </div>
 
-        <!-- DIESER BEREICH WIRD NUR EINGELOGGTEN BENUTZERN ANGEZEIGT -->
-        <div id="userContent" style="display: none;">
-            <p style="margin-bottom: 10px;">Direkte Kommunikation für Marktplatz-Angebote und Community-Nachrichten.</p>
+            <button id="openItemModalBtn" class="login-btn" style="cursor: pointer;">+ Angebot Erstellen</button>
+        </section>
 
-            <div class="chat-container">
-                <!-- Linke Leiste: Unterhaltungen -->
-                <div class="chat-sidebar" id="chatSidebar">
-                    <div style="padding: 15px; color: var(--gsra-yellow); font-size: 14px; font-weight: bold; border-bottom: 1px solid var(--border-subtle);">
-                        Deine Chats
-                    </div>
-                    <div id="chatsList">
-                        <p style="padding: 15px; font-size: 13px; color: var(--text-muted);">Lade Unterhaltungen...</p>
-                    </div>
-                </div>
-
-                <!-- Rechtes Fenster: Aktiver Chat -->
-                <div class="chat-window">
-                    <div class="chat-header" id="chatHeader">
-                        Wähle einen Chat aus oder starte eine Anfrage über den Marktplatz.
-                    </div>
-
-                    <div class="chat-messages" id="chatMessages">
-                        <p style="text-align: center; color: var(--text-muted); margin: auto;">Keine Nachricht ausgewählt.</p>
-                    </div>
-
-                    <form class="chat-input-area" id="chatForm">
-                        <input type="text" id="messageInput" placeholder="Nachricht schreiben..." autocomplete="off" disabled>
-                        <button type="submit" class="login-btn" id="sendBtn" disabled>Senden</button>
-                    </form>
-                </div>
+        <!-- KARTEN GRID -->
+        <section>
+            <h2>Aktuelle <span class="text-yellow">Angebote</span></h2>
+            <div id="marketplaceGrid">
+                <!-- Dynamisch geladene Marktplatz-Karten -->
             </div>
-        </div>
+        </section>
     </main>
 
-    <script src="messenger.js"></script>
+    <!-- MODAL 1: DETAIL-ANSICHT -->
+    <div id="itemDetailModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <button class="modal-close" id="closeDetailModalBtn">&times;</button>
+            
+            <h2 id="modalTitle" class="text-blue" style="margin-bottom: 5px;">Artikel Titel</h2>
+            <p id="modalMeta" style="font-size: 14px; color: var(--text-muted); margin-bottom: 15px;"></p>
+
+            <div>
+                <img id="modalMainImage" src="" alt="Hauptbild" class="modal-main-image">
+            </div>
+
+            <div id="modalGalleryStrip" class="gallery-container"></div>
+
+            <div style="background: #0b0c10; padding: 20px; border-radius: 8px; border: 1px solid var(--border-subtle); margin-bottom: 20px;">
+                <h4 style="color: #fff; margin-bottom: 10px; font-size: 16px;">Beschreibung:</h4>
+                <p id="modalDescription" style="text-align: left; max-width: 100%; margin: 0; white-space: pre-line;"></p>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; border-top: 1px solid var(--border-subtle); padding-top: 15px;">
+                <div>
+                    <span style="font-size: 14px; color: var(--text-muted);">Preis: </span>
+                    <span id="modalPrice" style="font-size: 24px; font-weight: bold; color: var(--gsra-yellow);">0,00 €</span>
+                </div>
+
+                <div style="display: flex; gap: 10px;">
+                    <button id="modalContactBtn" class="login-btn" style="display: flex; align-items: center; gap: 8px;">
+                        <i class="fa-solid fa-envelope"></i> Verkäufer kontaktieren
+                    </button>
+                    <button id="modalDeleteBtn" class="btn-delete" style="display: none;">
+                        <i class="fa-solid fa-trash"></i> Löschen
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: ANGEBOT ERSTELLEN -->
+    <div id="itemCreateModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <button class="modal-close" id="closeCreateModalBtn">&times;</button>
+            <h2>Artikel <span class="text-blue">Inserieren</span></h2>
+            <p style="margin-bottom: 20px;">Verkaufe dein Equipment in der GSRA-Community.</p>
+
+            <form id="create-item-form" style="display: flex; flex-direction: column; gap: 15px; text-align: left;">
+                <div>
+                    <label for="itemTitle" style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">Titel des Angebots*</label>
+                    <input type="text" id="itemTitle" placeholder="z.B. Fanatec Direct Drive Wheelbase 8Nm" required>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                    <div>
+                        <label for="itemCategory" style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">Kategorie*</label>
+                        <select id="itemCategory" required>
+                            <option value="Wheelbases">Wheelbases & Lenkräder</option>
+                            <option value="Pedale">Pedale</option>
+                            <option value="Rigs">Rigs & Sitze</option>
+                            <option value="Monitore">Monitore & VR</option>
+                            <option value="Zubehoer">Zubehör & Sonstiges</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="itemCondition" style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">Zustand*</label>
+                        <select id="itemCondition" required>
+                            <option value="Gebraucht">Gebraucht</option>
+                            <option value="Wie neu">Wie neu</option>
+                            <option value="Neu">Neu (OVP)</option>
+                            <option value="Defekt">Defekt / Ersatzteil</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="itemPrice" style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">Preis (€)*</label>
+                        <input type="number" id="itemPrice" step="0.01" min="0" placeholder="z.B. 350.00" required>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="itemDescription" style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">Beschreibung & Details*</label>
+                    <textarea id="itemDescription" rows="4" placeholder="Beschreibe den Zustand, Alter, Abholung/Versand..." required></textarea>
+                </div>
+
+                <div>
+                    <label for="itemImages" style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">Produktbilder (Maximal 10 Bilder auswählen)*</label>
+                    <input type="file" id="itemImages" accept="image/*" multiple required style="padding: 6px;">
+                </div>
+
+                <button type="submit" class="login-btn" style="margin-top: 10px; width: 100%;">Angebot Veröffentlichen</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- SOCIAL MEDIA SECTION -->
+    <section class="social-section">
+        <h2>Folge <span class="text-yellow">GSRA</span></h2>
+        <p class="social-subtext">Bleibe immer auf dem Laufenden auf unseren Social-Media-Kanälen.</p>
+        <div class="social-container">
+            <a href="https://www.instagram.com/official.gsra/" target="_blank" class="icon-instagram" aria-label="Instagram"><i class="fab fa-instagram"></i></a>
+            <a href="https://www.youtube.com/@GlobalSimracingAlliance" target="_blank" class="icon-youtube" aria-label="YouTube"><i class="fab fa-youtube"></i></a>
+            <a href="https://www.reddit.com/r/GSRA/" target="_blank" class="icon-reddit" aria-label="Reddit"><i class="fab fa-reddit"></i></a>
+            <a href="https://discord.gg/QDMa5qUCBX" target="_blank" class="icon-discord" aria-label="Discord"><i class="fab fa-discord"></i></a>
+            <a href="https://www.twitch.tv/global_simracing_alliance" target="_blank" class="icon-twitch" aria-label="Twitch"><i class="fab fa-twitch"></i></a>
+        </div>
+    </section>
+
+    <!-- SUPABASE SDK & JAVASCRIPT -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-client.js"></script>
+    <script src="auth-nav.js"></script>
+    <script src="marktplatz.js"></script>
 </body>
 </html>
