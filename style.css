@@ -182,7 +182,7 @@ nav a:hover::after, nav a.active::after {
 }
 
 /* =========================================
-   FORMULAR-INPUTS & TEXTAREA FIX
+   FORMULAR-INPUTS, AUTOCOMPLETE & TEXTAREA FIX
 ========================================= */
 #create-event-form input,
 #create-event-form select,
@@ -211,6 +211,40 @@ nav a:hover::after, nav a.active::after {
     resize: none !important;
 }
 
+.location-container {
+    position: relative;
+    width: 100%;
+}
+
+.autocomplete-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #15161a;
+    border: 1px solid var(--gsra-blue);
+    border-radius: 0 0 6px 6px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 2500;
+    display: none;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.8);
+}
+
+.autocomplete-item {
+    padding: 10px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #fff;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    text-align: left;
+}
+
+.autocomplete-item:hover {
+    background: var(--gsra-blue);
+    color: #fff;
+}
+
 input[type="date"],
 input[type="datetime-local"] {
     position: relative;
@@ -237,7 +271,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
 }
 
 /* =========================================
-   MÜLLEIMER BUTTON
+   BEARBEITEN & LÖSCHEN BUTTONS
 ========================================= */
 .btn-delete {
     background: rgba(255, 77, 77, 0.1);
@@ -267,6 +301,60 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
 
 .btn-delete:hover i {
     transform: scale(1.2) rotate(-10deg);
+}
+
+.btn-edit {
+    background: rgba(0, 85, 255, 0.15);
+    border: 1px solid var(--gsra-blue);
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.25s ease;
+}
+
+.btn-edit:hover {
+    background: var(--gsra-blue);
+    color: #ffffff;
+    box-shadow: var(--blue-glow);
+    transform: translateY(-1px);
+}
+
+.existing-img-wrapper {
+    position: relative;
+    display: inline-block;
+    width: 70px;
+    height: 70px;
+}
+
+.existing-img-wrapper img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid var(--border-subtle);
+}
+
+.existing-img-remove {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: #ff4d4d;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    font-size: 11px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 /* =========================================
