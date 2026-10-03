@@ -5,7 +5,7 @@
 let currentUser = null;
 let allItems = [];
 
-// Hilfsfunktion zum Schutz vor XSS / kaputtem HTML
+// Hilfsfunktion zum Schutz vor XSS
 function escapeHtml(str) {
     if (!str) return "";
     return String(str)
@@ -14,6 +14,33 @@ function escapeHtml(str) {
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
+}
+
+// Eleganter Custom Toast Ersatz für Browser-Alerts
+function showToast(message, type = "info") {
+    let container = document.getElementById("toastContainer");
+    if (!container) {
+        container = document.createElement("div");
+        container.id = "toastContainer";
+        document.body.appendChild(container);
+    }
+
+    const toast = document.createElement("div");
+    toast.className = `toast toast-${type}`;
+
+    let icon = '<i class="fa-solid fa-circle-info text-blue"></i>';
+    if (type === "success") icon = '<i class="fa-solid fa-circle-check" style="color: #00ff88;"></i>';
+    if (type === "error") icon = '<i class="fa-solid fa-circle-exclamation" style="color: #ff4d4d;"></i>';
+
+    toast.innerHTML = `${icon} <span>${escapeHtml(message)}</span>`;
+    container.appendChild(toast);
+
+    setTimeout(() => {
+        toast.style.opacity = "0";
+        toast.style.transform = "translateX(110%)";
+        toast.style.transition = "all 0.35s ease";
+        setTimeout(() => toast.remove(), 350);
+    }, 3500);
 }
 
 // Inline SVG-Platzhalter
@@ -42,7 +69,7 @@ const openItemModalBtn = document.getElementById("openItemModalBtn");
 const closeCreateModalBtn = document.getElementById("closeCreateModalBtn");
 const createItemForm = document.getElementById("create-item-form");
 
-// Auth Session initialisieren & synchron halten
+// Auth Session initialisieren
 document.addEventListener("DOMContentLoaded", async () => {
     const supabase = window.supabaseClient || window.supabase;
     if (!supabase) {
@@ -178,11 +205,11 @@ function openDetailModal(item) {
     if (modalContactBtn) {
         modalContactBtn.onclick = () => {
             if (!currentUser) {
-                alert("Bitte logge dich ein, um dem Verkäufer eine Nachricht zu senden.");
+                showToast("Bitte logge dich ein, um dem Verkäufer eine Nachricht zu senden.", "error");
                 return;
             }
             if (currentUser.id === sellerId) {
-                alert("Das ist dein eigenes Angebot.");
+                showToast("Das ist dein eigenes Angebot.", "info");
                 return;
             }
             
@@ -199,12 +226,12 @@ function openDetailModal(item) {
                     try {
                         const { error } = await supabase.from("marketplace").delete().eq("id", item.id);
                         if (error) throw error;
-                        alert("Angebot gelöscht.");
+                        showToast("Angebot erfolgreich gelöscht.", "success");
                         itemDetailModal.style.display = "none";
                         loadMarketplaceItems();
                     } catch (e) {
                         console.error("Fehler beim Löschen:", e);
-                        alert("Fehler beim Löschen des Angebots.");
+                        showToast("Fehler beim Löschen des Angebots.", "error");
                     }
                 }
             };
@@ -231,7 +258,7 @@ window.addEventListener("click", (e) => {
 if (openItemModalBtn) {
     openItemModalBtn.addEventListener("click", () => {
         if (!currentUser) {
-            alert("Bitte melde dich an, um ein Angebot zu erstellen.");
+            showToast("Bitte melde dich an, um ein Angebot zu erstellen.", "error");
             return;
         }
         itemCreateModal.style.display = "flex";
@@ -251,7 +278,7 @@ if (createItemForm) {
         const supabase = window.supabaseClient || window.supabase;
 
         if (!currentUser) {
-            alert("Du musst angemeldet sein.");
+            showToast("Du musst angemeldet sein.", "error");
             return;
         }
 
@@ -272,12 +299,12 @@ if (createItemForm) {
         const files = fileInput && fileInput.files ? Array.from(fileInput.files) : [];
 
         if (files.length === 0) {
-            alert("Bitte wähle mindestens ein Bild aus.");
+            showToast("Bitte wähle mindestens ein Bild aus.", "error");
             return;
         }
 
         if (files.length > 10) {
-            alert("Du kannst maximal 10 Bilder auswählen.");
+            showToast("Du kannst maximal 10 Bilder auswählen.", "error");
             return;
         }
 
@@ -314,13 +341,13 @@ if (createItemForm) {
 
             if (insertError) throw insertError;
 
-            alert("Angebot erfolgreich erstellt!");
+            showToast("Angebot erfolgreich erstellt!", "success");
             createItemForm.reset();
             itemCreateModal.style.display = "none";
             loadMarketplaceItems();
         } catch (error) {
             console.error("Fehler beim Erstellen des Angebots:", error);
-            alert("Fehler beim Erstellen des Angebots: " + (error.message || "Überprüfe deine Rechte oder Storage Policies."));
+            showToast("Fehler beim Erstellen des Angebots.", "error");
         } finally {
             if (submitBtn) {
                 submitBtn.disabled = false;
