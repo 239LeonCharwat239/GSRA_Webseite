@@ -52,6 +52,7 @@ const filterCategory = document.getElementById("filterCategory");
 const searchMarketplace = document.getElementById("searchMarketplace");
 const minPriceInput = document.getElementById("minPrice");
 const maxPriceInput = document.getElementById("maxPrice");
+const sortOrderInput = document.getElementById("sortOrder");
 
 // Detail Modal Elemente
 const itemDetailModal = document.getElementById("itemDetailModal");
@@ -104,7 +105,7 @@ async function loadMarketplaceItems() {
         if (error) throw error;
 
         allItems = data || [];
-        renderMarketplaceItems(allItems);
+        filterItems();
     } catch (error) {
         console.error("Fehler beim Laden der Artikel:", error);
         marketplaceGrid.innerHTML = "<p>Keine Angebote vorhanden oder Verbindungsfehler.</p>";
@@ -150,14 +151,15 @@ function renderMarketplaceItems(items) {
     });
 }
 
-// 3. Filter-Funktion (Kategorie, Suche & Preis-Spanne)
+// 3. Filter & Sortier-Funktion (Kategorie, Suche, Preis & Sortierung)
 function filterItems() {
     const categoryValue = filterCategory ? filterCategory.value : "all";
     const searchValue = searchMarketplace ? searchMarketplace.value.toLowerCase() : "";
     const minPrice = minPriceInput && minPriceInput.value !== "" ? parseFloat(minPriceInput.value) : 0;
     const maxPrice = maxPriceInput && maxPriceInput.value !== "" ? parseFloat(maxPriceInput.value) : Infinity;
+    const sortValue = sortOrderInput ? sortOrderInput.value : "newest";
 
-    const filtered = allItems.filter((item) => {
+    let filtered = allItems.filter((item) => {
         const itemPrice = parseFloat(item.price || 0);
         const matchesCategory = categoryValue === "all" || item.category === categoryValue;
         const matchesSearch = (item.title || "").toLowerCase().includes(searchValue) ||
@@ -167,6 +169,16 @@ function filterItems() {
         return matchesCategory && matchesSearch && matchesPrice;
     });
 
+    // Sortierung anwenden
+    if (sortValue === "price-asc") {
+        filtered.sort((a, b) => parseFloat(a.price || 0) - parseFloat(b.price || 0));
+    } else if (sortValue === "price-desc") {
+        filtered.sort((a, b) => parseFloat(b.price || 0) - parseFloat(a.price || 0));
+    } else {
+        // Neueste zuerst (nach ID / Erstelldatum)
+        filtered.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+    }
+
     renderMarketplaceItems(filtered);
 }
 
@@ -174,6 +186,7 @@ if (filterCategory) filterCategory.addEventListener("change", filterItems);
 if (searchMarketplace) searchMarketplace.addEventListener("input", filterItems);
 if (minPriceInput) minPriceInput.addEventListener("input", filterItems);
 if (maxPriceInput) maxPriceInput.addEventListener("input", filterItems);
+if (sortOrderInput) sortOrderInput.addEventListener("change", filterItems);
 
 // 4. Modal: Detailansicht
 function openDetailModal(item) {

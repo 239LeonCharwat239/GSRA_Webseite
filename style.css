@@ -304,7 +304,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
 }
 
 /* =========================================
-   MARKTPLATZ MODAL & GALERIE (RÄNDER FIX)
+   MARKTPLATZ MODAL & GALERIE
 ========================================= */
 .modal-overlay {
     position: fixed;

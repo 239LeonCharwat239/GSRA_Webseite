@@ -42,7 +42,7 @@
 
         <!-- FILTER & AKTIONEN -->
         <section style="display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-bottom: 30px; flex-wrap: wrap;">
-            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
                 <select id="filterCategory" style="padding: 8px 12px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
                     <option value="all">Alle Kategorien</option>
                     <option value="Wheelbases">Wheelbases & Lenkräder</option>
@@ -52,7 +52,16 @@
                     <option value="Zubehoer">Zubehör & Sonstiges</option>
                 </select>
 
-                <input type="text" id="searchMarketplace" placeholder="Suche Artikel..." style="padding: 8px 12px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px; min-width: 220px;">
+                <input type="text" id="searchMarketplace" placeholder="Suche Artikel..." style="padding: 8px 12px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px; min-width: 180px;">
+                
+                <input type="number" id="minPrice" placeholder="Min €" style="padding: 8px 12px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px; width: 90px;">
+                <input type="number" id="maxPrice" placeholder="Max €" style="padding: 8px 12px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px; width: 90px;">
+                
+                <select id="sortOrder" style="padding: 8px 12px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
+                    <option value="newest">Neueste zuerst</option>
+                    <option value="price-asc">Preis: Niedrigster zuerst</option>
+                    <option value="price-desc">Preis: Höchster zuerst</option>
+                </select>
             </div>
 
             <button id="openItemModalBtn" class="login-btn" style="cursor: pointer;">+ Angebot Erstellen</button>
