@@ -106,7 +106,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     loadMarketplaceItems();
 });
 
-// 1. WELTWEITE ORTS-SUCHE (INKL. DÖRFER & WEILER)
+// 1. ERWEITERTE ORTS-SUCHE (INKL. LÄNDERKÜRZEL WIE "DE", STÄDTE, DÖRFER & WEILER)
 function setupLocationAutocomplete() {
     if (!itemLocationInput || !locationDropdown) return;
 
@@ -122,7 +122,7 @@ function setupLocationAutocomplete() {
 
         debounceTimer = setTimeout(async () => {
             try {
-                // Nominatim API mit Unterstützung für Dörfer (village, hamlet, town, city)
+                // Nominatim API: Ermöglicht Suche nach Ländern, Städten, Dörfern und Weilern weltweit
                 const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=6`);
                 const data = await res.json();
 
@@ -137,9 +137,9 @@ function setupLocationAutocomplete() {
                     item.className = "autocomplete-item";
                     
                     const address = place.address || {};
-                    const locName = address.city || address.town || address.village || address.hamlet || address.municipality || place.name;
+                    const locName = address.city || address.town || address.village || address.hamlet || address.state || address.country || place.name;
                     const country = address.country || "";
-                    const displayName = country ? `${locName}, ${country}` : place.display_name;
+                    const displayName = (country && locName !== country) ? `${locName}, ${country}` : place.display_name;
 
                     item.innerText = displayName;
                     item.addEventListener("click", () => {
@@ -228,7 +228,7 @@ function renderMarketplaceItems(items) {
     });
 }
 
-// 4. Filter & Sortier-Funktion (Kategorie, Suche, Ort, Preis & Sortierung)
+// 4. Filter & Sortier-Funktion
 function filterItems() {
     const categoryValue = filterCategory ? filterCategory.value : "all";
     const searchValue = searchMarketplace ? searchMarketplace.value.toLowerCase() : "";
@@ -435,7 +435,7 @@ window.addEventListener("click", (e) => {
     if (e.target === itemCreateModal) itemCreateModal.style.display = "none";
 });
 
-// 7. Angebot Speichern (Insert oder Update in Supabase)
+// 7. Angebot Speichern / Aktualisieren in Supabase
 if (createItemForm) {
     createItemForm.addEventListener("submit", async (e) => {
         e.preventDefault();
