@@ -40,7 +40,7 @@
             <p class="hero-subtitle">Kaufe und verkaufe SimRacing-Hardware, Pedale, Lenkräder und Zubehör direkt in der Community.</p>
         </section>
 
-        <!-- ELEGANTE FILTERBAR -->
+        <!-- ELEGANTE FILTERBAR (MODERN & CLEAN) -->
         <section class="filter-bar">
             <div class="filter-inputs-group">
                 <select id="filterCategory">
@@ -54,7 +54,7 @@
 
                 <input type="text" id="searchMarketplace" placeholder="Suche Artikel..." style="min-width: 150px;">
                 
-                <!-- SUCH-COMBOBOX FÜR ORT / LAND -->
+                <!-- ORTSUCHE MIT COMBOBOX IN DER FILTERLEISTE -->
                 <div class="location-container">
                     <input type="text" id="searchLocation" placeholder="Ort / Land..." autocomplete="off" style="width: 140px;">
                     <div id="searchLocationDropdown" class="autocomplete-dropdown"></div>
@@ -77,7 +77,7 @@
         <section>
             <h2>Aktuelle <span class="text-yellow">Angebote</span></h2>
             <div id="marketplaceGrid">
-                <!-- Dynamische Angebote -->
+                <!-- Dynamisch geladene Marktplatz-Karten -->
             </div>
         </section>
     </main>
@@ -163,10 +163,10 @@
                         <input type="number" id="itemPrice" step="0.01" min="0" placeholder="z.B. 350.00" required>
                     </div>
                     
-                    <!-- ORTS-SUCHE FORMULAR -->
-                    <div class="location-container">
+                    <!-- ORTS-SUCHE MIT COMBOBOX (INKL. DÖRFER & WEILER) -->
+                    <div class="location-container" style="width: 100%;">
                         <label for="itemLocation" style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">Ort / Standort*</label>
-                        <input type="text" id="itemLocation" placeholder="Dorf, Stadt oder Land eingeben..." autocomplete="off" required>
+                        <input type="text" id="itemLocation" placeholder="Tippe Dorf, Stadt oder Land..." autocomplete="off" required style="width: 100%;">
                         <div id="locationDropdown" class="autocomplete-dropdown"></div>
                     </div>
                 </div>
@@ -176,10 +176,10 @@
                     <textarea id="itemDescription" rows="4" placeholder="Beschreibe den Zustand, Alter, Abholung/Versand..." required></textarea>
                 </div>
 
-                <!-- BESTEHENDE BILDER MIT DEM NEUEN X -->
-                <div id="existingImagesContainer" style="display: none; flex-direction: column; gap: 8px;">
-                    <label style="color: #fff; font-size: 13px;">Bestehende Bilder (Klicke auf X zum Entfernen):</label>
-                    <div id="existingImagesList" style="display: flex; gap: 12px; flex-wrap: wrap;"></div>
+                <!-- VORHANDENE BILDER (BEIM BEARBEITEN) -->
+                <div id="existingImagesContainer" style="display: none; flex-direction: column; gap: 6px;">
+                    <label style="color: #fff; font-size: 13px;">Bestehende Bilder (Klicke X zum Entfernen):</label>
+                    <div id="existingImagesList" style="display: flex; gap: 10px; flex-wrap: wrap;"></div>
                 </div>
 
                 <div>

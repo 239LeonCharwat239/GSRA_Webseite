@@ -46,7 +46,7 @@ function showToast(message, type = "info") {
 
 const DEFAULT_PLACEHOLDER = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='250' viewBox='0 0 400 250'><rect width='100%' height='100%' fill='%231a1a1a'/><text x='50%' y='50%' fill='%23666666' font-size='16' text-anchor='middle' dy='.3em'>Kein Bild vorhanden</text></svg>";
 
-// DOM Elemente
+// DOM-Elemente
 const marketplaceGrid = document.getElementById("marketplaceGrid");
 const filterCategory = document.getElementById("filterCategory");
 const searchMarketplace = document.getElementById("searchMarketplace");
@@ -69,7 +69,7 @@ const modalContactBtn = document.getElementById("modalContactBtn");
 const modalEditBtn = document.getElementById("modalEditBtn");
 const modalDeleteBtn = document.getElementById("modalDeleteBtn");
 
-// Create/Edit Modal
+// Erstellen / Bearbeiten Modal
 const itemCreateModal = document.getElementById("itemCreateModal");
 const openItemModalBtn = document.getElementById("openItemModalBtn");
 const closeCreateModalBtn = document.getElementById("closeCreateModalBtn");
@@ -81,13 +81,16 @@ const existingImagesContainer = document.getElementById("existingImagesContainer
 const existingImagesList = document.getElementById("existingImagesList");
 const uploadLabel = document.getElementById("uploadLabel");
 
-// Inserat Location Input
+// Orts-Suche Inputs
 const itemLocationInput = document.getElementById("itemLocation");
 const locationDropdown = document.getElementById("locationDropdown");
 
 document.addEventListener("DOMContentLoaded", async () => {
     const supabase = window.supabaseClient || window.supabase;
-    if (!supabase) return;
+    if (!supabase) {
+        console.error("Supabase Client nicht gefunden!");
+        return;
+    }
 
     const { data: { session } } = await supabase.auth.getSession();
     currentUser = session?.user || null;
@@ -96,14 +99,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         currentUser = session?.user || null;
     });
 
-    // Beide Location-Comboboxen initialisieren (Formular + Suchleiste)
+    // Beide Orts-Suchfelder mit der erweiterten Combobox verknüpfen
     setupLocationAutocomplete(itemLocationInput, locationDropdown, null);
     setupLocationAutocomplete(searchLocation, searchLocationDropdown, () => filterItems());
 
     loadMarketplaceItems();
 });
 
-// ERWEITERTE NOMINATIM SUCHE (INKL. DÖRFER, WEILER, PLZ & SCHULPFORTEN/WAHLITZ)
+// ERWEITERTE ORTS-SUCHE MIT GENAUERER SELEKTIERUNG (DÖRFER, WEILER, BUNDESLAND/REGION)
 function setupLocationAutocomplete(inputElement, dropdownElement, onSelectCallback) {
     if (!inputElement || !dropdownElement) return;
 
@@ -119,7 +122,6 @@ function setupLocationAutocomplete(inputElement, dropdownElement, onSelectCallba
 
         debounceTimer = setTimeout(async () => {
             try {
-                // query mit addressdetails=1 und featuretype=settlement
                 const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=8`);
                 const data = await res.json();
 
@@ -134,16 +136,15 @@ function setupLocationAutocomplete(inputElement, dropdownElement, onSelectCallba
                     item.className = "autocomplete-item";
                     
                     const addr = place.address || {};
-                    // Höchste Priorität für kleine Orte: Ortsteil, Dorf, Weiler, Stadtteil
-                    const specificName = addr.suburb || addr.village || addr.hamlet || addr.quarter || addr.town || addr.city || place.name;
+                    const specificName = addr.suburb || addr.village || addr.hamlet || addr.quarter || addr.town || addr.city || addr.municipality || place.name;
+                    const region = addr.state || addr.county || "";
                     const country = addr.country || "";
                     
-                    let displayName = specificName;
-                    if (country && specificName !== country) {
-                        displayName = `${specificName}, ${country}`;
-                    } else {
-                        displayName = place.display_name;
-                    }
+                    // Disambiguierung: Ortsname + Region/Bundesland + Land für eindeutige Unterscheidung (z.B. Vogelsang)
+                    let parts = [specificName];
+                    if (region && region !== specificName) parts.push(region);
+                    if (country && country !== region) parts.push(country);
+                    const displayName = parts.join(", ");
 
                     item.innerText = displayName;
                     item.addEventListener("click", () => {
@@ -168,7 +169,7 @@ function setupLocationAutocomplete(inputElement, dropdownElement, onSelectCallba
     });
 }
 
-// Marktplatz Daten laden
+// Marktplatz Artikel laden
 async function loadMarketplaceItems() {
     const supabase = window.supabaseClient || window.supabase;
     if (!marketplaceGrid || !supabase) return;
@@ -181,15 +182,16 @@ async function loadMarketplaceItems() {
             .order("created_at", { ascending: false });
 
         if (error) throw error;
+
         allItems = data || [];
         filterItems();
     } catch (error) {
-        console.error("Fehler beim Laden:", error);
+        console.error("Fehler beim Laden der Artikel:", error);
         marketplaceGrid.innerHTML = "<p>Keine Angebote vorhanden oder Verbindungsfehler.</p>";
     }
 }
 
-// Rendern der Karten
+// Artikel-Karten rendern
 function renderMarketplaceItems(items) {
     if (!marketplaceGrid) return;
     marketplaceGrid.innerHTML = "";
@@ -270,7 +272,7 @@ if (minPriceInput) minPriceInput.addEventListener("input", filterItems);
 if (maxPriceInput) maxPriceInput.addEventListener("input", filterItems);
 if (sortOrderInput) sortOrderInput.addEventListener("change", filterItems);
 
-// Detail Modal
+// Modal: Detailansicht
 function openDetailModal(item) {
     const supabase = window.supabaseClient || window.supabase;
     if (!itemDetailModal) return;
@@ -310,7 +312,7 @@ function openDetailModal(item) {
     if (modalContactBtn) {
         modalContactBtn.onclick = () => {
             if (!currentUser) {
-                showToast("Bitte logge dich ein, um den Verkäufer zu kontaktieren.", "error");
+                showToast("Bitte logge dich ein, um dem Verkäufer eine Nachricht zu senden.", "error");
                 return;
             }
             if (currentUser.id === sellerId) {
@@ -362,7 +364,7 @@ if (closeDetailModalBtn) {
     });
 }
 
-// Inserat erstellen/bearbeiten
+// Modal öffnen (Erstellen oder Bearbeiten)
 function openCreateOrEditModal(itemToEdit = null) {
     if (!currentUser) {
         showToast("Bitte melde dich an, um ein Angebot zu erstellen.", "error");
@@ -439,7 +441,7 @@ window.addEventListener("click", (e) => {
     if (e.target === itemCreateModal) itemCreateModal.style.display = "none";
 });
 
-// Angebot Speichern
+// Angebot Speichern / Aktualisieren in Supabase
 if (createItemForm) {
     createItemForm.addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -450,13 +452,20 @@ if (createItemForm) {
             return;
         }
 
-        const title = document.getElementById("itemTitle") ? document.getElementById("itemTitle").value : "";
-        const category = document.getElementById("itemCategory") ? document.getElementById("itemCategory").value : "";
-        const condition = document.getElementById("itemCondition") ? document.getElementById("itemCondition").value : "";
-        const price = document.getElementById("itemPrice") ? parseFloat(document.getElementById("itemPrice").value) : 0;
-        const location = document.getElementById("itemLocation") ? document.getElementById("itemLocation").value : "";
-        const description = document.getElementById("itemDescription") ? document.getElementById("itemDescription").value : "";
+        const titleInput = document.getElementById("itemTitle");
+        const categoryInput = document.getElementById("itemCategory");
+        const conditionInput = document.getElementById("itemCondition");
+        const priceInput = document.getElementById("itemPrice");
+        const locationInput = document.getElementById("itemLocation");
+        const descriptionInput = document.getElementById("itemDescription");
         const fileInput = document.getElementById("itemImages");
+
+        const title = titleInput ? titleInput.value : "";
+        const category = categoryInput ? categoryInput.value : "";
+        const condition = conditionInput ? conditionInput.value : "";
+        const price = priceInput ? parseFloat(priceInput.value) : 0;
+        const location = locationInput ? locationInput.value : "";
+        const description = descriptionInput ? descriptionInput.value : "";
 
         const files = fileInput && fileInput.files ? Array.from(fileInput.files) : [];
 
@@ -540,7 +549,7 @@ if (createItemForm) {
             itemCreateModal.style.display = "none";
             loadMarketplaceItems();
         } catch (error) {
-            console.error("Fehler beim Speichern:", error);
+            console.error("Fehler beim Speichern des Angebots:", error);
             showToast("Fehler beim Speichern des Angebots.", "error");
         } finally {
             if (submitItemBtn) {
