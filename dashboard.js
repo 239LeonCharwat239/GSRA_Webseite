@@ -74,7 +74,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 username = user.email.split("@")[0];
             }
 
-            dashUsername.textContent = username || "Fahrer";
+dashUsername.textContent = username || "Fahrer";
         }
 
     } catch (err) {
