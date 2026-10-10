@@ -40,10 +40,10 @@
             <p class="hero-subtitle">Kaufe und verkaufe SimRacing-Hardware, Pedale, Lenkräder und Zubehör direkt in der Community.</p>
         </section>
 
-        <!-- FILTER & AKTIONEN -->
-        <section style="display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-bottom: 30px; flex-wrap: wrap;">
-            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
-                <select id="filterCategory" style="padding: 8px 12px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
+        <!-- ELEGANTE FILTERBAR -->
+        <section class="filter-bar">
+            <div class="filter-inputs-group">
+                <select id="filterCategory">
                     <option value="all">Alle Kategorien</option>
                     <option value="Wheelbases">Wheelbases & Lenkräder</option>
                     <option value="Pedale">Pedale</option>
@@ -52,13 +52,18 @@
                     <option value="Zubehoer">Zubehör & Sonstiges</option>
                 </select>
 
-                <input type="text" id="searchMarketplace" placeholder="Suche Artikel..." style="padding: 8px 12px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px; min-width: 160px;">
-                <input type="text" id="searchLocation" placeholder="Ort / Land..." style="padding: 8px 12px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px; width: 130px;">
+                <input type="text" id="searchMarketplace" placeholder="Suche Artikel..." style="min-width: 150px;">
                 
-                <input type="number" id="minPrice" placeholder="Min €" style="padding: 8px 12px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px; width: 80px;">
-                <input type="number" id="maxPrice" placeholder="Max €" style="padding: 8px 12px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px; width: 80px;">
+                <!-- SUCH-COMBOBOX FÜR ORT / LAND -->
+                <div class="location-container">
+                    <input type="text" id="searchLocation" placeholder="Ort / Land..." autocomplete="off" style="width: 140px;">
+                    <div id="searchLocationDropdown" class="autocomplete-dropdown"></div>
+                </div>
                 
-                <select id="sortOrder" style="padding: 8px 12px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
+                <input type="number" id="minPrice" placeholder="Min €" style="width: 80px;">
+                <input type="number" id="maxPrice" placeholder="Max €" style="width: 80px;">
+                
+                <select id="sortOrder">
                     <option value="newest">Neueste zuerst</option>
                     <option value="price-asc">Preis: Niedrigster zuerst</option>
                     <option value="price-desc">Preis: Höchster zuerst</option>
@@ -72,7 +77,7 @@
         <section>
             <h2>Aktuelle <span class="text-yellow">Angebote</span></h2>
             <div id="marketplaceGrid">
-                <!-- Dynamisch geladene Marktplatz-Karten -->
+                <!-- Dynamische Angebote -->
             </div>
         </section>
     </main>
@@ -158,10 +163,10 @@
                         <input type="number" id="itemPrice" step="0.01" min="0" placeholder="z.B. 350.00" required>
                     </div>
                     
-                    <!-- WELTWEITE ORTS-SUCHE (INKL. DÖRFER, WEILER, LÄNDER) -->
+                    <!-- ORTS-SUCHE FORMULAR -->
                     <div class="location-container">
                         <label for="itemLocation" style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">Ort / Standort*</label>
-                        <input type="text" id="itemLocation" placeholder="Tippe Stadt, Dorf oder Land (z.B. DE, Berlin)..." autocomplete="off" required>
+                        <input type="text" id="itemLocation" placeholder="Dorf, Stadt oder Land eingeben..." autocomplete="off" required>
                         <div id="locationDropdown" class="autocomplete-dropdown"></div>
                     </div>
                 </div>
@@ -171,10 +176,10 @@
                     <textarea id="itemDescription" rows="4" placeholder="Beschreibe den Zustand, Alter, Abholung/Versand..." required></textarea>
                 </div>
 
-                <!-- VORHANDENE BILDER (BEIM BEARBEITEN) -->
-                <div id="existingImagesContainer" style="display: none; flex-direction: column; gap: 6px;">
-                    <label style="color: #fff; font-size: 13px;">Bestehende Bilder (Klicke X zum Entfernen):</label>
-                    <div id="existingImagesList" style="display: flex; gap: 10px; flex-wrap: wrap;"></div>
+                <!-- BESTEHENDE BILDER MIT DEM NEUEN X -->
+                <div id="existingImagesContainer" style="display: none; flex-direction: column; gap: 8px;">
+                    <label style="color: #fff; font-size: 13px;">Bestehende Bilder (Klicke auf X zum Entfernen):</label>
+                    <div id="existingImagesList" style="display: flex; gap: 12px; flex-wrap: wrap;"></div>
                 </div>
 
                 <div>

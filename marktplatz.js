@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Marketplace Logik & Galerie (Supabase)
+   GSRA - Marketplace Logik & Orts-Suche
 ========================================= */
 
 let currentUser = null;
@@ -8,7 +8,6 @@ let isEditMode = false;
 let currentEditItemId = null;
 let existingImagesUrls = [];
 
-// Hilfsfunktion zum Schutz vor XSS
 function escapeHtml(str) {
     if (!str) return "";
     return String(str)
@@ -19,7 +18,6 @@ function escapeHtml(str) {
         .replace(/'/g, "&#039;");
 }
 
-// Eleganter Custom Toast Ersatz für Browser-Alerts
 function showToast(message, type = "info") {
     let container = document.getElementById("toastContainer");
     if (!container) {
@@ -46,19 +44,19 @@ function showToast(message, type = "info") {
     }, 3500);
 }
 
-// Inline SVG-Platzhalter
 const DEFAULT_PLACEHOLDER = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='250' viewBox='0 0 400 250'><rect width='100%' height='100%' fill='%231a1a1a'/><text x='50%' y='50%' fill='%23666666' font-size='16' text-anchor='middle' dy='.3em'>Kein Bild vorhanden</text></svg>";
 
-// DOM-Elemente
+// DOM Elemente
 const marketplaceGrid = document.getElementById("marketplaceGrid");
 const filterCategory = document.getElementById("filterCategory");
 const searchMarketplace = document.getElementById("searchMarketplace");
 const searchLocation = document.getElementById("searchLocation");
+const searchLocationDropdown = document.getElementById("searchLocationDropdown");
 const minPriceInput = document.getElementById("minPrice");
 const maxPriceInput = document.getElementById("maxPrice");
 const sortOrderInput = document.getElementById("sortOrder");
 
-// Detail Modal Elemente
+// Detail Modal
 const itemDetailModal = document.getElementById("itemDetailModal");
 const closeDetailModalBtn = document.getElementById("closeDetailModalBtn");
 const modalTitle = document.getElementById("modalTitle");
@@ -71,7 +69,7 @@ const modalContactBtn = document.getElementById("modalContactBtn");
 const modalEditBtn = document.getElementById("modalEditBtn");
 const modalDeleteBtn = document.getElementById("modalDeleteBtn");
 
-// Erstellen / Bearbeiten Modal Elemente
+// Create/Edit Modal
 const itemCreateModal = document.getElementById("itemCreateModal");
 const openItemModalBtn = document.getElementById("openItemModalBtn");
 const closeCreateModalBtn = document.getElementById("closeCreateModalBtn");
@@ -83,17 +81,13 @@ const existingImagesContainer = document.getElementById("existingImagesContainer
 const existingImagesList = document.getElementById("existingImagesList");
 const uploadLabel = document.getElementById("uploadLabel");
 
-// Orts-Suche Elements
+// Inserat Location Input
 const itemLocationInput = document.getElementById("itemLocation");
 const locationDropdown = document.getElementById("locationDropdown");
 
-// Auth Session initialisieren
 document.addEventListener("DOMContentLoaded", async () => {
     const supabase = window.supabaseClient || window.supabase;
-    if (!supabase) {
-        console.error("Supabase Client nicht gefunden!");
-        return;
-    }
+    if (!supabase) return;
 
     const { data: { session } } = await supabase.auth.getSession();
     currentUser = session?.user || null;
@@ -102,33 +96,36 @@ document.addEventListener("DOMContentLoaded", async () => {
         currentUser = session?.user || null;
     });
 
-    setupLocationAutocomplete();
+    // Beide Location-Comboboxen initialisieren (Formular + Suchleiste)
+    setupLocationAutocomplete(itemLocationInput, locationDropdown, null);
+    setupLocationAutocomplete(searchLocation, searchLocationDropdown, () => filterItems());
+
     loadMarketplaceItems();
 });
 
-// 1. ERWEITERTE ORTS-SUCHE (INKL. LÄNDERKÜRZEL WIE "DE", STÄDTE, DÖRFER & WEILER)
-function setupLocationAutocomplete() {
-    if (!itemLocationInput || !locationDropdown) return;
+// ERWEITERTE NOMINATIM SUCHE (INKL. DÖRFER, WEILER, PLZ & SCHULPFORTEN/WAHLITZ)
+function setupLocationAutocomplete(inputElement, dropdownElement, onSelectCallback) {
+    if (!inputElement || !dropdownElement) return;
 
     let debounceTimer;
-    itemLocationInput.addEventListener("input", (e) => {
+    inputElement.addEventListener("input", (e) => {
         const query = e.target.value.trim();
         clearTimeout(debounceTimer);
 
         if (query.length < 2) {
-            locationDropdown.style.display = "none";
+            dropdownElement.style.display = "none";
             return;
         }
 
         debounceTimer = setTimeout(async () => {
             try {
-                // Nominatim API: Ermöglicht Suche nach Ländern, Städten, Dörfern und Weilern weltweit
-                const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=6`);
+                // query mit addressdetails=1 und featuretype=settlement
+                const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=8`);
                 const data = await res.json();
 
-                locationDropdown.innerHTML = "";
+                dropdownElement.innerHTML = "";
                 if (data.length === 0) {
-                    locationDropdown.style.display = "none";
+                    dropdownElement.style.display = "none";
                     return;
                 }
 
@@ -136,34 +133,42 @@ function setupLocationAutocomplete() {
                     const item = document.createElement("div");
                     item.className = "autocomplete-item";
                     
-                    const address = place.address || {};
-                    const locName = address.city || address.town || address.village || address.hamlet || address.state || address.country || place.name;
-                    const country = address.country || "";
-                    const displayName = (country && locName !== country) ? `${locName}, ${country}` : place.display_name;
+                    const addr = place.address || {};
+                    // Höchste Priorität für kleine Orte: Ortsteil, Dorf, Weiler, Stadtteil
+                    const specificName = addr.suburb || addr.village || addr.hamlet || addr.quarter || addr.town || addr.city || place.name;
+                    const country = addr.country || "";
+                    
+                    let displayName = specificName;
+                    if (country && specificName !== country) {
+                        displayName = `${specificName}, ${country}`;
+                    } else {
+                        displayName = place.display_name;
+                    }
 
                     item.innerText = displayName;
                     item.addEventListener("click", () => {
-                        itemLocationInput.value = displayName;
-                        locationDropdown.style.display = "none";
+                        inputElement.value = displayName;
+                        dropdownElement.style.display = "none";
+                        if (onSelectCallback) onSelectCallback();
                     });
-                    locationDropdown.appendChild(item);
+                    dropdownElement.appendChild(item);
                 });
 
-                locationDropdown.style.display = "block";
+                dropdownElement.style.display = "block";
             } catch (err) {
-                console.error("Fehler bei Orts-Suche:", err);
+                console.error("Fehler bei der Orts-Suche:", err);
             }
         }, 300);
     });
 
     document.addEventListener("click", (e) => {
-        if (e.target !== itemLocationInput && e.target !== locationDropdown) {
-            locationDropdown.style.display = "none";
+        if (e.target !== inputElement && e.target !== dropdownElement) {
+            dropdownElement.style.display = "none";
         }
     });
 }
 
-// 2. Marktplatz Artikel laden
+// Marktplatz Daten laden
 async function loadMarketplaceItems() {
     const supabase = window.supabaseClient || window.supabase;
     if (!marketplaceGrid || !supabase) return;
@@ -176,16 +181,15 @@ async function loadMarketplaceItems() {
             .order("created_at", { ascending: false });
 
         if (error) throw error;
-
         allItems = data || [];
         filterItems();
     } catch (error) {
-        console.error("Fehler beim Laden der Artikel:", error);
+        console.error("Fehler beim Laden:", error);
         marketplaceGrid.innerHTML = "<p>Keine Angebote vorhanden oder Verbindungsfehler.</p>";
     }
 }
 
-// 3. Artikel-Karten rendern
+// Rendern der Karten
 function renderMarketplaceItems(items) {
     if (!marketplaceGrid) return;
     marketplaceGrid.innerHTML = "";
@@ -228,7 +232,7 @@ function renderMarketplaceItems(items) {
     });
 }
 
-// 4. Filter & Sortier-Funktion
+// Filter & Sortierung
 function filterItems() {
     const categoryValue = filterCategory ? filterCategory.value : "all";
     const searchValue = searchMarketplace ? searchMarketplace.value.toLowerCase() : "";
@@ -266,7 +270,7 @@ if (minPriceInput) minPriceInput.addEventListener("input", filterItems);
 if (maxPriceInput) maxPriceInput.addEventListener("input", filterItems);
 if (sortOrderInput) sortOrderInput.addEventListener("change", filterItems);
 
-// 5. Modal: Detailansicht
+// Detail Modal
 function openDetailModal(item) {
     const supabase = window.supabaseClient || window.supabase;
     if (!itemDetailModal) return;
@@ -306,7 +310,7 @@ function openDetailModal(item) {
     if (modalContactBtn) {
         modalContactBtn.onclick = () => {
             if (!currentUser) {
-                showToast("Bitte logge dich ein, um dem Verkäufer eine Nachricht zu senden.", "error");
+                showToast("Bitte logge dich ein, um den Verkäufer zu kontaktieren.", "error");
                 return;
             }
             if (currentUser.id === sellerId) {
@@ -358,7 +362,7 @@ if (closeDetailModalBtn) {
     });
 }
 
-// 6. Modal öffnen (Erstellen oder Bearbeiten)
+// Inserat erstellen/bearbeiten
 function openCreateOrEditModal(itemToEdit = null) {
     if (!currentUser) {
         showToast("Bitte melde dich an, um ein Angebot zu erstellen.", "error");
@@ -435,7 +439,7 @@ window.addEventListener("click", (e) => {
     if (e.target === itemCreateModal) itemCreateModal.style.display = "none";
 });
 
-// 7. Angebot Speichern / Aktualisieren in Supabase
+// Angebot Speichern
 if (createItemForm) {
     createItemForm.addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -446,20 +450,13 @@ if (createItemForm) {
             return;
         }
 
-        const titleInput = document.getElementById("itemTitle");
-        const categoryInput = document.getElementById("itemCategory");
-        const conditionInput = document.getElementById("itemCondition");
-        const priceInput = document.getElementById("itemPrice");
-        const locationInput = document.getElementById("itemLocation");
-        const descriptionInput = document.getElementById("itemDescription");
+        const title = document.getElementById("itemTitle") ? document.getElementById("itemTitle").value : "";
+        const category = document.getElementById("itemCategory") ? document.getElementById("itemCategory").value : "";
+        const condition = document.getElementById("itemCondition") ? document.getElementById("itemCondition").value : "";
+        const price = document.getElementById("itemPrice") ? parseFloat(document.getElementById("itemPrice").value) : 0;
+        const location = document.getElementById("itemLocation") ? document.getElementById("itemLocation").value : "";
+        const description = document.getElementById("itemDescription") ? document.getElementById("itemDescription").value : "";
         const fileInput = document.getElementById("itemImages");
-
-        const title = titleInput ? titleInput.value : "";
-        const category = categoryInput ? categoryInput.value : "";
-        const condition = conditionInput ? conditionInput.value : "";
-        const price = priceInput ? parseFloat(priceInput.value) : 0;
-        const location = locationInput ? locationInput.value : "";
-        const description = descriptionInput ? descriptionInput.value : "";
 
         const files = fileInput && fileInput.files ? Array.from(fileInput.files) : [];
 
@@ -543,7 +540,7 @@ if (createItemForm) {
             itemCreateModal.style.display = "none";
             loadMarketplaceItems();
         } catch (error) {
-            console.error("Fehler beim Speichern des Angebots:", error);
+            console.error("Fehler beim Speichern:", error);
             showToast("Fehler beim Speichern des Angebots.", "error");
         } finally {
             if (submitItemBtn) {
