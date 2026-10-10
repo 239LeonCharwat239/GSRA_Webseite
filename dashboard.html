@@ -39,10 +39,9 @@
     </header>
 
     <main class="container">
-        <h1 class="hero-title">Fahrer <span class="text-blue">Dashboard</span></h1>
-
-        <!-- BENUTZERINHALT (OHNE FLACKERN DIREKT SICHTBAR NACH AUTH-PRÜFUNG) -->
-        <div id="userContent">
+        <!-- DAS PROFIL WIRD ERST PER JS EINGEBLENDET, WENN DER USER EINGELOGGT IST -->
+        <div id="userContent" style="display: none;">
+            <h1 class="hero-title">Fahrer <span class="text-blue">Dashboard</span></h1>
             <p style="margin-bottom: 20px;">Verwalte deine Profildaten, verknüpfte Konten und deine Aktivitäten.</p>
 
             <div class="grid-2">

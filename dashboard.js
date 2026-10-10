@@ -3,7 +3,6 @@
 ========================================= */
 
 document.addEventListener("DOMContentLoaded", async () => {
-    // Supabase-Client abrufen (einheitlicher Fallback wie in den anderen Skripten)
     const client = window.supabaseClient || window.supabase;
 
     if (!client) {
@@ -11,7 +10,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
     }
 
-    // HTML-Elemente zur Anzeige der Profilinformationen
+    const userContent = document.getElementById("userContent");
     const dashUsername = document.getElementById("dashUsername");
     const dashEmail = document.getElementById("dashEmail");
     const dashCreated = document.getElementById("dashCreated");
@@ -22,10 +21,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         if (error) {
             console.error("Fehler beim Abrufen der Session:", error.message);
+            window.location.href = "login.html";
             return;
         }
 
-        // Falls keine aktive Session existiert, Weiterleitung zum Login
+        // Falls nicht eingeloggt: Sofort zur Login-Seite leiten
         if (!session || !session.user) {
             window.location.href = "login.html";
             return;
@@ -38,7 +38,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             dashEmail.textContent = user.email || "K. A.";
         }
 
-        // 2. Erstellungsdatum ("Mitglied seit") formatieren & setzen
+        // 2. Erstellungsdatum setzen
         if (dashCreated) {
             if (user.created_at) {
                 const date = new Date(user.created_at);
@@ -52,11 +52,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
         }
 
-        // 3. Benutzernamen ermitteln (Metadata -> Supabase Profiles Tabelle -> E-Mail Kürzel)
+        // 3. Benutzernamen ermitteln
         if (dashUsername) {
             let username = user.user_metadata?.username || user.user_metadata?.full_name || user.user_metadata?.display_name;
 
-            // Falls in den Metadaten kein Name liegt, optional aus einer Supabase 'profiles' Tabelle laden
             if (!username) {
                 const { data: profile } = await client
                     .from("profiles")
@@ -69,15 +68,20 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }
             }
 
-            // Fallback: Name vor dem @-Zeichen der E-Mail verwenden
             if (!username && user.email) {
                 username = user.email.split("@")[0];
             }
 
-dashUsername.textContent = username || "Fahrer";
+            dashUsername.textContent = username || "Fahrer";
+        }
+
+        // ERST JETZT DAS DASHBOARD EINSCHALTEN, WENN DER LOGIN BESTÄTIGT IST
+        if (userContent) {
+            userContent.style.display = "block";
         }
 
     } catch (err) {
         console.error("Unerwarteter Fehler beim Laden der Dashboard-Daten:", err);
+        window.location.href = "login.html";
     }
 });
