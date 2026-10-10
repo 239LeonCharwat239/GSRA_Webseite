@@ -348,13 +348,20 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
     color: white;
     border: none;
     border-radius: 50%;
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
     font-size: 11px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.existing-img-remove:hover {
+    background: #ff1a1a;
+    transform: scale(1.2) rotate(90deg);
+    box-shadow: 0 0 12px rgba(255, 77, 77, 0.8);
 }
 
 /* =========================================
@@ -524,27 +531,13 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
     animation: toastSlideIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
 
-.toast.toast-error {
-    border-left-color: #ff4d4d;
-}
-
-.toast.toast-success {
-    border-left-color: #00ff88;
-}
-
-.toast.toast-info {
-    border-left-color: var(--gsra-yellow);
-}
+.toast.toast-error { border-left-color: #ff4d4d; }
+.toast.toast-success { border-left-color: #00ff88; }
+.toast.toast-info { border-left-color: var(--gsra-yellow); }
 
 @keyframes toastSlideIn {
-    from {
-        transform: translateX(110%);
-        opacity: 0;
-    }
-    to {
-        transform: translateX(0);
-        opacity: 1;
-    }
+    from { transform: translateX(110%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
 }
 
 /* =========================================
@@ -682,244 +675,8 @@ p {
     transition: all 0.3s ease;
 }
 
-.icon-youtube:hover { 
-    color: #FF0000 !important; 
-    transform: scale(1.2) translateY(-4px);
-    filter: drop-shadow(0 0 12px rgba(255, 0, 0, 0.6)); 
-}
-
-.icon-instagram:hover { 
-    color: #E1306C !important; 
-    transform: scale(1.2) translateY(-4px);
-    filter: drop-shadow(0 0 12px rgba(225, 48, 108, 0.6)); 
-}
-
-.icon-discord:hover { 
-    color: #5865F2 !important; 
-    transform: scale(1.2) translateY(-4px);
-    filter: drop-shadow(0 0 12px rgba(88, 101, 242, 0.6)); 
-}
-
-.icon-reddit:hover { 
-    color: #FF4500 !important; 
-    transform: scale(1.2) translateY(-4px);
-    filter: drop-shadow(0 0 12px rgba(255, 69, 0, 0.6)); 
-}
-
-.icon-twitch:hover { 
-    color: #9146FF !important; 
-    transform: scale(1.2) translateY(-4px);
-    filter: drop-shadow(0 0 12px rgba(145, 70, 255, 0.6)); 
-}
-
-/* =========================================
-   GSRA MESSENGER STYLES
-========================================= */
-.chat-container {
-    display: grid;
-    grid-template-columns: 300px 1fr;
-    height: 70vh;
-    background: var(--bg-card);
-    border-radius: 10px;
-    border: 1px solid var(--border-subtle);
-    overflow: hidden;
-    margin-top: 20px;
-}
-
-.chat-sidebar {
-    background: #0d0e12;
-    border-right: 1px solid var(--border-subtle);
-    overflow-y: auto;
-}
-
-.chat-user-item {
-    padding: 15px;
-    border-bottom: 1px solid var(--border-subtle);
-    cursor: pointer;
-    transition: background 0.2s;
-    text-align: left;
-}
-
-.chat-user-item:hover, .chat-user-item.active {
-    background: rgba(0, 85, 255, 0.15);
-    border-left: 4px solid var(--gsra-blue);
-}
-
-.chat-window {
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    background: #0b0c10;
-    height: 100%;
-}
-
-.chat-header {
-    padding: 15px 20px;
-    background: #15161a;
-    border-bottom: 1px solid var(--border-subtle);
-    text-align: left;
-    font-weight: bold;
-    color: #fff;
-}
-
-.chat-messages {
-    flex: 1;
-    padding: 20px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.message-bubble {
-    max-width: 65%;
-    padding: 10px 15px;
-    border-radius: 8px;
-    font-size: 14px;
-    line-height: 1.4;
-    word-wrap: break-word;
-}
-
-.message-own {
-    align-self: flex-end;
-    background: var(--gsra-blue);
-    color: #fff;
-    border-bottom-right-radius: 2px;
-}
-
-.message-other {
-    align-self: flex-start;
-    background: #1f2128;
-    color: #fff;
-    border-bottom-left-radius: 2px;
-    border: 1px solid var(--border-subtle);
-}
-
-.message-time {
-    font-size: 10px;
-    opacity: 0.7;
-    margin-top: 4px;
-    text-align: right;
-    display: block;
-}
-
-.chat-input-area {
-    padding: 15px;
-    background: #15161a;
-    border-top: 1px solid var(--border-subtle);
-    display: flex;
-    gap: 10px;
-}
-
-.chat-input-area input {
-    flex: 1;
-    padding: 10px 14px;
-    background: #0b0c10;
-    border: 1px solid var(--border-subtle);
-    color: #fff;
-    border-radius: 4px;
-    outline: none;
-}
-
-@media (max-width: 768px) {
-    .chat-container {
-        grid-template-columns: 1fr;
-    }
-    .chat-sidebar {
-        display: none;
-    }
-}
-
-/* =========================================
-   ZUSATZ FÜR DASHBOARD & AUTH
-========================================= */
-.grid-2 {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 30px;
-    text-align: left;
-}
-
-.auth-only {
-    display: none;
-}
-
-/* =========================================
-   GSRA SETUPS & COMBOBOX STYLES
-========================================= */
-.combo-box-container {
-    position: relative;
-    width: 100%;
-}
-
-.combo-box-input {
-    width: 100%;
-    padding: 12px;
-    background: rgba(0,0,0,0.4);
-    border: 1px solid var(--border-subtle);
-    color: #fff;
-    border-radius: 4px;
-    box-sizing: border-box;
-}
-
-.combo-box-dropdown {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    max-height: 220px;
-    overflow-y: auto;
-    background: #121620;
-    border: 1px solid var(--border-subtle);
-    border-top: none;
-    border-radius: 0 0 4px 4px;
-    z-index: 100;
-    display: none;
-}
-
-.combo-option {
-    padding: 10px 12px;
-    cursor: pointer;
-    border-bottom: 1px solid rgba(255,255,255,0.05);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.combo-option:hover {
-    background: rgba(255,204,0,0.15);
-    color: var(--gsra-yellow);
-}
-
-.layout-tag {
-    font-size: 11px;
-    background: rgba(255,255,255,0.1);
-    padding: 2px 6px;
-    border-radius: 3px;
-    color: var(--text-muted);
-}
-
-.vote-btn {
-    background: rgba(255,255,255,0.05);
-    border: 1px solid var(--border-subtle);
-    color: #fff;
-    padding: 4px 8px;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: 0.2s;
-    font-size: 13px;
-}
-
-.vote-btn:hover {
-    background: rgba(255,255,255,0.2);
-}
-
-.vote-btn.like-btn:hover {
-    color: #00ff88;
-    border-color: #00ff88;
-}
-
-.vote-btn.dislike-btn:hover {
-    color: #ff4d4d;
-    border-color: #ff4d4d;
-}
+.icon-youtube:hover { color: #FF0000 !important; transform: scale(1.2) translateY(-4px); }
+.icon-instagram:hover { color: #E1306C !important; transform: scale(1.2) translateY(-4px); }
+.icon-discord:hover { color: #5865F2 !important; transform: scale(1.2) translateY(-4px); }
+.icon-reddit:hover { color: #FF4500 !important; transform: scale(1.2) translateY(-4px); }
+.icon-twitch:hover { color: #9146FF !important; transform: scale(1.2) translateY(-4px); }

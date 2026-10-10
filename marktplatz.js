@@ -106,7 +106,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     loadMarketplaceItems();
 });
 
-// 1. WELTWEITE ORTS-SUCHE (OPENSTREETMAP NOMINATIM API)
+// 1. WELTWEITE ORTS-SUCHE (INKL. DÖRFER & WEILER)
 function setupLocationAutocomplete() {
     if (!itemLocationInput || !locationDropdown) return;
 
@@ -122,7 +122,8 @@ function setupLocationAutocomplete() {
 
         debounceTimer = setTimeout(async () => {
             try {
-                const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=5`);
+                // Nominatim API mit Unterstützung für Dörfer (village, hamlet, town, city)
+                const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=6`);
                 const data = await res.json();
 
                 locationDropdown.innerHTML = "";
@@ -135,9 +136,10 @@ function setupLocationAutocomplete() {
                     const item = document.createElement("div");
                     item.className = "autocomplete-item";
                     
-                    const city = place.address.city || place.address.town || place.address.village || place.name;
-                    const country = place.address.country || "";
-                    const displayName = country ? `${city}, ${country}` : place.display_name;
+                    const address = place.address || {};
+                    const locName = address.city || address.town || address.village || address.hamlet || address.municipality || place.name;
+                    const country = address.country || "";
+                    const displayName = country ? `${locName}, ${country}` : place.display_name;
 
                     item.innerText = displayName;
                     item.addEventListener("click", () => {
@@ -433,7 +435,7 @@ window.addEventListener("click", (e) => {
     if (e.target === itemCreateModal) itemCreateModal.style.display = "none";
 });
 
-// 7. Angebot Speichern (Insert oder Update)
+// 7. Angebot Speichern (Insert oder Update in Supabase)
 if (createItemForm) {
     createItemForm.addEventListener("submit", async (e) => {
         e.preventDefault();
