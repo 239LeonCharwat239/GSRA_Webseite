@@ -1,12 +1,11 @@
 /* =========================================
-   GSRA - Messenger Logik (Supabase Realtime)
+   GSRA - High-End Messenger Logik
 ========================================= */
 
 let currentUser = null;
 let activeChatId = null;
 let messageSubscription = null;
 
-// Hilfsfunktion zum Schutz vor XSS / kaputtem HTML
 function escapeHtml(str) {
     if (!str) return "";
     return String(str)
@@ -17,13 +16,18 @@ function escapeHtml(str) {
         .replace(/'/g, "&#039;");
 }
 
-// DOM-Elemente
 const chatsList = document.getElementById("chatsList");
 const chatHeader = document.getElementById("chatHeader");
 const chatMessages = document.getElementById("chatMessages");
 const messageInput = document.getElementById("messageInput");
 const sendBtn = document.getElementById("sendBtn");
 const chatForm = document.getElementById("chatForm");
+const chatActions = document.getElementById("chatActions");
+const editChatTitleBtn = document.getElementById("editChatTitleBtn");
+const deleteChatBtn = document.getElementById("deleteChatBtn");
+const blockUserBtn = document.getElementById("blockUserBtn");
+const imageUploadInput = document.getElementById("imageUploadInput");
+const emojiBar = document.getElementById("emojiBar");
 
 document.addEventListener("DOMContentLoaded", async () => {
     const supabase = window.supabaseClient || window.supabase;
@@ -33,41 +37,51 @@ document.addEventListener("DOMContentLoaded", async () => {
     currentUser = session?.user || null;
 
     if (!currentUser) {
-        if (chatsList) {
-            chatsList.innerHTML = `<p style="padding: 15px; font-size: 13px; color: var(--text-muted);">Bitte logge dich ein, um deine Chats zu sehen.</p>`;
-        }
+        if (chatsList) chatsList.innerHTML = `<p style="padding: 15px; font-size: 13px; color: var(--text-muted);">Bitte logge dich ein.</p>`;
         return;
     }
 
-    // Erst URL-Parameter prüfen (erstellt ggf. neuen Chat), dann Übersicht laden
     await checkUrlParameters();
     await loadUserChats();
+
+    // Emoji Bar Klicks
+    if (emojiBar) {
+        emojiBar.querySelectorAll("span").forEach(span => {
+            span.addEventListener("click", () => {
+                if (messageInput && !messageInput.disabled) {
+                    messageInput.value += span.innerText;
+                    messageInput.focus();
+                }
+            });
+        });
+    }
 });
 
-// 1. URL Parameter verarbeiten (Anfrage von Marktplatz)
+// URL Parameter verarbeiten (Marketplace oder Direktchat mit Freund)
 async function checkUrlParameters() {
     const supabase = window.supabaseClient || window.supabase;
     const urlParams = new URLSearchParams(window.location.search);
     const sellerId = urlParams.get("sellerId");
     const sellerName = urlParams.get("sellerName") || "Verkäufer";
     const itemTitle = urlParams.get("itemTitle");
+    const friendId = urlParams.get("friendId");
 
-    if (sellerId && currentUser && sellerId !== currentUser.id) {
-        let { data: existingChat, error: fetchErr } = await supabase
+    const targetId = sellerId || friendId;
+    if (targetId && currentUser && targetId !== currentUser.id) {
+        let { data: existingChat } = await supabase
             .from("chats")
             .select("*")
-            .or(`and(user1_id.eq.${currentUser.id},user2_id.eq.${sellerId}),and(user1_id.eq.${sellerId},user2_id.eq.${currentUser.id})`)
+            .or(`and(user1_id.eq.${currentUser.id},user2_id.eq.${targetId}),and(user1_id.eq.${targetId},user2_id.eq.${currentUser.id})`)
             .maybeSingle();
-
-        if (fetchErr) console.warn("Hinweis beim Chat-Suchen:", fetchErr);
 
         if (!existingChat) {
             const { data: newChat, error } = await supabase
                 .from("chats")
                 .insert([{
                     user1_id: currentUser.id,
-                    user2_id: sellerId,
-                    last_message: itemTitle ? `Anfrage zu: ${itemTitle}` : "Neuer Chat"
+                    user2_id: targetId,
+                    title: itemTitle ? `Anfrage: ${itemTitle}` : null,
+                    last_message: "Chat gestartet"
                 }])
                 .select()
                 .single();
@@ -77,12 +91,12 @@ async function checkUrlParameters() {
 
         if (existingChat) {
             activeChatId = existingChat.id;
-            openChat(existingChat.id, sellerName, itemTitle);
+            openChat(existingChat.id, sellerName, existingChat.title);
         }
     }
 }
 
-// 2. Chat-Übersicht laden
+// Chats laden
 async function loadUserChats() {
     const supabase = window.supabaseClient || window.supabase;
     if (!chatsList || !currentUser || !supabase) return;
@@ -104,19 +118,17 @@ async function loadUserChats() {
         const item = document.createElement("div");
         item.className = `chat-user-item ${chat.id === activeChatId ? 'active' : ''}`;
         
-        const shortUserId = otherUserId ? escapeHtml(otherUserId.substring(0, 6)) : 'Chat';
+        const displayTitle = chat.title || `Chat mit Fahrer (${otherUserId.substring(0, 6)})`;
         const lastMsg = escapeHtml(chat.last_message || 'Keine Nachrichten');
 
         item.innerHTML = `
-            <div style="color: #fff; font-weight: bold; font-size: 14px;">Nutzer (${shortUserId})</div>
-            <div style="font-size: 12px; color: var(--text-muted); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
-                ${lastMsg}
-            </div>
+            <div style="color: #fff; font-weight: bold; font-size: 14px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${escapeHtml(displayTitle)}</div>
+            <div style="font-size: 12px; color: var(--text-muted); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${lastMsg}</div>
         `;
 
         item.addEventListener("click", () => {
             activeChatId = chat.id;
-            openChat(chat.id, `Nutzer (${otherUserId ? otherUserId.substring(0, 6) : ''})`);
+            openChat(chat.id, `Fahrer (${otherUserId.substring(0, 6)})`, chat.title);
             loadUserChats();
         });
 
@@ -124,10 +136,16 @@ async function loadUserChats() {
     });
 }
 
-// 3. Chat öffnen & Nachrichten abonnieren
-async function openChat(chatId, recipientName, itemContext = null) {
+// Chat öffnen
+async function openChat(chatId, recipientName, chatTitle = null) {
     const supabase = window.supabaseClient || window.supabase;
-    if (chatHeader) chatHeader.innerText = `Chat mit ${recipientName}`;
+    
+    const displayName = chatTitle ? `${chatTitle} (${recipientName})` : `Chat mit ${recipientName}`;
+    if (chatHeader) {
+        chatHeader.querySelector("span").innerText = displayName;
+    }
+    if (chatActions) chatActions.style.display = "flex";
+    if (emojiBar) emojiBar.style.display = "flex";
     if (messageInput) messageInput.disabled = false;
     if (sendBtn) sendBtn.disabled = false;
 
@@ -142,85 +160,126 @@ async function openChat(chatId, recipientName, itemContext = null) {
         .eq("chat_id", chatId)
         .order("created_at", { ascending: true });
 
-    renderMessages(messages || [], itemContext);
+    renderMessages(messages || []);
 
-    // Echtzeit-Nachrichten-Abo über Supabase
     messageSubscription = supabase
         .channel(`chat_${chatId}`)
-        .on(
-            'postgres_changes',
-            { event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` },
-            (payload) => {
-                appendSingleMessage(payload.new);
-            }
-        )
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` }, (payload) => {
+            appendSingleMessage(payload.new);
+        })
         .subscribe();
 }
 
-function renderMessages(messages, itemContext) {
+function renderMessages(messages) {
     if (!chatMessages) return;
     chatMessages.innerHTML = "";
-
-    if (messages.length === 0 && itemContext) {
-        chatMessages.innerHTML = `<p class="chat-placeholder" style="text-align: center; color: var(--gsra-yellow); font-size: 13px; margin: auto;">Starte die Konversation bezüglich "${escapeHtml(itemContext)}"</p>`;
+    if (messages.length === 0) {
+        chatMessages.innerHTML = `<p class="chat-placeholder" style="text-align: center; color: var(--text-muted); margin: auto;">Schreibe die erste Nachricht...</p>`;
         return;
     }
-
     messages.forEach(appendSingleMessage);
 }
 
 function appendSingleMessage(msg) {
     if (!chatMessages) return;
-
     const placeholder = chatMessages.querySelector(".chat-placeholder");
-    if (placeholder) {
-        placeholder.remove();
-    }
+    if (placeholder) placeholder.remove();
 
     const bubble = document.createElement("div");
     const isOwn = msg.sender_id === currentUser?.id;
-
     bubble.className = `message-bubble ${isOwn ? 'message-own' : 'message-other'}`;
 
     const timeStr = msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
 
-    const textDiv = document.createElement("div");
-    textDiv.innerText = msg.text || "";
+    let contentHtml = `<div>${escapeHtml(msg.text || "")}</div>`;
+    if (msg.image_url) {
+        contentHtml += `<img src="${escapeHtml(msg.image_url)}" alt="Bild" style="max-width: 220px; border-radius: 6px; margin-top: 6px; display: block;">`;
+    }
 
-    const timeSpan = document.createElement("span");
-    timeSpan.className = "message-time";
-    timeSpan.innerText = timeStr;
-
-    bubble.appendChild(textDiv);
-    bubble.appendChild(timeSpan);
-
+    bubble.innerHTML = `${contentHtml}<span class="message-time">${timeStr}</span>`;
     chatMessages.appendChild(bubble);
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-// 4. Nachricht senden
+// Chat-Titel umbenennen
+if (editChatTitleBtn) {
+    editChatTitleBtn.addEventListener("click", async () => {
+        const supabase = window.supabaseClient || window.supabase;
+        const newTitle = prompt("Gib einen neuen Namen für dieses Chat-Thema ein (der Benutzer bleibt unverändert):");
+        if (newTitle !== null && activeChatId) {
+            await supabase.from("chats").update({ title: newTitle }).eq("id", activeChatId);
+            loadUserChats();
+            alert("Chat-Thema aktualisiert!");
+        }
+    });
+}
+
+// Chat löschen
+if (deleteChatBtn) {
+    deleteChatBtn.addEventListener("click", async () => {
+        const supabase = window.supabaseClient || window.supabase;
+        if (confirm("Möchtest du diesen Chat wirklich unwiderruflich löschen?")) {
+            await supabase.from("chats").delete().eq("id", activeChatId);
+            activeChatId = null;
+            if (chatHeader) chatHeader.querySelector("span").innerText = "Wähle einen Chat aus";
+            if (chatActions) chatActions.style.display = "none";
+            if (emojiBar) emojiBar.style.display = "none";
+            if (chatMessages) chatMessages.innerHTML = "";
+            loadUserChats();
+        }
+    });
+}
+
+// Nutzer blockieren
+if (blockUserBtn) {
+    blockUserBtn.addEventListener("click", async () => {
+        alert("Nutzer wurde blockiert und aus deinen Chats entfernt.");
+        if (activeChatId) {
+            const supabase = window.supabaseClient || window.supabase;
+            await supabase.from("chats").delete().eq("id", activeChatId);
+            location.reload();
+        }
+    });
+}
+
+// Nachricht oder Bild senden
 if (chatForm) {
     chatForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         const supabase = window.supabaseClient || window.supabase;
-        const inputEl = document.getElementById("messageInput");
-        const text = inputEl ? inputEl.value.trim() : "";
+        const text = messageInput ? messageInput.value.trim() : "";
+        const file = imageUploadInput ? imageUploadInput.files[0] : null;
 
-        if (!text || !activeChatId || !currentUser || !supabase) return;
+        if ((!text && !file) || !activeChatId || !currentUser || !supabase) return;
 
-        if (inputEl) inputEl.value = "";
+        if (messageInput) messageInput.value = "";
+        if (imageUploadInput) imageUploadInput.value = "";
+
+        let imageUrl = null;
+        if (file) {
+            const fileExt = file.name.split('.').pop();
+            const fileName = `chat_${Date.now()}_${Math.random().toString(36).substring(2,7)}.${fileExt}`;
+            
+            // UPLOAD IN DEN NEUEN BUCKET: chat_attachments
+            const { error: uploadErr } = await supabase.storage.from("chat_attachments").upload(fileName, file);
+            if (!uploadErr) {
+                const { data: pubData } = supabase.storage.from("chat_attachments").getPublicUrl(fileName);
+                imageUrl = pubData.publicUrl;
+            } else {
+                console.error("Upload Fehler:", uploadErr.message);
+            }
+        }
 
         try {
-            const { error: msgError } = await supabase.from("messages").insert([{
+            await supabase.from("messages").insert([{
                 chat_id: activeChatId,
                 sender_id: currentUser.id,
-                text: text
+                text: text || (file ? "[Foto]" : ""),
+                image_url: imageUrl
             }]);
 
-            if (msgError) throw msgError;
-
             await supabase.from("chats").update({
-                last_message: text
+                last_message: text || "[Foto]"
             }).eq("id", activeChatId);
 
             loadUserChats();

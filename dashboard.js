@@ -1,87 +1,166 @@
 /* =========================================
-   GSRA - Dashboard Steuerung (Supabase)
+   GSRA - Dashboard Steuerung & Profil
 ========================================= */
 
 document.addEventListener("DOMContentLoaded", async () => {
     const client = window.supabaseClient || window.supabase;
-
-    if (!client) {
-        console.error("Supabase Client nicht gefunden!");
-        return;
-    }
+    if (!client) return;
 
     const userContent = document.getElementById("userContent");
     const dashUsername = document.getElementById("dashUsername");
     const dashEmail = document.getElementById("dashEmail");
     const dashCreated = document.getElementById("dashCreated");
+    const dashAvatarImg = document.getElementById("dashAvatarImg");
+    const editUsername = document.getElementById("editUsername");
+    const editBio = document.getElementById("editBio");
+    const profileForm = document.getElementById("profileForm");
+    const friendRequestForm = document.getElementById("friendRequestForm");
+    const friendUsernameInput = document.getElementById("friendUsernameInput");
+    const friendsListContainer = document.getElementById("friendsListContainer");
+
+    let currentUser = null;
 
     try {
-        // Aktuellen Benutzer abfragen
         const { data: { session }, error } = await client.auth.getSession();
-
-        if (error) {
-            console.error("Fehler beim Abrufen der Session:", error.message);
+        if (error || !session || !session.user) {
             window.location.href = "login.html";
             return;
         }
 
-        // Falls nicht eingeloggt: Sofort zur Login-Seite leiten
-        if (!session || !session.user) {
-            window.location.href = "login.html";
-            return;
-        }
+        currentUser = session.user;
+        dashEmail.textContent = currentUser.email || "";
+        dashCreated.textContent = new Date(currentUser.created_at).toLocaleDateString("de-DE");
 
-        const user = session.user;
+        // Profil aus Tabelle laden
+        let { data: profile } = await client
+            .from("profiles")
+            .select("*")
+            .eq("id", currentUser.id)
+            .maybeSingle();
 
-        // 1. E-Mail-Adresse setzen
-        if (dashEmail) {
-            dashEmail.textContent = user.email || "K. A.";
-        }
+        let username = profile?.username || currentUser.user_metadata?.username || currentUser.email.split("@")[0];
+        dashUsername.textContent = username;
+        if (editUsername) editUsername.value = username;
+        if (editBio && profile?.bio) editBio.value = profile.bio;
+        if (dashAvatarImg && profile?.avatar_url) dashAvatarImg.src = profile.avatar_url;
 
-        // 2. Erstellungsdatum setzen
-        if (dashCreated) {
-            if (user.created_at) {
-                const date = new Date(user.created_at);
-                dashCreated.textContent = date.toLocaleDateString("de-DE", {
-                    day: "2-digit",
-                    month: "2-digit",
-                    year: "numeric"
-                });
-            } else {
-                dashCreated.textContent = "Unbekannt";
-            }
-        }
+        if (userContent) userContent.style.display = "block";
 
-        // 3. Benutzernamen ermitteln
-        if (dashUsername) {
-            let username = user.user_metadata?.username || user.user_metadata?.full_name || user.user_metadata?.display_name;
+        // Profil speichern
+        if (profileForm) {
+            profileForm.addEventListener("submit", async (e) => {
+                e.preventDefault();
+                const newUsername = editUsername.value.trim();
+                const newBio = editBio.value.trim();
+                const avatarFile = document.getElementById("editAvatarFile").files[0];
 
-            if (!username) {
-                const { data: profile } = await client
-                    .from("profiles")
-                    .select("username")
-                    .eq("id", user.id)
-                    .maybeSingle();
+                let avatarUrl = profile?.avatar_url || null;
 
-                if (profile && profile.username) {
-                    username = profile.username;
+                if (avatarFile) {
+                    const fileExt = avatarFile.name.split('.').pop();
+                    const fileName = `${currentUser.id}_${Date.now()}.${fileExt}`;
+                    
+                    // UPLOAD IN DEN NEUEN BUCKET: avatars
+                    const { error: uploadErr } = await client.storage.from("avatars").upload(fileName, avatarFile);
+                    if (!uploadErr) {
+                        const { data: pubData } = client.storage.from("avatars").getPublicUrl(fileName);
+                        avatarUrl = pubData.publicUrl;
+                    } else {
+                        console.error("Upload Fehler:", uploadErr.message);
+                    }
                 }
-            }
 
-            if (!username && user.email) {
-                username = user.email.split("@")[0];
-            }
+                const { error: upsertErr } = await client.from("profiles").upsert({
+                    id: currentUser.id,
+                    username: newUsername,
+                    bio: newBio,
+                    avatar_url: avatarUrl
+                });
 
-            dashUsername.textContent = username || "Fahrer";
+                if (upsertErr) {
+                    alert("Fehler beim Speichern des Profils.");
+                } else {
+                    alert("Profil erfolgreich aktualisiert!");
+                    location.reload();
+                }
+            });
         }
 
-        // ERST JETZT DAS DASHBOARD EINSCHALTEN, WENN DER LOGIN BESTÄTIGT IST
-        if (userContent) {
-            userContent.style.display = "block";
+        // Freundschaftsanfrage senden
+        if (friendRequestForm) {
+            friendRequestForm.addEventListener("submit", async (e) => {
+                e.preventDefault();
+                const targetId = friendUsernameInput.value.trim();
+                if (targetId === currentUser.id) {
+                    alert("Du kannst dir nicht selbst eine Anfrage senden.");
+                    return;
+                }
+
+                const { error } = await client.from("friendships").insert([{
+                    user_id: currentUser.id,
+                    friend_id: targetId,
+                    status: "pending"
+                }]);
+
+                if (error) {
+                    alert("Fehler beim Senden der Anfrage (Existiert sie bereits?).");
+                } else {
+                    alert("Freundschaftsanfrage gesendet!");
+                    friendUsernameInput.value = "";
+                    loadFriends();
+                }
+            });
         }
+
+        loadFriends();
 
     } catch (err) {
-        console.error("Unerwarteter Fehler beim Laden der Dashboard-Daten:", err);
-        window.location.href = "login.html";
+        console.error("Dashboard Fehler:", err);
+    }
+
+    async function loadFriends() {
+        if (!friendsListContainer || !currentUser) return;
+        const { data: friendships, error } = await client
+            .from("friendships")
+            .select("*")
+            .or(`user_id.eq.${currentUser.id},friend_id.eq.${currentUser.id}`);
+
+        if (error || !friendships || friendships.length === 0) {
+            friendsListContainer.innerHTML = `<p style="font-size: 12px; color: var(--text-muted);">Keine Freunde oder Anfragen.</p>`;
+            return;
+        }
+
+        friendsListContainer.innerHTML = "";
+        friendships.forEach(f => {
+            const isSender = f.user_id === currentUser.id;
+            const otherId = isSender ? f.friend_id : f.user_id;
+            const shortId = otherId.substring(0, 8);
+
+            const div = document.createElement("div");
+            div.style.cssText = "display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 12px;";
+            
+            let statusText = f.status === 'accepted' ? '<span style="color: #00ff88;">Freund</span>' : (isSender ? '<span style="color: var(--gsra-yellow);">Ausgehend</span>' : '<span style="color: var(--gsra-blue);">Erhalten</span>');
+
+            div.innerHTML = `
+                <span>ID: ${shortId}... (${statusText})</span>
+                <div style="display: flex; gap: 5px;">
+                    ${f.status === 'pending' && !isSender ? `<button class="accept-btn" style="background:#00ff88; color:#000; border:none; padding:2px 6px; border-radius:3px; cursor:pointer;">Annehmen</button>` : ''}
+                    <button class="chat-friend-btn" style="background:var(--gsra-blue); color:#fff; border:none; padding:2px 6px; border-radius:3px; cursor:pointer;"><i class="fa-solid fa-comments"></i></button>
+                </div>
+            `;
+
+            if (f.status === 'pending' && !isSender) {
+                div.querySelector(".accept-btn").onclick = async () => {
+                    await client.from("friendships").update({ status: 'accepted' }).eq("id", f.id);
+                    loadFriends();
+                };
+            }
+
+            div.querySelector(".chat-friend-btn").onclick = () => {
+                window.location.href = `messenger.html?friendId=${otherId}`;
+            };
+
+            friendsListContainer.appendChild(div);
+        });
     }
 });

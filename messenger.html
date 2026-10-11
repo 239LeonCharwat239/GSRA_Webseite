@@ -37,7 +37,7 @@
     <main class="container">
         <section class="hero-section" style="margin-bottom: 20px; padding: 20px 0;">
             <h1 class="hero-title">GSRA <span class="text-blue">Messenger</span></h1>
-            <p class="hero-subtitle">Kommuniziere direkt mit anderen Fahrern und Verkäufern.</p>
+            <p class="hero-subtitle">Kommuniziere in Echtzeit mit deinen Freunden und Verkäufern.</p>
         </section>
 
         <!-- CHAT CONTAINER -->
@@ -49,14 +49,31 @@
 
             <!-- RECHTES HAUPT-CHATFENSTER -->
             <div class="chat-window">
-                <div class="chat-header" id="chatHeader">Wähle einen Chat aus</div>
+                <div class="chat-header" id="chatHeader" style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>Wähle einen Chat aus</span>
+                    <div id="chatActions" style="display: none; gap: 10px;">
+                        <button id="editChatTitleBtn" title="Chat-Thema umbenennen" style="background:none; border:none; color:var(--text-muted); cursor:pointer;"><i class="fa-solid fa-pen"></i></button>
+                        <button id="deleteChatBtn" title="Chat löschen" style="background:none; border:none; color:#ff4d4d; cursor:pointer;"><i class="fa-solid fa-trash"></i></button>
+                        <button id="blockUserBtn" title="Nutzer blockieren" style="background:none; border:none; color:#ff4d4d; cursor:pointer;"><i class="fa-solid fa-ban"></i></button>
+                    </div>
+                </div>
                 
                 <div class="chat-messages" id="chatMessages">
                     <p class="chat-placeholder" style="text-align: center; color: var(--text-muted); margin: auto;">Kein Chat ausgewählt.</p>
                 </div>
 
+                <!-- EMOJI QUICK BAR -->
+                <div id="emojiBar" style="padding: 6px 15px; background: #121317; border-top: 1px solid var(--border-subtle); display: none; gap: 8px; font-size: 18px; cursor: pointer;">
+                    <span>😊</span><span>🚀</span><span>🏎️</span><span>🔥</span><span>👍</span><span>❤️</span><span>🏁</span><span>😂</span><span>😎</span><span>💸</span>
+                </div>
+
                 <!-- EINGABEBEREICH -->
                 <form class="chat-input-area" id="chatForm">
+                    <label for="imageUploadInput" style="cursor: pointer; color: var(--text-muted); display: flex; align-items: center; font-size: 18px;" title="Foto anhängen">
+                        <i class="fa-solid fa-image"></i>
+                    </label>
+                    <input type="file" id="imageUploadInput" accept="image/*" style="display: none;">
+                    
                     <input type="text" id="messageInput" placeholder="Schreibe eine Nachricht..." autocomplete="off" disabled required>
                     <button type="submit" id="sendBtn" class="login-btn" style="cursor: pointer;" disabled>
                         <i class="fa-solid fa-paper-plane"></i> Senden
