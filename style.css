@@ -951,3 +951,48 @@ p {
     color: #ff4d4d;
     border-color: #ff4d4d;
 }
+
+/* =========================================
+   MESSENGER BILDER & EMOJI PICKER FIXES
+========================================= */
+.message-bubble img.chat-msg-img {
+    max-width: 100%;
+    max-height: 250px;
+    object-fit: cover;
+    border-radius: 8px;
+    margin-top: 8px;
+    display: block;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.message-bubble img.chat-msg-img:hover {
+    transform: scale(1.02);
+}
+
+.emoji-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 0 5px;
+    transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.emoji-btn:hover {
+    color: var(--gsra-yellow);
+    transform: scale(1.15);
+}
+
+.emoji-picker-container {
+    position: absolute;
+    bottom: 70px;
+    left: 20px;
+    z-index: 1000;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+    border-radius: 10px;
+    overflow: hidden;
+    display: none;
+}

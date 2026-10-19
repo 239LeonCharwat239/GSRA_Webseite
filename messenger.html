@@ -6,6 +6,8 @@
     <title>GSRA - Messenger</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Emoji Picker Component -->
+    <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@1/index.js"></script>
 </head>
 <body>
 
@@ -41,7 +43,7 @@
         </section>
 
         <!-- CHAT CONTAINER -->
-        <div class="chat-container">
+        <div class="chat-container" style="position: relative;">
             <!-- LINKE SIDEBAR: CHAT-ÜBERSICHT -->
             <div class="chat-sidebar" id="chatsList">
                 <p style="padding: 15px; font-size: 13px; color: var(--text-muted);">Lade Chats...</p>
@@ -50,11 +52,11 @@
             <!-- RECHTES HAUPT-CHATFENSTER -->
             <div class="chat-window">
                 <div class="chat-header" id="chatHeader" style="display: flex; justify-content: space-between; align-items: center;">
-                    <span>Wähle einen Chat aus</span>
-                    <div id="chatActions" style="display: none; gap: 10px;">
-                        <button id="editChatTitleBtn" title="Chat-Thema umbenennen" style="background:none; border:none; color:var(--text-muted); cursor:pointer;"><i class="fa-solid fa-pen"></i></button>
-                        <button id="deleteChatBtn" title="Chat löschen" style="background:none; border:none; color:#ff4d4d; cursor:pointer;"><i class="fa-solid fa-trash"></i></button>
-                        <button id="blockUserBtn" title="Nutzer blockieren" style="background:none; border:none; color:#ff4d4d; cursor:pointer;"><i class="fa-solid fa-ban"></i></button>
+                    <span id="chatTitleText">Wähle einen Chat aus</span>
+                    <div id="chatActions" style="display: none; gap: 12px; align-items: center;">
+                        <button id="editChatTitleBtn" title="Chat-Thema umbenennen" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size: 15px;"><i class="fa-solid fa-pen"></i></button>
+                        <button id="deleteChatBtn" title="Chat löschen" style="background:none; border:none; color:#ff4d4d; cursor:pointer; font-size: 15px;"><i class="fa-solid fa-trash"></i></button>
+                        <button id="blockUserBtn" title="Nutzer blockieren" style="background:none; border:none; color:#ff4d4d; cursor:pointer; font-size: 15px;"><i class="fa-solid fa-ban"></i></button>
                     </div>
                 </div>
                 
@@ -62,17 +64,21 @@
                     <p class="chat-placeholder" style="text-align: center; color: var(--text-muted); margin: auto;">Kein Chat ausgewählt.</p>
                 </div>
 
-                <!-- EMOJI QUICK BAR -->
-                <div id="emojiBar" style="padding: 6px 15px; background: #121317; border-top: 1px solid var(--border-subtle); display: none; gap: 8px; font-size: 18px; cursor: pointer;">
-                    <span>😊</span><span>🚀</span><span>🏎️</span><span>🔥</span><span>👍</span><span>❤️</span><span>🏁</span><span>😂</span><span>😎</span><span>💸</span>
+                <!-- EMOJI PICKER POPUP CONTAINER -->
+                <div id="emojiPickerWrapper" class="emoji-picker-container">
+                    <emoji-picker class="dark"></emoji-picker>
                 </div>
 
                 <!-- EINGABEBEREICH -->
-                <form class="chat-input-area" id="chatForm">
-                    <label for="imageUploadInput" style="cursor: pointer; color: var(--text-muted); display: flex; align-items: center; font-size: 18px;" title="Foto anhängen">
-                        <i class="fa-solid fa-image"></i>
+                <form class="chat-input-area" id="chatForm" style="align-items: center;">
+                    <button type="button" id="emojiToggleBtn" class="emoji-btn" title="Emoji auswählen" disabled>
+                        <i class="fa-regular fa-face-smile"></i>
+                    </button>
+
+                    <label for="imageUploadInput" style="cursor: pointer; color: var(--text-muted); display: flex; align-items: center; font-size: 18px; padding: 0 4px;" title="Foto anhängen">
+                        <i class="fa-solid fa-paperclip"></i>
                     </label>
-                    <input type="file" id="imageUploadInput" accept="image/*" style="display: none;">
+                    <input type="file" id="imageUploadInput" accept="image/*" style="display: none;" disabled>
                     
                     <input type="text" id="messageInput" placeholder="Schreibe eine Nachricht..." autocomplete="off" disabled required>
                     <button type="submit" id="sendBtn" class="login-btn" style="cursor: pointer;" disabled>

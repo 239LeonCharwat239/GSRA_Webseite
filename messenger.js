@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - High-End Messenger Logik
+   GSRA - High-End Messenger Logik (Fixes)
 ========================================= */
 
 let currentUser = null;
@@ -17,7 +17,7 @@ function escapeHtml(str) {
 }
 
 const chatsList = document.getElementById("chatsList");
-const chatHeader = document.getElementById("chatHeader");
+const chatTitleText = document.getElementById("chatTitleText");
 const chatMessages = document.getElementById("chatMessages");
 const messageInput = document.getElementById("messageInput");
 const sendBtn = document.getElementById("sendBtn");
@@ -27,7 +27,8 @@ const editChatTitleBtn = document.getElementById("editChatTitleBtn");
 const deleteChatBtn = document.getElementById("deleteChatBtn");
 const blockUserBtn = document.getElementById("blockUserBtn");
 const imageUploadInput = document.getElementById("imageUploadInput");
-const emojiBar = document.getElementById("emojiBar");
+const emojiToggleBtn = document.getElementById("emojiToggleBtn");
+const emojiPickerWrapper = document.getElementById("emojiPickerWrapper");
 
 document.addEventListener("DOMContentLoaded", async () => {
     const supabase = window.supabaseClient || window.supabase;
@@ -44,20 +45,33 @@ document.addEventListener("DOMContentLoaded", async () => {
     await checkUrlParameters();
     await loadUserChats();
 
-    // Emoji Bar Klicks
-    if (emojiBar) {
-        emojiBar.querySelectorAll("span").forEach(span => {
-            span.addEventListener("click", () => {
+    // Emoji Picker Logik
+    if (emojiToggleBtn && emojiPickerWrapper) {
+        emojiToggleBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const isVisible = emojiPickerWrapper.style.display === "block";
+            emojiPickerWrapper.style.display = isVisible ? "none" : "block";
+        });
+
+        document.addEventListener("click", (e) => {
+            if (!emojiPickerWrapper.contains(e.target) && e.target !== emojiToggleBtn) {
+                emojiPickerWrapper.style.display = "none";
+            }
+        });
+
+        const picker = emojiPickerWrapper.querySelector("emoji-picker");
+        if (picker) {
+            picker.addEventListener("emoji-click", (event) => {
                 if (messageInput && !messageInput.disabled) {
-                    messageInput.value += span.innerText;
+                    messageInput.value += event.detail.unicode;
                     messageInput.focus();
                 }
             });
-        });
+        }
     }
 });
 
-// URL Parameter verarbeiten (Marketplace oder Direktchat mit Freund)
+// URL Parameter verarbeiten & danach URL bereinigen, damit gelöschte Chats nicht wiederkehren
 async function checkUrlParameters() {
     const supabase = window.supabaseClient || window.supabase;
     const urlParams = new URLSearchParams(window.location.search);
@@ -92,11 +106,14 @@ async function checkUrlParameters() {
         if (existingChat) {
             activeChatId = existingChat.id;
             openChat(existingChat.id, sellerName, existingChat.title);
+
+            // URL im Browser bereinigen, ohne neu zu laden
+            window.history.replaceState({}, document.title, window.location.pathname);
         }
     }
 }
 
-// Chats laden
+// Chats in Sidebar laden
 async function loadUserChats() {
     const supabase = window.supabaseClient || window.supabase;
     if (!chatsList || !currentUser || !supabase) return;
@@ -141,12 +158,12 @@ async function openChat(chatId, recipientName, chatTitle = null) {
     const supabase = window.supabaseClient || window.supabase;
     
     const displayName = chatTitle ? `${chatTitle} (${recipientName})` : `Chat mit ${recipientName}`;
-    if (chatHeader) {
-        chatHeader.querySelector("span").innerText = displayName;
-    }
+    if (chatTitleText) chatTitleText.innerText = displayName;
+    
     if (chatActions) chatActions.style.display = "flex";
-    if (emojiBar) emojiBar.style.display = "flex";
     if (messageInput) messageInput.disabled = false;
+    if (imageUploadInput) imageUploadInput.disabled = false;
+    if (emojiToggleBtn) emojiToggleBtn.disabled = false;
     if (sendBtn) sendBtn.disabled = false;
 
     if (messageSubscription) {
@@ -191,9 +208,13 @@ function appendSingleMessage(msg) {
 
     const timeStr = msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
 
-    let contentHtml = `<div>${escapeHtml(msg.text || "")}</div>`;
+    let contentHtml = "";
+    if (msg.text && msg.text !== "[Foto]") {
+        contentHtml += `<div>${escapeHtml(msg.text)}</div>`;
+    }
+
     if (msg.image_url) {
-        contentHtml += `<img src="${escapeHtml(msg.image_url)}" alt="Bild" style="max-width: 220px; border-radius: 6px; margin-top: 6px; display: block;">`;
+        contentHtml += `<img src="${escapeHtml(msg.image_url)}" alt="Chat Bild" class="chat-msg-img" onclick="window.open('${escapeHtml(msg.image_url)}', '_blank')">`;
     }
 
     bubble.innerHTML = `${contentHtml}<span class="message-time">${timeStr}</span>`;
@@ -205,39 +226,64 @@ function appendSingleMessage(msg) {
 if (editChatTitleBtn) {
     editChatTitleBtn.addEventListener("click", async () => {
         const supabase = window.supabaseClient || window.supabase;
+        if (!activeChatId) return;
+
         const newTitle = prompt("Gib einen neuen Namen für dieses Chat-Thema ein (der Benutzer bleibt unverändert):");
-        if (newTitle !== null && activeChatId) {
-            await supabase.from("chats").update({ title: newTitle }).eq("id", activeChatId);
+        if (newTitle !== null && newTitle.trim() !== "") {
+            const trimmedTitle = newTitle.trim();
+            await supabase.from("chats").update({ title: trimmedTitle }).eq("id", activeChatId);
+            if (chatTitleText) chatTitleText.innerText = trimmedTitle;
             loadUserChats();
-            alert("Chat-Thema aktualisiert!");
         }
     });
 }
 
-// Chat löschen
+// Chat löschen (Ohne Seiten-Reload)
 if (deleteChatBtn) {
     deleteChatBtn.addEventListener("click", async () => {
         const supabase = window.supabaseClient || window.supabase;
+        if (!activeChatId) return;
+
         if (confirm("Möchtest du diesen Chat wirklich unwiderruflich löschen?")) {
             await supabase.from("chats").delete().eq("id", activeChatId);
+            
+            // Ansicht zurücksetzen
             activeChatId = null;
-            if (chatHeader) chatHeader.querySelector("span").innerText = "Wähle einen Chat aus";
+            if (chatTitleText) chatTitleText.innerText = "Wähle einen Chat aus";
             if (chatActions) chatActions.style.display = "none";
-            if (emojiBar) emojiBar.style.display = "none";
-            if (chatMessages) chatMessages.innerHTML = "";
+            if (messageInput) { messageInput.value = ""; messageInput.disabled = true; }
+            if (imageUploadInput) { imageUploadInput.value = ""; imageUploadInput.disabled = true; }
+            if (emojiToggleBtn) emojiToggleBtn.disabled = true;
+            if (sendBtn) sendBtn.disabled = true;
+            if (emojiPickerWrapper) emojiPickerWrapper.style.display = "none";
+            if (chatMessages) chatMessages.innerHTML = `<p class="chat-placeholder" style="text-align: center; color: var(--text-muted); margin: auto;">Kein Chat ausgewählt.</p>`;
+
             loadUserChats();
         }
     });
 }
 
-// Nutzer blockieren
+// Nutzer blockieren (Ohne Seiten-Reload)
 if (blockUserBtn) {
     blockUserBtn.addEventListener("click", async () => {
-        alert("Nutzer wurde blockiert und aus deinen Chats entfernt.");
-        if (activeChatId) {
-            const supabase = window.supabaseClient || window.supabase;
+        const supabase = window.supabaseClient || window.supabase;
+        if (!activeChatId) return;
+
+        if (confirm("Möchtest du diesen Nutzer blockieren und den Chat löschen?")) {
             await supabase.from("chats").delete().eq("id", activeChatId);
-            location.reload();
+            
+            activeChatId = null;
+            if (chatTitleText) chatTitleText.innerText = "Wähle einen Chat aus";
+            if (chatActions) chatActions.style.display = "none";
+            if (messageInput) { messageInput.value = ""; messageInput.disabled = true; }
+            if (imageUploadInput) { imageUploadInput.value = ""; imageUploadInput.disabled = true; }
+            if (emojiToggleBtn) emojiToggleBtn.disabled = true;
+            if (sendBtn) sendBtn.disabled = true;
+            if (emojiPickerWrapper) emojiPickerWrapper.style.display = "none";
+            if (chatMessages) chatMessages.innerHTML = `<p class="chat-placeholder" style="text-align: center; color: var(--text-muted); margin: auto;">Kein Chat ausgewählt.</p>`;
+
+            loadUserChats();
+            alert("Nutzer wurde entfernt.");
         }
     });
 }
@@ -254,13 +300,13 @@ if (chatForm) {
 
         if (messageInput) messageInput.value = "";
         if (imageUploadInput) imageUploadInput.value = "";
+        if (emojiPickerWrapper) emojiPickerWrapper.style.display = "none";
 
         let imageUrl = null;
         if (file) {
             const fileExt = file.name.split('.').pop();
             const fileName = `chat_${Date.now()}_${Math.random().toString(36).substring(2,7)}.${fileExt}`;
             
-            // UPLOAD IN DEN NEUEN BUCKET: chat_attachments
             const { error: uploadErr } = await supabase.storage.from("chat_attachments").upload(fileName, file);
             if (!uploadErr) {
                 const { data: pubData } = supabase.storage.from("chat_attachments").getPublicUrl(fileName);
