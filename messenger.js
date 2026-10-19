@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - High-End Messenger Logik (Final Fixed)
+   GSRA - High-End Messenger Logik (Vollständiger Fix)
 ========================================= */
 
 let currentUser = null;
@@ -30,7 +30,7 @@ const imageUploadInput = document.getElementById("imageUploadInput");
 const emojiToggleBtn = document.getElementById("emojiToggleBtn");
 const emojiPickerWrapper = document.getElementById("emojiPickerWrapper");
 const imagePreviewContainer = document.getElementById("imagePreviewContainer");
-const imagePreviewThumb = document.getElementById("imagePreviewThumb");
+const previewThumbsList = document.getElementById("previewThumbsList");
 const imagePreviewName = document.getElementById("imagePreviewName");
 const removeImageBtn = document.getElementById("removeImageBtn");
 const imageModal = document.getElementById("imageModal");
@@ -52,7 +52,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     await checkUrlParameters();
     await loadUserChats();
 
-    // Emoji Picker Logik
+    // Emoji Picker Toggeln
     if (emojiToggleBtn && emojiPickerWrapper) {
         emojiToggleBtn.addEventListener("click", (e) => {
             e.stopPropagation();
@@ -77,22 +77,29 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    // Bild-Auswahl Vorschau
+    // Mehrfach-Bilder-Vorschau
     if (imageUploadInput) {
         imageUploadInput.addEventListener("change", () => {
-            const file = imageUploadInput.files[0];
-            if (file) {
-                imagePreviewThumb.src = URL.createObjectURL(file);
-                imagePreviewName.textContent = file.name;
-                imagePreviewContainer.style.display = "flex";
+            const files = Array.from(imageUploadInput.files);
+            if (files.length > 0) {
+                if (previewThumbsList) previewThumbsList.innerHTML = "";
+                files.forEach(file => {
+                    const img = document.createElement("img");
+                    img.src = URL.createObjectURL(file);
+                    img.style.cssText = "width: 40px; height: 40px; object-fit: cover; border-radius: 4px; border: 1px solid var(--gsra-blue);";
+                    if (previewThumbsList) previewThumbsList.appendChild(img);
+                });
+                if (imagePreviewName) imagePreviewName.textContent = `${files.length} Bild(er) ausgewählt`;
+                if (imagePreviewContainer) imagePreviewContainer.style.display = "flex";
             }
         });
     }
 
     if (removeImageBtn) {
         removeImageBtn.addEventListener("click", () => {
-            imageUploadInput.value = "";
-            imagePreviewContainer.style.display = "none";
+            if (imageUploadInput) imageUploadInput.value = "";
+            if (previewThumbsList) previewThumbsList.innerHTML = "";
+            if (imagePreviewContainer) imagePreviewContainer.style.display = "none";
         });
     }
 
@@ -242,26 +249,41 @@ function appendSingleMessage(msg) {
 
     const timeStr = msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
 
-    let contentHtml = "";
-    if (msg.text && msg.text !== "[Foto]") {
-        contentHtml += `<div>${escapeHtml(msg.text)}</div>`;
-    }
-
+    // BILD ZUERST OBEN
     if (msg.image_url) {
-        const img = document.createElement("img");
-        img.src = msg.image_url;
-        img.alt = "Chat Bild";
-        img.className = "chat-msg-thumb";
-        img.onclick = () => {
-            modalImageFull.src = msg.image_url;
-            imageModal.style.display = "flex";
-        };
-        const imgWrapper = document.createElement("div");
-        imgWrapper.appendChild(img);
-        contentHtml += imgWrapper.outerHTML;
+        const urls = msg.image_url.split(",");
+        const imgContainer = document.createElement("div");
+        imgContainer.style.cssText = "display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px;";
+
+        urls.forEach(url => {
+            const cleanUrl = url.trim();
+            const img = document.createElement("img");
+            img.src = cleanUrl;
+            img.alt = "Chat Bild";
+            img.className = "chat-msg-thumb";
+            img.addEventListener("click", () => {
+                if (modalImageFull && imageModal) {
+                    modalImageFull.src = cleanUrl;
+                    imageModal.style.display = "flex";
+                }
+            });
+            imgContainer.appendChild(img);
+        });
+        bubble.appendChild(imgContainer);
     }
 
-    bubble.innerHTML = `${contentHtml}<span class="message-time">${timeStr}</span>`;
+    // TEXT DARUNTER (ALS ECHTE BILDUNTERSCHRIFT)
+    if (msg.text && msg.text !== "[Foto]") {
+        const textDiv = document.createElement("div");
+        textDiv.innerText = msg.text;
+        bubble.appendChild(textDiv);
+    }
+
+    const timeSpan = document.createElement("span");
+    timeSpan.className = "message-time";
+    timeSpan.innerText = timeStr;
+    bubble.appendChild(timeSpan);
+
     chatMessages.appendChild(bubble);
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
@@ -272,7 +294,7 @@ if (editChatTitleBtn) {
         const supabase = window.supabaseClient || window.supabase;
         if (!activeChatId) return;
 
-        const newTitle = prompt("Gib einen neuen Namen für dieses Chat-Thema ein (der Benutzer bleibt unverändert):");
+        const newTitle = prompt("Gib einen neuen Namen für dieses Chat-Thema ein:");
         if (newTitle !== null && newTitle.trim() !== "") {
             const trimmedTitle = newTitle.trim();
             await supabase.from("chats").update({ title: trimmedTitle }).eq("id", activeChatId);
@@ -282,7 +304,7 @@ if (editChatTitleBtn) {
     });
 }
 
-// Chat löschen (Nachrichten + Chat löschen, Ansicht zurücksetzen)
+// Chat löschen
 if (deleteChatBtn) {
     deleteChatBtn.addEventListener("click", async () => {
         const supabase = window.supabaseClient || window.supabase;
@@ -303,12 +325,12 @@ if (deleteChatBtn) {
             if (imagePreviewContainer) imagePreviewContainer.style.display = "none";
             if (chatMessages) chatMessages.innerHTML = `<p class="chat-placeholder" style="text-align: center; color: var(--text-muted); margin: auto;">Kein Chat ausgewählt.</p>`;
 
-            loadUserChats();
+            await loadUserChats();
         }
     });
 }
 
-// Nutzer blockieren (Nachrichten + Chat löschen, Ansicht zurücksetzen)
+// Nutzer blockieren
 if (blockUserBtn) {
     blockUserBtn.addEventListener("click", async () => {
         const supabase = window.supabaseClient || window.supabase;
@@ -329,47 +351,50 @@ if (blockUserBtn) {
             if (imagePreviewContainer) imagePreviewContainer.style.display = "none";
             if (chatMessages) chatMessages.innerHTML = `<p class="chat-placeholder" style="text-align: center; color: var(--text-muted); margin: auto;">Kein Chat ausgewählt.</p>`;
 
-            loadUserChats();
+            await loadUserChats();
             alert("Nutzer wurde blockiert und der Chat entfernt.");
         }
     });
 }
 
-// Nachricht oder Bild senden
+// Nachricht & Mehrfach-Bilder senden
 if (chatForm) {
     chatForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         const supabase = window.supabaseClient || window.supabase;
         const text = messageInput ? messageInput.value.trim() : "";
-        const file = imageUploadInput ? imageUploadInput.files[0] : null;
+        const files = imageUploadInput ? Array.from(imageUploadInput.files) : [];
 
-        if ((!text && !file) || !activeChatId || !currentUser || !supabase) return;
+        if ((!text && files.length === 0) || !activeChatId || !currentUser || !supabase) return;
 
         if (messageInput) messageInput.value = "";
         if (imageUploadInput) imageUploadInput.value = "";
         if (imagePreviewContainer) imagePreviewContainer.style.display = "none";
         if (emojiPickerWrapper) emojiPickerWrapper.style.display = "none";
 
-        let imageUrl = null;
-        if (file) {
+        let imageUrls = [];
+
+        for (const file of files) {
             const fileExt = file.name.split('.').pop();
             const fileName = `chat_${Date.now()}_${Math.random().toString(36).substring(2,7)}.${fileExt}`;
             
             const { error: uploadErr } = await supabase.storage.from("chat_attachments").upload(fileName, file);
             if (!uploadErr) {
                 const { data: pubData } = supabase.storage.from("chat_attachments").getPublicUrl(fileName);
-                imageUrl = pubData.publicUrl;
+                imageUrls.push(pubData.publicUrl);
             } else {
                 console.error("Upload Fehler:", uploadErr.message);
             }
         }
 
+        const finalImageUrl = imageUrls.length > 0 ? imageUrls.join(",") : null;
+
         try {
             await supabase.from("messages").insert([{
                 chat_id: activeChatId,
                 sender_id: currentUser.id,
-                text: text || (file ? "[Foto]" : ""),
-                image_url: imageUrl
+                text: text || (finalImageUrl ? "[Foto]" : ""),
+                image_url: finalImageUrl
             }]);
 
             await supabase.from("chats").update({
