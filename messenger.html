@@ -69,6 +69,13 @@
                     <emoji-picker class="dark"></emoji-picker>
                 </div>
 
+                <!-- BILD-VORSCHAU VOR DEM SENDEN -->
+                <div id="imagePreviewContainer" style="display: none; padding: 8px 15px; background: #121317; border-top: 1px solid var(--border-subtle); align-items: center; gap: 10px;">
+                    <img id="imagePreviewThumb" src="" alt="Vorschau" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px; border: 1px solid var(--gsra-blue);">
+                    <span id="imagePreviewName" style="font-size: 12px; color: #fff; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
+                    <button type="button" id="removeImageBtn" style="background: none; border: none; color: #ff4d4d; cursor: pointer; font-size: 16px;"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+
                 <!-- EINGABEBEREICH -->
                 <form class="chat-input-area" id="chatForm" style="align-items: center;">
                     <button type="button" id="emojiToggleBtn" class="emoji-btn" title="Emoji auswählen" disabled>
@@ -88,6 +95,12 @@
             </div>
         </div>
     </main>
+
+    <!-- IN-PAGE LIGHTBOX MODAL FÜR BILDER -->
+    <div id="imageModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.9); z-index: 4000; justify-content: center; align-items: center; padding: 20px;">
+        <button id="closeImageModal" style="position: absolute; top: 20px; right: 30px; background: none; border: none; color: #fff; font-size: 30px; cursor: pointer;"><i class="fa-solid fa-xmark"></i></button>
+        <img id="modalImageFull" src="" alt="Großansicht" style="max-width: 90%; max-height: 90vh; object-fit: contain; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.9);">
+    </div>
 
     <!-- SOCIAL MEDIA SECTION -->
     <section class="social-section">
