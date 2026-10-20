@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - High-End Messenger Logik (Vollständiger Fix)
+   GSRA - High-End Messenger Logik (Vollständig)
 ========================================= */
 
 let currentUser = null;
@@ -114,6 +114,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 });
 
+// Hilfsfunktion: Benutzername aus Profilen laden
+async function fetchUserName(userId) {
+    const supabase = window.supabaseClient || window.supabase;
+    if (!supabase || !userId) return `Fahrer (${userId ? userId.substring(0, 6) : 'Unbekannt'})`;
+    
+    const { data } = await supabase
+        .from("profiles")
+        .select("username, full_name")
+        .eq("id", userId)
+        .maybeSingle();
+
+    return data?.username || data?.full_name || `Fahrer (${userId.substring(0, 6)})`;
+}
+
 // URL Parameter verarbeiten & danach URL bereinigen
 async function checkUrlParameters() {
     const supabase = window.supabaseClient || window.supabase;
@@ -171,12 +185,14 @@ async function loadUserChats() {
     }
 
     chatsList.innerHTML = "";
-    chats.forEach((chat) => {
+    for (const chat of chats) {
         const otherUserId = chat.user1_id === currentUser.id ? chat.user2_id : chat.user1_id;
+        const otherUserName = await fetchUserName(otherUserId);
+        
         const item = document.createElement("div");
         item.className = `chat-user-item ${chat.id === activeChatId ? 'active' : ''}`;
         
-        const displayTitle = chat.title || `Chat mit Fahrer (${otherUserId.substring(0, 6)})`;
+        const displayTitle = chat.title || `Chat mit ${otherUserName}`;
         const lastMsg = escapeHtml(chat.last_message || 'Keine Nachrichten');
 
         item.innerHTML = `
@@ -186,18 +202,19 @@ async function loadUserChats() {
 
         item.addEventListener("click", () => {
             activeChatId = chat.id;
-            openChat(chat.id, `Fahrer (${otherUserId.substring(0, 6)})`, chat.title);
+            openChat(chat.id, otherUserName, chat.title);
             loadUserChats();
         });
 
         chatsList.appendChild(item);
-    });
+    }
 }
 
 // Chat öffnen
 async function openChat(chatId, recipientName, chatTitle = null) {
     const supabase = window.supabaseClient || window.supabase;
     
+    // Header-Titel korrekt aufbauen, ohne den Namen zu verlieren
     const displayName = chatTitle ? `${chatTitle} (${recipientName})` : `Chat mit ${recipientName}`;
     if (chatTitleText) chatTitleText.innerText = displayName;
     
@@ -249,7 +266,7 @@ function appendSingleMessage(msg) {
 
     const timeStr = msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
 
-    // BILD ZUERST OBEN
+    // BILD(ER) OBEN
     if (msg.image_url) {
         const urls = msg.image_url.split(",");
         const imgContainer = document.createElement("div");
@@ -272,7 +289,7 @@ function appendSingleMessage(msg) {
         bubble.appendChild(imgContainer);
     }
 
-    // TEXT DARUNTER (ALS ECHTE BILDUNTERSCHRIFT)
+    // TEXT DARUNTER ALS ECHTE BILDUNTERSCHRIFT
     if (msg.text && msg.text !== "[Foto]") {
         const textDiv = document.createElement("div");
         textDiv.innerText = msg.text;
@@ -298,8 +315,8 @@ if (editChatTitleBtn) {
         if (newTitle !== null && newTitle.trim() !== "") {
             const trimmedTitle = newTitle.trim();
             await supabase.from("chats").update({ title: trimmedTitle }).eq("id", activeChatId);
-            if (chatTitleText) chatTitleText.innerText = trimmedTitle;
             loadUserChats();
+            alert("Chat-Thema aktualisiert!");
         }
     });
 }
