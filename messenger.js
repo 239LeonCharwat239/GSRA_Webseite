@@ -1,10 +1,12 @@
 /* =========================================
-   GSRA - High-End Messenger Logik (Vollständig)
+   GSRA - WhatsApp Desktop Style Messenger Logik
 ========================================= */
 
 let currentUser = null;
 let activeChatId = null;
 let messageSubscription = null;
+let allChatsCache = [];
+let currentFilter = 'all';
 
 function escapeHtml(str) {
     if (!str) return "";
@@ -36,6 +38,14 @@ const removeImageBtn = document.getElementById("removeImageBtn");
 const imageModal = document.getElementById("imageModal");
 const modalImageFull = document.getElementById("modalImageFull");
 const closeImageModal = document.getElementById("closeImageModal");
+const waWelcomeScreen = document.getElementById("waWelcomeScreen");
+const waChatActivePane = document.getElementById("waChatActivePane");
+const chatSearchInput = document.getElementById("chatSearchInput");
+const tileInvite = document.getElementById("tileInvite");
+const tileAddFriend = document.getElementById("tileAddFriend");
+const tileForum = document.getElementById("tileForum");
+const addFriendBtn = document.getElementById("addFriendBtn");
+const newChatBtn = document.getElementById("newChatBtn");
 
 document.addEventListener("DOMContentLoaded", async () => {
     const supabase = window.supabaseClient || window.supabase;
@@ -51,6 +61,48 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     await checkUrlParameters();
     await loadUserChats();
+
+    // Filter Pills Click Events
+    document.querySelectorAll(".wa-pill").forEach(pill => {
+        pill.addEventListener("click", (e) => {
+            document.querySelectorAll(".wa-pill").forEach(p => p.classList.remove("active"));
+            e.target.classList.add("active");
+            currentFilter = e.target.getAttribute("data-filter");
+            renderChatsList();
+        });
+    });
+
+    // Suchleiste Event
+    if (chatSearchInput) {
+        chatSearchInput.addEventListener("input", () => {
+            renderChatsList();
+        });
+    }
+
+    // Schnellaktions-Kacheln Events
+    if (tileInvite) {
+        tileInvite.addEventListener("click", () => {
+            const inviteLink = window.location.origin + "/messenger.html";
+            prompt("Kopiere diesen Link, um einen Freund einzuladen:", inviteLink);
+        });
+    }
+
+    if (tileAddFriend || addFriendBtn) {
+        const handleAddFriend = () => {
+            const friendEmail = prompt("Gib die Benutzer-ID oder den Namen deines Freundes ein:");
+            if (friendEmail) alert("Funktion zur Freundessuche wird geladen. Nutze vorerst den Marktplatz, um Verkäufer anzuschreiben!");
+        };
+        if (tileAddFriend) tileAddFriend.addEventListener("click", handleAddFriend);
+        if (addFriendBtn) addFriendBtn.addEventListener("click", handleAddFriend);
+    }
+
+    if (tileForum || newChatBtn) {
+        const handleNewChat = () => {
+            alert("Das GSRA Offizielle Forum ist bereits oben in deiner Chat-Liste angepinnt!");
+        };
+        if (tileForum) tileForum.addEventListener("click", handleNewChat);
+        if (newChatBtn) newChatBtn.addEventListener("click", handleNewChat);
+    }
 
     // Emoji Picker Toggeln
     if (emojiToggleBtn && emojiPickerWrapper) {
@@ -69,7 +121,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const picker = emojiPickerWrapper.querySelector("emoji-picker");
         if (picker) {
             picker.addEventListener("emoji-click", (event) => {
-                if (messageInput && !messageInput.disabled) {
+                if (messageInput) {
                     messageInput.value += event.detail.unicode;
                     messageInput.focus();
                 }
@@ -114,7 +166,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 });
 
-// Hilfsfunktion: Benutzername aus Profilen laden
+// Hilfsfunktion: Benutzername laden
 async function fetchUserName(userId) {
     const supabase = window.supabaseClient || window.supabase;
     if (!supabase || !userId) return `Fahrer (${userId ? userId.substring(0, 6) : 'Unbekannt'})`;
@@ -128,7 +180,7 @@ async function fetchUserName(userId) {
     return data?.username || data?.full_name || `Fahrer (${userId.substring(0, 6)})`;
 }
 
-// URL Parameter verarbeiten & danach URL bereinigen
+// URL Parameter verarbeiten
 async function checkUrlParameters() {
     const supabase = window.supabaseClient || window.supabase;
     const urlParams = new URLSearchParams(window.location.search);
@@ -168,7 +220,7 @@ async function checkUrlParameters() {
     }
 }
 
-// Chats in Sidebar laden
+// Chats laden
 async function loadUserChats() {
     const supabase = window.supabaseClient || window.supabase;
     if (!chatsList || !currentUser || !supabase) return;
@@ -179,31 +231,105 @@ async function loadUserChats() {
         .or(`user1_id.eq.${currentUser.id},user2_id.eq.${currentUser.id}`)
         .order("created_at", { ascending: false });
 
-    if (error || !chats || chats.length === 0) {
-        chatsList.innerHTML = `<p style="padding: 15px; font-size: 13px; color: var(--text-muted);">Keine aktiven Chats.</p>`;
+    if (error) {
+        chatsList.innerHTML = `<p style="padding: 15px; font-size: 13px; color: var(--text-muted);">Fehler beim Laden.</p>`;
         return;
     }
 
+    // GSRA Official Forum als festes Hauptforum hinzufügen, falls noch nicht da
+    allChatsCache = chats || [];
+    
+    // Prüfen, ob das GSRA Forum in der Liste existiert, sonst virtuell einfügen
+    renderChatsList();
+}
+
+// Chats in Sidebar rendern (mit Filtern & Suchleiste)
+async function renderChatsList() {
+    if (!chatsList) return;
     chatsList.innerHTML = "";
-    for (const chat of chats) {
-        const otherUserId = chat.user1_id === currentUser.id ? chat.user2_id : chat.user1_id;
-        const otherUserName = await fetchUserName(otherUserId);
-        
+
+    const searchTerm = chatSearchInput ? chatSearchInput.value.toLowerCase() : "";
+
+    // Virtuelles GSRA Forum immer oben einfügen
+    let displayChats = [...allChatsCache];
+    
+    // Prüfen ob Forum existiert
+    const forumExists = displayChats.some(c => c.title === "GSRA Official / Community Forum");
+    if (!forumExists && currentUser) {
+        displayChats.unshift({
+            id: 'gsra-official-forum',
+            title: 'GSRA Official / Community Forum',
+            last_message: 'Willkommen im offiziellen Community-Forum!',
+            is_forum: true,
+            created_at: new Date().toISOString()
+        });
+    }
+
+    let filtered = displayChats.filter(chat => {
+        const title = (chat.title || "Chat").toLowerCase();
+        const matchesSearch = title.includes(searchTerm);
+        if (!matchesSearch) return false;
+
+        if (currentFilter === 'unread') {
+            return chat.unread === true;
+        }
+        if (currentFilter === 'forums') {
+            return chat.is_forum === true || chat.title?.includes("Forum") || chat.title?.includes("GSRA");
+        }
+        return true;
+    });
+
+    if (filtered.length === 0) {
+        chatsList.innerHTML = `<p style="padding: 15px; font-size: 13px; color: var(--text-muted);">Keine Chats gefunden.</p>`;
+        return;
+    }
+
+    for (const chat of filtered) {
+        const isForum = chat.is_forum || chat.id === 'gsra-official-forum';
+        let otherUserName = "Forum";
+        if (!isForum) {
+            const otherUserId = chat.user1_id === currentUser.id ? chat.user2_id : chat.user1_id;
+            otherUserName = await fetchUserName(otherUserId);
+        }
+
         const item = document.createElement("div");
-        item.className = `chat-user-item ${chat.id === activeChatId ? 'active' : ''}`;
+        const isSelected = chat.id === activeChatId;
+        const isUnread = chat.unread === true;
+
+        item.className = `wa-chat-item ${isSelected ? 'active' : ''} ${isUnread ? 'unread' : ''}`;
         
         const displayTitle = chat.title || `Chat mit ${otherUserName}`;
         const lastMsg = escapeHtml(chat.last_message || 'Keine Nachrichten');
 
         item.innerHTML = `
-            <div style="color: #fff; font-weight: bold; font-size: 14px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${escapeHtml(displayTitle)}</div>
-            <div style="font-size: 12px; color: var(--text-muted); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${lastMsg}</div>
+            <div class="wa-avatar"><i class="fa-solid ${isForum ? 'fa-bullhorn text-yellow' : 'fa-user'}"></i></div>
+            <div class="wa-chat-info">
+                <div class="wa-chat-row">
+                    <span class="wa-chat-name">${escapeHtml(displayTitle)}</span>
+                    <span class="wa-chat-time">10:24</span>
+                </div>
+                <div class="wa-chat-msg">${lastMsg}</div>
+            </div>
+            ${isUnread ? '<div class="wa-unread-dot"></div>' : ''}
         `;
 
         item.addEventListener("click", () => {
             activeChatId = chat.id;
-            openChat(chat.id, otherUserName, chat.title);
-            loadUserChats();
+            chat.unread = false; // Als gelesen markieren
+            
+            if (waWelcomeScreen) waWelcomeScreen.style.display = "none";
+            if (waChatActivePane) waChatActivePane.style.display = "flex";
+
+            if (isForum) {
+                if (chatTitleText) chatTitleText.innerText = "GSRA Official / Community Forum";
+                if (chatActions) chatActions.style.display = "none";
+                if (messageInput) { messageInput.disabled = true; messageInput.placeholder = "Dies ist ein offizieller Ankündigungskanal."; }
+                if (sendBtn) sendBtn.disabled = true;
+                if (chatMessages) chatMessages.innerHTML = `<div class="message-bubble message-other"><div><b>[GSRA Admin]:</b> Willkommen im offiziellen Community-Forum! Hier posten wir Updates, neue Features und Simracing-News.</div><span class="message-time">10:24</span></div>`;
+            } else {
+                openChat(chat.id, otherUserName, chat.title);
+            }
+            renderChatsList();
         });
 
         chatsList.appendChild(item);
@@ -214,12 +340,11 @@ async function loadUserChats() {
 async function openChat(chatId, recipientName, chatTitle = null) {
     const supabase = window.supabaseClient || window.supabase;
     
-    // Header-Titel korrekt aufbauen, ohne den Namen zu verlieren
     const displayName = chatTitle ? `${chatTitle} (${recipientName})` : `Chat mit ${recipientName}`;
     if (chatTitleText) chatTitleText.innerText = displayName;
     
     if (chatActions) chatActions.style.display = "flex";
-    if (messageInput) messageInput.disabled = false;
+    if (messageInput) { messageInput.disabled = false; messageInput.placeholder = "Gib eine Nachricht ein..."; }
     if (imageUploadInput) imageUploadInput.disabled = false;
     if (emojiToggleBtn) emojiToggleBtn.disabled = false;
     if (sendBtn) sendBtn.disabled = false;
@@ -266,7 +391,6 @@ function appendSingleMessage(msg) {
 
     const timeStr = msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
 
-    // BILD(ER) OBEN
     if (msg.image_url) {
         const urls = msg.image_url.split(",");
         const imgContainer = document.createElement("div");
@@ -289,7 +413,6 @@ function appendSingleMessage(msg) {
         bubble.appendChild(imgContainer);
     }
 
-    // TEXT DARUNTER ALS ECHTE BILDUNTERSCHRIFT
     if (msg.text && msg.text !== "[Foto]") {
         const textDiv = document.createElement("div");
         textDiv.innerText = msg.text;
@@ -332,15 +455,8 @@ if (deleteChatBtn) {
             await supabase.from("chats").delete().eq("id", activeChatId);
             
             activeChatId = null;
-            if (chatTitleText) chatTitleText.innerText = "Wähle einen Chat aus";
-            if (chatActions) chatActions.style.display = "none";
-            if (messageInput) { messageInput.value = ""; messageInput.disabled = true; }
-            if (imageUploadInput) { imageUploadInput.value = ""; imageUploadInput.disabled = true; }
-            if (emojiToggleBtn) emojiToggleBtn.disabled = true;
-            if (sendBtn) sendBtn.disabled = true;
-            if (emojiPickerWrapper) emojiPickerWrapper.style.display = "none";
-            if (imagePreviewContainer) imagePreviewContainer.style.display = "none";
-            if (chatMessages) chatMessages.innerHTML = `<p class="chat-placeholder" style="text-align: center; color: var(--text-muted); margin: auto;">Kein Chat ausgewählt.</p>`;
+            if (waWelcomeScreen) waWelcomeScreen.style.display = "flex";
+            if (waChatActivePane) waChatActivePane.style.display = "none";
 
             await loadUserChats();
         }
@@ -358,15 +474,8 @@ if (blockUserBtn) {
             await supabase.from("chats").delete().eq("id", activeChatId);
             
             activeChatId = null;
-            if (chatTitleText) chatTitleText.innerText = "Wähle einen Chat aus";
-            if (chatActions) chatActions.style.display = "none";
-            if (messageInput) { messageInput.value = ""; messageInput.disabled = true; }
-            if (imageUploadInput) { imageUploadInput.value = ""; imageUploadInput.disabled = true; }
-            if (emojiToggleBtn) emojiToggleBtn.disabled = true;
-            if (sendBtn) sendBtn.disabled = true;
-            if (emojiPickerWrapper) emojiPickerWrapper.style.display = "none";
-            if (imagePreviewContainer) imagePreviewContainer.style.display = "none";
-            if (chatMessages) chatMessages.innerHTML = `<p class="chat-placeholder" style="text-align: center; color: var(--text-muted); margin: auto;">Kein Chat ausgewählt.</p>`;
+            if (waWelcomeScreen) waWelcomeScreen.style.display = "flex";
+            if (waChatActivePane) waChatActivePane.style.display = "none";
 
             await loadUserChats();
             alert("Nutzer wurde blockiert und der Chat entfernt.");
@@ -374,7 +483,7 @@ if (blockUserBtn) {
     });
 }
 
-// Nachricht & Mehrfach-Bilder senden
+// Nachricht & Bilder senden
 if (chatForm) {
     chatForm.addEventListener("submit", async (e) => {
         e.preventDefault();

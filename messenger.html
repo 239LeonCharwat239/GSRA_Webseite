@@ -39,60 +39,110 @@
     <main class="container">
         <section class="hero-section" style="margin-bottom: 20px; padding: 20px 0;">
             <h1 class="hero-title">GSRA <span class="text-blue">Messenger</span></h1>
-            <p class="hero-subtitle">Kommuniziere in Echtzeit mit deinen Freunden und Verkäufern.</p>
+            <p class="hero-subtitle">Kommuniziere in Echtzeit mit deinen Freunden, Fahrern und dem GSRA-Team.</p>
         </section>
 
-        <!-- CHAT CONTAINER -->
-        <div class="chat-container" style="position: relative;">
-            <!-- LINKE SIDEBAR: CHAT-ÜBERSICHT -->
-            <div class="chat-sidebar" id="chatsList">
-                <p style="padding: 15px; font-size: 13px; color: var(--text-muted);">Lade Chats...</p>
-            </div>
-
-            <!-- RECHTES HAUPT-CHATFENSTER -->
-            <div class="chat-window">
-                <div class="chat-header" id="chatHeader" style="display: flex; justify-content: space-between; align-items: center;">
-                    <span id="chatTitleText">Wähle einen Chat aus</span>
-                    <div id="chatActions" style="display: none; gap: 12px; align-items: center;">
-                        <button id="editChatTitleBtn" title="Chat-Thema umbenennen" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size: 15px;"><i class="fa-solid fa-pen"></i></button>
-                        <button id="deleteChatBtn" title="Chat löschen" style="background:none; border:none; color:#ff4d4d; cursor:pointer; font-size: 15px;"><i class="fa-solid fa-trash"></i></button>
-                        <button id="blockUserBtn" title="Nutzer blockieren" style="background:none; border:none; color:#ff4d4d; cursor:pointer; font-size: 15px;"><i class="fa-solid fa-ban"></i></button>
+        <!-- WHATSAPP-STYLE CHAT CONTAINER -->
+        <div class="wa-container">
+            <!-- LINKE SIDEBAR -->
+            <div class="wa-sidebar">
+                <div class="wa-sidebar-header">
+                    <span style="font-weight: bold; font-size: 18px; color: #fff;">Chats</span>
+                    <div style="display: flex; gap: 15px;">
+                        <button id="addFriendBtn" title="Freund hinzufügen" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size: 16px;"><i class="fa-solid fa-user-plus"></i></button>
+                        <button id="newChatBtn" title="Neuer Chat" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size: 16px;"><i class="fa-solid fa-comment-medical"></i></button>
                     </div>
                 </div>
-                
-                <!-- SCROLLBARER NACHRICHTEN-CONTAINER -->
-                <div class="chat-messages" id="chatMessages">
-                    <p class="chat-placeholder" style="text-align: center; color: var(--text-muted); margin: auto;">Kein Chat ausgewählt.</p>
+
+                <!-- SUCHLEISTE -->
+                <div class="wa-search-bar">
+                    <i class="fa-solid fa-magnifying-glass" style="color: var(--text-muted); font-size: 13px;"></i>
+                    <input type="text" id="chatSearchInput" placeholder="Suche oder neuen Chat beginnen" autocomplete="off">
                 </div>
 
-                <!-- EMOJI PICKER POPUP CONTAINER -->
-                <div id="emojiPickerWrapper" class="emoji-picker-container">
-                    <emoji-picker class="dark"></emoji-picker>
+                <!-- FILTER-PILLS (Alle, Ungelesen, Foren) -->
+                <div class="wa-filter-pills">
+                    <button class="wa-pill active" data-filter="all">Alle</button>
+                    <button class="wa-pill" data-filter="unread">Ungelesen</button>
+                    <button class="wa-pill" data-filter="forums">Foren</button>
                 </div>
 
-                <!-- BILD-VORSCHAU VOR DEM SENDEN -->
-                <div id="imagePreviewContainer" style="display: none; padding: 8px 15px; background: #121317; border-top: 1px solid var(--border-subtle); align-items: center; gap: 10px; flex-wrap: wrap;">
-                    <div id="previewThumbsList" style="display: flex; gap: 8px; flex-wrap: wrap;"></div>
-                    <span id="imagePreviewName" style="font-size: 12px; color: #fff; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
-                    <button type="button" id="removeImageBtn" style="background: none; border: none; color: #ff4d4d; cursor: pointer; font-size: 16px;"><i class="fa-solid fa-xmark"></i></button>
+                <!-- CHAT LISTE -->
+                <div class="chat-sidebar-list" id="chatsList">
+                    <p style="padding: 15px; font-size: 13px; color: var(--text-muted);">Lade Chats...</p>
                 </div>
+            </div>
 
-                <!-- FESTE EINGABELEISTE AM UNTEREN RAND -->
-                <form class="chat-input-area" id="chatForm" style="align-items: center;">
-                    <button type="button" id="emojiToggleBtn" class="emoji-btn" title="Emoji auswählen" disabled>
-                        <i class="fa-regular fa-face-smile"></i>
-                    </button>
-
-                    <label for="imageUploadInput" style="cursor: pointer; color: var(--text-muted); display: flex; align-items: center; font-size: 18px; padding: 0 4px;" title="Fotos anhängen (mehrere möglich)">
-                        <i class="fa-solid fa-paperclip"></i>
-                    </label>
-                    <input type="file" id="imageUploadInput" accept="image/*" multiple style="display: none;" disabled>
+            <!-- RECHTES HAUPT-CHATFENSTER / STARTBILDSCHIRM -->
+            <div class="wa-main-pane">
+                <!-- LEERER STARTBILDSCHIRM MIT SCHNELLAKTIONEN (WHATSAPP DESKTOP STYLE) -->
+                <div id="waWelcomeScreen" class="wa-welcome-screen">
+                    <div class="wa-welcome-icon"><i class="fa-solid fa-headset"></i></div>
+                    <h2>GSRA Web Messenger</h2>
+                    <p>Sende und empfange Nachrichten in Echtzeit mit anderen Simracern, verwalte deine Verkaufsanfragen und bleibe im GSRA-Hauptforum auf dem Laufenden.</p>
                     
-                    <input type="text" id="messageInput" placeholder="Schreibe eine Nachricht..." autocomplete="off" disabled>
-                    <button type="submit" id="sendBtn" class="login-btn" style="cursor: pointer;" disabled>
-                        <i class="fa-solid fa-paper-plane"></i> Senden
-                    </button>
-                </form>
+                    <!-- SCHNELLAKTIONS-KACHELN -->
+                    <div class="wa-quick-tiles">
+                        <div class="wa-quick-tile" id="tileInvite">
+                            <i class="fa-solid fa-user-group"></i>
+                            <span>Invite a Friend</span>
+                        </div>
+                        <div class="wa-quick-tile" id="tileAddFriend">
+                            <i class="fa-solid fa-user-plus"></i>
+                            <span>Kontakt hinzufügen</span>
+                        </div>
+                        <div class="wa-quick-tile" id="tileForum">
+                            <i class="fa-solid fa-bullhorn"></i>
+                            <span>GSRA Forum</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AKTIVES CHATFENSTER (WIRD BEI KLICK EINGEBLNDET) -->
+                <div id="waChatActivePane" class="wa-active-pane" style="display: none;">
+                    <div class="chat-header" id="chatHeader" style="display: flex; justify-content: space-between; align-items: center;">
+                        <span id="chatTitleText">Wähle einen Chat aus</span>
+                        <div id="chatActions" style="display: flex; gap: 12px; align-items: center;">
+                            <button id="editChatTitleBtn" title="Chat-Thema umbenennen" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size: 15px;"><i class="fa-solid fa-pen"></i></button>
+                            <button id="deleteChatBtn" title="Chat löschen" style="background:none; border:none; color:#ff4d4d; cursor:pointer; font-size: 15px;"><i class="fa-solid fa-trash"></i></button>
+                            <button id="blockUserBtn" title="Nutzer blockieren" style="background:none; border:none; color:#ff4d4d; cursor:pointer; font-size: 15px;"><i class="fa-solid fa-ban"></i></button>
+                        </div>
+                    </div>
+                    
+                    <!-- SCROLLBARER NACHRICHTEN-CONTAINER -->
+                    <div class="chat-messages" id="chatMessages">
+                        <p class="chat-placeholder" style="text-align: center; color: var(--text-muted); margin: auto;">Schreibe die erste Nachricht...</p>
+                    </div>
+
+                    <!-- EMOJI PICKER POPUP CONTAINER -->
+                    <div id="emojiPickerWrapper" class="emoji-picker-container">
+                        <emoji-picker class="dark"></emoji-picker>
+                    </div>
+
+                    <!-- BILD-VORSCHAU VOR DEM SENDEN -->
+                    <div id="imagePreviewContainer" style="display: none; padding: 8px 15px; background: #121317; border-top: 1px solid var(--border-subtle); align-items: center; gap: 10px; flex-wrap: wrap;">
+                        <div id="previewThumbsList" style="display: flex; gap: 8px; flex-wrap: wrap;"></div>
+                        <span id="imagePreviewName" style="font-size: 12px; color: #fff; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
+                        <button type="button" id="removeImageBtn" style="background: none; border: none; color: #ff4d4d; cursor: pointer; font-size: 16px;"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+
+                    <!-- FESTE EINGABELEISTE AM UNTEREN RAND -->
+                    <form class="chat-input-area" id="chatForm" style="align-items: center;">
+                        <button type="button" id="emojiToggleBtn" class="emoji-btn" title="Emoji auswählen">
+                            <i class="fa-regular fa-face-smile"></i>
+                        </button>
+
+                        <label for="imageUploadInput" style="cursor: pointer; color: var(--text-muted); display: flex; align-items: center; font-size: 18px; padding: 0 4px;" title="Fotos anhängen (mehrere möglich)">
+                            <i class="fa-solid fa-paperclip"></i>
+                        </label>
+                        <input type="file" id="imageUploadInput" accept="image/*" multiple style="display: none;">
+                        
+                        <input type="text" id="messageInput" placeholder="Gib eine Nachricht ein..." autocomplete="off">
+                        <button type="submit" id="sendBtn" class="login-btn" style="cursor: pointer;">
+                            <i class="fa-solid fa-paper-plane"></i> Senden
+                        </button>
+                    </form>
+                </div>
             </div>
         </div>
     </main>
