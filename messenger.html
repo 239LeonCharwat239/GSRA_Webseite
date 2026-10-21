@@ -29,7 +29,7 @@
             <a href="nachschlagewerk.html">Nachschlagewerk</a>
             <a href="kalender.html">Rennkalender</a>
             <a href="dashboard.html">Dashboard</a>
-            <a href="messenger.html" class="active">Messenger</a>
+            <a href="messenger.html" class="active" id="messengerNavBtn">Messenger</a>
             <a href="login.html" class="login-btn" id="loginNavBtn">Login</a>
             <button id="logoutBtn" class="login-btn" style="display: none;">Logout</button>
         </nav>
@@ -49,8 +49,8 @@
                 <div class="wa-sidebar-header">
                     <span style="font-weight: bold; font-size: 18px; color: #fff;">Chats</span>
                     <div style="display: flex; gap: 15px;">
+                        <button id="newChatPlusBtn" title="Neues Forum / Chat erstellen" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size: 16px;"><i class="fa-solid fa-plus"></i></button>
                         <button id="addFriendBtn" title="Freund hinzufügen" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size: 16px;"><i class="fa-solid fa-user-plus"></i></button>
-                        <button id="newChatBtn" title="Neuer Chat" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size: 16px;"><i class="fa-solid fa-comment-medical"></i></button>
                     </div>
                 </div>
 
@@ -60,10 +60,11 @@
                     <input type="text" id="chatSearchInput" placeholder="Suche oder neuen Chat beginnen" autocomplete="off">
                 </div>
 
-                <!-- FILTER-PILLS (Alle, Ungelesen, Foren) -->
+                <!-- FILTER-PILLS (Alle, Ungelesen, Favoriten, Foren) -->
                 <div class="wa-filter-pills">
                     <button class="wa-pill active" data-filter="all">Alle</button>
                     <button class="wa-pill" data-filter="unread">Ungelesen</button>
+                    <button class="wa-pill" data-filter="favorites">Favoriten</button>
                     <button class="wa-pill" data-filter="forums">Foren</button>
                 </div>
 
@@ -75,7 +76,7 @@
 
             <!-- RECHTES HAUPT-CHATFENSTER / STARTBILDSCHIRM -->
             <div class="wa-main-pane">
-                <!-- LEERER STARTBILDSCHIRM MIT SCHNELLAKTIONEN (WHATSAPP DESKTOP STYLE) -->
+                <!-- LEERER STARTBILDSCHIRM MIT SCHNELLAKTIONEN -->
                 <div id="waWelcomeScreen" class="wa-welcome-screen">
                     <div class="wa-welcome-icon"><i class="fa-solid fa-headset"></i></div>
                     <h2>GSRA Web Messenger</h2>
@@ -98,7 +99,7 @@
                     </div>
                 </div>
 
-                <!-- AKTIVES CHATFENSTER (WIRD BEI KLICK EINGEBLNDET) -->
+                <!-- AKTIVES CHATFENSTER -->
                 <div id="waChatActivePane" class="wa-active-pane" style="display: none;">
                     <div class="chat-header" id="chatHeader" style="display: flex; justify-content: space-between; align-items: center;">
                         <span id="chatTitleText">Wähle einen Chat aus</span>
@@ -146,6 +147,25 @@
             </div>
         </div>
     </main>
+
+    <!-- NEUES FORUM / GRUPPE ERSTELLEN MODAL -->
+    <div id="newForumModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.85); z-index: 5000; justify-content: center; align-items: center; padding: 20px;">
+        <div style="background: var(--bg-card); border: 1px solid var(--border-subtle); border-top: 4px solid var(--gsra-blue); border-radius: 10px; width: 100%; max-width: 450px; padding: 25px; position: relative;">
+            <button id="closeForumModal" type="button" style="position: absolute; top: 15px; right: 20px; background: none; border: none; color: var(--text-muted); font-size: 22px; cursor: pointer;"><i class="fa-solid fa-xmark"></i></button>
+            <h3 style="color: #fff; margin-bottom: 15px; font-size: 20px;">Neues Forum erstellen</h3>
+            <form id="newForumForm" style="display: flex; flex-direction: column; gap: 15px;">
+                <div>
+                    <label style="display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 5px;">Name des Forums / der Gruppe</label>
+                    <input type="text" id="forumNameInput" placeholder="z.B. GT3 Setup Talk" required style="width: 100%; padding: 10px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 6px; outline: none;">
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <input type="checkbox" id="isForumCheckbox" checked style="width: 18px; height: 18px;">
+                    <label for="isForumCheckbox" style="font-size: 13px; color: #fff;">Als Forum einrichten (Nur Admins schreiben)</label>
+                </div>
+                <button type="submit" class="login-btn" style="width: 100%; margin-top: 10px;">Forum erstellen</button>
+            </form>
+        </div>
+    </div>
 
     <!-- IN-PAGE LIGHTBOX MODAL FÜR BILDER -->
     <div id="imageModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.92); z-index: 9999; justify-content: center; align-items: center; padding: 20px;">

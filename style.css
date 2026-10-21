@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Master Design (Final Clean)
+   GSRA - Master Design (Final Clean + Updates)
 ========================================= */
 
 :root {
@@ -152,6 +152,16 @@ nav a:hover, nav a.active {
 
 nav a:hover::after, nav a.active::after {
     width: 100%;
+}
+
+/* Nav Unread Glowing Red */
+nav a.nav-unread-glow {
+    color: #ff4d4d !important;
+    text-shadow: 0 0 12px rgba(255, 77, 77, 0.8) !important;
+}
+nav a.nav-unread-glow::after {
+    background-color: #ff4d4d !important;
+    width: 100% !important;
 }
 
 .login-btn, #logoutBtn {
@@ -1058,19 +1068,20 @@ p {
 
 .wa-filter-pills {
     display: flex;
-    gap: 8px;
+    gap: 6px;
     padding: 10px 15px;
     background: #111b21;
     flex-shrink: 0;
+    flex-wrap: wrap;
 }
 
 .wa-pill {
     background: #202c33;
     color: var(--text-muted);
     border: none;
-    padding: 6px 14px;
+    padding: 6px 12px;
     border-radius: 16px;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -1106,7 +1117,7 @@ p {
 }
 
 .wa-chat-item.unread {
-    background: rgba(255, 77, 77, 0.08);
+    background: rgba(255, 77, 77, 0.12);
     border-left: 4px solid #ff4d4d;
 }
 
@@ -1144,9 +1155,20 @@ p {
     text-overflow: ellipsis;
 }
 
-.wa-chat-time {
-    font-size: 11px;
+.wa-favorite-btn {
+    background: none;
+    border: none;
     color: var(--text-muted);
+    cursor: pointer;
+    font-size: 13px;
+    transition: color 0.2s ease;
+    padding: 4px;
+}
+.wa-favorite-btn.favorited {
+    color: var(--gsra-yellow);
+}
+.wa-favorite-btn:hover {
+    color: var(--gsra-yellow);
 }
 
 .wa-chat-msg {
