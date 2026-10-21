@@ -129,7 +129,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Freund hinzufügen (Garantiert fehlerfrei ohne Duplikate)
+    // Freund hinzufügen (100% duplikatsfrei & ohne neuen Chat, wenn bereits einer existiert)
     const handleAddFriend = async () => {
         if (!currentUser?.id) return;
         const friendName = prompt("Gib den Benutzernamen (Username) deines Freundes ein:");
@@ -151,26 +151,33 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
-        let existingChat = null;
-        const { data: list1 } = await supabase.from("chats").select("*").eq("user1_id", currentUser.id).eq("user2_id", foundProfiles.id);
-        const { data: list2 } = await supabase.from("chats").select("*").eq("user1_id", foundProfiles.id).eq("user2_id", currentUser.id);
-        const combined = [...(list1 || []), ...(list2 || [])];
+        // Prüfen, ob im Cache bereits ein Chat existiert
+        let existingChat = allChatsCache.find(c => 
+            (c.user1_id === currentUser.id && c.user2_id === foundProfiles.id) ||
+            (c.user1_id === foundProfiles.id && c.user2_id === currentUser.id)
+        );
 
-        if (combined.length > 0) {
-            existingChat = combined[0];
-        } else {
-            const { data: newChat, err: newErr } = await supabase
-                .from("chats")
-                .insert([{
-                    user1_id: currentUser.id,
-                    user2_id: foundProfiles.id,
-                    title: null,
-                    last_message: "Chat gestartet"
-                }])
-                .select()
-                .single();
+        if (!existingChat) {
+            const { data: list1 } = await supabase.from("chats").select("*").eq("user1_id", currentUser.id).eq("user2_id", foundProfiles.id);
+            const { data: list2 } = await supabase.from("chats").select("*").eq("user1_id", foundProfiles.id).eq("user2_id", currentUser.id);
+            const combined = [...(list1 || []), ...(list2 || [])];
 
-            if (!newErr) existingChat = newChat;
+            if (combined.length > 0) {
+                existingChat = combined[0];
+            } else {
+                const { data: newChat, err: newErr } = await supabase
+                    .from("chats")
+                    .insert([{
+                        user1_id: currentUser.id,
+                        user2_id: foundProfiles.id,
+                        title: null,
+                        last_message: "Chat gestartet"
+                    }])
+                    .select()
+                    .single();
+
+                if (!newErr) existingChat = newChat;
+            }
         }
 
         if (existingChat) {
@@ -204,6 +211,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    // Mitglied hinzufügen (mit Prüfung, ob bereits hinzugefügt)
     if (addMemberBtn) {
         addMemberBtn.addEventListener("click", async () => {
             if (!currentUser?.id || !activeChatId) return;
@@ -222,7 +230,19 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
 
             if (targetUser.id === currentUser.id) {
-                alert("Du kannst dich nicht selbst zu einem Chat hinzufügen.");
+                alert("Du kannst dich nicht selbst zu einer Gruppe hinzufügen.");
+                return;
+            }
+
+            // Prüfen, ob das Mitglied bereits in den Nachrichten als hinzugefügt auftaucht
+            const { data: existingMsgs } = await supabase
+                .from("messages")
+                .select("text")
+                .eq("chat_id", activeChatId);
+
+            const alreadyAdded = (existingMsgs || []).some(m => m.text && m.text.includes(targetUser.username));
+            if (alreadyAdded) {
+                alert(`${targetUser.username} ist bereits in dieser Gruppe vorhanden!`);
                 return;
             }
 
