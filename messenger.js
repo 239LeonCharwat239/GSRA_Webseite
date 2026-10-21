@@ -76,7 +76,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     await checkUrlParameters();
     await loadUserChats();
 
-    // Sofortiger Check des Global-Glows beim Laden
     updateGlobalUnreadState();
 
     document.querySelectorAll(".wa-pill").forEach(pill => {
@@ -130,7 +129,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Freund hinzufügen (Garantiert ohne Duplikate & ohne 400-Fehler)
+    // Freund hinzufügen (Garantiert fehlerfrei ohne Duplikate)
     const handleAddFriend = async () => {
         if (!currentUser?.id) return;
         const friendName = prompt("Gib den Benutzernamen (Username) deines Freundes ein:");
@@ -219,6 +218,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             if (!targetUser) {
                 alert("Nutzer nicht gefunden.");
+                return;
+            }
+
+            if (targetUser.id === currentUser.id) {
+                alert("Du kannst dich nicht selbst zu einem Chat hinzufügen.");
                 return;
             }
 
@@ -502,7 +506,7 @@ async function loadUserChats() {
         console.error("Fehler beim Laden der Chats:", err);
     }
 
-    // Perfekte Deduplizierung: Zwingt identische Direktchats zwischen denselben Personen auf exakt einen Eintrag
+    // Harte Deduplizierung: Zwingt identische Direktchats zwischen denselben Personen auf exakt einen Eintrag
     let uniqueDirectMap = new Map();
     for (const chat of rawChats) {
         const isForum = (chat.user1_id === chat.user2_id) || (chat.id === 'gsra-official-forum');
@@ -541,8 +545,6 @@ async function loadUserChats() {
         }
         const lastRead = getLastReadTime(chat.id);
         if (lastRead === 0) {
-            // Wenn es das offizielle Forum ist und der Nutzer sich frisch einloggt, nur dann ungelesen wenn es ganz neu ist, 
-            // aber um das ständige Aufspringen zu verhindern, werten wir es nur als ungelesen, wenn wirklich neue Nachrichten da sind.
             if (chat.id === 'gsra-official-forum') {
                 chat.unread = false; // Forum startet standardmäßig als gelesen, bis eine echte neue Nachricht kommt
             } else {

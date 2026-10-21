@@ -6,19 +6,17 @@
     <title>GSRA - Messenger</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Emoji Picker Component -->
     <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@1/index.js"></script>
 </head>
 <body>
 
-    <!-- HEADER & NAVIGATION -->
     <header>
         <div class="logo-slogan-container">
             <a href="index.html" class="logo-link">
                 <img src="GSRA_Logo_ohne Hintergund.jpeg" alt="GSRA Logo" class="logo">
             </a>
             <div class="header-slogan">
-                <span class="text-blue">UNITED BY SPEED.</span> 
+                <span class="text-blue">UNITED BY SPEED.</span>
                 <span class="text-yellow">DRIVEN GLOBALLY.</span>
             </div>
         </div>
@@ -35,16 +33,13 @@
         </nav>
     </header>
 
-    <!-- MAIN CONTAINER -->
     <main class="container">
         <section class="hero-section" style="margin-bottom: 20px; padding: 20px 0;">
             <h1 class="hero-title">GSRA <span class="text-blue">Messenger</span></h1>
             <p class="hero-subtitle">Kommuniziere in Echtzeit mit deinen Freunden, Fahrern und dem GSRA-Team.</p>
         </section>
 
-        <!-- WHATSAPP-STYLE CHAT CONTAINER -->
         <div class="wa-container">
-            <!-- LINKE SIDEBAR -->
             <div class="wa-sidebar">
                 <div class="wa-sidebar-header">
                     <span style="font-weight: bold; font-size: 18px; color: #fff;">Chats</span>
@@ -54,13 +49,11 @@
                     </div>
                 </div>
 
-                <!-- SUCHLEISTE -->
                 <div class="wa-search-bar">
                     <i class="fa-solid fa-magnifying-glass" style="color: var(--text-muted); font-size: 13px;"></i>
                     <input type="text" id="chatSearchInput" placeholder="Suche Chats oder Foren..." autocomplete="off">
                 </div>
 
-                <!-- FILTER-PILLS -->
                 <div class="wa-filter-pills">
                     <button class="wa-pill active" data-filter="all">Alle</button>
                     <button class="wa-pill" data-filter="unread">Ungelesen</button>
@@ -68,21 +61,17 @@
                     <button class="wa-pill" data-filter="forums">Foren</button>
                 </div>
 
-                <!-- CHAT LISTE -->
                 <div class="chat-sidebar-list" id="chatsList">
                     <p style="padding: 15px; font-size: 13px; color: var(--text-muted);">Lade Chats...</p>
                 </div>
             </div>
 
-            <!-- RECHTES HAUPT-CHATFENSTER / STARTBILDSCHIRM -->
             <div class="wa-main-pane">
-                <!-- LEERER STARTBILDSCHIRM -->
                 <div id="waWelcomeScreen" class="wa-welcome-screen">
                     <div class="wa-welcome-icon"><i class="fa-solid fa-headset"></i></div>
                     <h2>GSRA Web Messenger</h2>
                     <p>Sende und empfange Nachrichten in Echtzeit mit anderen Simracern, verwalte deine Verkaufsanfragen und bleibe im GSRA-Hauptforum auf dem Laufenden.</p>
-                    
-                    <!-- SCHNELLAKTIONS-KACHELN -->
+
                     <div class="wa-quick-tiles">
                         <div class="wa-quick-tile" id="tileInvite">
                             <i class="fa-solid fa-user-group"></i>
@@ -99,7 +88,6 @@
                     </div>
                 </div>
 
-                <!-- AKTIVES CHATFENSTER -->
                 <div id="waChatActivePane" class="wa-active-pane" style="display: none;">
                     <div class="chat-header" id="chatHeader" style="display: flex; justify-content: space-between; align-items: center;">
                         <span id="chatTitleText">Wähle einen Chat aus</span>
@@ -110,35 +98,31 @@
                             <button id="blockUserBtn" title="Nutzer blockieren" style="background:none; border:none; color:#ff4d4d; cursor:pointer; font-size: 15px;"><i class="fa-solid fa-ban"></i></button>
                         </div>
                     </div>
-                    
-                    <!-- SCROLLBARER NACHRICHTEN-CONTAINER -->
+
                     <div class="chat-messages" id="chatMessages">
                         <p class="chat-placeholder" style="text-align: center; color: var(--text-muted); margin: auto;">Schreibe die erste Nachricht...</p>
                     </div>
 
-                    <!-- EMOJI PICKER POPUP CONTAINER -->
                     <div id="emojiPickerWrapper" class="emoji-picker-container">
                         <emoji-picker class="dark"></emoji-picker>
                     </div>
 
-                    <!-- BILD-VORSCHAU VOR DEM SENDEN -->
                     <div id="imagePreviewContainer" style="display: none; padding: 8px 15px; background: #121317; border-top: 1px solid var(--border-subtle); align-items: center; gap: 10px; flex-wrap: wrap;">
                         <div id="previewThumbsList" style="display: flex; gap: 8px; flex-wrap: wrap;"></div>
                         <span id="imagePreviewName" style="font-size: 12px; color: #fff; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
                         <button type="button" id="removeImageBtn" style="background: none; border: none; color: #ff4d4d; cursor: pointer; font-size: 16px;"><i class="fa-solid fa-xmark"></i></button>
                     </div>
 
-                    <!-- FESTE EINGABELEISTE AM UNTEREN RAND -->
                     <form class="chat-input-area" id="chatForm" style="align-items: center;">
                         <button type="button" id="emojiToggleBtn" class="emoji-btn" title="Emoji auswählen">
                             <i class="fa-regular fa-face-smile"></i>
                         </button>
 
-                        <label style="cursor: pointer; color: var(--text-muted); display: flex; align-items: center; font-size: 18px; padding: 0 4px;" title="Fotos anhängen (mehrere möglich)">
+                        <label for="imageUploadInput" style="cursor: pointer; color: var(--text-muted); display: flex; align-items: center; font-size: 18px; padding: 0 4px;" title="Fotos anhängen (mehrere möglich)">
                             <i class="fa-solid fa-paperclip"></i>
                             <input type="file" id="imageUploadInput" accept="image/*" multiple style="display: none;">
                         </label>
-                        
+
                         <input type="text" id="messageInput" placeholder="Gib eine Nachricht ein..." autocomplete="off">
                         <button type="submit" id="sendBtn" class="login-btn" style="cursor: pointer;">
                             <i class="fa-solid fa-paper-plane"></i> Senden
@@ -149,13 +133,12 @@
         </div>
     </main>
 
-    <!-- NEUES FORUM / GRUPPE ERSTELLEN MODAL (Mit behobenem Label-Fehler) -->
     <div id="newForumModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.85); z-index: 5000; justify-content: center; align-items: center; padding: 20px;">
         <div style="background: var(--bg-card); border: 1px solid var(--border-subtle); border-top: 4px solid var(--gsra-blue); border-radius: 10px; width: 100%; max-width: 450px; padding: 25px; position: relative;">
             <button id="closeForumModal" type="button" style="position: absolute; top: 15px; right: 20px; background: none; border: none; color: var(--text-muted); font-size: 22px; cursor: pointer;"><i class="fa-solid fa-xmark"></i></button>
             <h3 style="color: #fff; margin-bottom: 15px; font-size: 20px;">Neues Forum / Gruppe erstellen</h3>
             <form id="newForumForm" style="display: flex; flex-direction: column; gap: 15px;">
-                <label style="display: block; font-size: 12px; color: var(--text-muted);">
+                <label for="forumNameInput" style="display: block; font-size: 12px; color: var(--text-muted);">
                     Name der Gruppe / des Forums
                     <input type="text" id="forumNameInput" placeholder="z.B. GT3 Setup Talk" required style="width: 100%; margin-top: 5px; padding: 10px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 6px; outline: none;">
                 </label>
@@ -164,13 +147,11 @@
         </div>
     </div>
 
-    <!-- IN-PAGE LIGHTBOX MODAL FÜR BILDER -->
     <div id="imageModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.92); z-index: 9999; justify-content: center; align-items: center; padding: 20px;">
         <button id="closeImageModal" type="button" style="position: absolute; top: 20px; right: 30px; background: none; border: none; color: #fff; font-size: 32px; cursor: pointer;"><i class="fa-solid fa-xmark"></i></button>
         <img id="modalImageFull" src="" alt="Großansicht" style="max-width: 90vw; max-height: 88vh; object-fit: contain; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.95); border: 1px solid var(--border-subtle);">
     </div>
 
-    <!-- SOCIAL MEDIA SECTION -->
     <section class="social-section">
         <h2>Folge <span class="text-yellow">GSRA</span></h2>
         <p class="social-subtext">Bleibe immer auf dem Laufenden auf unseren Social-Media-Kanälen.</p>
@@ -183,10 +164,9 @@
         </div>
     </section>
 
-    <!-- SUPABASE SDK & JAVASCRIPT -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-client.js"></script>
     <script src="auth-nav.js"></script>
-    <script src="messenger.js"></script>
+    <script src="messenger_8.js"></script>
 </body>
 </html>
