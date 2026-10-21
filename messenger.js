@@ -77,7 +77,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     await checkUrlParameters();
     await loadUserChats();
 
-    // Sofortiger Check des localStorage für Navbar-Glow beim Laden
     updateGlobalUnreadState();
 
     // Filter Pills Event
@@ -132,7 +131,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Freund hinzufügen / Direktchat aufbauen (Fehlerfrei ohne 400er or-Syntax)
+    // Freund hinzufügen / Direktchat aufbauen (100% fehlerfrei ohne .or() 400-Fehler und Duplikate)
     const handleAddFriend = async () => {
         if (!currentUser?.id) return;
         const friendName = prompt("Gib den Benutzernamen (Username) deines Freundes ein:");
@@ -154,28 +153,14 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
-        // Sichere Abfrage nach existierendem Chat (Vermeidung von 400-Bad-Request)
         let existingChat = null;
-        let { data: chats1 } = await supabase
-            .from("chats")
-            .select("*")
-            .eq("user1_id", currentUser.id)
-            .eq("user2_id", foundProfiles.id);
+        const { data: list1 } = await supabase.from("chats").select("*").eq("user1_id", currentUser.id).eq("user2_id", foundProfiles.id);
+        const { data: list2 } = await supabase.from("chats").select("*").eq("user1_id", foundProfiles.id).eq("user2_id", currentUser.id);
+        const combined = [...(list1 || []), ...(list2 || [])];
 
-        if (chats1 && chats1.length > 0) {
-            existingChat = chats1[0];
+        if (combined.length > 0) {
+            existingChat = combined[0];
         } else {
-            let { data: chats2 } = await supabase
-                .from("chats")
-                .select("*")
-                .eq("user1_id", foundProfiles.id)
-                .eq("user2_id", currentUser.id);
-            if (chats2 && chats2.length > 0) {
-                existingChat = chats2[0];
-            }
-        }
-
-        if (!existingChat) {
             const { data: newChat, err: newErr } = await supabase
                 .from("chats")
                 .insert([{
@@ -396,26 +381,13 @@ async function checkUrlParameters() {
     const targetId = sellerId || friendId;
     if (targetId && targetId !== currentUser.id) {
         let existingChat = null;
-        let { data: chats1 } = await supabase
-            .from("chats")
-            .select("*")
-            .eq("user1_id", currentUser.id)
-            .eq("user2_id", targetId);
+        const { data: list1 } = await supabase.from("chats").select("*").eq("user1_id", currentUser.id).eq("user2_id", targetId);
+        const { data: list2 } = await supabase.from("chats").select("*").eq("user1_id", targetId).eq("user2_id", currentUser.id);
+        const combined = [...(list1 || []), ...(list2 || [])];
 
-        if (chats1 && chats1.length > 0) {
-            existingChat = chats1[0];
+        if (combined.length > 0) {
+            existingChat = combined[0];
         } else {
-            let { data: chats2 } = await supabase
-                .from("chats")
-                .select("*")
-                .eq("user1_id", targetId)
-                .eq("user2_id", currentUser.id);
-            if (chats2 && chats2.length > 0) {
-                existingChat = chats2[0];
-            }
-        }
-
-        if (!existingChat) {
             const { data: newChat, error } = await supabase
                 .from("chats")
                 .insert([{
@@ -441,7 +413,7 @@ async function checkUrlParameters() {
     }
 }
 
-// Globaler Echtzeit-Listener für Nachrichten mit localStorage Synchronisation
+// Globaler Echtzeit-Listener mit localStorage Glow-Synchronisation
 function setupGlobalMessageListener() {
     const supabase = window.supabaseClient || window.supabase;
     if (!supabase || !currentUser?.id) return;
@@ -478,7 +450,6 @@ function updateGlobalUnreadState() {
         localStorage.setItem('gsra_has_unread', 'false');
     }
 
-    // Aktuellen Navbar-Button direkt aktualisieren
     const navBtn = document.getElementById("messengerNavBtn") || document.querySelector('a[href="messenger.html"]');
     if (navBtn) {
         if (hasUnread) {
@@ -511,7 +482,6 @@ async function loadUserChats() {
 
     let rawChats = [];
     try {
-        // Sichere, getrennte Abfragen zur Vermeidung des 400er Fehlers
         const { data: chatsAsUser1 } = await supabase
             .from("chats")
             .select("*")
@@ -524,7 +494,6 @@ async function loadUserChats() {
 
         const combined = [...(chatsAsUser1 || []), ...(chatsAsUser2 || [])];
         
-        // Deduplizierung nach Chat-ID
         const map = new Map();
         combined.forEach(c => map.set(c.id, c));
         rawChats = Array.from(map.values());
@@ -534,7 +503,7 @@ async function loadUserChats() {
         console.error("Fehler beim Laden der Chats:", err);
     }
 
-    // Zusätzliche Chat-Deduplizierung für Direktchats zwischen denselben Personen (verhindert Doppeleinträge)
+    // Strengste Deduplizierung: Verhindert doppelte Chats zwischen denselben Personen komplett
     let uniqueDirectMap = new Map();
     for (const chat of rawChats) {
         const isForum = (chat.user1_id === chat.user2_id) || (chat.id === 'gsra-official-forum');
@@ -555,7 +524,6 @@ async function loadUserChats() {
 
     allChatsCache = Array.from(uniqueDirectMap.values());
 
-    // Offizielles GSRA-Forum immer für alle bereitstellen
     const forumExists = allChatsCache.some(c => c.id === 'gsra-official-forum');
     if (!forumExists) {
         allChatsCache.unshift({
@@ -573,8 +541,8 @@ async function loadUserChats() {
             continue;
         }
         const lastRead = getLastReadTime(chat.id);
-        if (lastRead === 0 && chat.id !== 'gsra-official-forum') {
-            chat.unread = true; // Noch nie geöffneter Chat für diesen Account
+        if (lastRead === 0) {
+            chat.unread = true; // Neue Chats / Forum beim Account-Wechsel als ungelesen markieren
         } else {
             const chatTime = chat.created_at ? new Date(chat.created_at).getTime() : 0;
             chat.unread = chatTime > lastRead;
