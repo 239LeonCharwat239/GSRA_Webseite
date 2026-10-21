@@ -11,6 +11,7 @@ let currentFilter = 'all';
 let userFavorites = new Set();
 let isAdminUser = false;
 let userNamesCache = {};
+let officialForumChatId = null;
 
 function escapeHtml(str) {
     if (!str) return "";
@@ -73,8 +74,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     await checkUserAdminStatus();
     await loadFavorites();
-    await checkUrlParameters();
     await loadUserChats();
+    await checkUrlParameters();
 
     updateGlobalUnreadState();
 
@@ -129,7 +130,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Freund hinzufügen (100% duplikatsfrei & ohne neuen Chat, wenn bereits einer existiert)
+    // Freund hinzufügen (100% normalisiert & duplikatsfrei)
     const handleAddFriend = async () => {
         if (!currentUser?.id) return;
         const friendName = prompt("Gib den Benutzernamen (Username) deines Freundes ein:");
@@ -151,25 +152,27 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
-        // Prüfen, ob im Cache bereits ein Chat existiert
-        let existingChat = allChatsCache.find(c => 
-            (c.user1_id === currentUser.id && c.user2_id === foundProfiles.id) ||
-            (c.user1_id === foundProfiles.id && c.user2_id === currentUser.id)
-        );
+        // Strikte Normalisierung der IDs (immer alphabetisch sortiert für user1 und user2)
+        const [u1, u2] = [currentUser.id, foundProfiles.id].sort();
+
+        let existingChat = allChatsCache.find(c => c.user1_id === u1 && c.user2_id === u2);
 
         if (!existingChat) {
-            const { data: list1 } = await supabase.from("chats").select("*").eq("user1_id", currentUser.id).eq("user2_id", foundProfiles.id);
-            const { data: list2 } = await supabase.from("chats").select("*").eq("user1_id", foundProfiles.id).eq("user2_id", currentUser.id);
-            const combined = [...(list1 || []), ...(list2 || [])];
+            const { data: fetched } = await supabase
+                .from("chats")
+                .select("*")
+                .eq("user1_id", u1)
+                .eq("user2_id", u2)
+                .maybeSingle();
 
-            if (combined.length > 0) {
-                existingChat = combined[0];
+            if (fetched) {
+                existingChat = fetched;
             } else {
                 const { data: newChat, err: newErr } = await supabase
                     .from("chats")
                     .insert([{
-                        user1_id: currentUser.id,
-                        user2_id: foundProfiles.id,
+                        user1_id: u1,
+                        user2_id: u2,
                         title: null,
                         last_message: "Chat gestartet"
                     }])
@@ -202,16 +205,17 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (tileForum) {
         tileForum.addEventListener("click", () => {
-            activeChatId = 'gsra-official-forum';
-            markChatAsRead(activeChatId);
-            if (waWelcomeScreen) waWelcomeScreen.style.display = "none";
-            if (waChatActivePane) waChatActivePane.style.display = "flex";
-            renderChatsList();
-            openForumChat({ id: 'gsra-official-forum', title: 'GSRA Official / Community Forum' });
+            if (officialForumChatId) {
+                activeChatId = officialForumChatId;
+                markChatAsRead(activeChatId);
+                if (waWelcomeScreen) waWelcomeScreen.style.display = "none";
+                if (waChatActivePane) waChatActivePane.style.display = "flex";
+                renderChatsList();
+                openForumChat(allChatsCache.find(c => c.id === officialForumChatId));
+            }
         });
     }
 
-    // Mitglied hinzufügen (mit Prüfung, ob bereits hinzugefügt)
     if (addMemberBtn) {
         addMemberBtn.addEventListener("click", async () => {
             if (!currentUser?.id || !activeChatId) return;
@@ -234,7 +238,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 return;
             }
 
-            // Prüfen, ob das Mitglied bereits in den Nachrichten als hinzugefügt auftaucht
             const { data: existingMsgs } = await supabase
                 .from("messages")
                 .select("text")
@@ -403,19 +406,24 @@ async function checkUrlParameters() {
 
     const targetId = sellerId || friendId;
     if (targetId && targetId !== currentUser.id) {
+        const [u1, u2] = [currentUser.id, targetId].sort();
         let existingChat = null;
-        const { data: list1 } = await supabase.from("chats").select("*").eq("user1_id", currentUser.id).eq("user2_id", targetId);
-        const { data: list2 } = await supabase.from("chats").select("*").eq("user1_id", targetId).eq("user2_id", currentUser.id);
-        const combined = [...(list1 || []), ...(list2 || [])];
 
-        if (combined.length > 0) {
-            existingChat = combined[0];
+        const { data: fetched } = await supabase
+            .from("chats")
+            .select("*")
+            .eq("user1_id", u1)
+            .eq("user2_id", u2)
+            .maybeSingle();
+
+        if (fetched) {
+            existingChat = fetched;
         } else {
             const { data: newChat, error } = await supabase
                 .from("chats")
                 .insert([{
-                    user1_id: currentUser.id,
-                    user2_id: targetId,
+                    user1_id: u1,
+                    user2_id: u2,
                     title: itemTitle ? `Anfrage: ${itemTitle}` : null,
                     last_message: "Chat gestartet"
                 }])
@@ -526,38 +534,53 @@ async function loadUserChats() {
         console.error("Fehler beim Laden der Chats:", err);
     }
 
-    // Harte Deduplizierung: Zwingt identische Direktchats zwischen denselben Personen auf exakt einen Eintrag
-    let uniqueDirectMap = new Map();
+    // Stellen sicher, dass das offizielle Forum als echter Datenbank-Eintrag existiert (verhindert den 400er UUID-Fehler)
+    let forumChat = rawChats.find(c => c.title === 'GSRA Official / Community Forum' || (c.user1_id === c.user2_id && c.title && c.title.includes('Official')));
+    
+    if (!forumChat) {
+        const { data: createdForum, err: forumErr } = await supabase
+            .from("chats")
+            .insert([{
+                user1_id: currentUser.id,
+                user2_id: currentUser.id,
+                title: 'GSRA Official / Community Forum',
+                last_message: 'Willkommen im offiziellen Community-Forum!'
+            }])
+            .select()
+            .single();
+
+        if (!forumErr && createdForum) {
+            forumChat = createdForum;
+            rawChats.unshift(createdForum);
+        }
+    }
+
+    if (forumChat) {
+        officialForumChatId = forumChat.id;
+    }
+
+    // Strikte Deduplizierung nach sortierten Paar-IDs bei Direktchats
+    let uniqueMap = new Map();
     for (const chat of rawChats) {
-        const isForum = (chat.user1_id === chat.user2_id) || (chat.id === 'gsra-official-forum');
+        const isForum = (chat.user1_id === chat.user2_id) || (chat.id === officialForumChatId);
         if (isForum) {
-            uniqueDirectMap.set(chat.id, chat);
+            uniqueMap.set(chat.id, chat);
         } else {
             const pairKey = [chat.user1_id, chat.user2_id].sort().join('_');
-            if (!uniqueDirectMap.has(pairKey)) {
-                uniqueDirectMap.set(pairKey, chat);
+            if (!uniqueMap.has(pairKey)) {
+                uniqueMap.set(pairKey, chat);
             } else {
-                const existing = uniqueDirectMap.get(pairKey);
+                const existing = uniqueMap.get(pairKey);
                 if (new Date(chat.created_at) > new Date(existing.created_at)) {
-                    uniqueDirectMap.set(pairKey, chat);
+                    uniqueMap.set(pairKey, chat);
                 }
             }
         }
     }
 
-    allChatsCache = Array.from(uniqueDirectMap.values());
+    allChatsCache = Array.from(uniqueMap.values());
 
-    const forumExists = allChatsCache.some(c => c.id === 'gsra-official-forum');
-    if (!forumExists) {
-        allChatsCache.unshift({
-            id: 'gsra-official-forum',
-            title: 'GSRA Official / Community Forum',
-            last_message: 'Willkommen im offiziellen Community-Forum!',
-            created_at: new Date().toISOString()
-        });
-    }
-
-    // Ungelesen-Status ermitteln (inklusive des offiziellen Forums)
+    // Ungelesen-Status ermitteln
     for (const chat of allChatsCache) {
         if (chat.id === activeChatId) {
             chat.unread = false;
@@ -565,8 +588,8 @@ async function loadUserChats() {
         }
         const lastRead = getLastReadTime(chat.id);
         if (lastRead === 0) {
-            if (chat.id === 'gsra-official-forum') {
-                chat.unread = false; // Forum startet standardmäßig als gelesen, bis eine echte neue Nachricht kommt
+            if (chat.id === officialForumChatId) {
+                chat.unread = false; // Startet als gelesen, bis eine neue echte Nachricht eintrifft
             } else {
                 chat.unread = true;
             }
@@ -599,7 +622,7 @@ async function renderChatsList() {
             return userFavorites.has(chat.id);
         }
         if (currentFilter === 'forums') {
-            return chat.id === 'gsra-official-forum' || (chat.user1_id === chat.user2_id);
+            return chat.id === officialForumChatId || (chat.user1_id === chat.user2_id);
         }
         return true;
     });
@@ -610,7 +633,7 @@ async function renderChatsList() {
     }
 
     for (const chat of filtered) {
-        const isForum = chat.id === 'gsra-official-forum' || (chat.user1_id === chat.user2_id);
+        const isForum = chat.id === officialForumChatId || (chat.user1_id === chat.user2_id);
         let otherUserName = "Forum";
         if (!isForum) {
             const otherUserId = chat.user1_id === currentUser.id ? chat.user2_id : chat.user1_id;
@@ -662,7 +685,7 @@ async function renderChatsList() {
 }
 
 function openForumChat(forumChat = null) {
-    const chatId = forumChat?.id || 'gsra-official-forum';
+    const chatId = forumChat?.id || officialForumChatId;
     activeChatId = chatId;
     markChatAsRead(chatId);
 
@@ -671,7 +694,7 @@ function openForumChat(forumChat = null) {
     if (addMemberBtn) addMemberBtn.style.display = "block";
     if (blockUserBtn) blockUserBtn.style.display = "none";
 
-    const isOfficialAnnouncement = (chatId === 'gsra-official-forum');
+    const isOfficialAnnouncement = (chatId === officialForumChatId);
 
     if (isOfficialAnnouncement && !isAdminUser) {
         if (messageInput) {
@@ -689,15 +712,6 @@ function openForumChat(forumChat = null) {
 
     if (chatMessages) {
         chatMessages.innerHTML = "";
-        if (isOfficialAnnouncement) {
-            chatMessages.innerHTML = `
-                <div class="message-bubble message-other">
-                    <div class="msg-author">[GSRA Official Admin]</div>
-                    <div>Willkommen im offiziellen Community-Forum. Hier erfährst du alle Neuigkeiten rund um GSRA!</div>
-                    <span class="message-time">10:24</span>
-                </div>
-            `;
-        }
     }
     loadChatMessages(chatId);
     renderChatsList();
@@ -752,12 +766,11 @@ async function loadChatMessages(chatId) {
 
 function renderMessages(messages) {
     if (!chatMessages) return;
-    const isOfficial = activeChatId === 'gsra-official-forum';
-    if (!isOfficial && messages.length === 0) {
+    if (messages.length === 0) {
         chatMessages.innerHTML = `<p class="chat-placeholder" style="text-align: center; color: var(--text-muted); margin: auto;">Schreibe die erste Nachricht...</p>`;
         return;
     }
-    if (!isOfficial) chatMessages.innerHTML = "";
+    chatMessages.innerHTML = "";
     messages.forEach(appendSingleMessage);
 }
 
@@ -832,7 +845,7 @@ async function appendSingleMessage(msg) {
 if (editChatTitleBtn) {
     editChatTitleBtn.addEventListener("click", async () => {
         const supabase = window.supabaseClient || window.supabase;
-        if (!activeChatId || activeChatId === 'gsra-official-forum') {
+        if (!activeChatId || activeChatId === officialForumChatId) {
             alert("Das offizielle Forum kann nicht umbenannt werden.");
             return;
         }
@@ -850,7 +863,7 @@ if (editChatTitleBtn) {
 if (deleteChatBtn) {
     deleteChatBtn.addEventListener("click", async () => {
         const supabase = window.supabaseClient || window.supabase;
-        if (!activeChatId || activeChatId === 'gsra-official-forum') {
+        if (!activeChatId || activeChatId === officialForumChatId) {
             alert("Das offizielle Forum kann nicht gelöscht werden.");
             return;
         }
@@ -873,7 +886,7 @@ if (deleteChatBtn) {
 if (blockUserBtn) {
     blockUserBtn.addEventListener("click", async () => {
         const supabase = window.supabaseClient || window.supabase;
-        if (!activeChatId || activeChatId === 'gsra-official-forum') return;
+        if (!activeChatId || activeChatId === officialForumChatId) return;
 
         if (confirm("Möchtest du diesen Nutzer blockieren und den Chat entfernen?")) {
             await supabase.from("messages").delete().eq("chat_id", activeChatId);
@@ -900,7 +913,7 @@ if (chatForm) {
 
         if ((!text && files.length === 0) || !activeChatId || !currentUser?.id || !supabase) return;
 
-        const isOfficialAnnouncement = (activeChatId === 'gsra-official-forum');
+        const isOfficialAnnouncement = (activeChatId === officialForumChatId);
         if (isOfficialAnnouncement && !isAdminUser) {
             alert("Nur Administratoren können im offiziellen Forum schreiben.");
             return;
