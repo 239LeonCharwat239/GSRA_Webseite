@@ -130,7 +130,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Freund hinzufügen (100% normalisiert & duplikatsfrei)
+    // Freund hinzufügen (100% duplikatsfrei mit sortierten Paar-IDs)
     const handleAddFriend = async () => {
         if (!currentUser?.id) return;
         const friendName = prompt("Gib den Benutzernamen (Username) deines Freundes ein:");
@@ -152,9 +152,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
-        // Strikte Normalisierung der IDs (immer alphabetisch sortiert für user1 und user2)
         const [u1, u2] = [currentUser.id, foundProfiles.id].sort();
-
         let existingChat = allChatsCache.find(c => c.user1_id === u1 && c.user2_id === u2);
 
         if (!existingChat) {
@@ -475,11 +473,7 @@ function setupGlobalMessageListener() {
 
 function updateGlobalUnreadState() {
     const hasUnread = allChatsCache.some(c => c.unread === true);
-    if (hasUnread) {
-        localStorage.setItem('gsra_has_unread', 'true');
-    } else {
-        localStorage.setItem('gsra_has_unread', 'false');
-    }
+    localStorage.setItem('gsra_has_unread', hasUnread ? 'true' : 'false');
 
     const navBtn = document.getElementById("messengerNavBtn") || document.querySelector('a[href="messenger.html"]');
     if (navBtn) {
@@ -534,7 +528,7 @@ async function loadUserChats() {
         console.error("Fehler beim Laden der Chats:", err);
     }
 
-    // Stellen sicher, dass das offizielle Forum als echter Datenbank-Eintrag existiert (verhindert den 400er UUID-Fehler)
+    // Garantiert eine echte UUID für das offizielle Forum in der DB (verhindert den 400er Fehler)
     let forumChat = rawChats.find(c => c.title === 'GSRA Official / Community Forum' || (c.user1_id === c.user2_id && c.title && c.title.includes('Official')));
     
     if (!forumChat) {
@@ -559,7 +553,7 @@ async function loadUserChats() {
         officialForumChatId = forumChat.id;
     }
 
-    // Strikte Deduplizierung nach sortierten Paar-IDs bei Direktchats
+    // Strikte Deduplizierung nach sortierten Paar-IDs für Direktchats
     let uniqueMap = new Map();
     for (const chat of rawChats) {
         const isForum = (chat.user1_id === chat.user2_id) || (chat.id === officialForumChatId);
@@ -580,7 +574,7 @@ async function loadUserChats() {
 
     allChatsCache = Array.from(uniqueMap.values());
 
-    // Ungelesen-Status ermitteln
+    // Ungelesen-Status ermitteln (Forum startet als gelesen)
     for (const chat of allChatsCache) {
         if (chat.id === activeChatId) {
             chat.unread = false;
@@ -589,7 +583,7 @@ async function loadUserChats() {
         const lastRead = getLastReadTime(chat.id);
         if (lastRead === 0) {
             if (chat.id === officialForumChatId) {
-                chat.unread = false; // Startet als gelesen, bis eine neue echte Nachricht eintrifft
+                chat.unread = false; 
             } else {
                 chat.unread = true;
             }
@@ -686,6 +680,7 @@ async function renderChatsList() {
 
 function openForumChat(forumChat = null) {
     const chatId = forumChat?.id || officialForumChatId;
+    if (!chatId) return;
     activeChatId = chatId;
     markChatAsRead(chatId);
 
@@ -718,6 +713,7 @@ function openForumChat(forumChat = null) {
 }
 
 async function openChat(chatId, recipientName, chatTitle = null) {
+    if (!chatId) return;
     activeChatId = chatId;
     markChatAsRead(chatId);
 
@@ -738,7 +734,7 @@ async function openChat(chatId, recipientName, chatTitle = null) {
 
 async function loadChatMessages(chatId) {
     const supabase = window.supabaseClient || window.supabase;
-    if (!supabase) return;
+    if (!supabase || !chatId) return;
 
     if (messageSubscription) {
         supabase.removeChannel(messageSubscription);
