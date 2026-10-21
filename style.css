@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Master Design (Vollständig & Korrigiert)
+   GSRA - Master Design (Vollständig & Ungekürzt)
 ========================================= */
 
 :root {
@@ -154,7 +154,7 @@ nav a:hover::after, nav a.active::after {
     width: 100%;
 }
 
-/* Roter Glow für ungelernene Nachrichten in der Navbar */
+/* Roter Glow für ungelesene Nachrichten in der Navbar */
 nav a.nav-unread-glow {
     color: #ff4d4d !important;
     text-shadow: 0 0 12px rgba(255, 77, 77, 0.9) !important;
@@ -845,52 +845,6 @@ p {
 }
 
 /* =========================================
-   MESSENGER BILDER & THUMBNAIL FIXES
-========================================= */
-.message-bubble img.chat-msg-thumb {
-    max-width: 180px;
-    max-height: 140px;
-    object-fit: cover;
-    border-radius: 6px;
-    margin-top: 6px;
-    display: block;
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    cursor: pointer;
-    transition: transform 0.2s ease, opacity 0.2s ease;
-}
-
-.message-bubble img.chat-msg-thumb:hover {
-    transform: scale(1.03);
-    opacity: 0.9;
-}
-
-.emoji-btn {
-    background: transparent;
-    border: none;
-    color: var(--text-muted);
-    font-size: 20px;
-    cursor: pointer;
-    padding: 0 5px;
-    transition: color 0.2s ease, transform 0.2s ease;
-}
-
-.emoji-btn:hover {
-    color: var(--gsra-yellow);
-    transform: scale(1.15);
-}
-
-.emoji-picker-container {
-    position: absolute;
-    bottom: 70px;
-    left: 20px;
-    z-index: 1000;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.8);
-    border-radius: 10px;
-    overflow: hidden;
-    display: none;
-}
-
-/* =========================================
    WHATSAPP DESKTOP LAYOUT (GSRA MESSENGER)
 ========================================= */
 .wa-container {
@@ -994,7 +948,7 @@ p {
     background: #2a3942;
 }
 
-/* Rote Hervorhebung für ungelernene Chats in der Sidebar */
+/* Rote Hervorhebung für ungelesene Chats in der Sidebar */
 .wa-chat-item.unread {
     background: rgba(255, 77, 77, 0.15);
     border-left: 4px solid #ff4d4d;
@@ -1197,6 +1151,58 @@ p {
     border: 1px solid var(--border-subtle);
 }
 
+/* WhatsApp Bild-Grid (Kompakte Kacheln) */
+.wa-media-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 4px;
+    max-width: 220px;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 6px;
+}
+
+.wa-media-item {
+    position: relative;
+    width: 100%;
+    height: 100px;
+    background: #0d0e12;
+}
+
+.wa-media-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    cursor: pointer;
+    display: block;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.wa-media-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.65);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: bold;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.msg-author {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--gsra-yellow);
+    margin-bottom: 3px;
+}
+
 .message-time {
     font-size: 10px;
     opacity: 0.7;
@@ -1222,6 +1228,32 @@ p {
     color: #fff;
     border-radius: 4px;
     outline: none;
+}
+
+.emoji-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 0 5px;
+    transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.emoji-btn:hover {
+    color: var(--gsra-yellow);
+    transform: scale(1.15);
+}
+
+.emoji-picker-container {
+    position: absolute;
+    bottom: 70px;
+    left: 20px;
+    z-index: 1000;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+    border-radius: 10px;
+    overflow: hidden;
+    display: none;
 }
 
 @media (max-width: 850px) {
