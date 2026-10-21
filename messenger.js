@@ -64,7 +64,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const { data: { session } } = await supabase.auth.getSession();
     currentUser = session?.user || null;
 
-    if (!currentUser) {
+    if (!currentUser || !currentUser.id) {
         if (chatsList) chatsList.innerHTML = `<p style="padding: 15px; font-size: 13px; color: var(--text-muted);">Bitte logge dich ein.</p>`;
         return;
     }
@@ -110,7 +110,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         newForumForm.addEventListener("submit", async (e) => {
             e.preventDefault();
             const forumName = forumNameInput.value.trim();
-            if (!forumName || !supabase) return;
+            if (!forumName || !supabase || !currentUser?.id) return;
 
             const { error } = await supabase.from("chats").insert([{
                 user1_id: currentUser.id,
@@ -133,6 +133,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Freund hinzufügen
     const handleAddFriend = async () => {
+        if (!currentUser?.id) return;
         const friendName = prompt("Gib den Benutzernamen (Username) deines Freundes ein:");
         if (!friendName) return;
 
@@ -206,8 +207,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (addMemberBtn) {
         addMemberBtn.addEventListener("click", async () => {
+            if (!currentUser?.id || !activeChatId) return;
             const memberName = prompt("Gib den Benutzernamen des hinzuzufügenden Mitglieds ein:");
-            if (!memberName || !activeChatId) return;
+            if (!memberName) return;
 
             const { data: targetUser } = await supabase
                 .from("profiles")
@@ -297,7 +299,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 async function checkUserAdminStatus() {
     const supabase = window.supabaseClient || window.supabase;
-    if (!supabase || !currentUser) return;
+    if (!supabase || !currentUser?.id) return;
     try {
         const { data } = await supabase
             .from("profiles")
@@ -312,7 +314,7 @@ async function checkUserAdminStatus() {
 
 async function loadFavorites() {
     const supabase = window.supabaseClient || window.supabase;
-    if (!supabase || !currentUser) return;
+    if (!supabase || !currentUser?.id) return;
     const { data } = await supabase
         .from("chat_favorites")
         .select("chat_id")
@@ -326,7 +328,7 @@ async function loadFavorites() {
 async function toggleFavorite(chatId, event) {
     if (event) event.stopPropagation();
     const supabase = window.supabaseClient || window.supabase;
-    if (!supabase || !currentUser) return;
+    if (!supabase || !currentUser?.id) return;
 
     if (userFavorites.has(chatId)) {
         await supabase.from("chat_favorites").delete().match({ user_id: currentUser.id, chat_id: chatId });
@@ -356,6 +358,7 @@ async function fetchUserName(userId) {
 
 async function checkUrlParameters() {
     const supabase = window.supabaseClient || window.supabase;
+    if (!supabase || !currentUser?.id) return;
     const urlParams = new URLSearchParams(window.location.search);
     const sellerId = urlParams.get("sellerId");
     const sellerName = urlParams.get("sellerName") || "Verkäufer";
@@ -363,7 +366,7 @@ async function checkUrlParameters() {
     const friendId = urlParams.get("friendId");
 
     const targetId = sellerId || friendId;
-    if (targetId && currentUser && targetId !== currentUser.id) {
+    if (targetId && targetId !== currentUser.id) {
         let { data: existingChat } = await supabase
             .from("chats")
             .select("*")
@@ -396,10 +399,10 @@ async function checkUrlParameters() {
     }
 }
 
-// Globaler Echtzeit-Listener für Nachrichten (auch seitenübergreifend für Navbar-Leuchten)
+// Globaler Echtzeit-Listener für Nachrichten
 function setupGlobalMessageListener() {
     const supabase = window.supabaseClient || window.supabase;
-    if (!supabase || !currentUser) return;
+    if (!supabase || !currentUser?.id) return;
 
     if (globalListenerChannel) {
         supabase.removeChannel(globalListenerChannel);
@@ -411,11 +414,13 @@ function setupGlobalMessageListener() {
             const newMsg = payload.new;
             if (newMsg.sender_id !== currentUser.id) {
                 const targetChat = allChatsCache.find(c => c.id === newMsg.chat_id);
-                if (targetChat && targetChat.id !== activeChatId) {
-                    targetChat.unread = true;
-                    updateGlobalUnreadState();
-                    renderChatsList();
-                } else if (!targetChat) {
+                if (targetChat) {
+                    if (targetChat.id !== activeChatId) {
+                        targetChat.unread = true;
+                        updateGlobalUnreadState();
+                        renderChatsList();
+                    }
+                } else {
                     loadUserChats();
                 }
             }
@@ -434,15 +439,14 @@ function updateGlobalUnreadState() {
     }
 }
 
-// Hilfsfunktionen für Lesestatus via localStorage
 function getLastReadTime(chatId) {
-    if (!currentUser) return 0;
+    if (!currentUser?.id) return 0;
     const val = localStorage.getItem(`gsra_last_read_${currentUser.id}_${chatId}`);
     return val ? new Date(val).getTime() : 0;
 }
 
 function markChatAsRead(chatId) {
-    if (!currentUser || !chatId) return;
+    if (!currentUser?.id || !chatId) return;
     localStorage.setItem(`gsra_last_read_${currentUser.id}_${chatId}`, new Date().toISOString());
     const chatObj = allChatsCache.find(c => c.id === chatId);
     if (chatObj) {
@@ -453,7 +457,7 @@ function markChatAsRead(chatId) {
 
 async function loadUserChats() {
     const supabase = window.supabaseClient || window.supabase;
-    if (!chatsList || !currentUser || !supabase) return;
+    if (!chatsList || !currentUser?.id || !supabase) return;
 
     let chats = [];
     try {
@@ -485,17 +489,18 @@ async function loadUserChats() {
         });
     }
 
-    // Ungelesen-Status für jeden Chat prüfen anhand des letzen Aktivitäts-Zeitpunkts und localStorage
+    // Verbesserte Unread-Logik: Wenn noch nie gelesen (lastRead === 0), als ungelesen markieren falls es ein aktiver Chat ist
     for (const chat of allChatsCache) {
-        const lastRead = getLastReadTime(chat.id);
-        const chatTime = chat.created_at ? new Date(chat.created_at).getTime() : 0;
-        // Wenn noch nie gelesen oder neue Nachrichten vorhanden
-        if (lastRead === 0 && chat.id !== activeChatId) {
-            // Standardmäßig ungelistete alte Chats als gelesen werten, es sei denn es kam frisch was rein
-            // Für den Anfang setzen wir unread auf false bei Init, es sei denn ein Realtime-Event triggert es.
+        if (chat.id === activeChatId) {
             chat.unread = false;
+            continue;
+        }
+        const lastRead = getLastReadTime(chat.id);
+        if (lastRead === 0) {
+            chat.unread = true; // Neu für diesen Account -> direkt als ungelesen markieren
         } else {
-            chat.unread = chatTime > lastRead && chat.id !== activeChatId;
+            const chatTime = chat.created_at ? new Date(chat.created_at).getTime() : 0;
+            chat.unread = chatTime > lastRead;
         }
     }
 
@@ -565,7 +570,6 @@ async function renderChatsList() {
         const favBtn = item.querySelector(".wa-favorite-btn");
         favBtn.addEventListener("click", (e) => toggleFavorite(chat.id, e));
 
-        // Klick auf Chat -> Chat öffnen & als gelesen markieren (WhatsApp-Verhalten)
         item.addEventListener("click", () => {
             activeChatId = chat.id;
             markChatAsRead(chat.id);
@@ -585,7 +589,6 @@ async function renderChatsList() {
     }
 }
 
-// Forum öffnen
 function openForumChat(forumChat = null) {
     const chatId = forumChat?.id || 'gsra-official-forum';
     activeChatId = chatId;
@@ -668,7 +671,6 @@ async function loadChatMessages(chatId) {
         .channel(`chat_${chatId}`)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` }, (payload) => {
             appendSingleMessage(payload.new);
-            // Wenn der Chat gerade offen ist, direkt als gelesen markieren
             if (activeChatId === chatId) {
                 markChatAsRead(chatId);
             }
@@ -823,7 +825,7 @@ if (chatForm) {
         const text = messageInput ? messageInput.value.trim() : "";
         const files = imageUploadInput ? Array.from(imageUploadInput.files) : [];
 
-        if ((!text && files.length === 0) || !activeChatId || !currentUser || !supabase) return;
+        if ((!text && files.length === 0) || !activeChatId || !currentUser?.id || !supabase) return;
 
         const isOfficialAnnouncement = (activeChatId === 'gsra-official-forum');
         if (isOfficialAnnouncement && !isAdminUser) {
