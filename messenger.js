@@ -105,7 +105,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Benutzerdefinierte Gruppe / Forum erstellen
+    // Benutzerdefinierte Gruppe / Forum erstellen (ohne nicht-existente DB-Spalten)
     if (newForumForm) {
         newForumForm.addEventListener("submit", async (e) => {
             e.preventDefault();
@@ -116,8 +116,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 user1_id: currentUser.id,
                 user2_id: currentUser.id,
                 title: forumName,
-                is_forum: true,
-                is_admin_only: false,
                 last_message: "Gruppe erstellt"
             }]);
 
@@ -201,7 +199,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (waWelcomeScreen) waWelcomeScreen.style.display = "none";
             if (waChatActivePane) waChatActivePane.style.display = "flex";
             renderChatsList();
-            openForumChat({ id: 'gsra-official-forum', title: 'GSRA Official / Community Forum', is_admin_only: true });
+            openForumChat({ id: 'gsra-official-forum', title: 'GSRA Official / Community Forum' });
         });
     }
 
@@ -476,28 +474,26 @@ async function loadUserChats() {
 
     allChatsCache = chats || [];
 
-    // Pflicht-GSRA-Forum ganz oben einfügen
-    const forumExists = allChatsCache.some(c => c.id === 'gsra-official-forum' || c.title === "GSRA Official / Community Forum");
+    // Offizielles GSRA-Forum immer für alle bereitstellen
+    const forumExists = allChatsCache.some(c => c.id === 'gsra-official-forum');
     if (!forumExists) {
         allChatsCache.unshift({
             id: 'gsra-official-forum',
             title: 'GSRA Official / Community Forum',
             last_message: 'Willkommen im offiziellen Community-Forum!',
-            is_forum: true,
-            is_admin_only: true,
             created_at: new Date().toISOString()
         });
     }
 
-    // Verbesserte Unread-Logik: Wenn noch nie gelesen (lastRead === 0), als ungelesen markieren falls es ein aktiver Chat ist
+    // Ungelesen-Status ermitteln
     for (const chat of allChatsCache) {
         if (chat.id === activeChatId) {
             chat.unread = false;
             continue;
         }
         const lastRead = getLastReadTime(chat.id);
-        if (lastRead === 0) {
-            chat.unread = true; // Neu für diesen Account -> direkt als ungelesen markieren
+        if (lastRead === 0 && chat.id !== 'gsra-official-forum') {
+            chat.unread = true; // Noch nie geöffneter Chat für diesen Account -> ungelesen
         } else {
             const chatTime = chat.created_at ? new Date(chat.created_at).getTime() : 0;
             chat.unread = chatTime > lastRead;
@@ -527,7 +523,7 @@ async function renderChatsList() {
             return userFavorites.has(chat.id);
         }
         if (currentFilter === 'forums') {
-            return chat.is_forum === true || chat.title?.includes("Forum");
+            return chat.id === 'gsra-official-forum' || (chat.user1_id === chat.user2_id);
         }
         return true;
     });
@@ -538,7 +534,7 @@ async function renderChatsList() {
     }
 
     for (const chat of filtered) {
-        const isForum = chat.is_forum || chat.id === 'gsra-official-forum';
+        const isForum = chat.id === 'gsra-official-forum' || (chat.user1_id === chat.user2_id);
         let otherUserName = "Forum";
         if (!isForum) {
             const otherUserId = chat.user1_id === currentUser.id ? chat.user2_id : chat.user1_id;
@@ -577,7 +573,7 @@ async function renderChatsList() {
             if (waWelcomeScreen) waWelcomeScreen.style.display = "none";
             if (waChatActivePane) waChatActivePane.style.display = "flex";
 
-            if (isForum || chat.id === 'gsra-official-forum') {
+            if (isForum) {
                 openForumChat(chat);
             } else {
                 openChat(chat.id, otherUserName, chat.title);
@@ -599,7 +595,7 @@ function openForumChat(forumChat = null) {
     if (addMemberBtn) addMemberBtn.style.display = "block";
     if (blockUserBtn) blockUserBtn.style.display = "none";
 
-    const isOfficialAnnouncement = (chatId === 'gsra-official-forum' || forumChat?.title === "GSRA Official / Community Forum");
+    const isOfficialAnnouncement = (chatId === 'gsra-official-forum');
 
     if (isOfficialAnnouncement && !isAdminUser) {
         if (messageInput) {
