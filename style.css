@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Master Design (Final Clean + Unread Red Glow Fix)
+   GSRA - Master Design (Vollständig & Korrigiert)
 ========================================= */
 
 :root {
@@ -192,7 +192,7 @@ nav a.nav-unread-glow::after {
 }
 
 /* =========================================
-   STYLISCHE FILTERBAR & FORMULARE
+   STYLISCHE FILTERBAR (MODERN & CLEAN)
 ========================================= */
 .filter-bar {
     background: rgba(21, 22, 26, 0.85);
@@ -236,6 +236,486 @@ nav a.nav-unread-glow::after {
     box-shadow: 0 0 10px rgba(0, 85, 255, 0.3);
 }
 
+.filter-bar input::placeholder {
+    color: #717786;
+}
+
+/* =========================================
+   FORMULAR-INPUTS & TEXTAREA FIX
+========================================= */
+#create-event-form input,
+#create-event-form select,
+#create-item-form input,
+#create-item-form select,
+#create-item-form textarea,
+#create-setup-form input,
+#create-setup-form select,
+#create-setup-form textarea {
+    width: 100%;
+    height: 42px;
+    padding: 10px 12px;
+    background: #0b0c10 !important;
+    border: 1px solid var(--border-subtle) !important;
+    color: #ffffff !important;
+    border-radius: 6px !important;
+    font-family: inherit;
+    font-size: 14px;
+    box-sizing: border-box;
+    outline: none;
+}
+
+#create-item-form textarea,
+#create-setup-form textarea {
+    height: 110px !important;
+    resize: none !important;
+}
+
+.location-container {
+    position: relative;
+    display: inline-block;
+}
+
+.autocomplete-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    min-width: 250px;
+    background: #15161a;
+    border: 1px solid var(--gsra-blue);
+    border-radius: 6px;
+    max-height: 240px;
+    overflow-y: auto;
+    z-index: 2500;
+    display: none;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.9);
+}
+
+.autocomplete-item {
+    padding: 10px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #fff;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    text-align: left;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.autocomplete-item:hover {
+    background: rgba(0, 85, 255, 0.25);
+    color: var(--gsra-yellow);
+}
+
+input[type="date"],
+input[type="datetime-local"] {
+    position: relative;
+    padding-right: 40px !important;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    filter: invert(0.85);
+    cursor: pointer;
+    opacity: 0.8;
+    transition: transform 0.2s ease, filter 0.2s ease, opacity 0.2s ease;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+    transform: translateY(-50%) scale(1.25);
+    filter: invert(0.7) sepia(1) saturate(5) hue-rotate(175deg);
+}
+
+/* =========================================
+   MÜLLEIMER & BEARBEITEN BUTTONS
+========================================= */
+.btn-delete {
+    background: rgba(255, 77, 77, 0.1);
+    border: 1px solid #ff4d4d;
+    color: #ff4d4d;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.25s ease;
+}
+
+.btn-delete i {
+    transition: transform 0.25s ease;
+}
+
+.btn-delete:hover {
+    background: #ff4d4d;
+    color: #ffffff;
+    box-shadow: 0 0 10px rgba(255, 77, 77, 0.6);
+    transform: translateY(-1px);
+}
+
+.btn-delete:hover i {
+    transform: scale(1.2) rotate(-10deg);
+}
+
+.btn-edit {
+    background: rgba(0, 85, 255, 0.15);
+    border: 1px solid var(--gsra-blue);
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.25s ease;
+}
+
+.btn-edit:hover {
+    background: var(--gsra-blue);
+    color: #ffffff;
+    box-shadow: var(--blue-glow);
+    transform: translateY(-1px);
+}
+
+/* =========================================
+   BESTEHENDE BILDER & NEON-HOVER X-EFFEKT
+========================================= */
+.existing-img-wrapper {
+    position: relative;
+    display: inline-block;
+    width: 80px;
+    height: 80px;
+    border-radius: 6px;
+}
+
+.existing-img-wrapper img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid var(--border-subtle);
+    background: #0d0e12;
+}
+
+.existing-img-remove {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: #15161a;
+    color: #ff4d4d;
+    border: 2px solid #ff4d4d;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.8);
+    transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.existing-img-remove:hover {
+    background: #ff4d4d;
+    color: #ffffff;
+    transform: scale(1.25) rotate(90deg);
+    box-shadow: 0 0 12px rgba(255, 77, 77, 0.9);
+}
+
+/* =========================================
+   MARKTPLATZ GRID & BILDER
+========================================= */
+#marketplaceGrid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 25px;
+    margin-top: 30px;
+    text-align: left;
+}
+
+.marketplace-card-img {
+    width: 100%;
+    height: 220px;
+    object-fit: contain;
+    background-color: #0d0e12;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    border: 1px solid var(--border-subtle);
+    padding: 8px;
+}
+
+@media (max-width: 992px) {
+    #marketplaceGrid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    #marketplaceGrid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* =========================================
+   MARKTPLATZ MODAL & GALERIE
+========================================= */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(5px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    padding: 20px;
+}
+
+.modal-content {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-top: 4px solid var(--gsra-blue);
+    border-radius: 10px;
+    max-width: 850px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 30px;
+    position: relative;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+    text-align: left;
+}
+
+.modal-close {
+    position: absolute;
+    top: 15px;
+    right: 20px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 26px;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.modal-close:hover {
+    color: #ff4d4d;
+}
+
+.modal-main-image {
+    width: 100%;
+    max-height: 420px;
+    object-fit: contain;
+    background: #0d0e12;
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+    margin-bottom: 12px;
+    padding: 10px;
+}
+
+.gallery-container {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding: 6px;
+    margin-bottom: 20px;
+}
+
+.gallery-thumbnail {
+    width: 75px;
+    height: 75px;
+    border-radius: 6px;
+    object-fit: contain;
+    background: #0d0e12;
+    border: 2px solid var(--border-subtle);
+    cursor: pointer;
+    opacity: 0.7;
+    transition: transform 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+    flex-shrink: 0;
+    padding: 4px;
+}
+
+.gallery-thumbnail:hover, .gallery-thumbnail.active {
+    opacity: 1;
+    transform: scale(1.05);
+    border-color: var(--gsra-blue);
+}
+
+.marketplace-card-clickable {
+    cursor: pointer;
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.marketplace-card-clickable:hover {
+    transform: translateY(-5px);
+    border-color: var(--gsra-blue);
+    box-shadow: var(--blue-glow);
+}
+
+/* =========================================
+   CUSTOM TOAST NOTIFICATIONS
+========================================= */
+#toastContainer {
+    position: fixed;
+    bottom: 25px;
+    right: 25px;
+    z-index: 3000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+}
+
+.toast {
+    pointer-events: auto;
+    background: var(--bg-card);
+    color: var(--text-light);
+    border: 1px solid var(--border-subtle);
+    border-left: 4px solid var(--gsra-blue);
+    padding: 14px 20px;
+    border-radius: 6px;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.7);
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    animation: toastSlideIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.toast.toast-error { border-left-color: #ff4d4d; }
+.toast.toast-success { border-left-color: #00ff88; }
+.toast.toast-info { border-left-color: var(--gsra-yellow); }
+
+@keyframes toastSlideIn {
+    from { transform: translateX(110%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+/* =========================================
+   HERO & GENERAL CARDS
+========================================= */
+.hero-section {
+    padding: 40px 0;
+    margin-bottom: 40px;
+}
+
+.hero-title {
+    font-size: 42px;
+    font-weight: 900;
+    color: var(--text-light);
+    letter-spacing: 3px;
+    margin-bottom: 15px;
+    text-transform: uppercase;
+}
+
+.hero-subtitle {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+h2 {
+    color: var(--text-light);
+    font-size: 32px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 15px;
+    display: inline-block;
+    border-bottom: 3px solid var(--gsra-blue);
+    padding-bottom: 8px;
+}
+
+p {
+    font-size: 17px;
+    color: var(--text-muted);
+    max-width: 750px;
+    margin: 0 auto 25px auto;
+}
+
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 30px;
+    margin-top: 40px;
+    text-align: left;
+}
+
+.card {
+    background: var(--bg-card);
+    padding: 25px;
+    border-radius: 10px;
+    border: 1px solid var(--border-subtle);
+    border-top: 4px solid var(--gsra-blue);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.card h3 {
+    color: var(--text-light);
+    margin-bottom: 10px;
+    font-size: 20px;
+}
+
+.card:hover {
+    transform: translateY(-8px);
+    box-shadow: var(--blue-glow);
+}
+
+/* =========================================
+   RENNKALENDER TABELLE
+========================================= */
+.event-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 30px;
+    background-color: var(--bg-card);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    border: 1px solid var(--border-subtle);
+    text-align: left;
+}
+
+.event-table th, .event-table td {
+    padding: 18px 22px;
+    font-size: 15px;
+}
+
+.event-table th {
+    background-color: #0d0e12;
+    color: var(--gsra-blue);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-size: 13px;
+    border-bottom: 2px solid var(--gsra-blue);
+}
+
+.event-table td {
+    color: var(--text-light);
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+
 /* =========================================
    SOCIAL MEDIA ICONS
 ========================================= */
@@ -269,6 +749,146 @@ nav a.nav-unread-glow::after {
 .icon-discord:hover { color: #5865F2 !important; transform: scale(1.2) translateY(-4px); }
 .icon-reddit:hover { color: #FF4500 !important; transform: scale(1.2) translateY(-4px); }
 .icon-twitch:hover { color: #9146FF !important; transform: scale(1.2) translateY(-4px); }
+
+/* =========================================
+   ZUSATZ FÜR DASHBOARD & AUTH
+========================================= */
+.grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 30px;
+    text-align: left;
+}
+
+.auth-only {
+    display: none;
+}
+
+/* =========================================
+   GSRA SETUPS & COMBOBOX STYLES
+========================================= */
+.combo-box-container {
+    position: relative;
+    width: 100%;
+}
+
+.combo-box-input {
+    width: 100%;
+    padding: 12px;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--border-subtle);
+    color: #fff;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+.combo-box-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    max-height: 220px;
+    overflow-y: auto;
+    background: #121620;
+    border: 1px solid var(--border-subtle);
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    z-index: 100;
+    display: none;
+}
+
+.combo-option {
+    padding: 10px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.combo-option:hover {
+    background: rgba(255,204,0,0.15);
+    color: var(--gsra-yellow);
+}
+
+.layout-tag {
+    font-size: 11px;
+    background: rgba(255,255,255,0.1);
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: var(--text-muted);
+}
+
+.vote-btn {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border-subtle);
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: 0.2s;
+    font-size: 13px;
+}
+
+.vote-btn:hover {
+    background: rgba(255,255,255,0.2);
+}
+
+.vote-btn.like-btn:hover {
+    color: #00ff88;
+    border-color: #00ff88;
+}
+
+.vote-btn.dislike-btn:hover {
+    color: #ff4d4d;
+    border-color: #ff4d4d;
+}
+
+/* =========================================
+   MESSENGER BILDER & THUMBNAIL FIXES
+========================================= */
+.message-bubble img.chat-msg-thumb {
+    max-width: 180px;
+    max-height: 140px;
+    object-fit: cover;
+    border-radius: 6px;
+    margin-top: 6px;
+    display: block;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    cursor: pointer;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.message-bubble img.chat-msg-thumb:hover {
+    transform: scale(1.03);
+    opacity: 0.9;
+}
+
+.emoji-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 0 5px;
+    transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.emoji-btn:hover {
+    color: var(--gsra-yellow);
+    transform: scale(1.15);
+}
+
+.emoji-picker-container {
+    position: absolute;
+    bottom: 70px;
+    left: 20px;
+    z-index: 1000;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+    border-radius: 10px;
+    overflow: hidden;
+    display: none;
+}
 
 /* =========================================
    WHATSAPP DESKTOP LAYOUT (GSRA MESSENGER)
