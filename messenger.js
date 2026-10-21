@@ -77,6 +77,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     await checkUrlParameters();
     await loadUserChats();
 
+    // Sofortiger Check des localStorage für Navbar-Glow beim Laden
+    updateGlobalUnreadState();
+
     // Filter Pills Event
     document.querySelectorAll(".wa-pill").forEach(pill => {
         pill.addEventListener("click", (e) => {
@@ -105,7 +108,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Benutzerdefinierte Gruppe / Forum erstellen (ohne nicht-existente DB-Spalten)
+    // Benutzerdefinierte Gruppe / Forum erstellen
     if (newForumForm) {
         newForumForm.addEventListener("submit", async (e) => {
             e.preventDefault();
@@ -129,7 +132,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Freund hinzufügen
+    // Freund hinzufügen / Direktchat aufbauen (Fehlerfrei ohne 400er or-Syntax)
     const handleAddFriend = async () => {
         if (!currentUser?.id) return;
         const friendName = prompt("Gib den Benutzernamen (Username) deines Freundes ein:");
@@ -151,11 +154,26 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
-        let { data: existingChat } = await supabase
+        // Sichere Abfrage nach existierendem Chat (Vermeidung von 400-Bad-Request)
+        let existingChat = null;
+        let { data: chats1 } = await supabase
             .from("chats")
             .select("*")
-            .or(`and(user1_id.eq.${currentUser.id},user2_id.eq.${foundProfiles.id}),and(user1_id.eq.${foundProfiles.id},user2_id.eq.${currentUser.id})`)
-            .maybeSingle();
+            .eq("user1_id", currentUser.id)
+            .eq("user2_id", foundProfiles.id);
+
+        if (chats1 && chats1.length > 0) {
+            existingChat = chats1[0];
+        } else {
+            let { data: chats2 } = await supabase
+                .from("chats")
+                .select("*")
+                .eq("user1_id", foundProfiles.id)
+                .eq("user2_id", currentUser.id);
+            if (chats2 && chats2.length > 0) {
+                existingChat = chats2[0];
+            }
+        }
 
         if (!existingChat) {
             const { data: newChat, err: newErr } = await supabase
@@ -313,13 +331,17 @@ async function checkUserAdminStatus() {
 async function loadFavorites() {
     const supabase = window.supabaseClient || window.supabase;
     if (!supabase || !currentUser?.id) return;
-    const { data } = await supabase
-        .from("chat_favorites")
-        .select("chat_id")
-        .eq("user_id", currentUser.id);
+    try {
+        const { data } = await supabase
+            .from("chat_favorites")
+            .select("chat_id")
+            .eq("user_id", currentUser.id);
 
-    if (data) {
-        userFavorites = new Set(data.map(f => f.chat_id));
+        if (data) {
+            userFavorites = new Set(data.map(f => f.chat_id));
+        }
+    } catch (e) {
+        userFavorites = new Set();
     }
 }
 
@@ -328,14 +350,18 @@ async function toggleFavorite(chatId, event) {
     const supabase = window.supabaseClient || window.supabase;
     if (!supabase || !currentUser?.id) return;
 
-    if (userFavorites.has(chatId)) {
-        await supabase.from("chat_favorites").delete().match({ user_id: currentUser.id, chat_id: chatId });
-        userFavorites.delete(chatId);
-    } else {
-        await supabase.from("chat_favorites").insert([{ user_id: currentUser.id, chat_id: chatId }]);
-        userFavorites.add(chatId);
+    try {
+        if (userFavorites.has(chatId)) {
+            await supabase.from("chat_favorites").delete().match({ user_id: currentUser.id, chat_id: chatId });
+            userFavorites.delete(chatId);
+        } else {
+            await supabase.from("chat_favorites").insert([{ user_id: currentUser.id, chat_id: chatId }]);
+            userFavorites.add(chatId);
+        }
+        renderChatsList();
+    } catch (e) {
+        console.error("Favoriten-Fehler:", e);
     }
-    renderChatsList();
 }
 
 async function fetchUserName(userId) {
@@ -343,15 +369,19 @@ async function fetchUserName(userId) {
     const supabase = window.supabaseClient || window.supabase;
     if (!supabase || !userId) return `Fahrer`;
     
-    const { data } = await supabase
-        .from("profiles")
-        .select("username, full_name")
-        .eq("id", userId)
-        .maybeSingle();
+    try {
+        const { data } = await supabase
+            .from("profiles")
+            .select("username, full_name")
+            .eq("id", userId)
+            .maybeSingle();
 
-    const name = data?.username || data?.full_name || `Fahrer (${userId.substring(0, 6)})`;
-    userNamesCache[userId] = name;
-    return name;
+        const name = data?.username || data?.full_name || `Fahrer (${userId.substring(0, 6)})`;
+        userNamesCache[userId] = name;
+        return name;
+    } catch (e) {
+        return `Fahrer`;
+    }
 }
 
 async function checkUrlParameters() {
@@ -365,11 +395,25 @@ async function checkUrlParameters() {
 
     const targetId = sellerId || friendId;
     if (targetId && targetId !== currentUser.id) {
-        let { data: existingChat } = await supabase
+        let existingChat = null;
+        let { data: chats1 } = await supabase
             .from("chats")
             .select("*")
-            .or(`and(user1_id.eq.${currentUser.id},user2_id.eq.${targetId}),and(user1_id.eq.${targetId},user2_id.eq.${currentUser.id})`)
-            .maybeSingle();
+            .eq("user1_id", currentUser.id)
+            .eq("user2_id", targetId);
+
+        if (chats1 && chats1.length > 0) {
+            existingChat = chats1[0];
+        } else {
+            let { data: chats2 } = await supabase
+                .from("chats")
+                .select("*")
+                .eq("user1_id", targetId)
+                .eq("user2_id", currentUser.id);
+            if (chats2 && chats2.length > 0) {
+                existingChat = chats2[0];
+            }
+        }
 
         if (!existingChat) {
             const { data: newChat, error } = await supabase
@@ -397,7 +441,7 @@ async function checkUrlParameters() {
     }
 }
 
-// Globaler Echtzeit-Listener für Nachrichten
+// Globaler Echtzeit-Listener für Nachrichten mit localStorage Synchronisation
 function setupGlobalMessageListener() {
     const supabase = window.supabaseClient || window.supabase;
     if (!supabase || !currentUser?.id) return;
@@ -428,11 +472,19 @@ function setupGlobalMessageListener() {
 
 function updateGlobalUnreadState() {
     const hasUnread = allChatsCache.some(c => c.unread === true);
-    if (messengerNavBtn) {
+    if (hasUnread) {
+        localStorage.setItem('gsra_has_unread', 'true');
+    } else {
+        localStorage.setItem('gsra_has_unread', 'false');
+    }
+
+    // Aktuellen Navbar-Button direkt aktualisieren
+    const navBtn = document.getElementById("messengerNavBtn") || document.querySelector('a[href="messenger.html"]');
+    if (navBtn) {
         if (hasUnread) {
-            messengerNavBtn.classList.add("nav-unread-glow");
+            navBtn.classList.add("nav-unread-glow");
         } else {
-            messengerNavBtn.classList.remove("nav-unread-glow");
+            navBtn.classList.remove("nav-unread-glow");
         }
     }
 }
@@ -457,22 +509,51 @@ async function loadUserChats() {
     const supabase = window.supabaseClient || window.supabase;
     if (!chatsList || !currentUser?.id || !supabase) return;
 
-    let chats = [];
+    let rawChats = [];
     try {
-        const { data, error } = await supabase
+        // Sichere, getrennte Abfragen zur Vermeidung des 400er Fehlers
+        const { data: chatsAsUser1 } = await supabase
             .from("chats")
             .select("*")
-            .or(`user1_id.eq.${currentUser.id},user2_id.eq.${currentUser.id}`)
-            .order("created_at", { ascending: false });
+            .eq("user1_id", currentUser.id);
 
-        if (!error && data) {
-            chats = data;
-        }
+        const { data: chatsAsUser2 } = await supabase
+            .from("chats")
+            .select("*")
+            .eq("user2_id", currentUser.id);
+
+        const combined = [...(chatsAsUser1 || []), ...(chatsAsUser2 || [])];
+        
+        // Deduplizierung nach Chat-ID
+        const map = new Map();
+        combined.forEach(c => map.set(c.id, c));
+        rawChats = Array.from(map.values());
+        
+        rawChats.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     } catch (err) {
         console.error("Fehler beim Laden der Chats:", err);
     }
 
-    allChatsCache = chats || [];
+    // Zusätzliche Chat-Deduplizierung für Direktchats zwischen denselben Personen (verhindert Doppeleinträge)
+    let uniqueDirectMap = new Map();
+    for (const chat of rawChats) {
+        const isForum = (chat.user1_id === chat.user2_id) || (chat.id === 'gsra-official-forum');
+        if (isForum) {
+            uniqueDirectMap.set(chat.id, chat);
+        } else {
+            const pairKey = [chat.user1_id, chat.user2_id].sort().join('_');
+            if (!uniqueDirectMap.has(pairKey)) {
+                uniqueDirectMap.set(pairKey, chat);
+            } else {
+                const existing = uniqueDirectMap.get(pairKey);
+                if (new Date(chat.created_at) > new Date(existing.created_at)) {
+                    uniqueDirectMap.set(pairKey, chat);
+                }
+            }
+        }
+    }
+
+    allChatsCache = Array.from(uniqueDirectMap.values());
 
     // Offizielles GSRA-Forum immer für alle bereitstellen
     const forumExists = allChatsCache.some(c => c.id === 'gsra-official-forum');
@@ -493,7 +574,7 @@ async function loadUserChats() {
         }
         const lastRead = getLastReadTime(chat.id);
         if (lastRead === 0 && chat.id !== 'gsra-official-forum') {
-            chat.unread = true; // Noch nie geöffneter Chat für diesen Account -> ungelesen
+            chat.unread = true; // Noch nie geöffneter Chat für diesen Account
         } else {
             const chatTime = chat.created_at ? new Date(chat.created_at).getTime() : 0;
             chat.unread = chatTime > lastRead;
@@ -781,7 +862,7 @@ if (deleteChatBtn) {
 
         if (confirm("Möchtest du dieses Forum / diesen Chat wirklich löschen?")) {
             await supabase.from("messages").delete().eq("chat_id", activeChatId);
-            await supabase.from("chat_favorites").delete().eq("chat_id", activeChatId);
+            try { await supabase.from("chat_favorites").delete().eq("chat_id", activeChatId); } catch(e){}
             await supabase.from("chats").delete().eq("id", activeChatId);
             
             activeChatId = null;
@@ -801,6 +882,7 @@ if (blockUserBtn) {
 
         if (confirm("Möchtest du diesen Nutzer blockieren und den Chat entfernen?")) {
             await supabase.from("messages").delete().eq("chat_id", activeChatId);
+            try { await supabase.from("chat_favorites").delete().eq("chat_id", activeChatId); } catch(e){}
             await supabase.from("chats").delete().eq("id", activeChatId);
             
             activeChatId = null;

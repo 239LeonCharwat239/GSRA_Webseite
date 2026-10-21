@@ -134,10 +134,10 @@
                             <i class="fa-regular fa-face-smile"></i>
                         </button>
 
-                        <label for="imageUploadInput" style="cursor: pointer; color: var(--text-muted); display: flex; align-items: center; font-size: 18px; padding: 0 4px;" title="Fotos anhängen (mehrere möglich)">
+                        <label style="cursor: pointer; color: var(--text-muted); display: flex; align-items: center; font-size: 18px; padding: 0 4px;" title="Fotos anhängen (mehrere möglich)">
                             <i class="fa-solid fa-paperclip"></i>
+                            <input type="file" id="imageUploadInput" accept="image/*" multiple style="display: none;">
                         </label>
-                        <input type="file" id="imageUploadInput" accept="image/*" multiple style="display: none;">
                         
                         <input type="text" id="messageInput" placeholder="Gib eine Nachricht ein..." autocomplete="off">
                         <button type="submit" id="sendBtn" class="login-btn" style="cursor: pointer;">
