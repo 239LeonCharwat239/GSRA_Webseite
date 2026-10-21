@@ -55,7 +55,6 @@ const newForumModal = document.getElementById("newForumModal");
 const closeForumModal = document.getElementById("closeForumModal");
 const newForumForm = document.getElementById("newForumForm");
 const forumNameInput = document.getElementById("forumNameInput");
-const messengerNavBtn = document.getElementById("messengerNavBtn");
 
 document.addEventListener("DOMContentLoaded", async () => {
     const supabase = window.supabaseClient || window.supabase;
@@ -77,9 +76,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     await checkUrlParameters();
     await loadUserChats();
 
+    // Sofortiger Check des Global-Glows beim Laden
     updateGlobalUnreadState();
 
-    // Filter Pills Event
     document.querySelectorAll(".wa-pill").forEach(pill => {
         pill.addEventListener("click", (e) => {
             document.querySelectorAll(".wa-pill").forEach(p => p.classList.remove("active"));
@@ -107,7 +106,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Benutzerdefinierte Gruppe / Forum erstellen
+    // Benutzerdefiniertes Forum erstellen
     if (newForumForm) {
         newForumForm.addEventListener("submit", async (e) => {
             e.preventDefault();
@@ -131,7 +130,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Freund hinzufügen / Direktchat aufbauen (100% fehlerfrei ohne .or() 400-Fehler und Duplikate)
+    // Freund hinzufügen (Garantiert ohne Duplikate & ohne 400-Fehler)
     const handleAddFriend = async () => {
         if (!currentUser?.id) return;
         const friendName = prompt("Gib den Benutzernamen (Username) deines Freundes ein:");
@@ -503,7 +502,7 @@ async function loadUserChats() {
         console.error("Fehler beim Laden der Chats:", err);
     }
 
-    // Strengste Deduplizierung: Verhindert doppelte Chats zwischen denselben Personen komplett
+    // Perfekte Deduplizierung: Zwingt identische Direktchats zwischen denselben Personen auf exakt einen Eintrag
     let uniqueDirectMap = new Map();
     for (const chat of rawChats) {
         const isForum = (chat.user1_id === chat.user2_id) || (chat.id === 'gsra-official-forum');
@@ -534,7 +533,7 @@ async function loadUserChats() {
         });
     }
 
-    // Ungelesen-Status ermitteln
+    // Ungelesen-Status ermitteln (inklusive des offiziellen Forums)
     for (const chat of allChatsCache) {
         if (chat.id === activeChatId) {
             chat.unread = false;
@@ -542,7 +541,13 @@ async function loadUserChats() {
         }
         const lastRead = getLastReadTime(chat.id);
         if (lastRead === 0) {
-            chat.unread = true; // Neue Chats / Forum beim Account-Wechsel als ungelesen markieren
+            // Wenn es das offizielle Forum ist und der Nutzer sich frisch einloggt, nur dann ungelesen wenn es ganz neu ist, 
+            // aber um das ständige Aufspringen zu verhindern, werten wir es nur als ungelesen, wenn wirklich neue Nachrichten da sind.
+            if (chat.id === 'gsra-official-forum') {
+                chat.unread = false; // Forum startet standardmäßig als gelesen, bis eine echte neue Nachricht kommt
+            } else {
+                chat.unread = true;
+            }
         } else {
             const chatTime = chat.created_at ? new Date(chat.created_at).getTime() : 0;
             chat.unread = chatTime > lastRead;

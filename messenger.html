@@ -134,10 +134,10 @@
                             <i class="fa-regular fa-face-smile"></i>
                         </button>
 
-                        <label for="imageUploadInput" style="cursor: pointer; color: var(--text-muted); display: flex; align-items: center; font-size: 18px; padding: 0 4px;" title="Fotos anhängen (mehrere möglich)">
+                        <label style="cursor: pointer; color: var(--text-muted); display: flex; align-items: center; font-size: 18px; padding: 0 4px;" title="Fotos anhängen (mehrere möglich)">
                             <i class="fa-solid fa-paperclip"></i>
+                            <input type="file" id="imageUploadInput" accept="image/*" multiple style="display: none;">
                         </label>
-                        <input type="file" id="imageUploadInput" accept="image/*" multiple style="display: none;">
                         
                         <input type="text" id="messageInput" placeholder="Gib eine Nachricht ein..." autocomplete="off">
                         <button type="submit" id="sendBtn" class="login-btn" style="cursor: pointer;">
@@ -149,16 +149,16 @@
         </div>
     </main>
 
-    <!-- NEUES FORUM / GRUPPE ERSTELLEN MODAL -->
+    <!-- NEUES FORUM / GRUPPE ERSTELLEN MODAL (Mit behobenem Label-Fehler) -->
     <div id="newForumModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.85); z-index: 5000; justify-content: center; align-items: center; padding: 20px;">
         <div style="background: var(--bg-card); border: 1px solid var(--border-subtle); border-top: 4px solid var(--gsra-blue); border-radius: 10px; width: 100%; max-width: 450px; padding: 25px; position: relative;">
             <button id="closeForumModal" type="button" style="position: absolute; top: 15px; right: 20px; background: none; border: none; color: var(--text-muted); font-size: 22px; cursor: pointer;"><i class="fa-solid fa-xmark"></i></button>
             <h3 style="color: #fff; margin-bottom: 15px; font-size: 20px;">Neues Forum / Gruppe erstellen</h3>
             <form id="newForumForm" style="display: flex; flex-direction: column; gap: 15px;">
-                <div>
-                    <label style="display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 5px;">Name der Gruppe / des Forums</label>
-                    <input type="text" id="forumNameInput" placeholder="z.B. GT3 Setup Talk" required style="width: 100%; padding: 10px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 6px; outline: none;">
-                </div>
+                <label style="display: block; font-size: 12px; color: var(--text-muted);">
+                    Name der Gruppe / des Forums
+                    <input type="text" id="forumNameInput" placeholder="z.B. GT3 Setup Talk" required style="width: 100%; margin-top: 5px; padding: 10px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 6px; outline: none;">
+                </label>
                 <button type="submit" class="login-btn" style="width: 100%; margin-top: 10px;">Gruppe erstellen</button>
             </form>
         </div>
