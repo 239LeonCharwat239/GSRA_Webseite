@@ -57,10 +57,10 @@
                 <!-- SUCHLEISTE -->
                 <div class="wa-search-bar">
                     <i class="fa-solid fa-magnifying-glass" style="color: var(--text-muted); font-size: 13px;"></i>
-                    <input type="text" id="chatSearchInput" placeholder="Suche oder neuen Chat beginnen" autocomplete="off">
+                    <input type="text" id="chatSearchInput" placeholder="Suche Chats oder Foren..." autocomplete="off">
                 </div>
 
-                <!-- FILTER-PILLS (Alle, Ungelesen, Favoriten, Foren) -->
+                <!-- FILTER-PILLS -->
                 <div class="wa-filter-pills">
                     <button class="wa-pill active" data-filter="all">Alle</button>
                     <button class="wa-pill" data-filter="unread">Ungelesen</button>
@@ -76,7 +76,7 @@
 
             <!-- RECHTES HAUPT-CHATFENSTER / STARTBILDSCHIRM -->
             <div class="wa-main-pane">
-                <!-- LEERER STARTBILDSCHIRM MIT SCHNELLAKTIONEN -->
+                <!-- LEERER STARTBILDSCHIRM -->
                 <div id="waWelcomeScreen" class="wa-welcome-screen">
                     <div class="wa-welcome-icon"><i class="fa-solid fa-headset"></i></div>
                     <h2>GSRA Web Messenger</h2>
@@ -104,8 +104,9 @@
                     <div class="chat-header" id="chatHeader" style="display: flex; justify-content: space-between; align-items: center;">
                         <span id="chatTitleText">Wähle einen Chat aus</span>
                         <div id="chatActions" style="display: flex; gap: 12px; align-items: center;">
+                            <button id="addMemberBtn" title="Mitglied zum Forum hinzufügen" style="background:none; border:none; color:var(--gsra-yellow); cursor:pointer; font-size: 15px; display: none;"><i class="fa-solid fa-user-plus"></i></button>
                             <button id="editChatTitleBtn" title="Chat-Thema umbenennen" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size: 15px;"><i class="fa-solid fa-pen"></i></button>
-                            <button id="deleteChatBtn" title="Chat löschen" style="background:none; border:none; color:#ff4d4d; cursor:pointer; font-size: 15px;"><i class="fa-solid fa-trash"></i></button>
+                            <button id="deleteChatBtn" title="Chat / Forum löschen" style="background:none; border:none; color:#ff4d4d; cursor:pointer; font-size: 15px;"><i class="fa-solid fa-trash"></i></button>
                             <button id="blockUserBtn" title="Nutzer blockieren" style="background:none; border:none; color:#ff4d4d; cursor:pointer; font-size: 15px;"><i class="fa-solid fa-ban"></i></button>
                         </div>
                     </div>
