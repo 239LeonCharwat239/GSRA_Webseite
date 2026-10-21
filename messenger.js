@@ -105,7 +105,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Benutzerdefinierte Gruppe / Forum erstellen (jeder darf dort schreiben)
+    // Benutzerdefinierte Gruppe / Forum erstellen
     if (newForumForm) {
         newForumForm.addEventListener("submit", async (e) => {
             e.preventDefault();
@@ -117,7 +117,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 user2_id: currentUser.id,
                 title: forumName,
                 is_forum: true,
-                is_admin_only: false, // Normale Gruppen/Foren erlauben jedem das Schreiben
+                is_admin_only: false,
                 last_message: "Gruppe erstellt"
             }]);
 
@@ -175,6 +175,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         if (existingChat) {
             activeChatId = existingChat.id;
+            markChatAsRead(activeChatId);
             if (waWelcomeScreen) waWelcomeScreen.style.display = "none";
             if (waChatActivePane) waChatActivePane.style.display = "flex";
             openChat(existingChat.id, foundProfiles.username, existingChat.title);
@@ -195,6 +196,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (tileForum) {
         tileForum.addEventListener("click", () => {
             activeChatId = 'gsra-official-forum';
+            markChatAsRead(activeChatId);
             if (waWelcomeScreen) waWelcomeScreen.style.display = "none";
             if (waChatActivePane) waChatActivePane.style.display = "flex";
             renderChatsList();
@@ -202,7 +204,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Mitglied zum Forum/Gruppe hinzufügen + Systemnachricht
     if (addMemberBtn) {
         addMemberBtn.addEventListener("click", async () => {
             const memberName = prompt("Gib den Benutzernamen des hinzuzufügenden Mitglieds ein:");
@@ -297,13 +298,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 async function checkUserAdminStatus() {
     const supabase = window.supabaseClient || window.supabase;
     if (!supabase || !currentUser) return;
-    const { data } = await supabase
-        .from("profiles")
-        .select("role, is_admin")
-        .eq("id", currentUser.id)
-        .maybeSingle();
-
-    isAdminUser = data?.role === 'admin' || data?.is_admin === true;
+    try {
+        const { data } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", currentUser.id)
+            .maybeSingle();
+        isAdminUser = data?.role === 'admin';
+    } catch (e) {
+        isAdminUser = false;
+    }
 }
 
 async function loadFavorites() {
@@ -341,7 +345,7 @@ async function fetchUserName(userId) {
     
     const { data } = await supabase
         .from("profiles")
-        .select("username, full_name, role")
+        .select("username, full_name")
         .eq("id", userId)
         .maybeSingle();
 
@@ -383,6 +387,7 @@ async function checkUrlParameters() {
 
         if (existingChat) {
             activeChatId = existingChat.id;
+            markChatAsRead(activeChatId);
             if (waWelcomeScreen) waWelcomeScreen.style.display = "none";
             if (waChatActivePane) waChatActivePane.style.display = "flex";
             openChat(existingChat.id, sellerName, existingChat.title);
@@ -391,7 +396,7 @@ async function checkUrlParameters() {
     }
 }
 
-// Echtzeit-Listener für neue Nachrichten
+// Globaler Echtzeit-Listener für Nachrichten (auch seitenübergreifend für Navbar-Leuchten)
 function setupGlobalMessageListener() {
     const supabase = window.supabaseClient || window.supabase;
     if (!supabase || !currentUser) return;
@@ -429,23 +434,44 @@ function updateGlobalUnreadState() {
     }
 }
 
+// Hilfsfunktionen für Lesestatus via localStorage
+function getLastReadTime(chatId) {
+    if (!currentUser) return 0;
+    const val = localStorage.getItem(`gsra_last_read_${currentUser.id}_${chatId}`);
+    return val ? new Date(val).getTime() : 0;
+}
+
+function markChatAsRead(chatId) {
+    if (!currentUser || !chatId) return;
+    localStorage.setItem(`gsra_last_read_${currentUser.id}_${chatId}`, new Date().toISOString());
+    const chatObj = allChatsCache.find(c => c.id === chatId);
+    if (chatObj) {
+        chatObj.unread = false;
+    }
+    updateGlobalUnreadState();
+}
+
 async function loadUserChats() {
     const supabase = window.supabaseClient || window.supabase;
     if (!chatsList || !currentUser || !supabase) return;
 
-    const { data: chats, error } = await supabase
-        .from("chats")
-        .select("*")
-        .or(`user1_id.eq.${currentUser.id},user2_id.eq.${currentUser.id},is_forum.eq.true`)
-        .order("created_at", { ascending: false });
+    let chats = [];
+    try {
+        const { data, error } = await supabase
+            .from("chats")
+            .select("*")
+            .or(`user1_id.eq.${currentUser.id},user2_id.eq.${currentUser.id}`)
+            .order("created_at", { ascending: false });
 
-    if (error) {
-        chatsList.innerHTML = `<p style="padding: 15px; font-size: 13px; color: var(--text-muted);">Fehler beim Laden.</p>`;
-        return;
+        if (!error && data) {
+            chats = data;
+        }
+    } catch (err) {
+        console.error("Fehler beim Laden der Chats:", err);
     }
 
     allChatsCache = chats || [];
-    
+
     // Pflicht-GSRA-Forum ganz oben einfügen
     const forumExists = allChatsCache.some(c => c.id === 'gsra-official-forum' || c.title === "GSRA Official / Community Forum");
     if (!forumExists) {
@@ -457,6 +483,20 @@ async function loadUserChats() {
             is_admin_only: true,
             created_at: new Date().toISOString()
         });
+    }
+
+    // Ungelesen-Status für jeden Chat prüfen anhand des letzen Aktivitäts-Zeitpunkts und localStorage
+    for (const chat of allChatsCache) {
+        const lastRead = getLastReadTime(chat.id);
+        const chatTime = chat.created_at ? new Date(chat.created_at).getTime() : 0;
+        // Wenn noch nie gelesen oder neue Nachrichten vorhanden
+        if (lastRead === 0 && chat.id !== activeChatId) {
+            // Standardmäßig ungelistete alte Chats als gelesen werten, es sei denn es kam frisch was rein
+            // Für den Anfang setzen wir unread auf false bei Init, es sei denn ein Realtime-Event triggert es.
+            chat.unread = false;
+        } else {
+            chat.unread = chatTime > lastRead && chat.id !== activeChatId;
+        }
     }
 
     updateGlobalUnreadState();
@@ -525,10 +565,10 @@ async function renderChatsList() {
         const favBtn = item.querySelector(".wa-favorite-btn");
         favBtn.addEventListener("click", (e) => toggleFavorite(chat.id, e));
 
+        // Klick auf Chat -> Chat öffnen & als gelesen markieren (WhatsApp-Verhalten)
         item.addEventListener("click", () => {
             activeChatId = chat.id;
-            chat.unread = false; 
-            updateGlobalUnreadState();
+            markChatAsRead(chat.id);
             
             if (waWelcomeScreen) waWelcomeScreen.style.display = "none";
             if (waChatActivePane) waChatActivePane.style.display = "flex";
@@ -547,12 +587,16 @@ async function renderChatsList() {
 
 // Forum öffnen
 function openForumChat(forumChat = null) {
+    const chatId = forumChat?.id || 'gsra-official-forum';
+    activeChatId = chatId;
+    markChatAsRead(chatId);
+
     if (chatTitleText) chatTitleText.innerText = forumChat?.title || "GSRA Official / Community Forum";
     if (chatActions) chatActions.style.display = "flex";
     if (addMemberBtn) addMemberBtn.style.display = "block";
-    if (blockUserBtn) blockUserBtn.style.display = "none"; // Foren können nicht blockiert werden
+    if (blockUserBtn) blockUserBtn.style.display = "none";
 
-    const isOfficialAnnouncement = (forumChat?.id === 'gsra-official-forum' || forumChat?.title === "GSRA Official / Community Forum");
+    const isOfficialAnnouncement = (chatId === 'gsra-official-forum' || forumChat?.title === "GSRA Official / Community Forum");
 
     if (isOfficialAnnouncement && !isAdminUser) {
         if (messageInput) {
@@ -580,10 +624,14 @@ function openForumChat(forumChat = null) {
             `;
         }
     }
-    loadChatMessages(forumChat?.id || 'gsra-official-forum');
+    loadChatMessages(chatId);
+    renderChatsList();
 }
 
 async function openChat(chatId, recipientName, chatTitle = null) {
+    activeChatId = chatId;
+    markChatAsRead(chatId);
+
     const displayName = chatTitle ? `${chatTitle} (${recipientName})` : `Chat mit ${recipientName}`;
     if (chatTitleText) chatTitleText.innerText = displayName;
     
@@ -596,6 +644,7 @@ async function openChat(chatId, recipientName, chatTitle = null) {
     if (sendBtn) sendBtn.disabled = false;
 
     loadChatMessages(chatId);
+    renderChatsList();
 }
 
 async function loadChatMessages(chatId) {
@@ -619,6 +668,10 @@ async function loadChatMessages(chatId) {
         .channel(`chat_${chatId}`)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` }, (payload) => {
             appendSingleMessage(payload.new);
+            // Wenn der Chat gerade offen ist, direkt als gelesen markieren
+            if (activeChatId === chatId) {
+                markChatAsRead(chatId);
+            }
         })
         .subscribe();
 }
@@ -634,7 +687,6 @@ function renderMessages(messages) {
     messages.forEach(appendSingleMessage);
 }
 
-// WhatsApp Grid & Kacheldarstellung für Bilder
 async function appendSingleMessage(msg) {
     if (!chatMessages) return;
     const placeholder = chatMessages.querySelector(".chat-placeholder");
@@ -813,6 +865,7 @@ if (chatForm) {
                 }).eq("id", activeChatId);
             }
 
+            markChatAsRead(activeChatId);
             loadUserChats();
         } catch (err) {
             console.error("Fehler beim Senden:", err);
