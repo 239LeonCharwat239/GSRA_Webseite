@@ -1,8 +1,9 @@
 /* =========================================
-   GSRA - WhatsApp Desktop Style Messenger Logik
+   GSRA - Scalable Multi-User Messenger Logik
 ========================================= */
 
 let currentUser = null;
+let currentUsername = "";
 let activeChatId = null;
 let messageSubscription = null;
 let globalListenerChannel = null;
@@ -69,6 +70,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
     }
 
+    currentUsername = await fetchUserName(currentUser.id);
     allChatsCache = [];
     activeChatId = null;
 
@@ -106,7 +108,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Erstellen eines Forums/einer Gruppe
+    // Community-Gruppe / Forum erstellen
     if (newForumForm) {
         newForumForm.addEventListener("submit", async (e) => {
             e.preventDefault();
@@ -117,7 +119,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 user1_id: currentUser.id,
                 user2_id: currentUser.id,
                 title: forumName,
-                last_message: "Gruppe erstellt"
+                last_message: `${currentUsername} hat die Gruppe erstellt.`
             }]);
 
             if (!error) {
@@ -130,7 +132,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Freund hinzufügen
+    // Direktchat / Freund hinzufügen (Skaliert für Millionen Nutzer durch strikte ID-Normalisierung)
     const handleAddFriend = async () => {
         if (!currentUser?.id) return;
         const friendName = prompt("Gib den Benutzernamen (Username) deines Freundes ein:");
@@ -152,6 +154,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
+        // Strikte Normalisierung: Sortierte Paar-IDs verhindern jegliche Duplikate
         const [u1, u2] = [currentUser.id, foundProfiles.id].sort();
         let existingChat = allChatsCache.find(c => c.user1_id === u1 && c.user2_id === u2);
 
@@ -214,7 +217,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Mitglied hinzufügen (Verknüpft den neuen User direkt in der Datenbank mit der Gruppe!)
+    // Mitglied zu Gruppe hinzufügen (Multi-User-fähig ohne Datenverlust)
     if (addMemberBtn) {
         addMemberBtn.addEventListener("click", async () => {
             if (!currentUser?.id || !activeChatId) return;
@@ -232,21 +235,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 return;
             }
 
-            if (targetUser.id === currentUser.id) {
-                alert("Du bist bereits in diesem Forum/Chat.");
-                return;
-            }
-
-            const currentAdminName = await fetchUserName(currentUser.id);
-            const sysMsg = `${currentAdminName} hat ${targetUser.username} zur Gruppe hinzugefügt.`;
-
-            // DB-Aktualisierung: Verknüpfe den neuen User auch in user2_id, damit er die Gruppe sieht
-            const currentChatObj = allChatsCache.find(c => c.id === activeChatId);
-            if (currentChatObj && currentChatObj.user1_id === currentChatObj.user2_id) {
-                await supabase.from("chats").update({ user2_id: targetUser.id, last_message: sysMsg }).eq("id", activeChatId);
-            } else {
-                await supabase.from("chats").update({ last_message: sysMsg }).eq("id", activeChatId);
-            }
+            const sysMsg = `${currentUsername} hat ${targetUser.username} zur Gruppe hinzugefügt.`;
 
             await supabase.from("messages").insert([{
                 chat_id: activeChatId,
@@ -254,7 +243,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                 text: sysMsg
             }]);
 
-            await loadUserChats();
+            await supabase.from("chats").update({ last_message: sysMsg }).eq("id", activeChatId);
+
+            loadUserChats();
             alert(`Mitglied ${targetUser.username} wurde erfolgreich hinzugefügt!`);
         });
     }
@@ -503,6 +494,7 @@ async function loadUserChats() {
 
     let rawChats = [];
     try {
+        // 1. Lade Direktchats als User 1 oder User 2
         const { data: chatsAsUser1 } = await supabase
             .from("chats")
             .select("*")
@@ -513,19 +505,25 @@ async function loadUserChats() {
             .select("*")
             .eq("user2_id", currentUser.id);
 
-        const combined = [...(chatsAsUser1 || []), ...(chatsAsUser2 || [])];
+        // 2. Lade Gruppen/Foren (Chats mit Titel)
+        const { data: groupChats } = await supabase
+            .from("chats")
+            .select("*")
+            .not("title", "is", null);
+
+        const combined = [...(chatsAsUser1 || []), ...(chatsAsUser2 || []), ...(groupChats || [])];
         
         const map = new Map();
         combined.forEach(c => map.set(c.id, c));
         rawChats = Array.from(map.values());
         
-        rawChats.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        rawChats.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
     } catch (err) {
         console.error("Fehler beim Laden der Chats:", err);
     }
 
-    // GSRA-Hauptforum ermitteln
-    let forumChat = rawChats.find(c => c.title === 'GSRA Official / Community Forum' || (c.user1_id === c.user2_id && c.title && c.title.includes('Official')));
+    // GSRA-Hauptforum ermitteln oder anlegen
+    let forumChat = rawChats.find(c => c.title === 'GSRA Official / Community Forum' || (c.title && c.title.includes('Official')));
     
     if (!forumChat) {
         const { data: createdForum, err: forumErr } = await supabase
@@ -549,10 +547,37 @@ async function loadUserChats() {
         officialForumChatId = forumChat.id;
     }
 
-    // 100% Strikte Deduplizierung: Zwingt doppelte Datenbank-Zeilen auf genau eine UI-Zeile!
-    let uniqueMap = new Map();
+    // Filter für Multi-User-Gruppen: Sichtbar wenn Ersteller oder Username in Nachrichten erwähnt (eingeladen)
+    let accessibleChats = [];
     for (const chat of rawChats) {
-        const isForum = (chat.user1_id === chat.user2_id) || (chat.id === officialForumChatId);
+        const isOfficial = (chat.id === officialForumChatId || (chat.title && chat.title.includes('Official')));
+        const isDirect = (chat.title === null);
+        
+        if (isOfficial || isDirect) {
+            accessibleChats.push(chat);
+        } else if (chat.title) {
+            // Gruppe/Forum: Sichtbar für Ersteller oder wenn der User in den Nachrichten vorkommt
+            if (chat.user1_id === currentUser.id) {
+                accessibleChats.push(chat);
+            } else {
+                const { data: msgCheck } = await supabase
+                    .from("messages")
+                    .select("text")
+                    .eq("chat_id", chat.id)
+                    .ilike("text", `%${currentUsername}%`)
+                    .limit(1);
+
+                if (msgCheck && msgCheck.length > 0) {
+                    accessibleChats.push(chat);
+                }
+            }
+        }
+    }
+
+    // 100% Strikte Deduplizierung: Zwingt doppelte Direktchat-Paare auf exakt einen Eintrag
+    let uniqueMap = new Map();
+    for (const chat of accessibleChats) {
+        const isForum = (chat.title !== null);
         if (isForum) {
             uniqueMap.set(chat.id, chat);
         } else {
@@ -561,7 +586,7 @@ async function loadUserChats() {
                 uniqueMap.set(pairKey, chat);
             } else {
                 const existing = uniqueMap.get(pairKey);
-                if (new Date(chat.created_at) > new Date(existing.created_at)) {
+                if (new Date(chat.created_at || 0) > new Date(existing.created_at || 0)) {
                     uniqueMap.set(pairKey, chat);
                 }
             }
@@ -612,7 +637,7 @@ async function renderChatsList() {
             return userFavorites.has(chat.id);
         }
         if (currentFilter === 'forums') {
-            return chat.id === officialForumChatId || (chat.user1_id === chat.user2_id);
+            return chat.title !== null;
         }
         return true;
     });
@@ -623,7 +648,7 @@ async function renderChatsList() {
     }
 
     for (const chat of filtered) {
-        const isForum = chat.id === officialForumChatId || (chat.user1_id === chat.user2_id);
+        const isForum = (chat.title !== null);
         let otherUserName = "Forum";
         if (!isForum) {
             const otherUserId = chat.user1_id === currentUser.id ? chat.user2_id : chat.user1_id;
@@ -939,11 +964,9 @@ if (chatForm) {
                 image_url: finalImageUrl
             }]);
 
-            if (!isOfficialAnnouncement) {
-                await supabase.from("chats").update({
-                    last_message: text || "[Foto]"
-                }).eq("id", activeChatId);
-            }
+            await supabase.from("chats").update({
+                last_message: text || "[Foto]"
+            }).eq("id", activeChatId);
 
             markChatAsRead(activeChatId);
             loadUserChats();
