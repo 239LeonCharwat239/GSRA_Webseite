@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Zentrale Auth- & Navigationssteuerung (Option B: Transparente Navigation)
+   GSRA - Zentrale Auth- & Navigationssteuerung
 ========================================= */
 
 const initAuthNav = async () => {
@@ -16,7 +16,6 @@ const initAuthNav = async () => {
     const userContent = document.getElementById("userContent");
 
     const updateUI = (session) => {
-        // 1. Navigation: Login/Logout-Button je nach Status umschalten
         if (session) {
             if (loginNavBtn) loginNavBtn.style.setProperty("display", "none", "important");
             if (logoutBtn) logoutBtn.style.setProperty("display", "inline-block", "important");
@@ -25,7 +24,6 @@ const initAuthNav = async () => {
             if (logoutBtn) logoutBtn.style.setProperty("display", "none", "important");
         }
 
-        // 2. Seiteninhalt: Gast-Hinweis vs. Mitglieder-Inhalt automatisch umschalten
         if (guestNotice && userContent) {
             if (session) {
                 guestNotice.style.display = "none";
@@ -37,25 +35,77 @@ const initAuthNav = async () => {
         }
     };
 
-    // 3. Globaler Unread-Glow für den Messenger auf allen Unterseiten prüfen
-    const checkGlobalUnreadNav = () => {
-        const hasUnread = localStorage.getItem('gsra_has_unread') === 'true';
-        const messengerNavBtn = document.getElementById("messengerNavBtn") || document.querySelector('a[href="messenger.html"]');
-        if (messengerNavBtn) {
-            if (hasUnread) {
-                messengerNavBtn.classList.add("nav-unread-glow");
-            } else {
-                messengerNavBtn.classList.remove("nav-unread-glow");
+    // Live-Prüfung auf ungelesene Nachrichten direkt beim Seitenaufruf auf allen Unterseiten
+    const checkLiveUnreadMessages = async (userId) => {
+        if (!userId) return;
+        
+        try {
+            // Hole alle Chat-IDs, in denen der User vertreten ist
+            const { data: userChats } = await client
+                .from("chats")
+                .select("id")
+                .or(`user1_id.eq.${userId},user2_id.eq.${userId}`);
+
+            if (!userChats || userChats.length === 0) return;
+            const chatIds = userChats.map(c => c.id);
+
+            // Prüfe, ob neuere Nachrichten vorliegen als im localStorage gespeichert
+            let hasUnread = false;
+            for (const cId of chatIds) {
+                const lastRead = localStorage.getItem(`gsra_last_read_${userId}_${cId}`);
+                const lastReadTime = lastRead ? new Date(lastRead).toISOString() : new Date(0).toISOString();
+
+                const { data: unreadMsgs } = await client
+                    .from("messages")
+                    .select("id")
+                    .eq("chat_id", cId)
+                    .neq("sender_id", userId)
+                    .gt("created_at", lastReadTime)
+                    .limit(1);
+
+                if (unreadMsgs && unreadMsgs.length > 0) {
+                    hasUnread = true;
+                    break;
+                }
             }
+
+            localStorage.setItem('gsra_has_unread', hasUnread ? 'true' : 'false');
+            
+            const messengerNavBtn = document.getElementById("messengerNavBtn") || document.querySelector('a[href="messenger.html"]');
+            if (messengerNavBtn) {
+                if (hasUnread) {
+                    messengerNavBtn.classList.add("nav-unread-glow");
+                } else {
+                    messengerNavBtn.classList.remove("nav-unread-glow");
+                }
+            }
+        } catch (e) {
+            console.error("Fehler beim Prüfen ungelesener Nachrichten:", e);
         }
     };
-    checkGlobalUnreadNav();
 
     const { data: { session } } = await client.auth.getSession();
     updateUI(session);
 
+    if (session?.user?.id) {
+        checkLiveUnreadMessages(session.user.id);
+
+        // Echtzeit-Eingang neuer Nachrichten auf jeder Seite abhören
+        client
+            .channel('global_nav_unread_channel')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+                if (payload.new && payload.new.sender_id !== session.user.id) {
+                    checkLiveUnreadMessages(session.user.id);
+                }
+            })
+            .subscribe();
+    }
+
     client.auth.onAuthStateChange((_event, session) => {
         updateUI(session);
+        if (session?.user?.id) {
+            checkLiveUnreadMessages(session.user.id);
+        }
     });
 
     if (logoutBtn) {
