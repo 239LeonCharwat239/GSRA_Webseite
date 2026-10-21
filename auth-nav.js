@@ -37,6 +37,20 @@ const initAuthNav = async () => {
         }
     };
 
+    // 3. Globaler Unread-Glow für den Messenger auf allen Unterseiten prüfen
+    const checkGlobalUnreadNav = () => {
+        const hasUnread = localStorage.getItem('gsra_has_unread') === 'true';
+        const messengerNavBtn = document.getElementById("messengerNavBtn") || document.querySelector('a[href="messenger.html"]');
+        if (messengerNavBtn) {
+            if (hasUnread) {
+                messengerNavBtn.classList.add("nav-unread-glow");
+            } else {
+                messengerNavBtn.classList.remove("nav-unread-glow");
+            }
+        }
+    };
+    checkGlobalUnreadNav();
+
     const { data: { session } } = await client.auth.getSession();
     updateUI(session);
 
