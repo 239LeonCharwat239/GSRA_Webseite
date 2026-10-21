@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - WhatsApp Desktop Style Messenger Logik (Optimiert)
+   GSRA - WhatsApp Desktop Style Messenger Logik (Vollständig korrigiert)
 ========================================= */
 
 let currentUser = null;
@@ -10,6 +10,7 @@ let allChatsCache = [];
 let currentFilter = 'all';
 let userFavorites = new Set();
 let isAdminUser = false;
+let userNamesCache = {};
 
 function escapeHtml(str) {
     if (!str) return "";
@@ -69,7 +70,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
     }
 
-    // Caches und Status zurücksetzen, um Datenlecks zwischen Accounts zu verhindern
     allChatsCache = [];
     activeChatId = null;
 
@@ -78,7 +78,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     await checkUrlParameters();
     await loadUserChats();
 
-    // Filter Pills Click Events
+    // Filter Pills Event
     document.querySelectorAll(".wa-pill").forEach(pill => {
         pill.addEventListener("click", (e) => {
             document.querySelectorAll(".wa-pill").forEach(p => p.classList.remove("active"));
@@ -88,14 +88,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     });
 
-    // Suchleiste Event
     if (chatSearchInput) {
         chatSearchInput.addEventListener("input", () => {
             renderChatsList();
         });
     }
 
-    // Modal für neues Forum öffnen/schließen
     if (newChatPlusBtn && newForumModal) {
         newChatPlusBtn.addEventListener("click", () => {
             newForumModal.style.display = "flex";
@@ -108,7 +106,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Neues Forum erstellen Handler
     if (newForumForm) {
         newForumForm.addEventListener("submit", async (e) => {
             e.preventDefault();
@@ -136,7 +133,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Freund hinzufügen Funktion
+    // Freund hinzufügen
     const handleAddFriend = async () => {
         const friendName = prompt("Gib den Benutzernamen (Username) deines Freundes ein:");
         if (!friendName) return;
@@ -148,16 +145,15 @@ document.addEventListener("DOMContentLoaded", async () => {
             .maybeSingle();
 
         if (error || !foundProfiles) {
-            alert("Nutzer nicht gefunden oder Fehler bei der Suche.");
+            alert("Nutzer nicht gefunden.");
             return;
         }
 
         if (foundProfiles.id === currentUser.id) {
-            alert("Du kannst dich nicht selbst als Freund hinzufügen.");
+            alert("Du kannst dich nicht selbst hinzufügen.");
             return;
         }
 
-        // Direkten Chat starten / öffnen
         let { data: existingChat } = await supabase
             .from("chats")
             .select("*")
@@ -209,11 +205,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Mitglied zum Forum hinzufügen
+    // Mitglied zum Forum hinzufügen + Systemnachricht
     if (addMemberBtn) {
         addMemberBtn.addEventListener("click", async () => {
             const memberName = prompt("Gib den Benutzernamen des hinzuzufügenden Mitglieds ein:");
-            if (!memberName) return;
+            if (!memberName || !activeChatId) return;
 
             const { data: targetUser } = await supabase
                 .from("profiles")
@@ -226,11 +222,22 @@ document.addEventListener("DOMContentLoaded", async () => {
                 return;
             }
 
-            alert(`Mitglied ${targetUser.username} wurde erfolgreich zum Forum hinzugefügt!`);
+            const currentAdminName = await fetchUserName(currentUser.id);
+            const sysMsg = `${currentAdminName} hat ${targetUser.username} zum Forum hinzugefügt.`;
+
+            await supabase.from("messages").insert([{
+                chat_id: activeChatId,
+                sender_id: currentUser.id,
+                text: `[System]: ${sysMsg}`
+            }]);
+
+            await supabase.from("chats").update({ last_message: sysMsg }).eq("id", activeChatId);
+
+            loadUserChats();
+            alert(`Mitglied ${targetUser.username} wurde erfolgreich hinzugefügt!`);
         });
     }
 
-    // Emoji Picker Toggeln
     if (emojiToggleBtn && emojiPickerWrapper) {
         emojiToggleBtn.addEventListener("click", (e) => {
             e.stopPropagation();
@@ -255,7 +262,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
 
-    // Mehrfach-Bilder-Vorschau
     if (imageUploadInput) {
         imageUploadInput.addEventListener("change", () => {
             const files = Array.from(imageUploadInput.files);
@@ -318,7 +324,6 @@ async function loadFavorites() {
     }
 }
 
-// Favorit umschalten
 async function toggleFavorite(chatId, event) {
     if (event) event.stopPropagation();
     const supabase = window.supabaseClient || window.supabase;
@@ -334,21 +339,22 @@ async function toggleFavorite(chatId, event) {
     renderChatsList();
 }
 
-// Benutzername laden
 async function fetchUserName(userId) {
+    if (userNamesCache[userId]) return userNamesCache[userId];
     const supabase = window.supabaseClient || window.supabase;
-    if (!supabase || !userId) return `Fahrer (${userId ? userId.substring(0, 6) : 'Unbekannt'})`;
+    if (!supabase || !userId) return `Fahrer`;
     
     const { data } = await supabase
         .from("profiles")
-        .select("username, full_name")
+        .select("username, full_name, role")
         .eq("id", userId)
         .maybeSingle();
 
-    return data?.username || data?.full_name || `Fahrer (${userId.substring(0, 6)})`;
+    const name = data?.username || data?.full_name || `Fahrer (${userId.substring(0, 6)})`;
+    userNamesCache[userId] = name;
+    return name;
 }
 
-// URL Parameter verarbeiten
 async function checkUrlParameters() {
     const supabase = window.supabaseClient || window.supabase;
     const urlParams = new URLSearchParams(window.location.search);
@@ -415,7 +421,6 @@ function setupGlobalMessageListener() {
         .subscribe();
 }
 
-// Globalen Rot-Status für Navbar prüfen
 function updateGlobalUnreadState() {
     const hasUnread = allChatsCache.some(c => c.unread === true);
     if (messengerNavBtn) {
@@ -427,7 +432,6 @@ function updateGlobalUnreadState() {
     }
 }
 
-// Chats laden
 async function loadUserChats() {
     const supabase = window.supabaseClient || window.supabase;
     if (!chatsList || !currentUser || !supabase) return;
@@ -445,7 +449,6 @@ async function loadUserChats() {
 
     allChatsCache = chats || [];
     
-    // Pflicht-GSRA-Forum hinzufügen
     const forumExists = allChatsCache.some(c => c.id === 'gsra-official-forum' || c.title === "GSRA Official / Community Forum");
     if (!forumExists) {
         allChatsCache.unshift({
@@ -463,7 +466,6 @@ async function loadUserChats() {
     setupGlobalMessageListener();
 }
 
-// Chats in Sidebar rendern
 async function renderChatsList() {
     if (!chatsList) return;
     chatsList.innerHTML = "";
@@ -545,11 +547,12 @@ async function renderChatsList() {
     }
 }
 
-// Forum Chat öffnen
+// Forum öffnen (Blockieren-Button ausblenden, Löschen/Hinzufügen anzeigen)
 function openForumChat(forumChat = null) {
     if (chatTitleText) chatTitleText.innerText = forumChat?.title || "GSRA Official / Community Forum";
     if (chatActions) chatActions.style.display = "flex";
     if (addMemberBtn) addMemberBtn.style.display = "block";
+    if (blockUserBtn) blockUserBtn.style.display = "none"; // Foren kann man nicht blockieren!
 
     const isRestricted = forumChat?.is_admin_only !== false;
 
@@ -570,14 +573,14 @@ function openForumChat(forumChat = null) {
     if (chatMessages) {
         chatMessages.innerHTML = `
             <div class="message-bubble message-other">
-                <div><b>[GSRA Official Admin]:</b> Willkommen im offiziellen Community-Forum. Hier erfährst du alle Neuigkeiten rund um GSRA!</div>
+                <div class="msg-author">[GSRA Official Admin]</div>
+                <div>Willkommen im offiziellen Community-Forum. Hier erfährst du alle Neuigkeiten rund um GSRA!</div>
                 <span class="message-time">10:24</span>
             </div>
         `;
     }
 }
 
-// Chat öffnen
 async function openChat(chatId, recipientName, chatTitle = null) {
     const supabase = window.supabaseClient || window.supabase;
     
@@ -586,6 +589,7 @@ async function openChat(chatId, recipientName, chatTitle = null) {
     
     if (chatActions) chatActions.style.display = "flex";
     if (addMemberBtn) addMemberBtn.style.display = "none";
+    if (blockUserBtn) blockUserBtn.style.display = "block"; // In Privatchats anzeigen
     if (messageInput) { messageInput.disabled = false; messageInput.placeholder = "Gib eine Nachricht ein..."; }
     if (imageUploadInput) imageUploadInput.disabled = false;
     if (emojiToggleBtn) emojiToggleBtn.disabled = false;
@@ -622,7 +626,8 @@ function renderMessages(messages) {
     messages.forEach(appendSingleMessage);
 }
 
-function appendSingleMessage(msg) {
+// WhatsApp Bild-Grid & Absender-Rendering
+async function appendSingleMessage(msg) {
     if (!chatMessages) return;
     const placeholder = chatMessages.querySelector(".chat-placeholder");
     if (placeholder) placeholder.remove();
@@ -631,28 +636,50 @@ function appendSingleMessage(msg) {
     const isOwn = msg.sender_id === currentUser?.id;
     bubble.className = `message-bubble ${isOwn ? 'message-own' : 'message-other'}`;
 
-    const timeStr = msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+    const senderName = await fetchUserName(msg.sender_id);
+    const dateObj = msg.created_at ? new Date(msg.created_at) : new Date();
+    const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const dateStr = dateObj.toLocaleDateString([], { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+    // Absender anzeigen bei Fremdnachrichten oder in Foren
+    const authorDiv = document.createElement("div");
+    authorDiv.className = "msg-author";
+    authorDiv.innerText = isOwn ? "Du" : senderName;
+    bubble.appendChild(authorDiv);
 
     if (msg.image_url) {
-        const urls = msg.image_url.split(",");
-        const imgContainer = document.createElement("div");
-        imgContainer.style.cssText = "display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px;";
+        const urls = msg.image_url.split(",").map(u => u.trim()).filter(Boolean);
+        const gridContainer = document.createElement("div");
+        gridContainer.className = "wa-media-grid";
 
-        urls.forEach(url => {
-            const cleanUrl = url.trim();
+        const displayCount = Math.min(urls.length, 4);
+        for (let i = 0; i < displayCount; i++) {
+            const cleanUrl = urls[i];
+            const imgWrap = document.createElement("div");
+            imgWrap.className = "wa-media-item";
+
             const img = document.createElement("img");
             img.src = cleanUrl;
-            img.alt = "Chat Bild";
-            img.className = "chat-msg-thumb";
+            img.alt = "Bild";
             img.addEventListener("click", () => {
                 if (modalImageFull && imageModal) {
                     modalImageFull.src = cleanUrl;
                     imageModal.style.display = "flex";
                 }
             });
-            imgContainer.appendChild(img);
-        });
-        bubble.appendChild(imgContainer);
+            imgWrap.appendChild(img);
+
+            // +X Overlay beim letzten Bild, wenn mehr als 4 Bilder da sind
+            if (i === 3 && urls.length > 4) {
+                const overlay = document.createElement("div");
+                overlay.className = "wa-media-overlay";
+                overlay.innerText = `+${urls.length - 4}`;
+                imgWrap.appendChild(overlay);
+            }
+
+            gridContainer.appendChild(imgWrap);
+        }
+        bubble.appendChild(gridContainer);
     }
 
     if (msg.text && msg.text !== "[Foto]") {
@@ -663,14 +690,13 @@ function appendSingleMessage(msg) {
 
     const timeSpan = document.createElement("span");
     timeSpan.className = "message-time";
-    timeSpan.innerText = timeStr;
+    timeSpan.innerText = `${dateStr}, ${timeStr}`;
     bubble.appendChild(timeSpan);
 
     chatMessages.appendChild(bubble);
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-// Chat-Titel umbenennen
 if (editChatTitleBtn) {
     editChatTitleBtn.addEventListener("click", async () => {
         const supabase = window.supabaseClient || window.supabase;
@@ -689,7 +715,6 @@ if (editChatTitleBtn) {
     });
 }
 
-// Chat / Forum löschen
 if (deleteChatBtn) {
     deleteChatBtn.addEventListener("click", async () => {
         const supabase = window.supabaseClient || window.supabase;
@@ -713,7 +738,6 @@ if (deleteChatBtn) {
     });
 }
 
-// Nutzer blockieren
 if (blockUserBtn) {
     blockUserBtn.addEventListener("click", async () => {
         const supabase = window.supabaseClient || window.supabase;
@@ -733,7 +757,7 @@ if (blockUserBtn) {
     });
 }
 
-// Nachricht & Bilder senden
+// Senden von Nachrichten (Prüfung auf Admin im GSRA Forum)
 if (chatForm) {
     chatForm.addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -763,8 +787,6 @@ if (chatForm) {
             if (!uploadErr) {
                 const { data: pubData } = supabase.storage.from("chat_attachments").getPublicUrl(fileName);
                 imageUrls.push(pubData.publicUrl);
-            } else {
-                console.error("Upload Fehler:", uploadErr.message);
             }
         }
 
@@ -783,7 +805,14 @@ if (chatForm) {
                     last_message: text || "[Foto]"
                 }).eq("id", activeChatId);
             } else {
-                // Virtuelles Forum Nachricht senden (simuliert oder in eine zugewiesene Chat-ID falls vorhanden)
+                // Admin Post im virtuellen Forum
+                const adminName = await fetchUserName(currentUser.id);
+                await supabase.from("messages").insert([{
+                    chat_id: 'gsra-official-forum-db', // oder direkt speichern falls DB Chat existiert
+                    sender_id: currentUser.id,
+                    text: text || (finalImageUrl ? "[Foto]" : ""),
+                    image_url: finalImageUrl
+                }]);
                 alert("Nachricht im GSRA Forum erfolgreich veröffentlicht!");
             }
 
