@@ -106,7 +106,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Benutzerdefiniertes Forum erstellen
+    // Erstellen eines Forums/einer Gruppe
     if (newForumForm) {
         newForumForm.addEventListener("submit", async (e) => {
             e.preventDefault();
@@ -130,7 +130,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Freund hinzufügen (100% duplikatsfrei mit sortierten Paar-IDs)
+    // Freund hinzufügen
     const handleAddFriend = async () => {
         if (!currentUser?.id) return;
         const friendName = prompt("Gib den Benutzernamen (Username) deines Freundes ein:");
@@ -214,6 +214,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    // Mitglied hinzufügen (Verknüpft den neuen User direkt in der Datenbank mit der Gruppe!)
     if (addMemberBtn) {
         addMemberBtn.addEventListener("click", async () => {
             if (!currentUser?.id || !activeChatId) return;
@@ -232,23 +233,20 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
 
             if (targetUser.id === currentUser.id) {
-                alert("Du kannst dich nicht selbst zu einer Gruppe hinzufügen.");
-                return;
-            }
-
-            const { data: existingMsgs } = await supabase
-                .from("messages")
-                .select("text")
-                .eq("chat_id", activeChatId);
-
-            const alreadyAdded = (existingMsgs || []).some(m => m.text && m.text.includes(targetUser.username));
-            if (alreadyAdded) {
-                alert(`${targetUser.username} ist bereits in dieser Gruppe vorhanden!`);
+                alert("Du bist bereits in diesem Forum/Chat.");
                 return;
             }
 
             const currentAdminName = await fetchUserName(currentUser.id);
             const sysMsg = `${currentAdminName} hat ${targetUser.username} zur Gruppe hinzugefügt.`;
+
+            // DB-Aktualisierung: Verknüpfe den neuen User auch in user2_id, damit er die Gruppe sieht
+            const currentChatObj = allChatsCache.find(c => c.id === activeChatId);
+            if (currentChatObj && currentChatObj.user1_id === currentChatObj.user2_id) {
+                await supabase.from("chats").update({ user2_id: targetUser.id, last_message: sysMsg }).eq("id", activeChatId);
+            } else {
+                await supabase.from("chats").update({ last_message: sysMsg }).eq("id", activeChatId);
+            }
 
             await supabase.from("messages").insert([{
                 chat_id: activeChatId,
@@ -256,9 +254,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 text: sysMsg
             }]);
 
-            await supabase.from("chats").update({ last_message: sysMsg }).eq("id", activeChatId);
-
-            loadUserChats();
+            await loadUserChats();
             alert(`Mitglied ${targetUser.username} wurde erfolgreich hinzugefügt!`);
         });
     }
@@ -442,7 +438,7 @@ async function checkUrlParameters() {
     }
 }
 
-// Globaler Echtzeit-Listener mit localStorage Glow-Synchronisation
+// Echtzeit-Listener
 function setupGlobalMessageListener() {
     const supabase = window.supabaseClient || window.supabase;
     if (!supabase || !currentUser?.id) return;
@@ -528,7 +524,7 @@ async function loadUserChats() {
         console.error("Fehler beim Laden der Chats:", err);
     }
 
-    // Garantiert eine echte UUID für das offizielle Forum in der DB (verhindert den 400er Fehler)
+    // GSRA-Hauptforum ermitteln
     let forumChat = rawChats.find(c => c.title === 'GSRA Official / Community Forum' || (c.user1_id === c.user2_id && c.title && c.title.includes('Official')));
     
     if (!forumChat) {
@@ -553,7 +549,7 @@ async function loadUserChats() {
         officialForumChatId = forumChat.id;
     }
 
-    // Strikte Deduplizierung nach sortierten Paar-IDs für Direktchats
+    // 100% Strikte Deduplizierung: Zwingt doppelte Datenbank-Zeilen auf genau eine UI-Zeile!
     let uniqueMap = new Map();
     for (const chat of rawChats) {
         const isForum = (chat.user1_id === chat.user2_id) || (chat.id === officialForumChatId);
@@ -574,7 +570,7 @@ async function loadUserChats() {
 
     allChatsCache = Array.from(uniqueMap.values());
 
-    // Ungelesen-Status ermitteln (Forum startet als gelesen)
+    // Ungelesen-Status ermitteln
     for (const chat of allChatsCache) {
         if (chat.id === activeChatId) {
             chat.unread = false;
