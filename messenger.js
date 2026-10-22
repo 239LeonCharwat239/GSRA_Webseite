@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Messenger Logik (Fix für Gruppen-Sync & Ungelesen-Status)
+   GSRA - Messenger Logik (Perfekter Fix für Sidebar-Hervorhebung & Gruppen)
 ========================================= */
 
 let currentUser = null;
@@ -215,7 +215,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Mitglied zu Gruppe hinzufügen (Verknüpft user2_id in der DB, damit der Partner die Gruppe sieht!)
+    // Mitglied zu Gruppe hinzufügen
     if (addMemberBtn) {
         addMemberBtn.addEventListener("click", async () => {
             if (!currentUser?.id || !activeChatId) return;
@@ -235,7 +235,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             const sysMsg = `${currentUsername} hat ${targetUser.username} zur Gruppe hinzugefügt.`;
 
-            // Aktualisiere user2_id der Gruppe, damit Supabase RLS die Gruppe für den eingeladenen Nutzer freigibt
             const currentChatObj = allChatsCache.find(c => c.id === activeChatId);
             if (currentChatObj && currentChatObj.user1_id === currentChatObj.user2_id) {
                 await supabase.from("chats").update({
@@ -248,7 +247,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }).eq("id", activeChatId);
             }
 
-            // Schreibe Systemnachricht mit Absender-ID des Erstellers
             await supabase.from("messages").insert([{
                 chat_id: activeChatId,
                 sender_id: currentUser.id,
@@ -455,13 +453,8 @@ function setupGlobalMessageListener() {
             if (newMsg.sender_id !== currentUser.id) {
                 const targetChat = allChatsCache.find(c => c.id === newMsg.chat_id);
                 if (targetChat) {
-                    if (targetChat.id !== activeChatId) {
+                    if (targetChat.id !== activeChatId || document.hidden) {
                         targetChat.unread = true;
-                    } else {
-                        // Wenn der Chat zwar geöffnet ist, schalten wir den Ungelesen-Status nur um, wenn das Tab unaktiv ist
-                        if (document.hidden) {
-                            targetChat.unread = true;
-                        }
                     }
                     updateGlobalUnreadState();
                     renderChatsList();
@@ -586,6 +579,7 @@ async function loadUserChats() {
         }
     }
 
+    // KORREKTUR: Prüfe anhand echter Nachrichten, ob seit der letzten Lesezeit neue Nachrichten von anderen eingetroffen sind
     for (const chat of allChatsCache) {
         if (chat.id === activeChatId) {
             chat.unread = false;
@@ -599,8 +593,16 @@ async function loadUserChats() {
                 chat.unread = true;
             }
         } else {
-            const chatTime = chat.created_at ? new Date(chat.created_at).getTime() : 0;
-            chat.unread = chatTime > lastRead;
+            const lastReadIso = new Date(lastRead).toISOString();
+            const { data: unreadMsgs } = await supabase
+                .from("messages")
+                .select("id")
+                .eq("chat_id", chat.id)
+                .neq("sender_id", currentUser.id)
+                .gt("created_at", lastReadIso)
+                .limit(1);
+
+            chat.unread = Boolean(unreadMsgs && unreadMsgs.length > 0);
         }
     }
 
@@ -795,7 +797,6 @@ async function appendSingleMessage(msg) {
 
     const bubble = document.createElement("div");
     
-    // EXAKTER CHECK: Nur eigene Nachrichten erhalten "Du"
     const isOwn = String(msg.sender_id) === String(currentUser?.id);
     bubble.className = `message-bubble ${isOwn ? 'message-own' : 'message-other'}`;
 
