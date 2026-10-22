@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Messenger Logik (Fix für chronologische Nachrichten & Chat-Sortierung)
+   GSRA - Messenger Logik (Fix für synchrone chronologische Nachrichtenreihenfolge)
 ========================================= */
 
 let currentUser = null;
@@ -459,7 +459,6 @@ function setupGlobalMessageListener() {
                         targetChat.unread = true;
                     }
                 }
-                // Bei neuer Nachricht die Liste sofort nach neuster Nachricht neu sortieren
                 allChatsCache.sort((a, b) => new Date(b.last_msg_time || b.created_at || 0) - new Date(a.last_msg_time || a.created_at || 0));
                 updateGlobalUnreadState();
                 renderChatsList();
@@ -574,7 +573,6 @@ async function loadUserChats() {
 
     allChatsCache = Array.from(uniqueMap.values());
 
-    // 1. Letzte Nachricht & Zeitstempel ermitteln
     for (const chat of allChatsCache) {
         if (!chat.title) {
             const otherUserId = chat.user1_id === currentUser.id ? chat.user2_id : chat.user1_id;
@@ -596,7 +594,6 @@ async function loadUserChats() {
             chat.last_msg_time = chat.created_at;
         }
 
-        // Ungelesen-Status ermitteln
         if (chat.id === activeChatId) {
             chat.unread = false;
         } else {
@@ -618,7 +615,6 @@ async function loadUserChats() {
         }
     }
 
-    // 2. STRIKTE SORTIERUNG: Neuste Aktivität (Neuste Nachricht) ganz nach oben
     allChatsCache.sort((a, b) => new Date(b.last_msg_time || b.created_at || 0) - new Date(a.last_msg_time || a.created_at || 0));
 
     updateGlobalUnreadState();
@@ -776,14 +772,14 @@ async function loadChatMessages(chatId) {
         messageSubscription = null;
     }
 
-    // Abfrage streng chronologisch nach Erstellungszeitpunkt der Nachricht!
     const { data: messages } = await supabase
         .from("messages")
         .select("*")
         .eq("chat_id", chatId)
         .order("created_at", { ascending: true });
 
-    renderMessages(messages || []);
+    // FIX: Await renderMessages ensures strict sequential chronological DOM insertion
+    await renderMessages(messages || []);
 
     messageSubscription = supabase
         .channel(`chat_${chatId}`)
@@ -796,14 +792,17 @@ async function loadChatMessages(chatId) {
         .subscribe();
 }
 
-function renderMessages(messages) {
+// FIX: async function with for...of loop preserves exact DB timestamp order
+async function renderMessages(messages) {
     if (!chatMessages) return;
     if (messages.length === 0) {
         chatMessages.innerHTML = `<p class="chat-placeholder" style="text-align: center; color: var(--text-muted); margin: auto;">Schreibe die erste Nachricht...</p>`;
         return;
     }
     chatMessages.innerHTML = "";
-    messages.forEach(appendSingleMessage);
+    for (const msg of messages) {
+        await appendSingleMessage(msg);
+    }
 }
 
 async function appendSingleMessage(msg) {
@@ -972,7 +971,6 @@ if (chatForm) {
         const finalImageUrl = imageUrls.length > 0 ? imageUrls.join(",") : null;
 
         try {
-            const nowIso = new Date().toISOString();
             await supabase.from("messages").insert([{
                 chat_id: activeChatId,
                 sender_id: currentUser.id,
