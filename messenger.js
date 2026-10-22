@@ -558,7 +558,14 @@ async function loadUserChats() {
                 const { data: msgCheck } = await supabase
                     .from("messages")
                     .select("text")
+                    .eq("chat_id", chat.id)
+                    .ilike("text", `%${currentUsername}%`)
+                    .limit(1);
+
                 if (msgCheck && msgCheck.length > 0) {
+                    accessibleChats.push(chat);
+                }
+            }
         }
     }
 
