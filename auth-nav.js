@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Zentrale Auth- & Navigationssteuerung
+   GSRA - Zentrale Auth- & Navigationssteuerung (Mit robustem Unread-Sync)
 ========================================= */
 
 const initAuthNav = async () => {
@@ -35,23 +35,28 @@ const initAuthNav = async () => {
         }
     };
 
-    // Live-Prüfung auf ungelesene Nachrichten direkt beim Seitenaufruf auf allen Unterseiten
     const checkLiveUnreadMessages = async (userId) => {
         if (!userId) return;
         
         try {
-            // Hole alle Chat-IDs, in denen der User vertreten ist
             const { data: userChats } = await client
                 .from("chats")
                 .select("id")
                 .or(`user1_id.eq.${userId},user2_id.eq.${userId}`);
 
-            if (!userChats || userChats.length === 0) return;
-            const chatIds = userChats.map(c => c.id);
+            const { data: groupChats } = await client
+                .from("chats")
+                .select("id")
+                .not("title", "is", null);
 
-            // Prüfe, ob neuere Nachrichten vorliegen als im localStorage gespeichert
+            const map = new Map();
+            [...(userChats || []), ...(groupChats || [])].forEach(c => map.set(c.id, c));
+            const allIds = Array.from(map.keys());
+
+            if (allIds.length === 0) return;
+
             let hasUnread = false;
-            for (const cId of chatIds) {
+            for (const cId of allIds) {
                 const lastRead = localStorage.getItem(`gsra_last_read_${userId}_${cId}`);
                 const lastReadTime = lastRead ? new Date(lastRead).toISOString() : new Date(0).toISOString();
 
@@ -90,7 +95,6 @@ const initAuthNav = async () => {
     if (session?.user?.id) {
         checkLiveUnreadMessages(session.user.id);
 
-        // Echtzeit-Eingang neuer Nachrichten auf jeder Seite abhören
         client
             .channel('global_nav_unread_channel')
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {

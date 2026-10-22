@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Messenger Logik (Radikaler Fix für Duplikate & Rendern)
+   GSRA - Messenger Logik (Ohne roten Punkt, saubere Gruppen & Sync)
 ========================================= */
 
 let currentUser = null;
@@ -500,6 +500,7 @@ async function loadUserChats() {
             .select("*")
             .eq("user2_id", currentUser.id);
 
+        // Alle Gruppen/Foren direkt laden, damit RLS eingeladene User nicht blockiert
         const { data: groupChats } = await supabase
             .from("chats")
             .select("*")
@@ -540,32 +541,18 @@ async function loadUserChats() {
         officialForumChatId = forumChat.id;
     }
 
+    // Filter für Direktchats (müssen beteiligt sein) und Gruppen (alle mit Titel sichtbar)
     let accessibleChats = [];
     for (const chat of rawChats) {
         const isOfficial = (chat.id === officialForumChatId || (chat.title && chat.title.includes('Official')));
         const isDirect = (chat.title === null);
+        const isGroup = (chat.title !== null);
         
-        if (isOfficial || isDirect) {
+        if (isOfficial || isDirect || isGroup) {
             accessibleChats.push(chat);
-        } else if (chat.title) {
-            if (chat.user1_id === currentUser.id) {
-                accessibleChats.push(chat);
-            } else {
-                const { data: msgCheck } = await supabase
-                    .from("messages")
-                    .select("text")
-                    .eq("chat_id", chat.id)
-                    .ilike("text", `%${currentUsername}%`)
-                    .limit(1);
-
-                if (msgCheck && msgCheck.length > 0) {
-                    accessibleChats.push(chat);
-                }
-            }
         }
     }
 
-    // 100% Strikte Eindeutigkeit nach Chat-ID (keine Duplikate mehr möglich)
     let uniqueMap = new Map();
     for (const chat of accessibleChats) {
         if (!uniqueMap.has(chat.id)) {
@@ -575,7 +562,6 @@ async function loadUserChats() {
 
     allChatsCache = Array.from(uniqueMap.values());
 
-    // Namen im Voraus laden, um parallele Render-Schleifen zu verhindern
     for (const chat of allChatsCache) {
         if (!chat.title) {
             const otherUserId = chat.user1_id === currentUser.id ? chat.user2_id : chat.user1_id;
@@ -610,7 +596,6 @@ async function renderChatsList() {
     if (!chatsList || isRendering) return;
     isRendering = true;
 
-    // Harter Reset der DOM-Liste
     chatsList.innerHTML = "";
 
     const searchTerm = chatSearchInput ? chatSearchInput.value.toLowerCase() : "";
@@ -658,6 +643,7 @@ async function renderChatsList() {
         const displayTitle = chat.title || `Chat mit ${otherUserName}`;
         const lastMsg = escapeHtml(chat.last_message || 'Keine Nachrichten');
 
+        // OHNE roten Punkt beim Stern – Design bleibt sauber und aufgeräumt!
         item.innerHTML = `
             <div class="wa-avatar"><i class="fa-solid ${isForum ? 'fa-bullhorn text-yellow' : 'fa-user'}"></i></div>
             <div class="wa-chat-info">
@@ -667,7 +653,6 @@ async function renderChatsList() {
                 </div>
                 <div class="wa-chat-msg">${lastMsg}</div>
             </div>
-            ${isUnread ? '<div class="wa-unread-dot"></div>' : ''}
         `;
 
         const favBtn = item.querySelector(".wa-favorite-btn");
