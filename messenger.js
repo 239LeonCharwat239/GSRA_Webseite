@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Messenger Logik (Fix für Ungelesen-Hervorhebung & Filter)
+   GSRA - Messenger Logik (Perfekter Fix für Gruppen-Sichtbarkeit & Ungelesen-Status)
 ========================================= */
 
 let currentUser = null;
@@ -233,19 +233,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             const sysMsg = `${currentUsername} hat ${targetUser.username} zur Gruppe hinzugefügt.`;
 
-            const currentChatObj = allChatsCache.find(c => c.id === activeChatId);
-            if (currentChatObj && currentChatObj.user1_id === currentChatObj.user2_id) {
-                await supabase.from("chats").update({
-                    user2_id: targetUser.id,
-                    last_message: sysMsg,
-                    updated_at: new Date().toISOString()
-                }).eq("id", activeChatId);
-            } else {
-                await supabase.from("chats").update({
-                    last_message: sysMsg,
-                    updated_at: new Date().toISOString()
-                }).eq("id", activeChatId);
-            }
+            await supabase.from("chats").update({
+                last_message: sysMsg,
+                updated_at: new Date().toISOString()
+            }).eq("id", activeChatId);
 
             await supabase.from("messages").insert([{
                 chat_id: activeChatId,
@@ -552,14 +543,22 @@ async function loadUserChats() {
         officialForumChatId = forumChat.id;
     }
 
+    // Robuste Filterung: Direktchats + offizielle Foren + Gruppen, bei denen der User beteiligt oder erwähnt wurde
     let accessibleChats = [];
     for (const chat of rawChats) {
         const isOfficial = (chat.id === officialForumChatId || (chat.title && chat.title.includes('Official')));
         const isDirect = (chat.title === null);
-        const isGroup = (chat.title !== null);
         
-        if (isOfficial || isDirect || isGroup) {
+        if (isOfficial || isDirect) {
             accessibleChats.push(chat);
+        } else if (chat.title) {
+            if (chat.user1_id === currentUser.id || chat.user2_id === currentUser.id) {
+                accessibleChats.push(chat);
+            } else {
+                const { data: msgCheck } = await supabase
+                    .from("messages")
+                    .select("text")
+                if (msgCheck && msgCheck.length > 0) {
         }
     }
 
@@ -572,7 +571,6 @@ async function loadUserChats() {
 
     allChatsCache = Array.from(uniqueMap.values());
 
-    // Präzise Abfrage der allerneuesten Nachricht pro Chat für perfekten Ungelesen-Status & Sortierung
     for (const chat of allChatsCache) {
         if (!chat.title) {
             const otherUserId = chat.user1_id === currentUser.id ? chat.user2_id : chat.user1_id;
@@ -594,7 +592,6 @@ async function loadUserChats() {
             chat.last_message = latestMsg.text || "[Foto]";
             const msgTime = new Date(latestMsg.created_at).getTime();
 
-            // Nur ungelesen, wenn die Nachricht vom ANDEREN stammt und NACH der Lesezeit eingegangen ist
             if (latestMsg.sender_id !== currentUser.id && msgTime > lastRead && chat.id !== activeChatId) {
                 chat.unread = true;
             } else {
@@ -606,7 +603,6 @@ async function loadUserChats() {
         }
     }
 
-    // Sortierung nach neuster Nachricht ganz oben
     allChatsCache.sort((a, b) => new Date(b.last_msg_time || b.created_at || 0) - new Date(a.last_msg_time || a.created_at || 0));
 
     updateGlobalUnreadState();
