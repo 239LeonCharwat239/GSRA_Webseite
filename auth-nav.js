@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Zentrale Auth- & Navigationssteuerung (Mit robustem Unread-Sync)
+   GSRA - Zentrale Auth- & Navigationssteuerung (Präzise Live-Abfrage)
 ========================================= */
 
 const initAuthNav = async () => {

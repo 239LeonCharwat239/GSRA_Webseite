@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Messenger Logik (Ohne roten Punkt, saubere Gruppen & Sync)
+   GSRA - Messenger Logik (Fix für Gruppen-Sync & Ungelesen-Status)
 ========================================= */
 
 let currentUser = null;
@@ -107,25 +107,26 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    // Forum/Gruppe erstellen
     if (newForumForm) {
         newForumForm.addEventListener("submit", async (e) => {
             e.preventDefault();
             const forumName = forumNameInput.value.trim();
             if (!forumName || !supabase || !currentUser?.id) return;
 
-            const { error } = await supabase.from("chats").insert([{
+            const { data: createdGroup, error } = await supabase.from("chats").insert([{
                 user1_id: currentUser.id,
                 user2_id: currentUser.id,
                 title: forumName,
                 last_message: `${currentUsername} hat die Gruppe erstellt.`
-            }]);
+            }]).select().single();
 
-            if (!error) {
+            if (!error && createdGroup) {
                 newForumModal.style.display = "none";
                 forumNameInput.value = "";
                 await loadUserChats();
             } else {
-                alert("Fehler beim Erstellen: " + error.message);
+                alert("Fehler beim Erstellen: " + (error?.message || "Unbekannter Fehler"));
             }
         });
     }
@@ -214,6 +215,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    // Mitglied zu Gruppe hinzufügen (Verknüpft user2_id in der DB, damit der Partner die Gruppe sieht!)
     if (addMemberBtn) {
         addMemberBtn.addEventListener("click", async () => {
             if (!currentUser?.id || !activeChatId) return;
@@ -233,15 +235,27 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             const sysMsg = `${currentUsername} hat ${targetUser.username} zur Gruppe hinzugefügt.`;
 
+            // Aktualisiere user2_id der Gruppe, damit Supabase RLS die Gruppe für den eingeladenen Nutzer freigibt
+            const currentChatObj = allChatsCache.find(c => c.id === activeChatId);
+            if (currentChatObj && currentChatObj.user1_id === currentChatObj.user2_id) {
+                await supabase.from("chats").update({
+                    user2_id: targetUser.id,
+                    last_message: sysMsg
+                }).eq("id", activeChatId);
+            } else {
+                await supabase.from("chats").update({
+                    last_message: sysMsg
+                }).eq("id", activeChatId);
+            }
+
+            // Schreibe Systemnachricht mit Absender-ID des Erstellers
             await supabase.from("messages").insert([{
                 chat_id: activeChatId,
                 sender_id: currentUser.id,
                 text: sysMsg
             }]);
 
-            await supabase.from("chats").update({ last_message: sysMsg }).eq("id", activeChatId);
-
-            loadUserChats();
+            await loadUserChats();
             alert(`Mitglied ${targetUser.username} wurde erfolgreich hinzugefügt!`);
         });
     }
@@ -443,9 +457,14 @@ function setupGlobalMessageListener() {
                 if (targetChat) {
                     if (targetChat.id !== activeChatId) {
                         targetChat.unread = true;
-                        updateGlobalUnreadState();
-                        renderChatsList();
+                    } else {
+                        // Wenn der Chat zwar geöffnet ist, schalten wir den Ungelesen-Status nur um, wenn das Tab unaktiv ist
+                        if (document.hidden) {
+                            targetChat.unread = true;
+                        }
                     }
+                    updateGlobalUnreadState();
+                    renderChatsList();
                 } else {
                     loadUserChats();
                 }
@@ -500,7 +519,6 @@ async function loadUserChats() {
             .select("*")
             .eq("user2_id", currentUser.id);
 
-        // Alle Gruppen/Foren direkt laden, damit RLS eingeladene User nicht blockiert
         const { data: groupChats } = await supabase
             .from("chats")
             .select("*")
@@ -541,7 +559,6 @@ async function loadUserChats() {
         officialForumChatId = forumChat.id;
     }
 
-    // Filter für Direktchats (müssen beteiligt sein) und Gruppen (alle mit Titel sichtbar)
     let accessibleChats = [];
     for (const chat of rawChats) {
         const isOfficial = (chat.id === officialForumChatId || (chat.title && chat.title.includes('Official')));
@@ -643,7 +660,6 @@ async function renderChatsList() {
         const displayTitle = chat.title || `Chat mit ${otherUserName}`;
         const lastMsg = escapeHtml(chat.last_message || 'Keine Nachrichten');
 
-        // OHNE roten Punkt beim Stern – Design bleibt sauber und aufgeräumt!
         item.innerHTML = `
             <div class="wa-avatar"><i class="fa-solid ${isForum ? 'fa-bullhorn text-yellow' : 'fa-user'}"></i></div>
             <div class="wa-chat-info">
@@ -755,7 +771,7 @@ async function loadChatMessages(chatId) {
         .channel(`chat_${chatId}`)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` }, (payload) => {
             appendSingleMessage(payload.new);
-            if (activeChatId === chatId) {
+            if (activeChatId === chatId && !document.hidden) {
                 markChatAsRead(chatId);
             }
         })
@@ -778,17 +794,19 @@ async function appendSingleMessage(msg) {
     if (placeholder) placeholder.remove();
 
     const bubble = document.createElement("div");
-    const isOwn = msg.sender_id === currentUser?.id;
+    
+    // EXAKTER CHECK: Nur eigene Nachrichten erhalten "Du"
+    const isOwn = String(msg.sender_id) === String(currentUser?.id);
     bubble.className = `message-bubble ${isOwn ? 'message-own' : 'message-other'}`;
 
-    const senderName = await fetchUserName(msg.sender_id);
+    const senderName = isOwn ? "Du" : await fetchUserName(msg.sender_id);
     const dateObj = msg.created_at ? new Date(msg.created_at) : new Date();
     const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const dateStr = dateObj.toLocaleDateString([], { day: '2-digit', month: '2-digit', year: 'numeric' });
 
     const authorDiv = document.createElement("div");
     authorDiv.className = "msg-author";
-    authorDiv.innerText = isOwn ? "Du" : senderName;
+    authorDiv.innerText = senderName;
     bubble.appendChild(authorDiv);
 
     if (msg.image_url) {
