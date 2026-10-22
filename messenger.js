@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Messenger Logik (Perfekter Fix für Sidebar-Hervorhebung & Gruppen)
+   GSRA - Messenger Logik (Fix für chronologische Nachrichten & Chat-Sortierung)
 ========================================= */
 
 let currentUser = null;
@@ -450,17 +450,21 @@ function setupGlobalMessageListener() {
         .channel('global_messages_channel')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
             const newMsg = payload.new;
-            if (newMsg.sender_id !== currentUser.id) {
-                const targetChat = allChatsCache.find(c => c.id === newMsg.chat_id);
-                if (targetChat) {
+            const targetChat = allChatsCache.find(c => c.id === newMsg.chat_id);
+            if (targetChat) {
+                targetChat.last_msg_time = newMsg.created_at || new Date().toISOString();
+                targetChat.last_message = newMsg.text || "[Foto]";
+                if (newMsg.sender_id !== currentUser.id) {
                     if (targetChat.id !== activeChatId || document.hidden) {
                         targetChat.unread = true;
                     }
-                    updateGlobalUnreadState();
-                    renderChatsList();
-                } else {
-                    loadUserChats();
                 }
+                // Bei neuer Nachricht die Liste sofort nach neuster Nachricht neu sortieren
+                allChatsCache.sort((a, b) => new Date(b.last_msg_time || b.created_at || 0) - new Date(a.last_msg_time || a.created_at || 0));
+                updateGlobalUnreadState();
+                renderChatsList();
+            } else {
+                loadUserChats();
             }
         })
         .subscribe();
@@ -522,8 +526,6 @@ async function loadUserChats() {
         const map = new Map();
         combined.forEach(c => map.set(c.id, c));
         rawChats = Array.from(map.values());
-        
-        rawChats.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
     } catch (err) {
         console.error("Fehler beim Laden der Chats:", err);
     }
@@ -572,39 +574,52 @@ async function loadUserChats() {
 
     allChatsCache = Array.from(uniqueMap.values());
 
+    // 1. Letzte Nachricht & Zeitstempel ermitteln
     for (const chat of allChatsCache) {
         if (!chat.title) {
             const otherUserId = chat.user1_id === currentUser.id ? chat.user2_id : chat.user1_id;
             await fetchUserName(otherUserId);
         }
-    }
 
-    // KORREKTUR: Prüfe anhand echter Nachrichten, ob seit der letzten Lesezeit neue Nachrichten von anderen eingetroffen sind
-    for (const chat of allChatsCache) {
+        const { data: latestMsg } = await supabase
+            .from("messages")
+            .select("created_at, sender_id, text")
+            .eq("chat_id", chat.id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        if (latestMsg) {
+            chat.last_msg_time = latestMsg.created_at;
+            chat.last_message = latestMsg.text || "[Foto]";
+        } else {
+            chat.last_msg_time = chat.created_at;
+        }
+
+        // Ungelesen-Status ermitteln
         if (chat.id === activeChatId) {
             chat.unread = false;
-            continue;
-        }
-        const lastRead = getLastReadTime(chat.id);
-        if (lastRead === 0) {
-            if (chat.id === officialForumChatId) {
-                chat.unread = false; 
-            } else {
-                chat.unread = true;
-            }
         } else {
-            const lastReadIso = new Date(lastRead).toISOString();
-            const { data: unreadMsgs } = await supabase
-                .from("messages")
-                .select("id")
-                .eq("chat_id", chat.id)
-                .neq("sender_id", currentUser.id)
-                .gt("created_at", lastReadIso)
-                .limit(1);
+            const lastRead = getLastReadTime(chat.id);
+            if (lastRead === 0) {
+                chat.unread = (chat.id !== officialForumChatId);
+            } else {
+                const lastReadIso = new Date(lastRead).toISOString();
+                const { data: unreadMsgs } = await supabase
+                    .from("messages")
+                    .select("id")
+                    .eq("chat_id", chat.id)
+                    .neq("sender_id", currentUser.id)
+                    .gt("created_at", lastReadIso)
+                    .limit(1);
 
-            chat.unread = Boolean(unreadMsgs && unreadMsgs.length > 0);
+                chat.unread = Boolean(unreadMsgs && unreadMsgs.length > 0);
+            }
         }
     }
+
+    // 2. STRIKTE SORTIERUNG: Neuste Aktivität (Neuste Nachricht) ganz nach oben
+    allChatsCache.sort((a, b) => new Date(b.last_msg_time || b.created_at || 0) - new Date(a.last_msg_time || a.created_at || 0));
 
     updateGlobalUnreadState();
     renderChatsList();
@@ -761,6 +776,7 @@ async function loadChatMessages(chatId) {
         messageSubscription = null;
     }
 
+    // Abfrage streng chronologisch nach Erstellungszeitpunkt der Nachricht!
     const { data: messages } = await supabase
         .from("messages")
         .select("*")
@@ -956,6 +972,7 @@ if (chatForm) {
         const finalImageUrl = imageUrls.length > 0 ? imageUrls.join(",") : null;
 
         try {
+            const nowIso = new Date().toISOString();
             await supabase.from("messages").insert([{
                 chat_id: activeChatId,
                 sender_id: currentUser.id,
