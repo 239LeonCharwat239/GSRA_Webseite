@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Messenger Logik (Finale Präzision: Globales Forum & Saubere Gruppenvalidierung)
+   GSRA - Messenger Logik (Finale Version: Globales Forum & Klare Chat/Forum-Trennung)
 ========================================= */
 
 let currentUser = null;
@@ -215,7 +215,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Mitglied zu Forum/Gruppe hinzufügen mit strikter Duplikat-Prüfung
+    // Mitglied zu Forum/Gruppe hinzufügen
     if (addMemberBtn) {
         addMemberBtn.addEventListener("click", async () => {
             if (!currentUser?.id || !activeChatId) return;
@@ -238,7 +238,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 return;
             }
 
-            // Prüfen, ob der Nutzer bereits in den Nachrichten dieses Forums erwähnt wurde / hinzugefügt wurde
             const { data: existingMsgs } = await supabase
                 .from("messages")
                 .select("text")
@@ -529,6 +528,7 @@ async function loadUserChats() {
             .select("*")
             .eq("user2_id", currentUser.id);
 
+        // FIX: Alle erstellten Gruppen/Foren abrufen, damit jeder User sie sehen kann, sobald er hinzugefügt wurde oder sie öffentlich sind
         const { data: groupChats } = await supabase
             .from("chats")
             .select("*")
@@ -543,7 +543,7 @@ async function loadUserChats() {
         console.error("Fehler beim Laden der Chats:", err);
     }
 
-    // FIX: Offizielles GSRA-Forum global für JEDEN User laden und sicherstellen, dass es in der Liste ist
+    // FIX: Offizielles GSRA-Forum global für JEDEN User sicher laden
     let forumChat = null;
     const { data: globalForum } = await supabase
         .from("chats")
@@ -581,7 +581,7 @@ async function loadUserChats() {
     for (const chat of rawChats) {
         const isOfficial = (chat.id === officialForumChatId || chat.title === 'GSRA Official / Community Forum');
         const isDirect = (chat.title === null || chat.user1_id !== chat.user2_id);
-        const isGroup = (chat.title !== null && chat.user1_id === chat.user2_id); // Jede Gruppe/Forum ist für alle einsehbar
+        const isGroup = (chat.title !== null && chat.user1_id === chat.user2_id);
         
         if (isOfficial || isDirect || isGroup) {
             accessibleChats.push(chat);
@@ -703,7 +703,6 @@ async function renderChatsList() {
 
         item.className = `wa-chat-item ${isSelected ? 'active' : ''} ${isUnread ? 'unread' : ''}`;
         
-        // Exakte Trennung: Foren/Gruppen behalten exakt ihren Titel ohne Partnernamen
         let displayTitle = "";
         if (isOfficial) {
             displayTitle = "GSRA Official / Community Forum";
@@ -762,7 +761,6 @@ function openForumChat(forumChat = null) {
     if (chatTitleText) chatTitleText.innerText = forumChat?.title || "GSRA Official / Community Forum";
     if (chatActions) chatActions.style.display = "flex";
     
-    // Mitglied hinzufügen nur bei erstellten Foren, nicht beim offiziellen Announcement-Forum
     if (addMemberBtn) {
         addMemberBtn.style.display = (chatId === officialForumChatId) ? "none" : "block";
     }
@@ -770,7 +768,7 @@ function openForumChat(forumChat = null) {
 
     const isOfficialAnnouncement = (chatId === officialForumChatId);
 
-    // FIX: Offizielles Forum: Nur Admins dürfen schreiben. Erstellte Foren: Jeder darf schreiben!
+    // FIX: Offizielles Forum -> nur Admins schreiben. Erstellte Foren -> Jedes Mitglied darf reinschreiben!
     if (isOfficialAnnouncement && !isAdminUser) {
         if (messageInput) {
             messageInput.disabled = true;
@@ -933,10 +931,15 @@ if (editChatTitleBtn) {
         const newTitle = prompt("Gib einen neuen Namen ein:");
         if (newTitle !== null && newTitle.trim() !== "") {
             const trimmedTitle = newTitle.trim();
-            
+            const chatObj = allChatsCache.find(c => c.id === activeChatId);
+            const isGroupChat = (chatObj && chatObj.title !== null);
+
             await supabase.from("chats").update({ title: trimmedTitle }).eq("id", activeChatId);
             
-            const sysMsg = `${currentUsername} hat das Forum in "${trimmedTitle}" umbenannt.`;
+            // FIX: Präzise Unterscheidung bei der Systemnachricht (Chat vs. Forum)
+            const nounType = isGroupChat ? "Forum" : "Chat";
+            const sysMsg = `${currentUsername} hat den ${nounType} in "${trimmedTitle}" umbenannt.`;
+
             await supabase.from("messages").insert([{
                 chat_id: activeChatId,
                 sender_id: currentUser.id,
