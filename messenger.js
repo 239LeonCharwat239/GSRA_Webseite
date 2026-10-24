@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Messenger Logik (Finale Version: Globales Forum, Eindeutige Chats & Umbenennungs-Systemnachricht)
+   GSRA - Messenger Logik (Finale saubere Trennung: Foren vs. Privatchats)
 ========================================= */
 
 let currentUser = null;
@@ -107,7 +107,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Gruppe erstellen
+    // Gruppe/Forum erstellen (user1_id === user2_id kennzeichnet Gruppen/Foren)
     if (newForumForm) {
         newForumForm.addEventListener("submit", async (e) => {
             e.preventDefault();
@@ -248,16 +248,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             const sysMsg = `${currentUsername} hat ${targetUser.username} zur Gruppe hinzugefügt.`;
 
-            if (currentChatObj && currentChatObj.user1_id === currentChatObj.user2_id) {
-                await supabase.from("chats").update({
-                    user2_id: targetUser.id,
-                    last_message: sysMsg
-                }).eq("id", activeChatId);
-            } else {
-                await supabase.from("chats").update({
-                    last_message: sysMsg
-                }).eq("id", activeChatId);
-            }
+            await supabase.from("chats").update({
+                last_message: sysMsg
+            }).eq("id", activeChatId);
 
             await supabase.from("messages").insert([{
                 chat_id: activeChatId,
@@ -546,7 +539,7 @@ async function loadUserChats() {
         console.error("Fehler beim Laden der Chats:", err);
     }
 
-    // FIX: Offizielles Forum GLOBAL für JEDEN Nutzer laden (egal wer es erstellt hat)
+    // Offizielles Forum GLOBAL für JEDEN Nutzer laden
     let forumChat = null;
     const { data: globalForum } = await supabase
         .from("chats")
@@ -706,13 +699,14 @@ async function renderChatsList() {
 
         item.className = `wa-chat-item ${isSelected ? 'active' : ''} ${isUnread ? 'unread' : ''}`;
         
+        // FIX: Strenge Trennung zwischen Foren/Gruppen und echten 1-on-1 Chats
         let displayTitle = "";
         if (isOfficial) {
             displayTitle = "GSRA Official / Community Forum";
         } else if (isGroup) {
-            displayTitle = chat.title;
+            displayTitle = chat.title; // Gruppen/Foren behalten IMMER exakt ihren eigenen Namen ohne Partner!
         } else if (chat.title) {
-            displayTitle = `${chat.title} (${otherUserName})`;
+            displayTitle = `${chat.title} (${otherUserName})`; // Nur Privatchats haben den Partnernamen dahinter
         } else {
             displayTitle = `Chat mit ${otherUserName}`;
         }
@@ -764,6 +758,7 @@ function openForumChat(forumChat = null) {
     if (chatTitleText) chatTitleText.innerText = forumChat?.title || "GSRA Official / Community Forum";
     if (chatActions) chatActions.style.display = "flex";
     
+    // Mitglied hinzufügen Button nur für erstellte Gruppen, aber NICHT für das offizielle Announcement-Forum
     if (addMemberBtn) {
         addMemberBtn.style.display = (chatId === officialForumChatId) ? "none" : "block";
     }
@@ -801,7 +796,7 @@ async function openChat(chatId, recipientName, chatTitle = null) {
     if (chatTitleText) chatTitleText.innerText = displayName;
     
     if (chatActions) chatActions.style.display = "flex";
-    if (addMemberBtn) addMemberBtn.style.display = "none";
+    if (addMemberBtn) addMemberBtn.style.display = "none"; // In 1-on-1 Chats kein Gruppen-Mitglied hinzufügen
     if (blockUserBtn) blockUserBtn.style.display = "block";
 
     if (messageInput) { messageInput.disabled = false; messageInput.placeholder = "Gib eine Nachricht ein..."; }
@@ -934,11 +929,9 @@ if (editChatTitleBtn) {
         if (newTitle !== null && newTitle.trim() !== "") {
             const trimmedTitle = newTitle.trim();
             
-            // 1. Titel in DB aktualisieren
             await supabase.from("chats").update({ title: trimmedTitle }).eq("id", activeChatId);
             
-            // 2. Systemnachricht posten, damit der Partner Bescheid weiß und es nach oben rutscht
-            const sysMsg = `${currentUsername} hat den Chatnamen in "${trimmedTitle}" geändert.`;
+            const sysMsg = `${currentUsername} hat den Namen in "${trimmedTitle}" geändert.`;
             await supabase.from("messages").insert([{
                 chat_id: activeChatId,
                 sender_id: currentUser.id,
