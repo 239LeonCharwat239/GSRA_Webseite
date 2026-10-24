@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Messenger Logik (Finale Version: Korrekte Grammatik, Foren & Synchronisation)
+   GSRA - Messenger Logik (Finale Präzision: Chat-Trennung, Icons & Foren-Messaging)
 ========================================= */
 
 let currentUser = null;
@@ -107,7 +107,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Forum/Gruppe erstellen
+    // Forum/Gruppe erstellen (user1_id === user2_id kennzeichnet echte Gruppen/Foren)
     if (newForumForm) {
         newForumForm.addEventListener("submit", async (e) => {
             e.preventDefault();
@@ -153,7 +153,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         const [u1, u2] = [currentUser.id, foundProfiles.id].sort();
-        let existingChat = allChatsCache.find(c => c.title === null && c.user1_id === u1 && c.user2_id === u2);
+        let existingChat = allChatsCache.find(c => c.user1_id !== c.user2_id && ((c.user1_id === u1 && c.user2_id === u2)));
 
         if (!existingChat) {
             const { data: fetched } = await supabase
@@ -161,10 +161,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                 .select("*")
                 .eq("user1_id", u1)
                 .eq("user2_id", u2)
-                .is("title", null)
                 .maybeSingle();
 
-            if (fetched) {
+            if (fetched && fetched.user1_id !== fetched.user2_id) {
                 existingChat = fetched;
             } else {
                 const { data: newChat, err: newErr } = await supabase
@@ -215,7 +214,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Mitglied zu Gruppe / Forum hinzufügen (mit Duplikat-Prüfung)
+    // Mitglied zu Gruppe / Forum hinzufügen (nur bei echten Foren)
     if (addMemberBtn) {
         addMemberBtn.addEventListener("click", async () => {
             if (!currentUser?.id || !activeChatId) return;
@@ -238,7 +237,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 return;
             }
 
-            // Prüfen, ob der Nutzer bereits hinzugefügt wurde
             const { data: existingMsgs } = await supabase
                 .from("messages")
                 .select("text")
@@ -416,10 +414,9 @@ async function checkUrlParameters() {
             .select("*")
             .eq("user1_id", u1)
             .eq("user2_id", u2)
-            .is("title", null)
             .maybeSingle();
 
-        if (fetched) {
+        if (fetched && fetched.user1_id !== fetched.user2_id) {
             existingChat = fetched;
         } else {
             const { data: newChat, error } = await supabase
@@ -524,7 +521,6 @@ async function loadUserChats() {
             .select("*")
             .eq("user2_id", currentUser.id);
 
-        // ALLE Gruppen/Foren (title ist nicht null) für jeden Nutzer laden
         const { data: groupChats } = await supabase
             .from("chats")
             .select("*")
@@ -539,7 +535,6 @@ async function loadUserChats() {
         console.error("Fehler beim Laden der Chats:", err);
     }
 
-    // Offizielles Forum global laden und sicherstellen, dass es existiert
     let forumChat = rawChats.find(c => c.title === 'GSRA Official / Community Forum' || (c.title && c.title.includes('Official')));
     
     if (!forumChat) {
@@ -576,8 +571,8 @@ async function loadUserChats() {
     let accessibleChats = [];
     for (const chat of rawChats) {
         const isOfficial = (chat.id === officialForumChatId || (chat.title && chat.title.includes('Official')));
-        const isDirect = (chat.title === null);
-        const isGroup = (chat.title !== null);
+        const isDirect = (chat.user1_id !== chat.user2_id);
+        const isGroup = (chat.user1_id === chat.user2_id);
         
         if (isOfficial || isDirect || isGroup) {
             accessibleChats.push(chat);
@@ -594,7 +589,7 @@ async function loadUserChats() {
     allChatsCache = Array.from(uniqueMap.values());
 
     for (const chat of allChatsCache) {
-        if (!chat.title) {
+        if (chat.user1_id !== chat.user2_id) {
             const otherUserId = chat.user1_id === currentUser.id ? chat.user2_id : chat.user1_id;
             await fetchUserName(otherUserId);
         }
@@ -651,8 +646,13 @@ async function renderChatsList() {
     const searchTerm = chatSearchInput ? chatSearchInput.value.toLowerCase() : "";
 
     let filtered = allChatsCache.filter(chat => {
-        const title = (chat.title || "Chat").toLowerCase();
-        const matchesSearch = title.includes(searchTerm);
+        const isOfficial = (chat.id === officialForumChatId || (chat.title && chat.title.includes('Official')));
+        const isGroup = (chat.title !== null && chat.user1_id === chat.user2_id && !isOfficial);
+        const otherUserId = (chat.user1_id !== chat.user2_id) ? (chat.user1_id === currentUser.id ? chat.user2_id : chat.user1_id) : null;
+        const otherUserName = otherUserId ? (userNamesCache[otherUserId] || "Fahrer") : "";
+        
+        const searchTarget = (chat.title ? chat.title + " " + otherUserName : otherUserName).toLowerCase();
+        const matchesSearch = searchTarget.includes(searchTerm);
         if (!matchesSearch) return false;
 
         if (currentFilter === 'unread') {
@@ -662,7 +662,7 @@ async function renderChatsList() {
             return userFavorites.has(chat.id);
         }
         if (currentFilter === 'forums') {
-            return chat.title !== null;
+            return isGroup || isOfficial;
         }
         return true;
     });
@@ -676,9 +676,12 @@ async function renderChatsList() {
     const fragment = document.createDocumentFragment();
 
     for (const chat of filtered) {
-        const isForum = (chat.title !== null);
-        let otherUserName = "Forum";
-        if (!isForum) {
+        const isOfficial = (chat.id === officialForumChatId || (chat.title && chat.title.includes('Official')));
+        const isGroup = (chat.title !== null && chat.user1_id === chat.user2_id && !isOfficial);
+        const isForumOrGroup = isOfficial || isGroup; // Nur echte Gruppen/Foren sind Foren!
+
+        let otherUserName = "Fahrer";
+        if (!isForumOrGroup && chat.user1_id !== chat.user2_id) {
             const otherUserId = chat.user1_id === currentUser.id ? chat.user2_id : chat.user1_id;
             otherUserName = userNamesCache[otherUserId] || "Fahrer";
         }
@@ -690,11 +693,22 @@ async function renderChatsList() {
 
         item.className = `wa-chat-item ${isSelected ? 'active' : ''} ${isUnread ? 'unread' : ''}`;
         
-        const displayTitle = chat.title || `Chat mit ${otherUserName}`;
+        // FIX: Strenge Trennung: Private Chats (auch mit Titel) zeigen IMMER den Partnernamen in Klammern und bleiben Chats
+        let displayTitle = "";
+        if (isOfficial) {
+            displayTitle = "GSRA Official / Community Forum";
+        } else if (isGroup) {
+            displayTitle = chat.title; // Echte Foren haben keinen Partnernamen
+        } else if (chat.title) {
+            displayTitle = `${chat.title} (${otherUserName})`; // Privater Chat mit umbenanntem Titel + Partnername!
+        } else {
+            displayTitle = `Chat mit ${otherUserName}`;
+        }
+
         const lastMsg = escapeHtml(chat.last_message || 'Keine Nachrichten');
 
         item.innerHTML = `
-            <div class="wa-avatar"><i class="fa-solid ${isForum ? 'fa-bullhorn text-yellow' : 'fa-user'}"></i></div>
+            <div class="wa-avatar"><i class="fa-solid ${isForumOrGroup ? 'fa-bullhorn text-yellow' : 'fa-user'}"></i></div>
             <div class="wa-chat-info">
                 <div class="wa-chat-row">
                     <span class="wa-chat-name">${escapeHtml(displayTitle)}</span>
@@ -714,7 +728,7 @@ async function renderChatsList() {
             if (waWelcomeScreen) waWelcomeScreen.style.display = "none";
             if (waChatActivePane) waChatActivePane.style.display = "flex";
 
-            if (isForum) {
+            if (isForumOrGroup) {
                 openForumChat(chat);
             } else {
                 openChat(chat.id, otherUserName, chat.title);
@@ -737,12 +751,15 @@ function openForumChat(forumChat = null) {
 
     if (chatTitleText) chatTitleText.innerText = forumChat?.title || "GSRA Official / Community Forum";
     if (chatActions) chatActions.style.display = "flex";
-    if (addMemberBtn) addMemberBtn.style.display = "block";
+    
+    // Mitglied hinzufügen nur bei echten Foren
+    if (addMemberBtn) {
+        addMemberBtn.style.display = (chatId === officialForumChatId) ? "none" : "block";
+    }
     if (blockUserBtn) blockUserBtn.style.display = "none";
 
     const isOfficialAnnouncement = (chatId === officialForumChatId);
 
-    // FIX: Offizielles Forum ist nur für Admins zum Schreiben, für User Read-Only. Private Foren sind für jeden lesbar & beschreibbar!
     if (isOfficialAnnouncement && !isAdminUser) {
         if (messageInput) {
             messageInput.disabled = true;
@@ -772,9 +789,11 @@ async function openChat(chatId, recipientName, chatTitle = null) {
     const displayName = chatTitle ? `${chatTitle} (${recipientName})` : `Chat mit ${recipientName}`;
     if (chatTitleText) chatTitleText.innerText = displayName;
     
+    // FIX: In echten 1-on-1 Chats wird der "Mitglied hinzufügen"-Button NIEMALS angezeigt!
     if (chatActions) chatActions.style.display = "flex";
-    if (addMemberBtn) addMemberBtn.style.display = "block";
+    if (addMemberBtn) addMemberBtn.style.display = "none";
     if (blockUserBtn) blockUserBtn.style.display = "block";
+
     if (messageInput) { messageInput.disabled = false; messageInput.placeholder = "Gib eine Nachricht ein..."; }
     if (imageUploadInput) imageUploadInput.disabled = false;
     if (emojiToggleBtn) emojiToggleBtn.disabled = false;
@@ -905,9 +924,8 @@ if (editChatTitleBtn) {
         if (newTitle !== null && newTitle.trim() !== "") {
             const trimmedTitle = newTitle.trim();
             const chatObj = allChatsCache.find(c => c.id === activeChatId);
-            const isForum = (chatObj && chatObj.title !== null);
+            const isForum = (chatObj && chatObj.user1_id === chatObj.user2_id);
             
-            // FIX: Grammatikalisch korrekte Artikel ("das Forum" vs "den Chat")
             const articleText = isForum ? "das Forum" : "den Chat";
 
             await supabase.from("chats").update({ title: trimmedTitle }).eq("id", activeChatId);
@@ -996,7 +1014,7 @@ if (chatForm) {
             const fileExt = file.name.split('.').pop();
             const fileName = `chat_${Date.now()}_${Math.random().toString(36).substring(2,7)}.${fileExt}`;
             
-            const { error: uploadErr } = await supabase.storage.from("chat_attachments").upload(fileName, file);
+            const { error: uploadErr } = await supabase.storage.log ? await supabase.storage.from("chat_attachments").upload(fileName, file) : await supabase.storage.from("chat_attachments").upload(fileName, file);
             if (!uploadErr) {
                 const { data: pubData } = supabase.storage.from("chat_attachments").getPublicUrl(fileName);
                 imageUrls.push(pubData.publicUrl);
