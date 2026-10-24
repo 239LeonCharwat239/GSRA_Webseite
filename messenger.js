@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Messenger Logik (Finale Version: Keine Gruppen-Icons in Chats & Perfektes Forum)
+   GSRA - Messenger Logik (Finale Perfektion: Symbole, Titel & Echtzeit)
 ========================================= */
 
 let currentUser = null;
@@ -107,7 +107,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Forum/Gruppe erstellen
+    // Gruppe erstellen
     if (newForumForm) {
         newForumForm.addEventListener("submit", async (e) => {
             e.preventDefault();
@@ -557,7 +557,7 @@ async function loadUserChats() {
         console.error("Fehler beim Laden der Chats:", err);
     }
 
-    // FIX: Explizite Suche nach dem exakten offiziellen Forum in Supabase
+    // Offizielles Forum explizit laden/sicherstellen
     let forumChat = rawChats.find(c => c.title === 'GSRA Official / Community Forum');
     
     if (!forumChat) {
@@ -596,8 +596,8 @@ async function loadUserChats() {
     let accessibleChats = [];
     for (const chat of rawChats) {
         const isOfficial = (chat.id === officialForumChatId || chat.title === 'GSRA Official / Community Forum');
-        const isDirect = (chat.title === null);
-        const isGroup = (chat.title !== null);
+        const isDirect = (chat.title === null || chat.user1_id !== chat.user2_id);
+        const isGroup = (chat.title !== null && chat.user1_id === chat.user2_id);
         
         if (isOfficial || isDirect || isGroup) {
             accessibleChats.push(chat);
@@ -614,7 +614,7 @@ async function loadUserChats() {
     allChatsCache = Array.from(uniqueMap.values());
 
     for (const chat of allChatsCache) {
-        if (!chat.title) {
+        if (chat.user1_id !== chat.user2_id) {
             const otherUserId = chat.user1_id === currentUser.id ? chat.user2_id : chat.user1_id;
             await fetchUserName(otherUserId);
         }
@@ -632,6 +632,7 @@ async function loadUserChats() {
             chat.last_message = latestMsg.text || "[Foto]";
         } else {
             chat.last_msg_time = chat.created_at;
+            chat.last_message = chat.id === officialForumChatId ? "Offizielles Community-Forum" : "Keine Nachrichten";
         }
 
         if (chat.id === activeChatId) {
@@ -671,8 +672,13 @@ async function renderChatsList() {
     const searchTerm = chatSearchInput ? chatSearchInput.value.toLowerCase() : "";
 
     let filtered = allChatsCache.filter(chat => {
-        const title = (chat.title || "Chat").toLowerCase();
-        const matchesSearch = title.includes(searchTerm);
+        const isOfficial = (chat.id === officialForumChatId || chat.title === 'GSRA Official / Community Forum');
+        const isGroup = (chat.title !== null && chat.user1_id === chat.user2_id && !isOfficial);
+        const otherUserId = (chat.user1_id !== chat.user2_id) ? (chat.user1_id === currentUser.id ? chat.user2_id : chat.user1_id) : null;
+        const otherUserName = otherUserId ? (userNamesCache[otherUserId] || "Fahrer") : "";
+        
+        const searchTarget = (chat.title ? chat.title + " " + otherUserName : otherUserName).toLowerCase();
+        const matchesSearch = searchTarget.includes(searchTerm);
         if (!matchesSearch) return false;
 
         if (currentFilter === 'unread') {
@@ -682,7 +688,7 @@ async function renderChatsList() {
             return userFavorites.has(chat.id);
         }
         if (currentFilter === 'forums') {
-            return chat.title !== null;
+            return isGroup || isOfficial;
         }
         return true;
     });
@@ -696,9 +702,12 @@ async function renderChatsList() {
     const fragment = document.createDocumentFragment();
 
     for (const chat of filtered) {
-        const isForum = (chat.title !== null);
-        let otherUserName = "Forum";
-        if (!isForum) {
+        const isOfficial = (chat.id === officialForumChatId || chat.title === 'GSRA Official / Community Forum');
+        const isGroup = (chat.title !== null && chat.user1_id === chat.user2_id && !isOfficial);
+        const isForumOrGroup = isOfficial || isGroup;
+
+        let otherUserName = "Fahrer";
+        if (!isForumOrGroup && chat.user1_id !== chat.user2_id) {
             const otherUserId = chat.user1_id === currentUser.id ? chat.user2_id : chat.user1_id;
             otherUserName = userNamesCache[otherUserId] || "Fahrer";
         }
@@ -710,11 +719,22 @@ async function renderChatsList() {
 
         item.className = `wa-chat-item ${isSelected ? 'active' : ''} ${isUnread ? 'unread' : ''}`;
         
-        const displayTitle = chat.title || `Chat mit ${otherUserName}`;
+        // FIX: Exakte Titel-Logik (Umbenannter Chat zeigt "Titel (Nutzername)")
+        let displayTitle = "";
+        if (isOfficial) {
+            displayTitle = "GSRA Official / Community Forum";
+        } else if (isGroup) {
+            displayTitle = chat.title;
+        } else if (chat.title) {
+            displayTitle = `${chat.title} (${otherUserName})`;
+        } else {
+            displayTitle = `Chat mit ${otherUserName}`;
+        }
+
         const lastMsg = escapeHtml(chat.last_message || 'Keine Nachrichten');
 
         item.innerHTML = `
-            <div class="wa-avatar"><i class="fa-solid ${isForum ? 'fa-bullhorn text-yellow' : 'fa-user'}"></i></div>
+            <div class="wa-avatar"><i class="fa-solid ${isForumOrGroup ? 'fa-bullhorn text-yellow' : 'fa-user'}"></i></div>
             <div class="wa-chat-info">
                 <div class="wa-chat-row">
                     <span class="wa-chat-name">${escapeHtml(displayTitle)}</span>
@@ -734,7 +754,7 @@ async function renderChatsList() {
             if (waWelcomeScreen) waWelcomeScreen.style.display = "none";
             if (waChatActivePane) waChatActivePane.style.display = "flex";
 
-            if (isForum) {
+            if (isForumOrGroup) {
                 openForumChat(chat);
             } else {
                 openChat(chat.id, otherUserName, chat.title);
@@ -758,7 +778,6 @@ function openForumChat(forumChat = null) {
     if (chatTitleText) chatTitleText.innerText = forumChat?.title || "GSRA Official / Community Forum";
     if (chatActions) chatActions.style.display = "flex";
     
-    // FIX: Im offiziellen Forum oder in echten Gruppen anzeigen, aber bei normalen Chats ausblenden
     if (addMemberBtn) {
         addMemberBtn.style.display = (chatId === officialForumChatId) ? "none" : "block";
     }
@@ -796,8 +815,6 @@ async function openChat(chatId, recipientName, chatTitle = null) {
     if (chatTitleText) chatTitleText.innerText = displayName;
     
     if (chatActions) chatActions.style.display = "flex";
-    
-    // FIX: In reinen 1-on-1 Direktchats wird das "Mitglied hinzufügen"-Symbol (addMemberBtn) komplett ausgeblendet!
     if (addMemberBtn) addMemberBtn.style.display = "none";
     if (blockUserBtn) blockUserBtn.style.display = "block";
 
@@ -1023,9 +1040,9 @@ if (chatForm) {
                 image_url: finalImageUrl
             }]);
 
-            await supabase.chats ? supabase.from("chats").update({
+            await supabase.from("chats").update({
                 last_message: text || "[Foto]"
-            }).eq("id", activeChatId) : null;
+            }).eq("id", activeChatId);
 
             markChatAsRead(activeChatId);
             loadUserChats();
