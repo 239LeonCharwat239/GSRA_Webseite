@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Messenger Logik (Fix für synchrone chronologische Nachrichtenreihenfolge)
+   GSRA - Messenger Logik (Finale Version: Korrekte Grammatik, Foren & Synchronisation)
 ========================================= */
 
 let currentUser = null;
@@ -118,7 +118,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 user1_id: currentUser.id,
                 user2_id: currentUser.id,
                 title: forumName,
-                last_message: `${currentUsername} hat die Gruppe erstellt.`
+                last_message: `${currentUsername} hat das Forum erstellt.`
             }]).select().single();
 
             if (!error && createdGroup) {
@@ -215,7 +215,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Mitglied zu Gruppe hinzufügen
+    // Mitglied zu Gruppe / Forum hinzufügen (mit Duplikat-Prüfung)
     if (addMemberBtn) {
         addMemberBtn.addEventListener("click", async () => {
             if (!currentUser?.id || !activeChatId) return;
@@ -233,19 +233,28 @@ document.addEventListener("DOMContentLoaded", async () => {
                 return;
             }
 
-            const sysMsg = `${currentUsername} hat ${targetUser.username} zur Gruppe hinzugefügt.`;
-
-            const currentChatObj = allChatsCache.find(c => c.id === activeChatId);
-            if (currentChatObj && currentChatObj.user1_id === currentChatObj.user2_id) {
-                await supabase.from("chats").update({
-                    user2_id: targetUser.id,
-                    last_message: sysMsg
-                }).eq("id", activeChatId);
-            } else {
-                await supabase.from("chats").update({
-                    last_message: sysMsg
-                }).eq("id", activeChatId);
+            if (targetUser.id === currentUser.id) {
+                alert("Du kannst dich nicht selbst hinzufügen.");
+                return;
             }
+
+            // Prüfen, ob der Nutzer bereits hinzugefügt wurde
+            const { data: existingMsgs } = await supabase
+                .from("messages")
+                .select("text")
+                .eq("chat_id", activeChatId);
+
+            const alreadyAdded = (existingMsgs || []).some(m => m.text && m.text.includes(targetUser.username));
+            if (alreadyAdded) {
+                alert(`Nutzer ${targetUser.username} ist bereits in diesem Forum.`);
+                return;
+            }
+
+            const sysMsg = `${currentUsername} hat ${targetUser.username} zum Forum hinzugefügt.`;
+
+            await supabase.from("chats").update({
+                last_message: sysMsg
+            }).eq("id", activeChatId);
 
             await supabase.from("messages").insert([{
                 chat_id: activeChatId,
@@ -418,7 +427,7 @@ async function checkUrlParameters() {
                 .insert([{
                     user1_id: u1,
                     user2_id: u2,
-                    title: itemTitle ? `Anfrage: ${itemTitle}` : null,
+                    title: null,
                     last_message: "Chat gestartet"
                 }])
                 .select()
@@ -515,6 +524,7 @@ async function loadUserChats() {
             .select("*")
             .eq("user2_id", currentUser.id);
 
+        // ALLE Gruppen/Foren (title ist nicht null) für jeden Nutzer laden
         const { data: groupChats } = await supabase
             .from("chats")
             .select("*")
@@ -529,23 +539,33 @@ async function loadUserChats() {
         console.error("Fehler beim Laden der Chats:", err);
     }
 
+    // Offizielles Forum global laden und sicherstellen, dass es existiert
     let forumChat = rawChats.find(c => c.title === 'GSRA Official / Community Forum' || (c.title && c.title.includes('Official')));
     
     if (!forumChat) {
-        const { data: createdForum, err: forumErr } = await supabase
+        const { data: globalForum } = await supabase
             .from("chats")
-            .insert([{
-                user1_id: currentUser.id,
-                user2_id: currentUser.id,
-                title: 'GSRA Official / Community Forum',
-                last_message: 'Willkommen im offiziellen Community-Forum!'
-            }])
-            .select()
-            .single();
+            .select("*")
+            .eq("title", 'GSRA Official / Community Forum')
+            .maybeSingle();
 
-        if (!forumErr && createdForum) {
-            forumChat = createdForum;
-            rawChats.unshift(createdForum);
+        if (globalForum) {
+            forumChat = globalForum;
+            rawChats.unshift(globalForum);
+        } else if (isAdminUser) {
+            const { data: createdForum, err: forumErr } = await supabase
+                .from("chats")
+                .insert([{
+                    user1_id: currentUser.id,
+                    user2_id: currentUser.id,
+                    title: 'GSRA Official / Community Forum',
+                    last_message: 'Willkommen im offiziellen Community-Forum!'
+                }]).select().single();
+
+            if (!forumErr && createdForum) {
+                forumChat = createdForum;
+                rawChats.unshift(createdForum);
+            }
         }
     }
 
@@ -722,6 +742,7 @@ function openForumChat(forumChat = null) {
 
     const isOfficialAnnouncement = (chatId === officialForumChatId);
 
+    // FIX: Offizielles Forum ist nur für Admins zum Schreiben, für User Read-Only. Private Foren sind für jeden lesbar & beschreibbar!
     if (isOfficialAnnouncement && !isAdminUser) {
         if (messageInput) {
             messageInput.disabled = true;
@@ -778,7 +799,6 @@ async function loadChatMessages(chatId) {
         .eq("chat_id", chatId)
         .order("created_at", { ascending: true });
 
-    // FIX: Await renderMessages ensures strict sequential chronological DOM insertion
     await renderMessages(messages || []);
 
     messageSubscription = supabase
@@ -792,7 +812,6 @@ async function loadChatMessages(chatId) {
         .subscribe();
 }
 
-// FIX: async function with for...of loop preserves exact DB timestamp order
 async function renderMessages(messages) {
     if (!chatMessages) return;
     if (messages.length === 0) {
@@ -885,7 +904,23 @@ if (editChatTitleBtn) {
         const newTitle = prompt("Gib einen neuen Namen ein:");
         if (newTitle !== null && newTitle.trim() !== "") {
             const trimmedTitle = newTitle.trim();
+            const chatObj = allChatsCache.find(c => c.id === activeChatId);
+            const isForum = (chatObj && chatObj.title !== null);
+            
+            // FIX: Grammatikalisch korrekte Artikel ("das Forum" vs "den Chat")
+            const articleText = isForum ? "das Forum" : "den Chat";
+
             await supabase.from("chats").update({ title: trimmedTitle }).eq("id", activeChatId);
+
+            const sysMsg = `${currentUsername} hat ${articleText} in "${trimmedTitle}" umbenannt.`;
+            await supabase.from("messages").insert([{
+                chat_id: activeChatId,
+                sender_id: currentUser.id,
+                text: sysMsg
+            }]);
+
+            await supabase.from("chats").update({ last_message: sysMsg }).eq("id", activeChatId);
+
             loadUserChats();
             alert("Aktualisiert!");
         }
