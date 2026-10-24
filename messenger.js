@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Messenger Logik (Vollständiger Fix für Marktplatz-Chats, Validierung & Forum)
+   GSRA - Messenger Logik (Finale Version: Keine Gruppen-Icons in Chats & Perfektes Forum)
 ========================================= */
 
 let currentUser = null;
@@ -147,19 +147,15 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
-        // FIX: Kann sich nicht selbst hinzufügen
         if (foundProfiles.id === currentUser.id) {
             alert("Du kannst dich nicht selbst als Freund hinzufügen.");
             return;
         }
 
         const [u1, u2] = [currentUser.id, foundProfiles.id].sort();
-        
-        // FIX: Prüfen, ob bereits ein Chat existiert
         let existingChat = allChatsCache.find(c => c.title === null && c.user1_id === u1 && c.user2_id === u2);
 
         if (existingChat) {
-            alert("Ihr habt bereits einen aktiven Chat miteinander!");
             activeChatId = existingChat.id;
             markChatAsRead(activeChatId);
             if (waWelcomeScreen) waWelcomeScreen.style.display = "none";
@@ -177,7 +173,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             .maybeSingle();
 
         if (fetched) {
-            alert("Ihr habt bereits einen aktiven Chat miteinander!");
             existingChat = fetched;
         } else {
             const { data: newChat, err: newErr } = await supabase
@@ -227,7 +222,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Mitglied zu Gruppe hinzufügen mit Validierung (kein Selbst-Hinzufügen, keine Duplikate)
+    // Mitglied zu Gruppe hinzufügen
     if (addMemberBtn) {
         addMemberBtn.addEventListener("click", async () => {
             if (!currentUser?.id || !activeChatId) return;
@@ -245,7 +240,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 return;
             }
 
-            // FIX: Verhindern, dass man sich selbst hinzufügt
             if (targetUser.id === currentUser.id) {
                 alert("Du kannst dich nicht selbst zu einer Gruppe hinzufügen.");
                 return;
@@ -253,7 +247,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             const currentChatObj = allChatsCache.find(c => c.id === activeChatId);
             if (currentChatObj) {
-                // FIX: Verhindern, dass derselbe Nutzer mehrfach hinzugefügt wird
                 if (currentChatObj.user1_id === targetUser.id || currentChatObj.user2_id === targetUser.id) {
                     alert(`Nutzer ${targetUser.username} ist bereits in dieser Gruppe.`);
                     return;
@@ -428,7 +421,6 @@ async function checkUrlParameters() {
         const [u1, u2] = [currentUser.id, targetId].sort();
         let existingChat = null;
 
-        // FIX: Marktplatz-Anfragen müssen IMMER direkte 1-on-1 Chats sein (title: null), damit sie nicht als Forum landen!
         const { data: fetched } = await supabase
             .from("chats")
             .select("*")
@@ -445,7 +437,7 @@ async function checkUrlParameters() {
                 .insert([{
                     user1_id: u1,
                     user2_id: u2,
-                    title: null, // Streng null, damit es ein echter Chat ist!
+                    title: null,
                     last_message: itemTitle ? `Anfrage zu: ${itemTitle}` : "Chat gestartet"
                 }])
                 .select()
@@ -565,8 +557,8 @@ async function loadUserChats() {
         console.error("Fehler beim Laden der Chats:", err);
     }
 
-    // FIX: Zentrales, globales offizielles Forum für alle Benutzer suchen statt Duplikate zu erzeugen
-    let forumChat = rawChats.find(c => c.title === 'GSRA Official / Community Forum' || (c.title && c.title.includes('Official')));
+    // FIX: Explizite Suche nach dem exakten offiziellen Forum in Supabase
+    let forumChat = rawChats.find(c => c.title === 'GSRA Official / Community Forum');
     
     if (!forumChat) {
         const { data: globalForum } = await supabase
@@ -603,7 +595,7 @@ async function loadUserChats() {
 
     let accessibleChats = [];
     for (const chat of rawChats) {
-        const isOfficial = (chat.id === officialForumChatId || (chat.title && chat.title.includes('Official')));
+        const isOfficial = (chat.id === officialForumChatId || chat.title === 'GSRA Official / Community Forum');
         const isDirect = (chat.title === null);
         const isGroup = (chat.title !== null);
         
@@ -765,7 +757,11 @@ function openForumChat(forumChat = null) {
 
     if (chatTitleText) chatTitleText.innerText = forumChat?.title || "GSRA Official / Community Forum";
     if (chatActions) chatActions.style.display = "flex";
-    if (addMemberBtn) addMemberBtn.style.display = "block";
+    
+    // FIX: Im offiziellen Forum oder in echten Gruppen anzeigen, aber bei normalen Chats ausblenden
+    if (addMemberBtn) {
+        addMemberBtn.style.display = (chatId === officialForumChatId) ? "none" : "block";
+    }
     if (blockUserBtn) blockUserBtn.style.display = "none";
 
     const isOfficialAnnouncement = (chatId === officialForumChatId);
@@ -800,8 +796,11 @@ async function openChat(chatId, recipientName, chatTitle = null) {
     if (chatTitleText) chatTitleText.innerText = displayName;
     
     if (chatActions) chatActions.style.display = "flex";
-    if (addMemberBtn) addMemberBtn.style.display = "block";
+    
+    // FIX: In reinen 1-on-1 Direktchats wird das "Mitglied hinzufügen"-Symbol (addMemberBtn) komplett ausgeblendet!
+    if (addMemberBtn) addMemberBtn.style.display = "none";
     if (blockUserBtn) blockUserBtn.style.display = "block";
+
     if (messageInput) { messageInput.disabled = false; messageInput.placeholder = "Gib eine Nachricht ein..."; }
     if (imageUploadInput) imageUploadInput.disabled = false;
     if (emojiToggleBtn) emojiToggleBtn.disabled = false;
@@ -1007,7 +1006,7 @@ if (chatForm) {
             const fileExt = file.name.split('.').pop();
             const fileName = `chat_${Date.now()}_${Math.random().toString(36).substring(2,7)}.${fileExt}`;
             
-            const { error: uploadErr } = await supabase.storage.storage ? supabase.storage.from("chat_attachments").upload(fileName, file) : supabase.storage.from("chat_attachments").upload(fileName, file);
+            const { error: uploadErr } = await supabase.storage.from("chat_attachments").upload(fileName, file);
             if (!uploadErr) {
                 const { data: pubData } = supabase.storage.from("chat_attachments").getPublicUrl(fileName);
                 imageUrls.push(pubData.publicUrl);
@@ -1024,9 +1023,9 @@ if (chatForm) {
                 image_url: finalImageUrl
             }]);
 
-            await supabase.from("chats").update({
+            await supabase.chats ? supabase.from("chats").update({
                 last_message: text || "[Foto]"
-            }).eq("id", activeChatId);
+            }).eq("id", activeChatId) : null;
 
             markChatAsRead(activeChatId);
             loadUserChats();
