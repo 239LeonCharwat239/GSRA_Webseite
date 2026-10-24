@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Messenger Logik (Fix für synchrone chronologische Nachrichtenreihenfolge)
+   GSRA - Messenger Logik (Vollständiger Fix für Marktplatz-Chats, Validierung & Forum)
 ========================================= */
 
 let currentUser = null;
@@ -147,39 +147,51 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
+        // FIX: Kann sich nicht selbst hinzufügen
         if (foundProfiles.id === currentUser.id) {
-            alert("Du kannst dich nicht selbst hinzufügen.");
+            alert("Du kannst dich nicht selbst als Freund hinzufügen.");
             return;
         }
 
         const [u1, u2] = [currentUser.id, foundProfiles.id].sort();
+        
+        // FIX: Prüfen, ob bereits ein Chat existiert
         let existingChat = allChatsCache.find(c => c.title === null && c.user1_id === u1 && c.user2_id === u2);
 
-        if (!existingChat) {
-            const { data: fetched } = await supabase
+        if (existingChat) {
+            alert("Ihr habt bereits einen aktiven Chat miteinander!");
+            activeChatId = existingChat.id;
+            markChatAsRead(activeChatId);
+            if (waWelcomeScreen) waWelcomeScreen.style.display = "none";
+            if (waChatActivePane) waChatActivePane.style.display = "flex";
+            openChat(existingChat.id, foundProfiles.username, existingChat.title);
+            return;
+        }
+
+        const { data: fetched } = await supabase
+            .from("chats")
+            .select("*")
+            .eq("user1_id", u1)
+            .eq("user2_id", u2)
+            .is("title", null)
+            .maybeSingle();
+
+        if (fetched) {
+            alert("Ihr habt bereits einen aktiven Chat miteinander!");
+            existingChat = fetched;
+        } else {
+            const { data: newChat, err: newErr } = await supabase
                 .from("chats")
-                .select("*")
-                .eq("user1_id", u1)
-                .eq("user2_id", u2)
-                .is("title", null)
-                .maybeSingle();
+                .insert([{
+                    user1_id: u1,
+                    user2_id: u2,
+                    title: null,
+                    last_message: "Chat gestartet"
+                }])
+                .select()
+                .single();
 
-            if (fetched) {
-                existingChat = fetched;
-            } else {
-                const { data: newChat, err: newErr } = await supabase
-                    .from("chats")
-                    .insert([{
-                        user1_id: u1,
-                        user2_id: u2,
-                        title: null,
-                        last_message: "Chat gestartet"
-                    }])
-                    .select()
-                    .single();
-
-                if (!newErr) existingChat = newChat;
-            }
+            if (!newErr) existingChat = newChat;
         }
 
         if (existingChat) {
@@ -215,7 +227,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Mitglied zu Gruppe hinzufügen
+    // Mitglied zu Gruppe hinzufügen mit Validierung (kein Selbst-Hinzufügen, keine Duplikate)
     if (addMemberBtn) {
         addMemberBtn.addEventListener("click", async () => {
             if (!currentUser?.id || !activeChatId) return;
@@ -233,9 +245,23 @@ document.addEventListener("DOMContentLoaded", async () => {
                 return;
             }
 
-            const sysMsg = `${currentUsername} hat ${targetUser.username} zur Gruppe hinzugefügt.`;
+            // FIX: Verhindern, dass man sich selbst hinzufügt
+            if (targetUser.id === currentUser.id) {
+                alert("Du kannst dich nicht selbst zu einer Gruppe hinzufügen.");
+                return;
+            }
 
             const currentChatObj = allChatsCache.find(c => c.id === activeChatId);
+            if (currentChatObj) {
+                // FIX: Verhindern, dass derselbe Nutzer mehrfach hinzugefügt wird
+                if (currentChatObj.user1_id === targetUser.id || currentChatObj.user2_id === targetUser.id) {
+                    alert(`Nutzer ${targetUser.username} ist bereits in dieser Gruppe.`);
+                    return;
+                }
+            }
+
+            const sysMsg = `${currentUsername} hat ${targetUser.username} zur Gruppe hinzugefügt.`;
+
             if (currentChatObj && currentChatObj.user1_id === currentChatObj.user2_id) {
                 await supabase.from("chats").update({
                     user2_id: targetUser.id,
@@ -402,6 +428,7 @@ async function checkUrlParameters() {
         const [u1, u2] = [currentUser.id, targetId].sort();
         let existingChat = null;
 
+        // FIX: Marktplatz-Anfragen müssen IMMER direkte 1-on-1 Chats sein (title: null), damit sie nicht als Forum landen!
         const { data: fetched } = await supabase
             .from("chats")
             .select("*")
@@ -418,13 +445,22 @@ async function checkUrlParameters() {
                 .insert([{
                     user1_id: u1,
                     user2_id: u2,
-                    title: itemTitle ? `Anfrage: ${itemTitle}` : null,
-                    last_message: "Chat gestartet"
+                    title: null, // Streng null, damit es ein echter Chat ist!
+                    last_message: itemTitle ? `Anfrage zu: ${itemTitle}` : "Chat gestartet"
                 }])
                 .select()
                 .single();
 
-            if (!error) existingChat = newChat;
+            if (!error && newChat) {
+                existingChat = newChat;
+                if (itemTitle) {
+                    await supabase.from("messages").insert([{
+                        chat_id: newChat.id,
+                        sender_id: currentUser.id,
+                        text: `Hallo, ich interessiere mich für deinen Artikel: ${itemTitle}`
+                    }]);
+                }
+            }
         }
 
         if (existingChat) {
@@ -529,23 +565,35 @@ async function loadUserChats() {
         console.error("Fehler beim Laden der Chats:", err);
     }
 
+    // FIX: Zentrales, globales offizielles Forum für alle Benutzer suchen statt Duplikate zu erzeugen
     let forumChat = rawChats.find(c => c.title === 'GSRA Official / Community Forum' || (c.title && c.title.includes('Official')));
     
     if (!forumChat) {
-        const { data: createdForum, err: forumErr } = await supabase
+        const { data: globalForum } = await supabase
             .from("chats")
-            .insert([{
-                user1_id: currentUser.id,
-                user2_id: currentUser.id,
-                title: 'GSRA Official / Community Forum',
-                last_message: 'Willkommen im offiziellen Community-Forum!'
-            }])
-            .select()
-            .single();
+            .select("*")
+            .eq("title", 'GSRA Official / Community Forum')
+            .maybeSingle();
 
-        if (!forumErr && createdForum) {
-            forumChat = createdForum;
-            rawChats.unshift(createdForum);
+        if (globalForum) {
+            forumChat = globalForum;
+            rawChats.unshift(globalForum);
+        } else if (isAdminUser) {
+            const { data: createdForum, err: forumErr } = await supabase
+                .from("chats")
+                .insert([{
+                    user1_id: currentUser.id,
+                    user2_id: currentUser.id,
+                    title: 'GSRA Official / Community Forum',
+                    last_message: 'Willkommen im offiziellen Community-Forum!'
+                }])
+                .select()
+                .single();
+
+            if (!forumErr && createdForum) {
+                forumChat = createdForum;
+                rawChats.unshift(createdForum);
+            }
         }
     }
 
@@ -778,7 +826,6 @@ async function loadChatMessages(chatId) {
         .eq("chat_id", chatId)
         .order("created_at", { ascending: true });
 
-    // FIX: Await renderMessages ensures strict sequential chronological DOM insertion
     await renderMessages(messages || []);
 
     messageSubscription = supabase
@@ -792,7 +839,6 @@ async function loadChatMessages(chatId) {
         .subscribe();
 }
 
-// FIX: async function with for...of loop preserves exact DB timestamp order
 async function renderMessages(messages) {
     if (!chatMessages) return;
     if (messages.length === 0) {
@@ -961,7 +1007,7 @@ if (chatForm) {
             const fileExt = file.name.split('.').pop();
             const fileName = `chat_${Date.now()}_${Math.random().toString(36).substring(2,7)}.${fileExt}`;
             
-            const { error: uploadErr } = await supabase.storage.from("chat_attachments").upload(fileName, file);
+            const { error: uploadErr } = await supabase.storage.storage ? supabase.storage.from("chat_attachments").upload(fileName, file) : supabase.storage.from("chat_attachments").upload(fileName, file);
             if (!uploadErr) {
                 const { data: pubData } = supabase.storage.from("chat_attachments").getPublicUrl(fileName);
                 imageUrls.push(pubData.publicUrl);
