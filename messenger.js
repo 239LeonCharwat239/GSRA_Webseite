@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Messenger Logik (Finale saubere Trennung: Foren vs. Privatchats)
+   GSRA - Messenger Logik (Finale Präzision: Globales Forum & Saubere Gruppenvalidierung)
 ========================================= */
 
 let currentUser = null;
@@ -107,7 +107,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Gruppe/Forum erstellen (user1_id === user2_id kennzeichnet Gruppen/Foren)
+    // Forum/Gruppe erstellen
     if (newForumForm) {
         newForumForm.addEventListener("submit", async (e) => {
             e.preventDefault();
@@ -118,7 +118,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 user1_id: currentUser.id,
                 user2_id: currentUser.id,
                 title: forumName,
-                last_message: `${currentUsername} hat die Gruppe erstellt.`
+                last_message: `${currentUsername} hat das Forum erstellt.`
             }]).select().single();
 
             if (!error && createdGroup) {
@@ -215,7 +215,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Mitglied zu Gruppe hinzufügen
+    // Mitglied zu Forum/Gruppe hinzufügen mit strikter Duplikat-Prüfung
     if (addMemberBtn) {
         addMemberBtn.addEventListener("click", async () => {
             if (!currentUser?.id || !activeChatId) return;
@@ -234,19 +234,23 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
 
             if (targetUser.id === currentUser.id) {
-                alert("Du kannst dich nicht selbst zu einer Gruppe hinzufügen.");
+                alert("Du kannst dich nicht selbst hinzufügen.");
                 return;
             }
 
-            const currentChatObj = allChatsCache.find(c => c.id === activeChatId);
-            if (currentChatObj) {
-                if (currentChatObj.user1_id === targetUser.id || currentChatObj.user2_id === targetUser.id) {
-                    alert(`Nutzer ${targetUser.username} ist bereits in dieser Gruppe.`);
-                    return;
-                }
+            // Prüfen, ob der Nutzer bereits in den Nachrichten dieses Forums erwähnt wurde / hinzugefügt wurde
+            const { data: existingMsgs } = await supabase
+                .from("messages")
+                .select("text")
+                .eq("chat_id", activeChatId);
+
+            const alreadyAdded = (existingMsgs || []).some(m => m.text && m.text.includes(targetUser.username));
+            if (alreadyAdded) {
+                alert(`Nutzer ${targetUser.username} ist bereits in diesem Forum.`);
+                return;
             }
 
-            const sysMsg = `${currentUsername} hat ${targetUser.username} zur Gruppe hinzugefügt.`;
+            const sysMsg = `${currentUsername} hat ${targetUser.username} zum Forum hinzugefügt.`;
 
             await supabase.from("chats").update({
                 last_message: sysMsg
@@ -539,7 +543,7 @@ async function loadUserChats() {
         console.error("Fehler beim Laden der Chats:", err);
     }
 
-    // Offizielles Forum GLOBAL für JEDEN Nutzer laden
+    // FIX: Offizielles GSRA-Forum global für JEDEN User laden und sicherstellen, dass es in der Liste ist
     let forumChat = null;
     const { data: globalForum } = await supabase
         .from("chats")
@@ -577,7 +581,7 @@ async function loadUserChats() {
     for (const chat of rawChats) {
         const isOfficial = (chat.id === officialForumChatId || chat.title === 'GSRA Official / Community Forum');
         const isDirect = (chat.title === null || chat.user1_id !== chat.user2_id);
-        const isGroup = (chat.title !== null && chat.user1_id === chat.user2_id && !isOfficial);
+        const isGroup = (chat.title !== null && chat.user1_id === chat.user2_id); // Jede Gruppe/Forum ist für alle einsehbar
         
         if (isOfficial || isDirect || isGroup) {
             accessibleChats.push(chat);
@@ -699,14 +703,14 @@ async function renderChatsList() {
 
         item.className = `wa-chat-item ${isSelected ? 'active' : ''} ${isUnread ? 'unread' : ''}`;
         
-        // FIX: Strenge Trennung zwischen Foren/Gruppen und echten 1-on-1 Chats
+        // Exakte Trennung: Foren/Gruppen behalten exakt ihren Titel ohne Partnernamen
         let displayTitle = "";
         if (isOfficial) {
             displayTitle = "GSRA Official / Community Forum";
         } else if (isGroup) {
-            displayTitle = chat.title; // Gruppen/Foren behalten IMMER exakt ihren eigenen Namen ohne Partner!
+            displayTitle = chat.title;
         } else if (chat.title) {
-            displayTitle = `${chat.title} (${otherUserName})`; // Nur Privatchats haben den Partnernamen dahinter
+            displayTitle = `${chat.title} (${otherUserName})`;
         } else {
             displayTitle = `Chat mit ${otherUserName}`;
         }
@@ -758,7 +762,7 @@ function openForumChat(forumChat = null) {
     if (chatTitleText) chatTitleText.innerText = forumChat?.title || "GSRA Official / Community Forum";
     if (chatActions) chatActions.style.display = "flex";
     
-    // Mitglied hinzufügen Button nur für erstellte Gruppen, aber NICHT für das offizielle Announcement-Forum
+    // Mitglied hinzufügen nur bei erstellten Foren, nicht beim offiziellen Announcement-Forum
     if (addMemberBtn) {
         addMemberBtn.style.display = (chatId === officialForumChatId) ? "none" : "block";
     }
@@ -766,6 +770,7 @@ function openForumChat(forumChat = null) {
 
     const isOfficialAnnouncement = (chatId === officialForumChatId);
 
+    // FIX: Offizielles Forum: Nur Admins dürfen schreiben. Erstellte Foren: Jeder darf schreiben!
     if (isOfficialAnnouncement && !isAdminUser) {
         if (messageInput) {
             messageInput.disabled = true;
@@ -796,7 +801,7 @@ async function openChat(chatId, recipientName, chatTitle = null) {
     if (chatTitleText) chatTitleText.innerText = displayName;
     
     if (chatActions) chatActions.style.display = "flex";
-    if (addMemberBtn) addMemberBtn.style.display = "none"; // In 1-on-1 Chats kein Gruppen-Mitglied hinzufügen
+    if (addMemberBtn) addMemberBtn.style.display = "none";
     if (blockUserBtn) blockUserBtn.style.display = "block";
 
     if (messageInput) { messageInput.disabled = false; messageInput.placeholder = "Gib eine Nachricht ein..."; }
@@ -931,7 +936,7 @@ if (editChatTitleBtn) {
             
             await supabase.from("chats").update({ title: trimmedTitle }).eq("id", activeChatId);
             
-            const sysMsg = `${currentUsername} hat den Namen in "${trimmedTitle}" geändert.`;
+            const sysMsg = `${currentUsername} hat das Forum in "${trimmedTitle}" umbenannt.`;
             await supabase.from("messages").insert([{
                 chat_id: activeChatId,
                 sender_id: currentUser.id,
@@ -954,7 +959,7 @@ if (deleteChatBtn) {
             return;
         }
 
-        if (confirm("Möchtest du dieses Forum / diesen Chat wirklich löschen?")) {
+        if (confirm("Möchtest du dieses Forum wirklich löschen?")) {
             await supabase.from("messages").delete().eq("chat_id", activeChatId);
             try { await supabase.from("chat_favorites").delete().eq("chat_id", activeChatId); } catch(e){}
             await supabase.from("chats").delete().eq("id", activeChatId);
