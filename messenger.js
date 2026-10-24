@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Messenger Logik (Finale Perfektion: Symbole, Titel & Echtzeit)
+   GSRA - Messenger Logik (Finale Version: Globales Forum, Eindeutige Chats & Umbenennungs-Systemnachricht)
 ========================================= */
 
 let currentUser = null;
@@ -153,7 +153,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         const [u1, u2] = [currentUser.id, foundProfiles.id].sort();
-        let existingChat = allChatsCache.find(c => c.title === null && c.user1_id === u1 && c.user2_id === u2);
+        const { data: existingPairs } = await supabase
+            .from("chats")
+            .select("*")
+            .eq("user1_id", u1)
+            .eq("user2_id", u2);
+
+        let existingChat = (existingPairs || []).find(c => c.user1_id !== c.user2_id);
 
         if (existingChat) {
             activeChatId = existingChat.id;
@@ -164,32 +170,19 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
-        const { data: fetched } = await supabase
+        const { data: newChat, err: newErr } = await supabase
             .from("chats")
-            .select("*")
-            .eq("user1_id", u1)
-            .eq("user2_id", u2)
-            .is("title", null)
-            .maybeSingle();
+            .insert([{
+                user1_id: u1,
+                user2_id: u2,
+                title: null,
+                last_message: "Chat gestartet"
+            }])
+            .select()
+            .single();
 
-        if (fetched) {
-            existingChat = fetched;
-        } else {
-            const { data: newChat, err: newErr } = await supabase
-                .from("chats")
-                .insert([{
-                    user1_id: u1,
-                    user2_id: u2,
-                    title: null,
-                    last_message: "Chat gestartet"
-                }])
-                .select()
-                .single();
-
-            if (!newErr) existingChat = newChat;
-        }
-
-        if (existingChat) {
+        if (!newErr && newChat) {
+            existingChat = newChat;
             activeChatId = existingChat.id;
             markChatAsRead(activeChatId);
             if (waWelcomeScreen) waWelcomeScreen.style.display = "none";
@@ -419,19 +412,15 @@ async function checkUrlParameters() {
     const targetId = sellerId || friendId;
     if (targetId && targetId !== currentUser.id) {
         const [u1, u2] = [currentUser.id, targetId].sort();
-        let existingChat = null;
-
-        const { data: fetched } = await supabase
+        const { data: existingPairs } = await supabase
             .from("chats")
             .select("*")
             .eq("user1_id", u1)
-            .eq("user2_id", u2)
-            .is("title", null)
-            .maybeSingle();
+            .eq("user2_id", u2);
 
-        if (fetched) {
-            existingChat = fetched;
-        } else {
+        let existingChat = (existingPairs || []).find(c => c.user1_id !== c.user2_id);
+
+        if (!existingChat) {
             const { data: newChat, error } = await supabase
                 .from("chats")
                 .insert([{
@@ -557,47 +546,45 @@ async function loadUserChats() {
         console.error("Fehler beim Laden der Chats:", err);
     }
 
-    // Offizielles Forum explizit laden/sicherstellen
-    let forumChat = rawChats.find(c => c.title === 'GSRA Official / Community Forum');
-    
-    if (!forumChat) {
-        const { data: globalForum } = await supabase
+    // FIX: Offizielles Forum GLOBAL für JEDEN Nutzer laden (egal wer es erstellt hat)
+    let forumChat = null;
+    const { data: globalForum } = await supabase
+        .from("chats")
+        .select("*")
+        .eq("title", 'GSRA Official / Community Forum')
+        .maybeSingle();
+
+    if (globalForum) {
+        forumChat = globalForum;
+    } else if (isAdminUser) {
+        const { data: createdForum, err: forumErr } = await supabase
             .from("chats")
-            .select("*")
-            .eq("title", 'GSRA Official / Community Forum')
-            .maybeSingle();
+            .insert([{
+                user1_id: currentUser.id,
+                user2_id: currentUser.id,
+                title: 'GSRA Official / Community Forum',
+                last_message: 'Willkommen im offiziellen Community-Forum!'
+            }])
+            .select()
+            .single();
 
-        if (globalForum) {
-            forumChat = globalForum;
-            rawChats.unshift(globalForum);
-        } else if (isAdminUser) {
-            const { data: createdForum, err: forumErr } = await supabase
-                .from("chats")
-                .insert([{
-                    user1_id: currentUser.id,
-                    user2_id: currentUser.id,
-                    title: 'GSRA Official / Community Forum',
-                    last_message: 'Willkommen im offiziellen Community-Forum!'
-                }])
-                .select()
-                .single();
-
-            if (!forumErr && createdForum) {
-                forumChat = createdForum;
-                rawChats.unshift(createdForum);
-            }
+        if (!forumErr && createdForum) {
+            forumChat = createdForum;
         }
     }
 
     if (forumChat) {
         officialForumChatId = forumChat.id;
+        if (!rawChats.some(c => c.id === forumChat.id)) {
+            rawChats.unshift(forumChat);
+        }
     }
 
     let accessibleChats = [];
     for (const chat of rawChats) {
         const isOfficial = (chat.id === officialForumChatId || chat.title === 'GSRA Official / Community Forum');
         const isDirect = (chat.title === null || chat.user1_id !== chat.user2_id);
-        const isGroup = (chat.title !== null && chat.user1_id === chat.user2_id);
+        const isGroup = (chat.title !== null && chat.user1_id === chat.user2_id && !isOfficial);
         
         if (isOfficial || isDirect || isGroup) {
             accessibleChats.push(chat);
@@ -719,7 +706,6 @@ async function renderChatsList() {
 
         item.className = `wa-chat-item ${isSelected ? 'active' : ''} ${isUnread ? 'unread' : ''}`;
         
-        // FIX: Exakte Titel-Logik (Umbenannter Chat zeigt "Titel (Nutzername)")
         let displayTitle = "";
         if (isOfficial) {
             displayTitle = "GSRA Official / Community Forum";
@@ -947,7 +933,20 @@ if (editChatTitleBtn) {
         const newTitle = prompt("Gib einen neuen Namen ein:");
         if (newTitle !== null && newTitle.trim() !== "") {
             const trimmedTitle = newTitle.trim();
+            
+            // 1. Titel in DB aktualisieren
             await supabase.from("chats").update({ title: trimmedTitle }).eq("id", activeChatId);
+            
+            // 2. Systemnachricht posten, damit der Partner Bescheid weiß und es nach oben rutscht
+            const sysMsg = `${currentUsername} hat den Chatnamen in "${trimmedTitle}" geändert.`;
+            await supabase.from("messages").insert([{
+                chat_id: activeChatId,
+                sender_id: currentUser.id,
+                text: sysMsg
+            }]);
+
+            await supabase.from("chats").update({ last_message: sysMsg }).eq("id", activeChatId);
+
             loadUserChats();
             alert("Aktualisiert!");
         }
