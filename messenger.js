@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Messenger Logik (Finale Perfektion: Korrekte Unread-Erkennung für die allererste Nachricht)
+   GSRA - Messenger Logik (Finale Perfektion: Initiale Systemnachrichten & sauberes Löschen)
 ========================================= */
 
 let currentUser = null;
@@ -107,21 +107,28 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Forum/Gruppe erstellen
+    // Forum/Gruppe erstellen mit initialer Systemnachricht
     if (newForumForm) {
         newForumForm.addEventListener("submit", async (e) => {
             e.preventDefault();
             const forumName = forumNameInput.value.trim();
             if (!forumName || !supabase || !currentUser?.id) return;
 
+            const sysMsg = `${currentUsername} hat das Forum erstellt.`;
             const { data: createdGroup, error } = await supabase.from("chats").insert([{
                 user1_id: currentUser.id,
                 user2_id: currentUser.id,
                 title: forumName,
-                last_message: `${currentUsername} hat das Forum erstellt.`
+                last_message: sysMsg
             }]).select().single();
 
             if (!error && createdGroup) {
+                await supabase.from("messages").insert([{
+                    chat_id: createdGroup.id,
+                    sender_id: currentUser.id,
+                    text: sysMsg
+                }]);
+
                 newForumModal.style.display = "none";
                 forumNameInput.value = "";
                 await loadUserChats();
@@ -166,18 +173,26 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (fetched && fetched.user1_id !== fetched.user2_id) {
                 existingChat = fetched;
             } else {
-                const { data: newChat, err: newErr } = await supabase
+                const sysMsg = `${currentUsername} hat den Chat mit dir eröffnet.`;
+                const { data: newChat, error: newErr } = await supabase
                     .from("chats")
                     .insert([{
                         user1_id: u1,
                         user2_id: u2,
                         title: null,
-                        last_message: "Chat gestartet"
+                        last_message: sysMsg
                     }])
                     .select()
                     .single();
 
-                if (!newErr) existingChat = newChat;
+                if (!newErr && newChat) {
+                    await supabase.from("messages").insert([{
+                        chat_id: newChat.id,
+                        sender_id: currentUser.id,
+                        text: sysMsg
+                    }]);
+                    existingChat = newChat;
+                }
             }
         }
 
@@ -419,18 +434,26 @@ async function checkUrlParameters() {
         if (fetched && fetched.user1_id !== fetched.user2_id) {
             existingChat = fetched;
         } else {
+            const sysMsg = itemTitle ? `Anfrage zu: ${itemTitle}` : `${currentUsername} hat den Chat eröffnet.`;
             const { data: newChat, error } = await supabase
                 .from("chats")
                 .insert([{
                     user1_id: u1,
                     user2_id: u2,
                     title: null,
-                    last_message: "Chat gestartet"
+                    last_message: sysMsg
                 }])
                 .select()
                 .single();
 
-            if (!error) existingChat = newChat;
+            if (!error && newChat) {
+                await supabase.from("messages").insert([{
+                    chat_id: newChat.id,
+                    sender_id: currentUser.id,
+                    text: sysMsg
+                }]);
+                existingChat = newChat;
+            }
         }
 
         if (existingChat) {
@@ -613,8 +636,6 @@ async function loadUserChats() {
             chat.unread = false;
         } else {
             const lastRead = getLastReadTime(chat.id);
-            // FIX: Einheitliche Prüfung für alle Chats (auch wenn lastRead === 0 ist),
-            // damit auch die allererste Nachricht im offiziellen Forum korrekt als unread erkannt wird.
             const lastReadIso = lastRead === 0 ? '1970-01-01T00:00:00.000Z' : new Date(lastRead).toISOString();
             const { data: unreadMsgs } = await supabase
                 .from("messages")
@@ -940,6 +961,7 @@ if (editChatTitleBtn) {
     });
 }
 
+// FIX: Löschen mit Fehlerprüfung, damit Supabase-RLS-Blockaden direkt gemeldet werden
 if (deleteChatBtn) {
     deleteChatBtn.addEventListener("click", async () => {
         const supabase = window.supabaseClient || window.supabase;
@@ -949,9 +971,17 @@ if (deleteChatBtn) {
         }
 
         if (confirm("Möchtest du dieses Forum / diesen Chat wirklich löschen?")) {
-            await supabase.from("messages").delete().eq("chat_id", activeChatId);
+            const { error: msgErr } = await supabase.from("messages").delete().eq("chat_id", activeChatId);
+            if (msgErr) {
+                alert("Fehler beim Löschen der Nachrichten: " + msgErr.message);
+                return;
+            }
             try { await supabase.from("chat_favorites").delete().eq("chat_id", activeChatId); } catch(e){}
-            await supabase.from("chats").delete().eq("id", activeChatId);
+            const { error: chatErr } = await supabase.from("chats").delete().eq("id", activeChatId);
+            if (chatErr) {
+                alert("Fehler beim Löschen: " + chatErr.message);
+                return;
+            }
             
             activeChatId = null;
             if (waWelcomeScreen) waWelcomeScreen.style.display = "flex";
@@ -969,9 +999,17 @@ if (blockUserBtn) {
         if (!activeChatId || activeChatId === officialForumChatId) return;
 
         if (confirm("Möchtest du diesen Nutzer blockieren und den Chat entfernen?")) {
-            await supabase.from("messages").delete().eq("chat_id", activeChatId);
+            const { error: msgErr } = await supabase.from("messages").delete().eq("chat_id", activeChatId);
+            if (msgErr) {
+                alert("Fehler: " + msgErr.message);
+                return;
+            }
             try { await supabase.from("chat_favorites").delete().eq("chat_id", activeChatId); } catch(e){}
-            await supabase.from("chats").delete().eq("id", activeChatId);
+            const { error: chatErr } = await supabase.from("chats").delete().eq("id", activeChatId);
+            if (chatErr) {
+                alert("Fehler: " + chatErr.message);
+                return;
+            }
             
             activeChatId = null;
             if (waWelcomeScreen) waWelcomeScreen.style.display = "flex";
@@ -1030,7 +1068,7 @@ if (chatForm) {
                 last_message: text || "[Foto]"
             }).eq("id", activeChatId);
 
-chat: markChatAsRead(activeChatId);
+            markChatAsRead(activeChatId);
             loadUserChats();
         } catch (err) {
             console.error("Fehler beim Senden:", err);
