@@ -315,7 +315,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 for (const file of files) {
                     if (file.size > MAX_FILE_SIZE) {
                         const actualSizeMB = (file.size / (1024 * 1024)).toFixed(1);
-                        alert(`Die Datei "${file.name}" ist ${actualSizeMB} MB groß und überschreitet das erlaubte Limit von 200 MB!`);
+                        alert(`Deine Datei ist ${actualSizeMB} MB groß. Das Limit liegt bei 200 MB, weshalb sie nicht hochgeladen werden kann.`);
                         imageUploadInput.value = "";
                         if (imagePreviewContainer) imagePreviewContainer.style.display = "none";
                         return;
@@ -346,13 +346,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (closeImageModal && imageModal) {
         closeImageModal.addEventListener("click", () => {
             imageModal.style.display = "none";
-            if (modalVideoFull) { modalVideoFull.pause(); modalVideoFull.style.display = "none"; modalVideoFull.src = ""; }
+            if (modalVideoFull) { 
+                // Video nicht pausieren, damit Bild-im-Bild (Mini-Player) auf der Seite weiterlaufen kann!
+                modalVideoFull.style.display = "none"; 
+            }
             if (modalImageFull) modalImageFull.style.display = "none";
         });
         imageModal.addEventListener("click", (e) => {
             if (e.target === imageModal) {
                 imageModal.style.display = "none";
-                if (modalVideoFull) { modalVideoFull.pause(); modalVideoFull.style.display = "none"; modalVideoFull.src = ""; }
+                if (modalVideoFull) { 
+                    modalVideoFull.style.display = "none"; 
+                }
                 if (modalImageFull) modalImageFull.style.display = "none";
             }
         });
@@ -879,7 +884,7 @@ async function renderMessages(messages) {
     }
 }
 
-// PRÄZISE SYSTEMNACHRICHTEN-LOGIK (VERHINDERT DOPPLUNGEN & KORRIGIERT FOREN-ANSPRACHE)
+// VOLLSTÄNDIG KORRIGIERTE SYSTEMNACHRICHTEN-LOGIK FÜR DU / DICH & HINZUFÜGEN
 async function formatSystemMessage(text, senderId) {
     if (!text) return "";
     let formatted = text;
@@ -892,7 +897,6 @@ async function formatSystemMessage(text, senderId) {
         } else if (formatted.includes("hat das Forum erstellt")) {
             formatted = "Du hast das Forum erstellt.";
         } else if (formatted.includes("hat hinzugefügt")) {
-            // Extrahiere den hinzugefügten Namen sauber
             const parts = formatted.split("hat ");
             if (parts.length > 1) {
                 const rest = parts[1].replace("zum Forum hinzugefügt", "").trim();
@@ -905,7 +909,6 @@ async function formatSystemMessage(text, senderId) {
         }
     } else {
         if (formatted.includes("hinzugefügt")) {
-            // Wenn ich hinzugefügt wurde von jemand anderem
             const senderName = await fetchUserName(senderId);
             formatted = `Du wurdest von ${senderName} zum Forum hinzugefügt.`;
         } else {
@@ -951,7 +954,6 @@ async function appendSingleMessage(msg) {
             const isVideo = /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(cleanUrl);
 
             if (isVideo) {
-                // WhatsApp-ähnlicher, direkt klickbarer großer Videoplayer-Container
                 const videoWrap = document.createElement("div");
                 videoWrap.className = "wa-video-preview-wrapper";
                 
@@ -1195,7 +1197,6 @@ if (chatForm) {
             loadUserChats();
         } catch (err) {
             console.error("Fehler beim Senden:", err);
-            // Sauberer, nutzerfreundlicher Fehlerhinweis ohne technische Backend-Begriffe
             if (err.message && err.message.includes("maximum allowed size")) {
                 alert("Dein Medium konnte nicht hochgeladen werden, da die Datei zu groß für das Server-Limit ist.");
             } else {

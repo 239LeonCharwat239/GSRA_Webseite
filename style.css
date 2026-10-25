@@ -154,7 +154,6 @@ nav a:hover::after, nav a.active::after {
     width: 100%;
 }
 
-/* Roter Glow für ungelesene Nachrichten in der Navbar */
 nav a.nav-unread-glow {
     color: #ff4d4d !important;
     text-shadow: 0 0 12px rgba(255, 77, 77, 0.9) !important;
@@ -192,7 +191,7 @@ nav a.nav-unread-glow::after {
 }
 
 /* =========================================
-   WHATSAPP-ÄHNLICHER VIDEO- & MEDIENPLAYER (MODERN & GROSS)
+   WHATSAPP-ÄHNLICHER VIDEO- & MEDIENPLAYER
 ========================================= */
 .wa-video-preview-wrapper {
     position: relative;
