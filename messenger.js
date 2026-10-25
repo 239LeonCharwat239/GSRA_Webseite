@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Messenger Logik (Vollständig inkl. Du/Dich Logik & Upload-Ladefeedback)
+   GSRA - Messenger Logik (Vollständig & Korrigiert)
 ========================================= */
 
 let currentUser = null;
@@ -186,7 +186,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (fetched && fetched.user1_id !== fetched.user2_id) {
                 existingChat = fetched;
             } else {
-                const sysMsg = `${currentUsername} hat den Chat mit dir eröffnet.`;
+                const sysMsg = `${currentUsername} hat den Chat eröffnet.`;
                 const { data: newChat, error: newErr } = await supabase
                     .from("chats")
                     .insert([{
@@ -264,17 +264,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 return;
             }
 
-            const { data: existingMsgs } = await supabase
-                .from("messages")
-                .select("text")
-                .eq("chat_id", activeChatId);
-
-            const alreadyAdded = (existingMsgs || []).some(m => m.text && m.text.includes(targetUser.username));
-            if (alreadyAdded) {
-                alert(`Nutzer ${targetUser.username} ist bereits in diesem Forum.`);
-                return;
-            }
-
             const sysMsg = `${currentUsername} hat ${targetUser.username} zum Forum hinzugefügt.`;
 
             await supabase.from("chats").update({
@@ -321,6 +310,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         imageUploadInput.addEventListener("change", () => {
             const files = Array.from(imageUploadInput.files);
             if (files.length > 0) {
+                const MAX_FILE_SIZE = 200 * 1024 * 1024; // 200 MB
+                for (const file of files) {
+                    if (file.size > MAX_FILE_SIZE) {
+                        const actualSizeMB = (file.size / (1024 * 1024)).toFixed(1);
+                        alert(`Die Datei "${file.name}" ist ${actualSizeMB} MB groß und überschreitet das maximale Limit von 200 MB!`);
+                        imageUploadInput.value = "";
+                        if (imagePreviewContainer) imagePreviewContainer.style.display = "none";
+                        return;
+                    }
+                }
                 if (previewThumbsList) previewThumbsList.innerHTML = "";
                 files.forEach(file => {
                     const isVid = file.type.startsWith('video/');
@@ -416,7 +415,7 @@ async function fetchUserName(userId) {
             .eq("id", userId)
             .maybeSingle();
 
-        const name = data?.username || data?.full_name || `Fahrer (${userId.substring(0, 6)})`;
+        const name = data?.username || data?.full_name || `Fahrer`;
         userNamesCache[userId] = name;
         return name;
     } catch (e) {
@@ -873,26 +872,30 @@ async function renderMessages(messages) {
     }
 }
 
-// INTELLIGENTE NAMENS- & DU/DICH-BEREINIGUNG FÜR SYSTEMNACHRICHTEN
+// FEHLERFREIE SYSTEMNACHRICHTEN-LOGIK (SAUBERE DU/DICH ANSPRACHE)
 async function formatSystemMessage(text, senderId) {
     if (!text) return "";
     let formatted = text;
 
-    // Ersetze eigenen Namen in Systemtexten durch "Du" / "dich"
-    if (currentUsername) {
-        const regex = new RegExp(currentUsername, "gi");
-        formatted = formatted.replace(regex, "dir"); // z.B. "hat den Chat mit dir eröffnet"
-    }
+    const isOwnAction = String(senderId) === String(currentUser?.id);
 
-    // Falls der Sender selbst die Aktion ausgeführt hat, personalisieren ("Du hast...")
-    if (String(senderId) === String(currentUser?.id)) {
-        formatted = formatted.replace(new RegExp(`^${currentUsername}`, "i"), "Du");
+    if (isOwnAction) {
+        if (formatted.includes("hat den Chat eröffnet")) {
+            formatted = "Du hast den Chat eröffnet.";
+        } else if (formatted.includes("hat das Forum erstellt")) {
+            formatted = "Du hast das Forum erstellt.";
+        } else if (formatted.includes("hat hinzugefügt")) {
+            formatted = formatted.replace(new RegExp(`^.+? hat `, "i"), "Du hast ");
+        } else if (formatted.includes("umbenannt")) {
+            formatted = formatted.replace(new RegExp(`^.+? hat `, "i"), "Du hast ");
+        }
+    } else {
+        if (currentUsername) {
+            const regex = new RegExp(currentUsername, "gi");
+            formatted = formatted.replace(regex, "dir");
+        }
+        formatted = formatted.replace(/\bhat dir eröffnet\b/gi, "hat den Chat mit dir eröffnet");
     }
-
-    // Grammatik-Korrekturen für "Du hat" -> "Du hast"
-    formatted = formatted.replace(/\bDu hat\b/gi, "Du hast");
-    formatted = formatted.replace(/\bdu hat\b/gi, "du hast");
-    formatted = formatted.replace(/\bhat dir eröffnet\b/gi, "hast den Chat mit dir eröffnet"); // Feinabstimmung
 
     return formatted;
 }
@@ -964,7 +967,6 @@ async function appendSingleMessage(msg) {
     if (msg.text && msg.text !== "[Medien]") {
         const textDiv = document.createElement("div");
         
-        // Prüfen, ob es eine Systemnachricht ist (enthält typische Phrasen)
         const isSystem = msg.text.includes("hat den Chat") || msg.text.includes("hat das Forum") || msg.text.includes("hat hinzugefügt") || msg.text.includes("umbenannt");
         
         if (isSystem) {
@@ -1090,11 +1092,11 @@ if (chatForm) {
 
         if ((!text && files.length === 0) || !activeChatId || !currentUser?.id || !supabase) return;
 
-        // 200 MB Limit Prüfung
         const MAX_FILE_SIZE = 200 * 1024 * 1024;
         for (const file of files) {
             if (file.size > MAX_FILE_SIZE) {
-                alert(`Die Datei "${file.name}" ist zu groß. Maximale Dateigröße ist 200 MB.`);
+                const actualSizeMB = (file.size / (1024 * 1024)).toFixed(1);
+                alert(`Die Datei "${file.name}" ist ${actualSizeMB} MB groß und überschreitet das Limit von 200 MB.`);
                 return;
             }
         }
@@ -1105,7 +1107,6 @@ if (chatForm) {
             return;
         }
 
-        // LADEFEEDBACK: Button deaktivieren und Text auf Senden... ändern
         if (sendBtn) {
             sendBtn.disabled = true;
             sendBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Sende...`;
@@ -1151,9 +1152,12 @@ if (chatForm) {
             loadUserChats();
         } catch (err) {
             console.error("Fehler beim Senden:", err);
-            alert("Fehler beim Hochladen/Senden der Nachricht. Bitte versuche es erneut.");
+            if (err.message && err.message.includes("maximum allowed size")) {
+                alert("Fehler: Die Datei überschreitet das aktuelle Server-Limit von Supabase (Free-Tier max. 50 MB). Bitte komprimiere das Video oder nutze bald den Pro-Tarif für bis zu 200 MB!");
+            } else {
+                alert("Fehler beim Hochladen/Senden der Nachricht. Bitte versuche es erneut.");
+            }
         } finally {
-            // LADEFEEDBACK ZURÜCKSETZEN
             if (sendBtn) {
                 sendBtn.disabled = false;
                 sendBtn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Senden`;
