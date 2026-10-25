@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Messenger Logik (Finale Präzision: Chat-Trennung, Icons & Foren-Messaging)
+   GSRA - Messenger Logik (Finale Perfektion: Korrekte Unread-Erkennung für die allererste Nachricht)
 ========================================= */
 
 let currentUser = null;
@@ -107,7 +107,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Forum/Gruppe erstellen (user1_id === user2_id kennzeichnet echte Gruppen/Foren)
+    // Forum/Gruppe erstellen
     if (newForumForm) {
         newForumForm.addEventListener("submit", async (e) => {
             e.preventDefault();
@@ -214,7 +214,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Mitglied zu Gruppe / Forum hinzufügen (nur bei echten Foren)
+    // Mitglied zu Gruppe / Forum hinzufügen
     if (addMemberBtn) {
         addMemberBtn.addEventListener("click", async () => {
             if (!currentUser?.id || !activeChatId) return;
@@ -613,20 +613,18 @@ async function loadUserChats() {
             chat.unread = false;
         } else {
             const lastRead = getLastReadTime(chat.id);
-            if (lastRead === 0) {
-                chat.unread = (chat.id !== officialForumChatId);
-            } else {
-                const lastReadIso = new Date(lastRead).toISOString();
-                const { data: unreadMsgs } = await supabase
-                    .from("messages")
-                    .select("id")
-                    .eq("chat_id", chat.id)
-                    .neq("sender_id", currentUser.id)
-                    .gt("created_at", lastReadIso)
-                    .limit(1);
+            // FIX: Einheitliche Prüfung für alle Chats (auch wenn lastRead === 0 ist),
+            // damit auch die allererste Nachricht im offiziellen Forum korrekt als unread erkannt wird.
+            const lastReadIso = lastRead === 0 ? '1970-01-01T00:00:00.000Z' : new Date(lastRead).toISOString();
+            const { data: unreadMsgs } = await supabase
+                .from("messages")
+                .select("id")
+                .eq("chat_id", chat.id)
+                .neq("sender_id", currentUser.id)
+                .gt("created_at", lastReadIso)
+                .limit(1);
 
-                chat.unread = Boolean(unreadMsgs && unreadMsgs.length > 0);
-            }
+            chat.unread = Boolean(unreadMsgs && unreadMsgs.length > 0);
         }
     }
 
@@ -678,7 +676,7 @@ async function renderChatsList() {
     for (const chat of filtered) {
         const isOfficial = (chat.id === officialForumChatId || (chat.title && chat.title.includes('Official')));
         const isGroup = (chat.title !== null && chat.user1_id === chat.user2_id && !isOfficial);
-        const isForumOrGroup = isOfficial || isGroup; // Nur echte Gruppen/Foren sind Foren!
+        const isForumOrGroup = isOfficial || isGroup;
 
         let otherUserName = "Fahrer";
         if (!isForumOrGroup && chat.user1_id !== chat.user2_id) {
@@ -693,14 +691,13 @@ async function renderChatsList() {
 
         item.className = `wa-chat-item ${isSelected ? 'active' : ''} ${isUnread ? 'unread' : ''}`;
         
-        // FIX: Strenge Trennung: Private Chats (auch mit Titel) zeigen IMMER den Partnernamen in Klammern und bleiben Chats
         let displayTitle = "";
         if (isOfficial) {
             displayTitle = "GSRA Official / Community Forum";
         } else if (isGroup) {
-            displayTitle = chat.title; // Echte Foren haben keinen Partnernamen
+            displayTitle = chat.title;
         } else if (chat.title) {
-            displayTitle = `${chat.title} (${otherUserName})`; // Privater Chat mit umbenanntem Titel + Partnername!
+            displayTitle = `${chat.title} (${otherUserName})`;
         } else {
             displayTitle = `Chat mit ${otherUserName}`;
         }
@@ -752,7 +749,6 @@ function openForumChat(forumChat = null) {
     if (chatTitleText) chatTitleText.innerText = forumChat?.title || "GSRA Official / Community Forum";
     if (chatActions) chatActions.style.display = "flex";
     
-    // Mitglied hinzufügen nur bei echten Foren
     if (addMemberBtn) {
         addMemberBtn.style.display = (chatId === officialForumChatId) ? "none" : "block";
     }
@@ -789,7 +785,6 @@ async function openChat(chatId, recipientName, chatTitle = null) {
     const displayName = chatTitle ? `${chatTitle} (${recipientName})` : `Chat mit ${recipientName}`;
     if (chatTitleText) chatTitleText.innerText = displayName;
     
-    // FIX: In echten 1-on-1 Chats wird der "Mitglied hinzufügen"-Button NIEMALS angezeigt!
     if (chatActions) chatActions.style.display = "flex";
     if (addMemberBtn) addMemberBtn.style.display = "none";
     if (blockUserBtn) blockUserBtn.style.display = "block";
@@ -1014,7 +1009,7 @@ if (chatForm) {
             const fileExt = file.name.split('.').pop();
             const fileName = `chat_${Date.now()}_${Math.random().toString(36).substring(2,7)}.${fileExt}`;
             
-            const { error: uploadErr } = await supabase.storage.log ? await supabase.storage.from("chat_attachments").upload(fileName, file) : await supabase.storage.from("chat_attachments").upload(fileName, file);
+            const { error: uploadErr } = await supabase.storage.from("chat_attachments").upload(fileName, file);
             if (!uploadErr) {
                 const { data: pubData } = supabase.storage.from("chat_attachments").getPublicUrl(fileName);
                 imageUrls.push(pubData.publicUrl);
@@ -1035,7 +1030,7 @@ if (chatForm) {
                 last_message: text || "[Foto]"
             }).eq("id", activeChatId);
 
-            markChatAsRead(activeChatId);
+chat: markChatAsRead(activeChatId);
             loadUserChats();
         } catch (err) {
             console.error("Fehler beim Senden:", err);
