@@ -597,11 +597,11 @@ async function loadUserChats() {
             const { data: createdForum, err: forumErr } = await supabase
                 .from("chats")
                 .insert([{
-                user1_id: currentUser.id,
-                user2_id: currentUser.id,
-                title: 'GSRA Official / Community Forum',
-                last_message: 'Willkommen im offiziellen Community-Forum!'
-            }]).select().single();
+                    user1_id: currentUser.id,
+                    user2_id: currentUser.id,
+                    title: 'GSRA Official / Community Forum',
+                    last_message: 'Willkommen im offiziellen Community-Forum!'
+                }]).select().single();
 
             if (!forumErr && createdForum) {
                 forumChat = createdForum;
@@ -801,7 +801,7 @@ function openForumChat(forumChat = null) {
     const isOfficialAnnouncement = (chatId === officialForumChatId);
 
     if (isOfficialAnnouncement && !isAdminUser) {
-    if (messageInput) {
+        if (messageInput) {
             messageInput.disabled = true;
             messageInput.placeholder = "Nur Administratoren können im offiziellen Forum schreiben.";
         }
@@ -810,7 +810,7 @@ function openForumChat(forumChat = null) {
         if (messageInput) {
             messageInput.disabled = false;
             messageInput.placeholder = "Schreibe eine Nachricht...";
-    }
+        }
         if (sendBtn) sendBtn.disabled = false;
     }
 
@@ -905,7 +905,7 @@ async function formatSystemMessage(text, senderId) {
             return `Du hast ${target} zum Forum hinzugefügt.`;
         } else {
             return `Du wurdest von ${actorName} zum Forum hinzugefügt.`;
-    }
+        }
     }
 
     // 2. Chat eröffnet
@@ -914,7 +914,7 @@ async function formatSystemMessage(text, senderId) {
             return "Du hast den Chat eröffnet.";
         } else {
             return `${actorName} hat den Chat mit dir eröffnet.`;
-    }
+        }
     }
 
     // 3. Forum erstellt
@@ -923,7 +923,7 @@ async function formatSystemMessage(text, senderId) {
             return "Du hast das Forum erstellt.";
         } else {
             return `${actorName} hat das Forum erstellt.`;
-    }
+        }
     }
 
     // 4. Umbenannt
@@ -932,7 +932,7 @@ async function formatSystemMessage(text, senderId) {
             return text.replace(new RegExp(`^${actorName}\\s+hat`, 'i'), 'Du hast');
         } else {
             return text;
-    }
+        }
     }
 
     return text;
@@ -1121,15 +1121,23 @@ if (blockUserBtn) {
         if (!activeChatId || activeChatId === officialForumChatId) return;
 
         if (confirm("Möchtest du diesen Nutzer blockieren und den Chat entfernen?")) {
-            await supabase.from("messages").delete().eq("chat_id", activeChatId);
+            const { error: msgErr } = await supabase.from("messages").delete().eq("chat_id", activeChatId);
+            if (msgErr) {
+                alert("Fehler: " + msgErr.message);
+                return;
+            }
             try { await supabase.from("chat_favorites").delete().eq("chat_id", activeChatId); } catch(e){}
-            await supabase.from("chats").delete().eq("id", activeChatId);
+            const { error: chatErr } = await supabase.from("chats").delete().eq("id", activeChatId);
+            if (chatErr) {
+                alert("Fehler: " + chatErr.message);
+                return;
+            }
             
             activeChatId = null;
             if (waWelcomeScreen) waWelcomeScreen.style.display = "flex";
             if (waChatActivePane) waChatActivePane.style.display = "none";
 
-            loadUserChats();
+            await loadUserChats();
             alert("Nutzer blockiert.");
         }
     });
@@ -1169,29 +1177,26 @@ if (chatForm) {
             for (const file of files) {
                 const fileExt = file.name.split('.').pop();
                 const fileName = `chat_${Date.now()}_${Math.random().toString(36).substring(2,7)}.${fileExt}`;
+                
                 const { error: uploadErr } = await supabase.storage.from("chat_attachments").upload(fileName, file);
-                if (uploadErr) throw uploadErr;
+                if (uploadErr) {
+                    throw uploadErr;
+                }
                 const { data: pubData } = supabase.storage.from("chat_attachments").getPublicUrl(fileName);
                 mediaUrls.push(pubData.publicUrl);
             }
 
             const finalMediaUrl = mediaUrls.length > 0 ? mediaUrls.join(",") : null;
 
-            // Nachricht zusammenbauen (inklusive Antwort-Kontext falls vorhanden)
-            let finalMessageText = text;
-            if (activeReplyingText) {
-                finalMessageText = `> ${activeReplyingText}\n${text}`;
-            }
-
             await supabase.from("messages").insert([{
                 chat_id: activeChatId,
                 sender_id: currentUser.id,
-                text: finalMessageText || (finalMediaUrl ? "[Medien]" : ""),
+                text: text || (finalMediaUrl ? "[Medien]" : ""),
                 image_url: finalMediaUrl
             }]);
 
             await supabase.from("chats").update({
-                last_message: finalMessageText || "[Medien]"
+                last_message: text || "[Medien]"
             }).eq("id", activeChatId);
 
             if (messageInput) {
@@ -1202,15 +1207,15 @@ if (chatForm) {
             if (imagePreviewContainer) imagePreviewContainer.style.display = "none";
             if (emojiPickerWrapper) emojiPickerWrapper.style.display = "none";
 
-            // Antwort zurücksetzen
-            activeReplyingText = null;
-            if (replyPreviewBanner) replyPreviewBanner.style.display = "none";
-
             markChatAsRead(activeChatId);
             loadUserChats();
         } catch (err) {
             console.error("Fehler beim Senden:", err);
-            alert("Dein Medium konnte nicht hochgeladen werden, da die Datei das Dateigrößenlimit überschreitet.");
+            if (err.message && err.message.includes("maximum allowed size")) {
+                alert("Dein Medium konnte nicht hochgeladen werden, da die Datei das Dateigrößenlimit überschreitet.");
+            } else {
+                alert("Fehler beim Hochladen/Senden der Nachricht. Bitte versuche es erneut.");
+            }
         } finally {
             if (sendBtn) {
                 sendBtn.disabled = false;
