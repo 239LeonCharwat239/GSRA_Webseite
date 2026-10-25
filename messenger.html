@@ -118,7 +118,7 @@
                             <i class="fa-regular fa-face-smile"></i>
                         </button>
 
-                        <label for="imageUploadInput" class="attachment-btn" title="Medien anhängen (Fotos & Videos bis 200 MB)">
+                        <label for="imageUploadInput" class="attachment-btn" title="Medien anhängen (Fotos & Videos)">
                             <i class="fa-solid fa-paperclip"></i>
                             <input type="file" id="imageUploadInput" accept="image/*,video/*" multiple style="display: none;">
                         </label>
@@ -150,7 +150,8 @@
 
     <div id="imageModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.92); z-index: 9999; justify-content: center; align-items: center; padding: 20px;">
         <button id="closeImageModal" type="button" style="position: absolute; top: 20px; right: 30px; background: none; border: none; color: #fff; font-size: 32px; cursor: pointer;"><i class="fa-solid fa-xmark"></i></button>
-        <img id="modalImageFull" src="" alt="Großansicht" style="max-width: 90vw; max-height: 88vh; object-fit: contain; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.95); border: 1px solid var(--border-subtle);">
+        <img id="modalImageFull" src="" alt="Großansicht" style="max-width: 90vw; max-height: 88vh; object-fit: contain; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.95); border: 1px solid var(--border-subtle); display: none;">
+        <video id="modalVideoFull" src="" controls style="max-width: 92vw; max-height: 90vh; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.95); border: 1px solid var(--border-subtle); display: none; outline: none;"></video>
     </div>
 
     <section class="social-section">

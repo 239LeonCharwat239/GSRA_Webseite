@@ -45,6 +45,7 @@ const imagePreviewName = document.getElementById("imagePreviewName");
 const removeImageBtn = document.getElementById("removeImageBtn");
 const imageModal = document.getElementById("imageModal");
 const modalImageFull = document.getElementById("modalImageFull");
+const modalVideoFull = document.getElementById("modalVideoFull");
 const closeImageModal = document.getElementById("closeImageModal");
 const waWelcomeScreen = document.getElementById("waWelcomeScreen");
 const waChatActivePane = document.getElementById("waChatActivePane");
@@ -310,11 +311,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         imageUploadInput.addEventListener("change", () => {
             const files = Array.from(imageUploadInput.files);
             if (files.length > 0) {
-                const MAX_FILE_SIZE = 200 * 1024 * 1024; // 200 MB
+                const MAX_FILE_SIZE = 200 * 1024 * 1024;
                 for (const file of files) {
                     if (file.size > MAX_FILE_SIZE) {
                         const actualSizeMB = (file.size / (1024 * 1024)).toFixed(1);
-                        alert(`Die Datei "${file.name}" ist ${actualSizeMB} MB groß und überschreitet das maximale Limit von 200 MB!`);
+                        alert(`Die Datei "${file.name}" ist ${actualSizeMB} MB groß und überschreitet das erlaubte Limit von 200 MB!`);
                         imageUploadInput.value = "";
                         if (imagePreviewContainer) imagePreviewContainer.style.display = "none";
                         return;
@@ -345,9 +346,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (closeImageModal && imageModal) {
         closeImageModal.addEventListener("click", () => {
             imageModal.style.display = "none";
+            if (modalVideoFull) { modalVideoFull.pause(); modalVideoFull.style.display = "none"; modalVideoFull.src = ""; }
+            if (modalImageFull) modalImageFull.style.display = "none";
         });
         imageModal.addEventListener("click", (e) => {
-            if (e.target === imageModal) imageModal.style.display = "none";
+            if (e.target === imageModal) {
+                imageModal.style.display = "none";
+                if (modalVideoFull) { modalVideoFull.pause(); modalVideoFull.style.display = "none"; modalVideoFull.src = ""; }
+                if (modalImageFull) modalImageFull.style.display = "none";
+            }
         });
     }
 });
@@ -872,7 +879,7 @@ async function renderMessages(messages) {
     }
 }
 
-// FEHLERFREIE SYSTEMNACHRICHTEN-LOGIK (SAUBERE DU/DICH ANSPRACHE)
+// PRÄZISE SYSTEMNACHRICHTEN-LOGIK (VERHINDERT DOPPLUNGEN & KORRIGIERT FOREN-ANSPRACHE)
 async function formatSystemMessage(text, senderId) {
     if (!text) return "";
     let formatted = text;
@@ -885,16 +892,29 @@ async function formatSystemMessage(text, senderId) {
         } else if (formatted.includes("hat das Forum erstellt")) {
             formatted = "Du hast das Forum erstellt.";
         } else if (formatted.includes("hat hinzugefügt")) {
-            formatted = formatted.replace(new RegExp(`^.+? hat `, "i"), "Du hast ");
+            // Extrahiere den hinzugefügten Namen sauber
+            const parts = formatted.split("hat ");
+            if (parts.length > 1) {
+                const rest = parts[1].replace("zum Forum hinzugefügt", "").trim();
+                formatted = `Du hast ${rest} zum Forum hinzugefügt.`;
+            } else {
+                formatted = "Du hast ein Mitglied zum Forum hinzugefügt.";
+            }
         } else if (formatted.includes("umbenannt")) {
             formatted = formatted.replace(new RegExp(`^.+? hat `, "i"), "Du hast ");
         }
     } else {
-        if (currentUsername) {
-            const regex = new RegExp(currentUsername, "gi");
-            formatted = formatted.replace(regex, "dir");
+        if (formatted.includes("hinzugefügt")) {
+            // Wenn ich hinzugefügt wurde von jemand anderem
+            const senderName = await fetchUserName(senderId);
+            formatted = `Du wurdest von ${senderName} zum Forum hinzugefügt.`;
+        } else {
+            if (currentUsername) {
+                const regex = new RegExp(currentUsername, "gi");
+                formatted = formatted.replace(regex, "dir");
+            }
+            formatted = formatted.replace(/\bhat dir eröffnet\b/gi, "hat den Chat mit dir eröffnet");
         }
-        formatted = formatted.replace(/\bhat dir eröffnet\b/gi, "hat den Chat mit dir eröffnet");
     }
 
     return formatted;
@@ -928,38 +948,61 @@ async function appendSingleMessage(msg) {
         const displayCount = Math.min(urls.length, 4);
         for (let i = 0; i < displayCount; i++) {
             const cleanUrl = urls[i];
-            const imgWrap = document.createElement("div");
-            imgWrap.className = "wa-media-item";
-
             const isVideo = /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(cleanUrl);
 
             if (isVideo) {
-                const video = document.createElement("video");
-                video.src = cleanUrl;
-                video.controls = true;
-                video.style.cssText = "width: 100%; height: 100%; object-fit: cover; border-radius: 4px; border: 1px solid rgba(255, 255, 255, 0.15);";
-                imgWrap.appendChild(video);
+                // WhatsApp-ähnlicher, direkt klickbarer großer Videoplayer-Container
+                const videoWrap = document.createElement("div");
+                videoWrap.className = "wa-video-preview-wrapper";
+                
+                const videoElem = document.createElement("video");
+                videoElem.src = cleanUrl;
+                videoElem.preload = "metadata";
+
+                const overlayDiv = document.createElement("div");
+                overlayDiv.className = "wa-video-play-overlay";
+                overlayDiv.innerHTML = '<i class="fa-solid fa-play"></i>';
+
+                videoWrap.appendChild(videoElem);
+                videoWrap.appendChild(overlayDiv);
+
+                videoWrap.addEventListener("click", () => {
+                    if (modalVideoFull && imageModal) {
+                        if (modalImageFull) modalImageFull.style.display = "none";
+                        modalVideoFull.src = cleanUrl;
+                        modalVideoFull.style.display = "block";
+                        imageModal.style.display = "flex";
+                        modalVideoFull.play();
+                    }
+                });
+
+                gridContainer.appendChild(videoWrap);
             } else {
+                const imgWrap = document.createElement("div");
+                imgWrap.className = "wa-media-item";
+
                 const img = document.createElement("img");
                 img.src = cleanUrl;
                 img.alt = "Bild";
                 img.addEventListener("click", () => {
                     if (modalImageFull && imageModal) {
+                        if (modalVideoFull) modalVideoFull.style.display = "none";
                         modalImageFull.src = cleanUrl;
+                        modalImageFull.style.display = "block";
                         imageModal.style.display = "flex";
                     }
                 });
                 imgWrap.appendChild(img);
-            }
 
-            if (i === 3 && urls.length > 4) {
-                const overlay = document.createElement("div");
-                overlay.className = "wa-media-overlay";
-                overlay.innerText = `+${urls.length - 4}`;
-                imgWrap.appendChild(overlay);
-            }
+                if (i === 3 && urls.length > 4) {
+                    const overlay = document.createElement("div");
+                    overlay.className = "wa-media-overlay";
+                    overlay.innerText = `+${urls.length - 4}`;
+                    imgWrap.appendChild(overlay);
+                }
 
-            gridContainer.appendChild(imgWrap);
+                gridContainer.appendChild(imgWrap);
+            }
         }
         bubble.appendChild(gridContainer);
     }
@@ -1096,7 +1139,7 @@ if (chatForm) {
         for (const file of files) {
             if (file.size > MAX_FILE_SIZE) {
                 const actualSizeMB = (file.size / (1024 * 1024)).toFixed(1);
-                alert(`Die Datei "${file.name}" ist ${actualSizeMB} MB groß und überschreitet das Limit von 200 MB.`);
+                alert(`Deine Datei ist ${actualSizeMB} MB groß. Das Limit liegt bei 200 MB, weshalb dein Medium nicht hochgeladen werden konnte.`);
                 return;
             }
         }
@@ -1152,8 +1195,9 @@ if (chatForm) {
             loadUserChats();
         } catch (err) {
             console.error("Fehler beim Senden:", err);
+            // Sauberer, nutzerfreundlicher Fehlerhinweis ohne technische Backend-Begriffe
             if (err.message && err.message.includes("maximum allowed size")) {
-                alert("Fehler: Die Datei überschreitet das aktuelle Server-Limit von Supabase (Free-Tier max. 50 MB). Bitte komprimiere das Video oder nutze bald den Pro-Tarif für bis zu 200 MB!");
+                alert("Dein Medium konnte nicht hochgeladen werden, da die Datei zu groß für das Server-Limit ist.");
             } else {
                 alert("Fehler beim Hochladen/Senden der Nachricht. Bitte versuche es erneut.");
             }

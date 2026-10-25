@@ -192,6 +192,54 @@ nav a.nav-unread-glow::after {
 }
 
 /* =========================================
+   WHATSAPP-ÄHNLICHER VIDEO- & MEDIENPLAYER (MODERN & GROSS)
+========================================= */
+.wa-video-preview-wrapper {
+    position: relative;
+    width: 100%;
+    max-width: 320px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #000;
+    cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    transition: transform 0.2s ease;
+}
+
+.wa-video-preview-wrapper:hover {
+    transform: scale(1.02);
+}
+
+.wa-video-preview-wrapper video {
+    width: 100%;
+    max-height: 220px;
+    object-fit: cover;
+    display: block;
+    pointer-events: none;
+}
+
+.wa-video-play-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 42px;
+    transition: background 0.2s ease;
+}
+
+.wa-video-preview-wrapper:hover .wa-video-play-overlay {
+    background: rgba(0, 0, 0, 0.25);
+    color: var(--gsra-yellow);
+}
+
+/* =========================================
    STYLISCHE FILTERBAR (MODERN & CLEAN)
 ========================================= */
 .filter-bar {
@@ -1145,7 +1193,7 @@ p {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 4px;
-    max-width: 220px;
+    max-width: 260px;
     border-radius: 6px;
     overflow: hidden;
     margin-bottom: 6px;
@@ -1154,12 +1202,11 @@ p {
 .wa-media-item {
     position: relative;
     width: 100%;
-    height: 100px;
+    height: 110px;
     background: #0d0e12;
 }
 
-.wa-media-item img,
-.wa-media-item video {
+.wa-media-item img {
     width: 100%;
     height: 100%;
     object-fit: cover;
