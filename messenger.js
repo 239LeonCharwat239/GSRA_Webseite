@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Messenger Logik (Vollständig inkl. Shift+Enter & Absätze)
+   GSRA - Messenger Logik (Vollständig inkl. Shift+Enter & Auto-Expanding Textarea)
 ========================================= */
 
 let currentUser = null;
@@ -95,8 +95,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // ENTER sendet ab, SHIFT + ENTER erzeugt einen Zeilenumbruch
+    // NEU: Automatische Höhenanpassung (bis ca. 6 Zeilen) bei Eingabe, Enter sendet ab, Shift+Enter macht Absatz
     if (messageInput) {
+        messageInput.addEventListener("input", () => {
+            messageInput.style.height = "auto";
+            messageInput.style.height = Math.min(messageInput.scrollHeight, 140) + "px";
+        });
+
         messageInput.addEventListener("keydown", (e) => {
             if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -307,6 +312,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                 if (messageInput) {
                     messageInput.value += event.detail.unicode;
                     messageInput.focus();
+                    // Event triggern, damit die Texthöhe sich direkt anpasst
+                    messageInput.dispatchEvent(new Event('input'));
                 }
             });
         }
@@ -924,7 +931,6 @@ async function appendSingleMessage(msg) {
     if (msg.text && msg.text !== "[Foto]") {
         const textDiv = document.createElement("div");
         textDiv.innerText = msg.text;
-        // Erhält Absätze, Zeilenumbrüche und kopierte Texte exakt wie eingegeben
         textDiv.style.whiteSpace = "pre-wrap";
         textDiv.style.wordBreak = "break-word";
         bubble.appendChild(textDiv);
@@ -966,7 +972,7 @@ if (editChatTitleBtn) {
 
             await supabase.from("chats").update({ last_message: sysMsg }).eq("id", activeChatId);
 
-            await loadUserChats();
+            loadUserChats();
             alert("Aktualisiert!");
         }
     });
@@ -1046,7 +1052,10 @@ if (chatForm) {
             return;
         }
 
-        if (messageInput) messageInput.value = "";
+        if (messageInput) {
+            messageInput.value = "";
+            messageInput.style.height = "42px"; // Nach Senden Feld wieder auf Standardgröße zurücksetzen
+        }
         if (imageUploadInput) imageUploadInput.value = "";
         if (imagePreviewContainer) imagePreviewContainer.style.display = "none";
         if (emojiPickerWrapper) emojiPickerWrapper.style.display = "none";
