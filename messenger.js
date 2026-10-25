@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Messenger Logik (Vollständig inkl. Video-Support, 200MB Limit & Auto-Expanding)
+   GSRA - Messenger Logik (Vollständig inkl. Du/Dich Logik & Upload-Ladefeedback)
 ========================================= */
 
 let currentUser = null;
@@ -873,6 +873,30 @@ async function renderMessages(messages) {
     }
 }
 
+// INTELLIGENTE NAMENS- & DU/DICH-BEREINIGUNG FÜR SYSTEMNACHRICHTEN
+async function formatSystemMessage(text, senderId) {
+    if (!text) return "";
+    let formatted = text;
+
+    // Ersetze eigenen Namen in Systemtexten durch "Du" / "dich"
+    if (currentUsername) {
+        const regex = new RegExp(currentUsername, "gi");
+        formatted = formatted.replace(regex, "dir"); // z.B. "hat den Chat mit dir eröffnet"
+    }
+
+    // Falls der Sender selbst die Aktion ausgeführt hat, personalisieren ("Du hast...")
+    if (String(senderId) === String(currentUser?.id)) {
+        formatted = formatted.replace(new RegExp(`^${currentUsername}`, "i"), "Du");
+    }
+
+    // Grammatik-Korrekturen für "Du hat" -> "Du hast"
+    formatted = formatted.replace(/\bDu hat\b/gi, "Du hast");
+    formatted = formatted.replace(/\bdu hat\b/gi, "du hast");
+    formatted = formatted.replace(/\bhat dir eröffnet\b/gi, "hast den Chat mit dir eröffnet"); // Feinabstimmung
+
+    return formatted;
+}
+
 async function appendSingleMessage(msg) {
     if (!chatMessages) return;
     const placeholder = chatMessages.querySelector(".chat-placeholder");
@@ -939,7 +963,18 @@ async function appendSingleMessage(msg) {
 
     if (msg.text && msg.text !== "[Medien]") {
         const textDiv = document.createElement("div");
-        textDiv.innerText = msg.text;
+        
+        // Prüfen, ob es eine Systemnachricht ist (enthält typische Phrasen)
+        const isSystem = msg.text.includes("hat den Chat") || msg.text.includes("hat das Forum") || msg.text.includes("hat hinzugefügt") || msg.text.includes("umbenannt");
+        
+        if (isSystem) {
+            textDiv.innerText = await formatSystemMessage(msg.text, msg.sender_id);
+            textDiv.style.fontStyle = "italic";
+            textDiv.style.opacity = "0.85";
+        } else {
+            textDiv.innerText = msg.text;
+        }
+
         textDiv.style.whiteSpace = "pre-wrap";
         textDiv.style.wordBreak = "break-word";
         bubble.appendChild(textDiv);
@@ -1070,30 +1105,29 @@ if (chatForm) {
             return;
         }
 
-        if (messageInput) {
-            messageInput.value = "";
-            messageInput.style.height = "42px";
+        // LADEFEEDBACK: Button deaktivieren und Text auf Senden... ändern
+        if (sendBtn) {
+            sendBtn.disabled = true;
+            sendBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Sende...`;
         }
-        if (imageUploadInput) imageUploadInput.value = "";
-        if (imagePreviewContainer) imagePreviewContainer.style.display = "none";
-        if (emojiPickerWrapper) emojiPickerWrapper.style.display = "none";
 
         let mediaUrls = [];
 
-        for (const file of files) {
-            const fileExt = file.name.split('.').pop();
-            const fileName = `chat_${Date.now()}_${Math.random().toString(36).substring(2,7)}.${fileExt}`;
-            
-            const { error: uploadErr } = await supabase.storage.from("chat_attachments").upload(fileName, file);
-            if (!uploadErr) {
+        try {
+            for (const file of files) {
+                const fileExt = file.name.split('.').pop();
+                const fileName = `chat_${Date.now()}_${Math.random().toString(36).substring(2,7)}.${fileExt}`;
+                
+                const { error: uploadErr } = await supabase.storage.from("chat_attachments").upload(fileName, file);
+                if (uploadErr) {
+                    throw uploadErr;
+                }
                 const { data: pubData } = supabase.storage.from("chat_attachments").getPublicUrl(fileName);
                 mediaUrls.push(pubData.publicUrl);
             }
-        }
 
-        const finalMediaUrl = mediaUrls.length > 0 ? mediaUrls.join(",") : null;
+            const finalMediaUrl = mediaUrls.length > 0 ? mediaUrls.join(",") : null;
 
-        try {
             await supabase.from("messages").insert([{
                 chat_id: activeChatId,
                 sender_id: currentUser.id,
@@ -1105,10 +1139,25 @@ if (chatForm) {
                 last_message: text || "[Medien]"
             }).eq("id", activeChatId);
 
+            if (messageInput) {
+                messageInput.value = "";
+                messageInput.style.height = "42px";
+            }
+            if (imageUploadInput) imageUploadInput.value = "";
+            if (imagePreviewContainer) imagePreviewContainer.style.display = "none";
+            if (emojiPickerWrapper) emojiPickerWrapper.style.display = "none";
+
             markChatAsRead(activeChatId);
             loadUserChats();
         } catch (err) {
             console.error("Fehler beim Senden:", err);
+            alert("Fehler beim Hochladen/Senden der Nachricht. Bitte versuche es erneut.");
+        } finally {
+            // LADEFEEDBACK ZURÜCKSETZEN
+            if (sendBtn) {
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Senden`;
+            }
         }
     });
 }
