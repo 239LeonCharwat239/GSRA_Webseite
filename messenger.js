@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Messenger Logik (Finale Perfektion: Initiale Systemnachrichten & sauberes Löschen)
+   GSRA - Messenger Logik (Vollständig inkl. Shift+Enter & Absätze)
 ========================================= */
 
 let currentUser = null;
@@ -95,6 +95,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    // ENTER sendet ab, SHIFT + ENTER erzeugt einen Zeilenumbruch
+    if (messageInput) {
+        messageInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                if (chatForm) chatForm.requestSubmit();
+            }
+        });
+    }
+
     if (newChatPlusBtn && newForumModal) {
         newChatPlusBtn.addEventListener("click", () => {
             newForumModal.style.display = "flex";
@@ -107,7 +117,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Forum/Gruppe erstellen mit initialer Systemnachricht
     if (newForumForm) {
         newForumForm.addEventListener("submit", async (e) => {
             e.preventDefault();
@@ -229,7 +238,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Mitglied zu Gruppe / Forum hinzufügen
     if (addMemberBtn) {
         addMemberBtn.addEventListener("click", async () => {
             if (!currentUser?.id || !activeChatId) return;
@@ -916,6 +924,9 @@ async function appendSingleMessage(msg) {
     if (msg.text && msg.text !== "[Foto]") {
         const textDiv = document.createElement("div");
         textDiv.innerText = msg.text;
+        // Erhält Absätze, Zeilenumbrüche und kopierte Texte exakt wie eingegeben
+        textDiv.style.whiteSpace = "pre-wrap";
+        textDiv.style.wordBreak = "break-word";
         bubble.appendChild(textDiv);
     }
 
@@ -955,13 +966,12 @@ if (editChatTitleBtn) {
 
             await supabase.from("chats").update({ last_message: sysMsg }).eq("id", activeChatId);
 
-            loadUserChats();
+            await loadUserChats();
             alert("Aktualisiert!");
         }
     });
 }
 
-// FIX: Löschen mit Fehlerprüfung, damit Supabase-RLS-Blockaden direkt gemeldet werden
 if (deleteChatBtn) {
     deleteChatBtn.addEventListener("click", async () => {
         const supabase = window.supabaseClient || window.supabase;

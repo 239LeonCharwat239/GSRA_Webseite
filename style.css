@@ -948,7 +948,6 @@ p {
     background: #2a3942;
 }
 
-/* Rote Hervorhebung für ungelesene Chats in der Sidebar */
 .wa-chat-item.unread {
     background: rgba(255, 77, 77, 0.15);
     border-left: 4px solid #ff4d4d;
@@ -1010,15 +1009,6 @@ p {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-}
-
-.wa-unread-dot {
-    width: 10px;
-    height: 10px;
-    background: #ff4d4d;
-    border-radius: 50%;
-    flex-shrink: 0;
-    box-shadow: 0 0 8px rgba(255, 77, 77, 0.9);
 }
 
 .wa-main-pane {
@@ -1151,7 +1141,6 @@ p {
     border: 1px solid var(--border-subtle);
 }
 
-/* WhatsApp Bild-Grid (Kompakte Kacheln) */
 .wa-media-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -1220,7 +1209,8 @@ p {
     flex-shrink: 0;
 }
 
-.chat-input-area input {
+.chat-input-area input,
+.chat-input-area textarea {
     flex: 1;
     padding: 10px 14px;
     background: #0b0c10;
@@ -1228,6 +1218,11 @@ p {
     color: #fff;
     border-radius: 4px;
     outline: none;
+    font-family: inherit;
+    font-size: 14px;
+    resize: none;
+    height: 42px;
+    line-height: 20px;
 }
 
 .emoji-btn {
