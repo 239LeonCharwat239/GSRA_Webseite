@@ -1257,27 +1257,6 @@ p {
     border: 1px solid var(--border-subtle);
 }
 
-/* Antwort-Zitierung in der Nachricht */
-.msg-reply-quote {
-    background: rgba(0,0,0,0.25);
-    border-left: 3px solid var(--gsra-yellow);
-    padding: 6px 10px;
-    margin-bottom: 6px;
-    border-radius: 4px;
-    font-size: 12px;
-}
-.msg-reply-author {
-    font-weight: 700;
-    color: var(--gsra-yellow);
-    margin-bottom: 2px;
-}
-.msg-reply-text {
-    opacity: 0.85;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
 /* Antwort-Vorschabalken über dem Eingabefeld */
 #replyPreviewBanner {
     background: #1f2c34;

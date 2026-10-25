@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Messenger Logik (Vollständig mit Nachrichten-Features)
+   GSRA - Messenger Logik (Vollständig stabil & erweitert)
 ========================================= */
 
 let currentUser = null;
@@ -14,7 +14,7 @@ let isAdminUser = false;
 let userNamesCache = {};
 let officialForumChatId = null;
 let isRendering = false;
-let activeReplyingMessage = null; // Speicher für aktive Antwort
+let activeReplyingText = null;
 
 function escapeHtml(str) {
     if (!str) return "";
@@ -117,7 +117,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (cancelReplyBtn) {
         cancelReplyBtn.addEventListener("click", () => {
-            activeReplyingMessage = null;
+            activeReplyingText = null;
             if (replyPreviewBanner) replyPreviewBanner.style.display = "none";
         });
     }
@@ -508,13 +508,13 @@ function setupGlobalMessageListener() {
 
     globalListenerChannel = supabase
         .channel('global_messages_channel')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
-            const targetChatId = payload.new?.chat_id || payload.old?.chat_id;
-            const targetChat = allChatsCache.find(c => c.id === targetChatId);
-            if (targetChat && payload.new) {
-                targetChat.last_msg_time = payload.new.created_at || new Date().toISOString();
-                targetChat.last_message = payload.new.text || "[Medien]";
-                if (payload.new.sender_id !== currentUser.id) {
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+            const newMsg = payload.new;
+            const targetChat = allChatsCache.find(c => c.id === newMsg.chat_id);
+            if (targetChat) {
+                targetChat.last_msg_time = newMsg.created_at || new Date().toISOString();
+                targetChat.last_message = newMsg.text || "[Medien]";
+                if (newMsg.sender_id !== currentUser.id) {
                     if (targetChat.id !== activeChatId || document.hidden) {
                         targetChat.unread = true;
                     }
@@ -522,9 +522,8 @@ function setupGlobalMessageListener() {
                 allChatsCache.sort((a, b) => new Date(b.last_msg_time || b.created_at || 0) - new Date(a.last_msg_time || a.created_at || 0));
                 updateGlobalUnreadState();
                 renderChatsList();
-            }
-            if (activeChatId && targetChatId === activeChatId) {
-                loadChatMessages(activeChatId, false);
+            } else {
+                loadUserChats();
             }
         })
         .subscribe();
@@ -794,9 +793,14 @@ async function openChat(chatId, recipientName, chatTitle = null) {
     renderChatsList();
 }
 
-async function loadChatMessages(chatId, shouldScroll = true) {
+async function loadChatMessages(chatId) {
     const supabase = window.supabaseClient || window.supabase;
     if (!supabase || !chatId) return;
+
+    if (messageSubscription) {
+        supabase.removeChannel(messageSubscription);
+        messageSubscription = null;
+    }
 
     const { data: messages } = await supabase
         .from("messages")
@@ -804,11 +808,21 @@ async function loadChatMessages(chatId, shouldScroll = true) {
         .eq("chat_id", chatId)
         .order("created_at", { ascending: true });
 
-    await renderMessages(messages || [], shouldScroll);
+    await renderMessages(messages || []);
+
+    messageSubscription = supabase
+        .channel(`chat_${chatId}`)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` }, (payload) => {
+            appendSingleMessage(payload.new);
+            if (activeChatId === chatId && !document.hidden) {
+                markChatAsRead(chatId);
+            }
+        })
+        .subscribe();
 }
 
-// MESSAGES RENDERN & WHATSAPP-MENÜ (BEARBEITEN, LÖSCHEN, ANTWORTEN, KOPIEREN)
-async function renderMessages(messages, shouldScroll = true) {
+// INTELLIGENTE DEDUPLIZIERUNG & RENDERING
+async function renderMessages(messages) {
     if (!chatMessages) return;
     if (messages.length === 0) {
         chatMessages.innerHTML = `<p class="chat-placeholder" style="text-align: center; color: var(--text-muted); margin: auto;">Schreibe die erste Nachricht...</p>`;
@@ -816,7 +830,6 @@ async function renderMessages(messages, shouldScroll = true) {
     }
     chatMessages.innerHTML = "";
     const seenSystemTexts = new Set();
-
     for (const msg of messages) {
         const isSystem = msg.text && (msg.text.includes("hat den Chat") || msg.text.includes("hat das Forum") || msg.text.includes("zum Forum hinzugefügt") || msg.text.includes("umbenannt"));
         if (isSystem) {
@@ -824,11 +837,9 @@ async function renderMessages(messages, shouldScroll = true) {
             if (seenSystemTexts.has(formatted)) continue;
             seenSystemTexts.add(formatted);
         }
-        await appendSingleMessage(msg, messages);
+        await appendSingleMessage(msg);
     }
-    if (shouldScroll) {
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
+    chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
 async function formatSystemMessage(text, senderId) {
@@ -853,7 +864,7 @@ async function formatSystemMessage(text, senderId) {
     return text;
 }
 
-async function appendSingleMessage(msg, allMessages = []) {
+async function appendSingleMessage(msg) {
     if (!chatMessages) return;
     const placeholder = chatMessages.querySelector(".chat-placeholder");
     if (placeholder) placeholder.remove();
@@ -872,7 +883,7 @@ async function appendSingleMessage(msg, allMessages = []) {
     authorDiv.innerText = senderName;
     bubble.appendChild(authorDiv);
 
-    // WhatsApp-ähnlicher Pfeil-Button für Nachrichten-Menü
+    // WhatsApp-Menü Button (Pfeil)
     const menuBtn = document.createElement("button");
     menuBtn.className = "msg-menu-btn";
     menuBtn.innerHTML = `<i class="fa-solid fa-chevron-down"></i>`;
@@ -881,12 +892,12 @@ async function appendSingleMessage(msg, allMessages = []) {
     const dropdown = document.createElement("div");
     dropdown.className = "msg-dropdown-menu";
 
-    // Antworten-Button
+    // Antworten
     const replyOpt = document.createElement("button");
     replyOpt.innerHTML = `<i class="fa-solid fa-reply"></i> Antworten`;
     replyOpt.addEventListener("click", () => {
         dropdown.style.display = "none";
-        activeReplyingMessage = msg;
+        activeReplyingText = `Antwort an ${senderName}: "${msg.text || '[Medien]'}"`;
         if (replyPreviewBanner && replyPreviewAuthor && replyPreviewText) {
             replyPreviewAuthor.innerText = `Antwort an ${senderName}`;
             replyPreviewText.innerText = msg.text || "[Medien]";
@@ -896,7 +907,7 @@ async function appendSingleMessage(msg, allMessages = []) {
     });
     dropdown.appendChild(replyOpt);
 
-    // Kopieren-Button
+    // Kopieren
     if (msg.text && msg.text !== "[Medien]") {
         const copyOpt = document.createElement("button");
         copyOpt.innerHTML = `<i class="fa-solid fa-copy"></i> Kopieren`;
@@ -908,9 +919,10 @@ async function appendSingleMessage(msg, allMessages = []) {
         dropdown.appendChild(copyOpt);
     }
 
-    // Bearbeiten- & Löschen-Optionen (nur für eigene Nachrichten oder Admins)
+    // Bearbeiten & Löschen (für eigene Nachrichten oder Admins)
     const canModify = isOwn || isAdminUser;
-    if (canModify && !msg.is_deleted) {
+    const isDeleted = msg.text && msg.text.includes("gelöscht.");
+    if (canModify && !isDeleted) {
         if (isOwn && msg.text && msg.text !== "[Medien]") {
             const editOpt = document.createElement("button");
             editOpt.innerHTML = `<i class="fa-solid fa-pen"></i> Bearbeiten`;
@@ -919,8 +931,8 @@ async function appendSingleMessage(msg, allMessages = []) {
                 const newText = prompt("Nachricht bearbeiten:", msg.text);
                 if (newText !== null && newText.trim() !== "") {
                     const supabase = window.supabaseClient || window.supabase;
-                    await supabase.from("messages").update({ text: newText.trim(), edited: true }).eq("id", msg.id);
-                    loadChatMessages(activeChatId, false);
+                    await supabase.from("messages").update({ text: newText.trim() + " (bearbeitet)" }).eq("id", msg.id);
+                    loadChatMessages(activeChatId);
                 }
             });
             dropdown.appendChild(editOpt);
@@ -934,13 +946,8 @@ async function appendSingleMessage(msg, allMessages = []) {
             if (confirm("Möchtest du diese Nachricht wirklich löschen?")) {
                 const supabase = window.supabaseClient || window.supabase;
                 const delText = isOwn ? "Du hast diese Nachricht gelöscht." : `${senderName} hat diese Nachricht gelöscht.`;
-                await supabase.from("messages").update({ 
-                    text: delText, 
-                    image_url: null, 
-                    reply_to_id: null,
-                    is_deleted: true 
-                }).eq("id", msg.id);
-                loadChatMessages(activeChatId, false);
+                await supabase.from("messages").update({ text: delText, image_url: null }).eq("id", msg.id);
+                loadChatMessages(activeChatId);
             }
         });
         dropdown.appendChild(deleteOpt);
@@ -959,21 +966,6 @@ async function appendSingleMessage(msg, allMessages = []) {
     document.addEventListener("click", () => {
         dropdown.style.display = "none";
     });
-
-    // Antwort-Kontext (falls Nachricht eine Antwort ist)
-    if (msg.reply_to_id && allMessages.length > 0) {
-        const repliedMsg = allMessages.find(m => m.id === msg.reply_to_id);
-        if (repliedMsg) {
-            const quoteDiv = document.createElement("div");
-            quoteDiv.className = "msg-reply-quote";
-            const repliedAuthor = String(repliedMsg.sender_id) === String(currentUser?.id) ? "Du" : await fetchUserName(repliedMsg.sender_id);
-            quoteDiv.innerHTML = `
-                <div class="msg-reply-author">${repliedAuthor}</div>
-                <div class="msg-reply-text">${escapeHtml(repliedMsg.text || "[Medien]")}</div>
-            `;
-            bubble.appendChild(quoteDiv);
-        }
-    }
 
     if (msg.image_url) {
         const urls = msg.image_url.split(",").map(u => u.trim()).filter(Boolean);
@@ -1032,22 +1024,12 @@ async function appendSingleMessage(msg, allMessages = []) {
         const textDiv = document.createElement("div");
         const isSystem = msg.text.includes("hat den Chat") || msg.text.includes("hat das Forum") || msg.text.includes("zum Forum hinzugefügt") || msg.text.includes("umbenannt");
         
-        if (isSystem) {
-            textDiv.innerText = await formatSystemMessage(msg.text, msg.sender_id);
+        if (isSystem || isDeleted) {
+            textDiv.innerText = isSystem ? await formatSystemMessage(msg.text, msg.sender_id) : msg.text;
             textDiv.style.fontStyle = "italic";
-            textDiv.style.opacity = "0.85";
-        } else if (msg.is_deleted) {
-            textDiv.innerText = msg.text;
-            textDiv.style.fontStyle = "italic";
-            textDiv.style.opacity = "0.6";
+            textDiv.style.opacity = isDeleted ? "0.6" : "0.85";
         } else {
             textDiv.innerText = msg.text;
-            if (msg.edited) {
-                const editSpan = document.createElement("span");
-                editSpan.style.cssText = "font-size: 10px; opacity: 0.6; margin-left: 6px;";
-                editSpan.innerText = "(bearbeitet)";
-                textDiv.appendChild(editSpan);
-            }
         }
 
         textDiv.style.whiteSpace = "pre-wrap";
@@ -1061,6 +1043,7 @@ async function appendSingleMessage(msg, allMessages = []) {
     bubble.appendChild(timeSpan);
 
     chatMessages.appendChild(bubble);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
 if (editChatTitleBtn) {
@@ -1179,16 +1162,21 @@ if (chatForm) {
 
             const finalMediaUrl = mediaUrls.length > 0 ? mediaUrls.join(",") : null;
 
+            // Nachricht zusammenbauen (inklusive Antwort-Kontext falls vorhanden)
+            let finalMessageText = text;
+            if (activeReplyingText) {
+                finalMessageText = `> ${activeReplyingText}\n${text}`;
+            }
+
             await supabase.from("messages").insert([{
                 chat_id: activeChatId,
                 sender_id: currentUser.id,
-                text: text || (finalMediaUrl ? "[Medien]" : ""),
-                image_url: finalMediaUrl,
-                reply_to_id: activeReplyingMessage ? activeReplyingMessage.id : null
+                text: finalMessageText || (finalMediaUrl ? "[Medien]" : ""),
+                image_url: finalMediaUrl
             }]);
 
             await supabase.from("chats").update({
-                last_message: text || "[Medien]"
+                last_message: finalMessageText || "[Medien]"
             }).eq("id", activeChatId);
 
             if (messageInput) {
@@ -1199,13 +1187,12 @@ if (chatForm) {
             if (imagePreviewContainer) imagePreviewContainer.style.display = "none";
             if (emojiPickerWrapper) emojiPickerWrapper.style.display = "none";
 
-            // Antwort-Modus zurücksetzen
-            activeReplyingMessage = null;
+            // Antwort zurücksetzen
+            activeReplyingText = null;
             if (replyPreviewBanner) replyPreviewBanner.style.display = "none";
 
             markChatAsRead(activeChatId);
             loadUserChats();
-            loadChatMessages(activeChatId);
         } catch (err) {
             console.error("Fehler beim Senden:", err);
             alert("Dein Medium konnte nicht hochgeladen werden, da die Datei das Dateigrößenlimit überschreitet.");
