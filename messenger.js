@@ -314,8 +314,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const MAX_FILE_SIZE = 200 * 1024 * 1024;
                 for (const file of files) {
                     if (file.size > MAX_FILE_SIZE) {
-                        const actualSizeMB = (file.size / (1024 * 1024)).toFixed(1);
-                        alert(`Deine Datei ist ${actualSizeMB} MB groß. Das Limit liegt bei 200 MB, weshalb sie nicht hochgeladen werden kann.`);
+                        alert("Dein Medium konnte nicht hochgeladen werden, da die Datei das Dateigrößenlimit überschreitet.");
                         imageUploadInput.value = "";
                         if (imagePreviewContainer) imagePreviewContainer.style.display = "none";
                         return;
@@ -871,6 +870,7 @@ async function loadChatMessages(chatId) {
         .subscribe();
 }
 
+// INTELIGENTE DEDUPLIZIERUNG VON SYSTEMNACHRICHTEN GEGEN DOPPELTER ANZEIGE
 async function renderMessages(messages) {
     if (!chatMessages) return;
     if (messages.length === 0) {
@@ -878,12 +878,20 @@ async function renderMessages(messages) {
         return;
     }
     chatMessages.innerHTML = "";
+    const seenSystemTexts = new Set();
     for (const msg of messages) {
+        const isSystem = msg.text && (msg.text.includes("hat den Chat") || msg.text.includes("hat das Forum") || msg.text.includes("zum Forum hinzugefügt") || msg.text.includes("umbenannt"));
+        if (isSystem) {
+            const formatted = await formatSystemMessage(msg.text, msg.sender_id);
+            if (seenSystemTexts.has(formatted)) {
+                continue; // Verhindert doppelte Systemnachrichten im UI
+            }
+            seenSystemTexts.add(formatted);
+        }
         await appendSingleMessage(msg);
     }
 }
 
-// 100% ROBUSTE SYSTEMNACHRICHTEN-LOGIK FÜR DU / DICH & HINZUFÜGEN
 async function formatSystemMessage(text, senderId) {
     if (!text) return "";
     const isOwnAction = String(senderId) === String(currentUser?.id);
@@ -1147,8 +1155,7 @@ if (chatForm) {
         const MAX_FILE_SIZE = 200 * 1024 * 1024;
         for (const file of files) {
             if (file.size > MAX_FILE_SIZE) {
-                const actualSizeMB = (file.size / (1024 * 1024)).toFixed(1);
-                alert(`Deine Datei ist ${actualSizeMB} MB groß. Das Limit liegt bei 200 MB, weshalb dein Medium nicht hochgeladen werden konnte.`);
+                alert("Dein Medium konnte nicht hochgeladen werden, da die Datei das Dateigrößenlimit überschreitet.");
                 return;
             }
         }
@@ -1205,7 +1212,7 @@ if (chatForm) {
         } catch (err) {
             console.error("Fehler beim Senden:", err);
             if (err.message && err.message.includes("maximum allowed size")) {
-                alert("Dein Medium konnte nicht hochgeladen werden, da die Datei das Dateigrößen-Limit überschreitet.");
+                alert("Dein Medium konnte nicht hochgeladen werden, da die Datei das Dateigrößenlimit überschreitet.");
             } else {
                 alert("Fehler beim Hochladen/Senden der Nachricht. Bitte versuche es erneut.");
             }
