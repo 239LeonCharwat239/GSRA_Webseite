@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Messenger Logik (Finale Version: Absätze, Stichpunkte & Shift+Enter)
+   GSRA - Messenger Logik (Finale Perfektion: Initiale Systemnachrichten & sauberes Löschen)
 ========================================= */
 
 let currentUser = null;
@@ -92,18 +92,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (chatSearchInput) {
         chatSearchInput.addEventListener("input", () => {
             renderChatsList();
-        });
-    }
-
-    // FIX: Enter sendet ab, Umschalt + Enter erzeugt einen Zeilenumbruch (falls es eine Textarea ist)
-    if (messageInput) {
-        messageInput.addEventListener("keydown", (e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-                if (messageInput.tagName === "TEXTAREA") {
-                    e.preventDefault();
-                    chatForm.requestSubmit();
-                }
-            }
         });
     }
 
@@ -928,9 +916,6 @@ async function appendSingleMessage(msg) {
     if (msg.text && msg.text !== "[Foto]") {
         const textDiv = document.createElement("div");
         textDiv.innerText = msg.text;
-        // FIX: Erhält Absätze, Zeilenumbrüche und Stichpunkte exakt wie eingegeben bzw. eingefügt
-        textDiv.style.whiteSpace = "pre-wrap";
-        textDiv.style.wordBreak = "break-word";
         bubble.appendChild(textDiv);
     }
 
@@ -976,6 +961,7 @@ if (editChatTitleBtn) {
     });
 }
 
+// FIX: Löschen mit Fehlerprüfung, damit Supabase-RLS-Blockaden direkt gemeldet werden
 if (deleteChatBtn) {
     deleteChatBtn.addEventListener("click", async () => {
         const supabase = window.supabaseClient || window.supabase;
