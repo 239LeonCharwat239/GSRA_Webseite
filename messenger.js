@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Messenger Logik (Vollständig stabil & erweitert)
+   GSRA - Messenger Logik (Vollständig & Korrigiert)
 ========================================= */
 
 let currentUser = null;
@@ -14,7 +14,6 @@ let isAdminUser = false;
 let userNamesCache = {};
 let officialForumChatId = null;
 let isRendering = false;
-let activeReplyingText = null;
 
 function escapeHtml(str) {
     if (!str) return "";
@@ -60,10 +59,6 @@ const newForumModal = document.getElementById("newForumModal");
 const closeForumModal = document.getElementById("closeForumModal");
 const newForumForm = document.getElementById("newForumForm");
 const forumNameInput = document.getElementById("forumNameInput");
-const replyPreviewBanner = document.getElementById("replyPreviewBanner");
-const replyPreviewAuthor = document.getElementById("replyPreviewAuthor");
-const replyPreviewText = document.getElementById("replyPreviewText");
-const cancelReplyBtn = document.getElementById("cancelReplyBtn");
 
 document.addEventListener("DOMContentLoaded", async () => {
     const supabase = window.supabaseClient || window.supabase;
@@ -112,13 +107,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 e.preventDefault();
                 if (chatForm) chatForm.requestSubmit();
             }
-        });
-    }
-
-    if (cancelReplyBtn) {
-        cancelReplyBtn.addEventListener("click", () => {
-            activeReplyingText = null;
-            if (replyPreviewBanner) replyPreviewBanner.style.display = "none";
         });
     }
 
@@ -357,13 +345,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (closeImageModal && imageModal) {
         closeImageModal.addEventListener("click", () => {
             imageModal.style.display = "none";
-            if (modalVideoFull) { modalVideoFull.style.display = "none"; }
+            if (modalVideoFull) { 
+                modalVideoFull.style.display = "none"; 
+            }
             if (modalImageFull) modalImageFull.style.display = "none";
         });
         imageModal.addEventListener("click", (e) => {
             if (e.target === imageModal) {
                 imageModal.style.display = "none";
-                if (modalVideoFull) { modalVideoFull.style.display = "none"; }
+                if (modalVideoFull) { 
+                    modalVideoFull.style.display = "none"; 
+                }
                 if (modalImageFull) modalImageFull.style.display = "none";
             }
         });
@@ -565,11 +557,23 @@ async function loadUserChats() {
 
     let rawChats = [];
     try {
-        const { data: chatsAsUser1 } = await supabase.from("chats").select("*").eq("user1_id", currentUser.id);
-        const { data: chatsAsUser2 } = await supabase.from("chats").select("*").eq("user2_id", currentUser.id);
-        const { data: groupChats } = await supabase.from("chats").select("*").not("title", "is", null);
+        const { data: chatsAsUser1 } = await supabase
+            .from("chats")
+            .select("*")
+            .eq("user1_id", currentUser.id);
+
+        const { data: chatsAsUser2 } = await supabase
+            .from("chats")
+            .select("*")
+            .eq("user2_id", currentUser.id);
+
+        const { data: groupChats } = await supabase
+            .from("chats")
+            .select("*")
+            .not("title", "is", null);
 
         const combined = [...(chatsAsUser1 || []), ...(chatsAsUser2 || []), ...(groupChats || [])];
+        
         const map = new Map();
         combined.forEach(c => map.set(c.id, c));
         rawChats = Array.from(map.values());
@@ -580,13 +584,19 @@ async function loadUserChats() {
     let forumChat = rawChats.find(c => c.title === 'GSRA Official / Community Forum' || (c.title && c.title.includes('Official')));
     
     if (!forumChat) {
-        const { data: globalForum } = await supabase.from("chats").select("*").eq("title", 'GSRA Official / Community Forum').maybeSingle();
+        const { data: globalForum } = await supabase
+            .from("chats")
+            .select("*")
+            .eq("title", 'GSRA Official / Community Forum')
+            .maybeSingle();
 
         if (globalForum) {
             forumChat = globalForum;
             rawChats.unshift(globalForum);
         } else if (isAdminUser) {
-            const { data: createdForum, err: forumErr } = await supabase.from("chats").insert([{
+            const { data: createdForum, err: forumErr } = await supabase
+                .from("chats")
+                .insert([{
                 user1_id: currentUser.id,
                 user2_id: currentUser.id,
                 title: 'GSRA Official / Community Forum',
@@ -674,6 +684,7 @@ async function renderChatsList() {
     isRendering = true;
 
     chatsList.innerHTML = "";
+
     const searchTerm = chatSearchInput ? chatSearchInput.value.toLowerCase() : "";
 
     let filtered = allChatsCache.filter(chat => {
@@ -683,11 +694,18 @@ async function renderChatsList() {
         const otherUserName = otherUserId ? (userNamesCache[otherUserId] || "Fahrer") : "";
         
         const searchTarget = (chat.title ? chat.title + " " + otherUserName : otherUserName).toLowerCase();
-        if (!searchTarget.includes(searchTerm)) return false;
+        const matchesSearch = searchTarget.includes(searchTerm);
+        if (!matchesSearch) return false;
 
-        if (currentFilter === 'unread') return chat.unread === true;
-        if (currentFilter === 'favorites') return userFavorites.has(chat.id);
-        if (currentFilter === 'forums') return isGroup || isOfficial;
+        if (currentFilter === 'unread') {
+            return chat.unread === true;
+        }
+        if (currentFilter === 'favorites') {
+            return userFavorites.has(chat.id);
+        }
+        if (currentFilter === 'forums') {
+            return isGroup || isOfficial;
+        }
         return true;
     });
 
@@ -717,7 +735,17 @@ async function renderChatsList() {
 
         item.className = `wa-chat-item ${isSelected ? 'active' : ''} ${isUnread ? 'unread' : ''}`;
         
-        let displayTitle = isOfficial ? "GSRA Official / Community Forum" : isGroup ? chat.title : chat.title ? `${chat.title} (${otherUserName})` : `Chat mit ${otherUserName}`;
+        let displayTitle = "";
+        if (isOfficial) {
+            displayTitle = "GSRA Official / Community Forum";
+        } else if (isGroup) {
+            displayTitle = chat.title;
+        } else if (chat.title) {
+            displayTitle = `${chat.title} (${otherUserName})`;
+        } else {
+            displayTitle = `Chat mit ${otherUserName}`;
+        }
+
         const lastMsg = escapeHtml(chat.last_message || 'Keine Nachrichten');
 
         item.innerHTML = `
@@ -731,16 +759,21 @@ async function renderChatsList() {
             </div>
         `;
 
-        item.querySelector(".wa-favorite-btn").addEventListener("click", (e) => toggleFavorite(chat.id, e));
+        const favBtn = item.querySelector(".wa-favorite-btn");
+        favBtn.addEventListener("click", (e) => toggleFavorite(chat.id, e));
 
         item.addEventListener("click", () => {
             activeChatId = chat.id;
             markChatAsRead(chat.id);
+            
             if (waWelcomeScreen) waWelcomeScreen.style.display = "none";
             if (waChatActivePane) waChatActivePane.style.display = "flex";
 
-            if (isForumOrGroup) openForumChat(chat);
-            else openChat(chat.id, otherUserName, chat.title);
+            if (isForumOrGroup) {
+                openForumChat(chat);
+            } else {
+                openChat(chat.id, otherUserName, chat.title);
+            }
             renderChatsList();
         });
 
@@ -759,17 +792,31 @@ function openForumChat(forumChat = null) {
 
     if (chatTitleText) chatTitleText.innerText = forumChat?.title || "GSRA Official / Community Forum";
     if (chatActions) chatActions.style.display = "flex";
-    if (addMemberBtn) addMemberBtn.style.display = (chatId === officialForumChatId) ? "none" : "block";
+    
+    if (addMemberBtn) {
+        addMemberBtn.style.display = (chatId === officialForumChatId) ? "none" : "block";
+    }
     if (blockUserBtn) blockUserBtn.style.display = "none";
 
     const isOfficialAnnouncement = (chatId === officialForumChatId);
-    if (messageInput) {
-        messageInput.disabled = (isOfficialAnnouncement && !isAdminUser);
-        messageInput.placeholder = (isOfficialAnnouncement && !isAdminUser) ? "Nur Administratoren können im offiziellen Forum schreiben." : "Schreibe eine Nachricht...";
-    }
-    if (sendBtn) sendBtn.disabled = (isOfficialAnnouncement && !isAdminUser);
 
-    if (chatMessages) chatMessages.innerHTML = "";
+    if (isOfficialAnnouncement && !isAdminUser) {
+    if (messageInput) {
+            messageInput.disabled = true;
+            messageInput.placeholder = "Nur Administratoren können im offiziellen Forum schreiben.";
+        }
+        if (sendBtn) sendBtn.disabled = true;
+    } else {
+        if (messageInput) {
+            messageInput.disabled = false;
+            messageInput.placeholder = "Schreibe eine Nachricht...";
+    }
+        if (sendBtn) sendBtn.disabled = false;
+    }
+
+    if (chatMessages) {
+        chatMessages.innerHTML = "";
+    }
     loadChatMessages(chatId);
     renderChatsList();
 }
@@ -779,7 +826,9 @@ async function openChat(chatId, recipientName, chatTitle = null) {
     activeChatId = chatId;
     markChatAsRead(chatId);
 
-    if (chatTitleText) chatTitleText.innerText = chatTitle ? `${chatTitle} (${recipientName})` : `Chat mit ${recipientName}`;
+    const displayName = chatTitle ? `${chatTitle} (${recipientName})` : `Chat mit ${recipientName}`;
+    if (chatTitleText) chatTitleText.innerText = displayName;
+    
     if (chatActions) chatActions.style.display = "flex";
     if (addMemberBtn) addMemberBtn.style.display = "none";
     if (blockUserBtn) blockUserBtn.style.display = "block";
@@ -821,7 +870,7 @@ async function loadChatMessages(chatId) {
         .subscribe();
 }
 
-// INTELLIGENTE DEDUPLIZIERUNG & RENDERING
+// INTELIGENTE DEDUPLIZIERUNG VON SYSTEMNACHRICHTEN GEGEN DOPPELTER ANZEIGE
 async function renderMessages(messages) {
     if (!chatMessages) return;
     if (messages.length === 0) {
@@ -834,12 +883,13 @@ async function renderMessages(messages) {
         const isSystem = msg.text && (msg.text.includes("hat den Chat") || msg.text.includes("hat das Forum") || msg.text.includes("zum Forum hinzugefügt") || msg.text.includes("umbenannt"));
         if (isSystem) {
             const formatted = await formatSystemMessage(msg.text, msg.sender_id);
-            if (seenSystemTexts.has(formatted)) continue;
+            if (seenSystemTexts.has(formatted)) {
+                continue; // Verhindert doppelte Systemnachrichten im UI
+            }
             seenSystemTexts.add(formatted);
         }
         await appendSingleMessage(msg);
     }
-    chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
 async function formatSystemMessage(text, senderId) {
@@ -847,20 +897,44 @@ async function formatSystemMessage(text, senderId) {
     const isOwnAction = String(senderId) === String(currentUser?.id);
     const actorName = await fetchUserName(senderId);
 
+    // 1. Person zum Forum hinzugefügt
     if (text.includes("zum Forum hinzugefügt")) {
         const match = text.match(/^(.+?)\s+hat\s+(.+?)\s+zum Forum hinzugefügt/i);
         const target = match && match[2] ? match[2] : "jemanden";
-        return isOwnAction ? `Du hast ${target} zum Forum hinzugefügt.` : `Du wurdest von ${actorName} zum Forum hinzugefügt.`;
+        if (isOwnAction) {
+            return `Du hast ${target} zum Forum hinzugefügt.`;
+        } else {
+            return `Du wurdest von ${actorName} zum Forum hinzugefügt.`;
     }
+    }
+
+    // 2. Chat eröffnet
     if (text.includes("hat den Chat eröffnet")) {
-        return isOwnAction ? "Du hast den Chat eröffnet." : `${actorName} hat den Chat mit dir eröffnet.`;
+        if (isOwnAction) {
+            return "Du hast den Chat eröffnet.";
+        } else {
+            return `${actorName} hat den Chat mit dir eröffnet.`;
     }
+    }
+
+    // 3. Forum erstellt
     if (text.includes("hat das Forum erstellt")) {
-        return isOwnAction ? "Du hast das Forum erstellt." : `${actorName} hat das Forum erstellt.`;
+        if (isOwnAction) {
+            return "Du hast das Forum erstellt.";
+        } else {
+            return `${actorName} hat das Forum erstellt.`;
     }
+    }
+
+    // 4. Umbenannt
     if (text.includes("umbenannt")) {
-        return isOwnAction ? text.replace(new RegExp(`^${actorName}\\s+hat`, 'i'), 'Du hast') : text;
+        if (isOwnAction) {
+            return text.replace(new RegExp(`^${actorName}\\s+hat`, 'i'), 'Du hast');
+        } else {
+            return text;
     }
+    }
+
     return text;
 }
 
@@ -870,6 +944,7 @@ async function appendSingleMessage(msg) {
     if (placeholder) placeholder.remove();
 
     const bubble = document.createElement("div");
+    
     const isOwn = String(msg.sender_id) === String(currentUser?.id);
     bubble.className = `message-bubble ${isOwn ? 'message-own' : 'message-other'}`;
 
@@ -882,90 +957,6 @@ async function appendSingleMessage(msg) {
     authorDiv.className = "msg-author";
     authorDiv.innerText = senderName;
     bubble.appendChild(authorDiv);
-
-    // WhatsApp-Menü Button (Pfeil)
-    const menuBtn = document.createElement("button");
-    menuBtn.className = "msg-menu-btn";
-    menuBtn.innerHTML = `<i class="fa-solid fa-chevron-down"></i>`;
-    bubble.appendChild(menuBtn);
-
-    const dropdown = document.createElement("div");
-    dropdown.className = "msg-dropdown-menu";
-
-    // Antworten
-    const replyOpt = document.createElement("button");
-    replyOpt.innerHTML = `<i class="fa-solid fa-reply"></i> Antworten`;
-    replyOpt.addEventListener("click", () => {
-        dropdown.style.display = "none";
-        activeReplyingText = `Antwort an ${senderName}: "${msg.text || '[Medien]'}"`;
-        if (replyPreviewBanner && replyPreviewAuthor && replyPreviewText) {
-            replyPreviewAuthor.innerText = `Antwort an ${senderName}`;
-            replyPreviewText.innerText = msg.text || "[Medien]";
-            replyPreviewBanner.style.display = "flex";
-        }
-        if (messageInput) messageInput.focus();
-    });
-    dropdown.appendChild(replyOpt);
-
-    // Kopieren
-    if (msg.text && msg.text !== "[Medien]") {
-        const copyOpt = document.createElement("button");
-        copyOpt.innerHTML = `<i class="fa-solid fa-copy"></i> Kopieren`;
-        copyOpt.addEventListener("click", () => {
-            dropdown.style.display = "none";
-            navigator.clipboard.writeText(msg.text);
-            alert("Nachricht in die Zwischenablage kopiert!");
-        });
-        dropdown.appendChild(copyOpt);
-    }
-
-    // Bearbeiten & Löschen (für eigene Nachrichten oder Admins)
-    const canModify = isOwn || isAdminUser;
-    const isDeleted = msg.text && msg.text.includes("gelöscht.");
-    if (canModify && !isDeleted) {
-        if (isOwn && msg.text && msg.text !== "[Medien]") {
-            const editOpt = document.createElement("button");
-            editOpt.innerHTML = `<i class="fa-solid fa-pen"></i> Bearbeiten`;
-            editOpt.addEventListener("click", async () => {
-                dropdown.style.display = "none";
-                const newText = prompt("Nachricht bearbeiten:", msg.text);
-                if (newText !== null && newText.trim() !== "") {
-                    const supabase = window.supabaseClient || window.supabase;
-                    await supabase.from("messages").update({ text: newText.trim() + " (bearbeitet)" }).eq("id", msg.id);
-                    loadChatMessages(activeChatId);
-                }
-            });
-            dropdown.appendChild(editOpt);
-        }
-
-        const deleteOpt = document.createElement("button");
-        deleteOpt.className = "text-danger";
-        deleteOpt.innerHTML = `<i class="fa-solid fa-trash"></i> Löschen`;
-        deleteOpt.addEventListener("click", async () => {
-            dropdown.style.display = "none";
-            if (confirm("Möchtest du diese Nachricht wirklich löschen?")) {
-                const supabase = window.supabaseClient || window.supabase;
-                const delText = isOwn ? "Du hast diese Nachricht gelöscht." : `${senderName} hat diese Nachricht gelöscht.`;
-                await supabase.from("messages").update({ text: delText, image_url: null }).eq("id", msg.id);
-                loadChatMessages(activeChatId);
-            }
-        });
-        dropdown.appendChild(deleteOpt);
-    }
-
-    bubble.appendChild(dropdown);
-
-    menuBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        document.querySelectorAll(".msg-dropdown-menu").forEach(m => {
-            if (m !== dropdown) m.style.display = "none";
-        });
-        dropdown.style.display = dropdown.style.display === "flex" ? "none" : "flex";
-    });
-
-    document.addEventListener("click", () => {
-        dropdown.style.display = "none";
-    });
 
     if (msg.image_url) {
         const urls = msg.image_url.split(",").map(u => u.trim()).filter(Boolean);
@@ -980,15 +971,18 @@ async function appendSingleMessage(msg) {
             if (isVideo) {
                 const videoWrap = document.createElement("div");
                 videoWrap.className = "wa-video-preview-wrapper";
+                
                 const videoElem = document.createElement("video");
                 videoElem.src = cleanUrl;
                 videoElem.preload = "metadata";
+
                 const overlayDiv = document.createElement("div");
                 overlayDiv.className = "wa-video-play-overlay";
                 overlayDiv.innerHTML = '<i class="fa-solid fa-play"></i>';
 
                 videoWrap.appendChild(videoElem);
                 videoWrap.appendChild(overlayDiv);
+
                 videoWrap.addEventListener("click", () => {
                     if (modalVideoFull && imageModal) {
                         if (modalImageFull) modalImageFull.style.display = "none";
@@ -998,10 +992,12 @@ async function appendSingleMessage(msg) {
                         modalVideoFull.play();
                     }
                 });
+
                 gridContainer.appendChild(videoWrap);
             } else {
                 const imgWrap = document.createElement("div");
                 imgWrap.className = "wa-media-item";
+
                 const img = document.createElement("img");
                 img.src = cleanUrl;
                 img.alt = "Bild";
@@ -1014,6 +1010,14 @@ async function appendSingleMessage(msg) {
                     }
                 });
                 imgWrap.appendChild(img);
+
+                if (i === 3 && urls.length > 4) {
+                    const overlay = document.createElement("div");
+                    overlay.className = "wa-media-overlay";
+                    overlay.innerText = `+${urls.length - 4}`;
+                    imgWrap.appendChild(overlay);
+                }
+
                 gridContainer.appendChild(imgWrap);
             }
         }
@@ -1022,12 +1026,13 @@ async function appendSingleMessage(msg) {
 
     if (msg.text && msg.text !== "[Medien]") {
         const textDiv = document.createElement("div");
+        
         const isSystem = msg.text.includes("hat den Chat") || msg.text.includes("hat das Forum") || msg.text.includes("zum Forum hinzugefügt") || msg.text.includes("umbenannt");
         
-        if (isSystem || isDeleted) {
-            textDiv.innerText = isSystem ? await formatSystemMessage(msg.text, msg.sender_id) : msg.text;
+        if (isSystem) {
+            textDiv.innerText = await formatSystemMessage(msg.text, msg.sender_id);
             textDiv.style.fontStyle = "italic";
-            textDiv.style.opacity = isDeleted ? "0.6" : "0.85";
+            textDiv.style.opacity = "0.85";
         } else {
             textDiv.innerText = msg.text;
         }
@@ -1059,6 +1064,7 @@ if (editChatTitleBtn) {
             const trimmedTitle = newTitle.trim();
             const chatObj = allChatsCache.find(c => c.id === activeChatId);
             const isForum = (chatObj && chatObj.user1_id === chatObj.user2_id);
+            
             const articleText = isForum ? "das Forum" : "den Chat";
 
             await supabase.from("chats").update({ title: trimmedTitle }).eq("id", activeChatId);
@@ -1071,6 +1077,7 @@ if (editChatTitleBtn) {
             }]);
 
             await supabase.from("chats").update({ last_message: sysMsg }).eq("id", activeChatId);
+
             loadUserChats();
             alert("Aktualisiert!");
         }
@@ -1086,15 +1093,23 @@ if (deleteChatBtn) {
         }
 
         if (confirm("Möchtest du dieses Forum / diesen Chat wirklich löschen?")) {
-            await supabase.from("messages").delete().eq("chat_id", activeChatId);
+            const { error: msgErr } = await supabase.from("messages").delete().eq("chat_id", activeChatId);
+            if (msgErr) {
+                alert("Fehler beim Löschen der Nachrichten: " + msgErr.message);
+                return;
+            }
             try { await supabase.from("chat_favorites").delete().eq("chat_id", activeChatId); } catch(e){}
-            await supabase.from("chats").delete().eq("id", activeChatId);
+            const { error: chatErr } = await supabase.from("chats").delete().eq("id", activeChatId);
+            if (chatErr) {
+                alert("Fehler beim Löschen: " + chatErr.message);
+                return;
+            }
             
             activeChatId = null;
             if (waWelcomeScreen) waWelcomeScreen.style.display = "flex";
             if (waChatActivePane) waChatActivePane.style.display = "none";
 
-            loadUserChats();
+            await loadUserChats();
             alert("Gelöscht.");
         }
     });

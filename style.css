@@ -1164,9 +1164,6 @@ p {
     gap: 12px;
 }
 
-/* =========================================
-   WHATSAPP NACHRICHTEN & MENÜ (NEU)
-========================================= */
 .message-bubble {
     max-width: 65%;
     padding: 10px 15px;
@@ -1174,72 +1171,6 @@ p {
     font-size: 14px;
     line-height: 1.4;
     word-wrap: break-word;
-    position: relative;
-}
-
-.message-bubble:hover .msg-menu-btn {
-    opacity: 1;
-}
-
-.msg-menu-btn {
-    position: absolute;
-    top: 6px;
-    right: 8px;
-    background: rgba(0,0,0,0.3);
-    border: none;
-    color: #fff;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    font-size: 11px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    opacity: 0;
-    transition: opacity 0.2s ease, background 0.2s ease;
-    z-index: 5;
-}
-
-.msg-menu-btn:hover {
-    background: rgba(0,0,0,0.6);
-}
-
-.msg-dropdown-menu {
-    position: absolute;
-    top: 32px;
-    right: 8px;
-    background: #232d36;
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 6px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.8);
-    display: none;
-    flex-direction: column;
-    z-index: 100;
-    min-width: 150px;
-    overflow: hidden;
-}
-
-.msg-dropdown-menu button {
-    background: none;
-    border: none;
-    color: #e9edef;
-    padding: 10px 14px;
-    text-align: left;
-    font-size: 13px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    transition: background 0.15s ease;
-}
-
-.msg-dropdown-menu button:hover {
-    background: #182229;
-}
-
-.msg-dropdown-menu button.text-danger {
-    color: #f15c6d;
 }
 
 .message-own {
@@ -1255,19 +1186,6 @@ p {
     color: #fff;
     border-bottom-left-radius: 2px;
     border: 1px solid var(--border-subtle);
-}
-
-/* Antwort-Vorschabalken über dem Eingabefeld */
-#replyPreviewBanner {
-    background: #1f2c34;
-    border-left: 4px solid var(--gsra-yellow);
-    padding: 8px 14px;
-    display: none;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 13px;
-    color: #fff;
-    border-top: 1px solid var(--border-subtle);
 }
 
 .wa-media-grid {
