@@ -347,7 +347,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         closeImageModal.addEventListener("click", () => {
             imageModal.style.display = "none";
             if (modalVideoFull) { 
-                // Video nicht pausieren, damit Bild-im-Bild (Mini-Player) auf der Seite weiterlaufen kann!
                 modalVideoFull.style.display = "none"; 
             }
             if (modalImageFull) modalImageFull.style.display = "none";
@@ -884,7 +883,7 @@ async function renderMessages(messages) {
     }
 }
 
-// VOLLSTÄNDIG KORRIGIERTE SYSTEMNACHRICHTEN-LOGIK FÜR DU / DICH & HINZUFÜGEN
+// PRÄZISE BEREINIGTE SYSTEMNACHRICHTEN-LOGIK (KORRIGIERT DAS "DU HAST X HAT Y" PROBLEM)
 async function formatSystemMessage(text, senderId) {
     if (!text) return "";
     let formatted = text;
@@ -897,10 +896,10 @@ async function formatSystemMessage(text, senderId) {
         } else if (formatted.includes("hat das Forum erstellt")) {
             formatted = "Du hast das Forum erstellt.";
         } else if (formatted.includes("hat hinzugefügt")) {
-            const parts = formatted.split("hat ");
-            if (parts.length > 1) {
-                const rest = parts[1].replace("zum Forum hinzugefügt", "").trim();
-                formatted = `Du hast ${rest} zum Forum hinzugefügt.`;
+            // Wir suchen gezielt nach dem Namen des hinzugefügten Nutzers zwischen "hat " und " zum Forum"
+            const match = formatted.match(/hat\s+(.+?)\s+zum Forum hinzugefügt/i);
+            if (match && match[1]) {
+                formatted = `Du hast ${match[1]} zum Forum hinzugefügt.`;
             } else {
                 formatted = "Du hast ein Mitglied zum Forum hinzugefügt.";
             }
