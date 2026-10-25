@@ -1158,7 +1158,8 @@ p {
     background: #0d0e12;
 }
 
-.wa-media-item img {
+.wa-media-item img,
+.wa-media-item video {
     width: 100%;
     height: 100%;
     object-fit: cover;
@@ -1207,7 +1208,7 @@ p {
     display: flex;
     gap: 10px;
     flex-shrink: 0;
-    align-items: flex-end;
+    align-items: center; /* Perfekte vertikale Zentrierung aller Elemente */
 }
 
 .chat-input-area input,
@@ -1223,7 +1224,7 @@ p {
     font-size: 14px;
     resize: none;
     min-height: 42px;
-    max-height: 140px; /* Ca. 6 Zeilen Limit (WhatsApp-Stil) */
+    max-height: 140px;
     overflow-y: auto;
     line-height: 20px;
 }
@@ -1234,12 +1235,32 @@ p {
     color: var(--text-muted);
     font-size: 20px;
     cursor: pointer;
-    padding: 0 5px 8px 5px;
+    padding: 0 5px;
+    display: flex;
+    align-items: center;
     transition: color 0.2s ease, transform 0.2s ease;
 }
 
 .emoji-btn:hover {
     color: var(--gsra-yellow);
+    transform: scale(1.15);
+}
+
+/* Neuer Hover-Effekt für die Büroklammer (Blau) */
+.attachment-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0 5px;
+    display: flex;
+    align-items: center;
+    transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.attachment-btn:hover {
+    color: var(--gsra-blue);
     transform: scale(1.15);
 }
 

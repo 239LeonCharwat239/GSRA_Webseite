@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Messenger Logik (Vollständig inkl. Shift+Enter & Auto-Expanding Textarea)
+   GSRA - Messenger Logik (Vollständig inkl. Video-Support, 200MB Limit & Auto-Expanding)
 ========================================= */
 
 let currentUser = null;
@@ -95,7 +95,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // NEU: Automatische Höhenanpassung (bis ca. 6 Zeilen) bei Eingabe, Enter sendet ab, Shift+Enter macht Absatz
     if (messageInput) {
         messageInput.addEventListener("input", () => {
             messageInput.style.height = "auto";
@@ -312,7 +311,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 if (messageInput) {
                     messageInput.value += event.detail.unicode;
                     messageInput.focus();
-                    // Event triggern, damit die Texthöhe sich direkt anpasst
                     messageInput.dispatchEvent(new Event('input'));
                 }
             });
@@ -325,12 +323,13 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (files.length > 0) {
                 if (previewThumbsList) previewThumbsList.innerHTML = "";
                 files.forEach(file => {
-                    const img = document.createElement("img");
-                    img.src = URL.createObjectURL(file);
-                    img.style.cssText = "width: 40px; height: 40px; object-fit: cover; border-radius: 4px; border: 1px solid var(--gsra-blue);";
-                    if (previewThumbsList) previewThumbsList.appendChild(img);
+                    const isVid = file.type.startsWith('video/');
+                    const elem = isVid ? document.createElement("video") : document.createElement("img");
+                    elem.src = URL.createObjectURL(file);
+                    elem.style.cssText = "width: 40px; height: 40px; object-fit: cover; border-radius: 4px; border: 1px solid var(--gsra-blue);";
+                    if (previewThumbsList) previewThumbsList.appendChild(elem);
                 });
-                if (imagePreviewName) imagePreviewName.textContent = `${files.length} Bild(er) ausgewählt`;
+                if (imagePreviewName) imagePreviewName.textContent = `${files.length} Datei(en) ausgewählt`;
                 if (imagePreviewContainer) imagePreviewContainer.style.display = "flex";
             }
         });
@@ -497,7 +496,7 @@ function setupGlobalMessageListener() {
             const targetChat = allChatsCache.find(c => c.id === newMsg.chat_id);
             if (targetChat) {
                 targetChat.last_msg_time = newMsg.created_at || new Date().toISOString();
-                targetChat.last_message = newMsg.text || "[Foto]";
+                targetChat.last_message = newMsg.text || "[Medien]";
                 if (newMsg.sender_id !== currentUser.id) {
                     if (targetChat.id !== activeChatId || document.hidden) {
                         targetChat.unread = true;
@@ -642,7 +641,7 @@ async function loadUserChats() {
 
         if (latestMsg) {
             chat.last_msg_time = latestMsg.created_at;
-            chat.last_message = latestMsg.text || "[Foto]";
+            chat.last_message = latestMsg.text || "[Medien]";
         } else {
             chat.last_msg_time = chat.created_at;
         }
@@ -905,16 +904,26 @@ async function appendSingleMessage(msg) {
             const imgWrap = document.createElement("div");
             imgWrap.className = "wa-media-item";
 
-            const img = document.createElement("img");
-            img.src = cleanUrl;
-            img.alt = "Bild";
-            img.addEventListener("click", () => {
-                if (modalImageFull && imageModal) {
-                    modalImageFull.src = cleanUrl;
-                    imageModal.style.display = "flex";
-                }
-            });
-            imgWrap.appendChild(img);
+            const isVideo = /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(cleanUrl);
+
+            if (isVideo) {
+                const video = document.createElement("video");
+                video.src = cleanUrl;
+                video.controls = true;
+                video.style.cssText = "width: 100%; height: 100%; object-fit: cover; border-radius: 4px; border: 1px solid rgba(255, 255, 255, 0.15);";
+                imgWrap.appendChild(video);
+            } else {
+                const img = document.createElement("img");
+                img.src = cleanUrl;
+                img.alt = "Bild";
+                img.addEventListener("click", () => {
+                    if (modalImageFull && imageModal) {
+                        modalImageFull.src = cleanUrl;
+                        imageModal.style.display = "flex";
+                    }
+                });
+                imgWrap.appendChild(img);
+            }
 
             if (i === 3 && urls.length > 4) {
                 const overlay = document.createElement("div");
@@ -928,7 +937,7 @@ async function appendSingleMessage(msg) {
         bubble.appendChild(gridContainer);
     }
 
-    if (msg.text && msg.text !== "[Foto]") {
+    if (msg.text && msg.text !== "[Medien]") {
         const textDiv = document.createElement("div");
         textDiv.innerText = msg.text;
         textDiv.style.whiteSpace = "pre-wrap";
@@ -1046,6 +1055,15 @@ if (chatForm) {
 
         if ((!text && files.length === 0) || !activeChatId || !currentUser?.id || !supabase) return;
 
+        // 200 MB Limit Prüfung
+        const MAX_FILE_SIZE = 200 * 1024 * 1024;
+        for (const file of files) {
+            if (file.size > MAX_FILE_SIZE) {
+                alert(`Die Datei "${file.name}" ist zu groß. Maximale Dateigröße ist 200 MB.`);
+                return;
+            }
+        }
+
         const isOfficialAnnouncement = (activeChatId === officialForumChatId);
         if (isOfficialAnnouncement && !isAdminUser) {
             alert("Nur Administratoren können im offiziellen Forum schreiben.");
@@ -1054,13 +1072,13 @@ if (chatForm) {
 
         if (messageInput) {
             messageInput.value = "";
-            messageInput.style.height = "42px"; // Nach Senden Feld wieder auf Standardgröße zurücksetzen
+            messageInput.style.height = "42px";
         }
         if (imageUploadInput) imageUploadInput.value = "";
         if (imagePreviewContainer) imagePreviewContainer.style.display = "none";
         if (emojiPickerWrapper) emojiPickerWrapper.style.display = "none";
 
-        let imageUrls = [];
+        let mediaUrls = [];
 
         for (const file of files) {
             const fileExt = file.name.split('.').pop();
@@ -1069,22 +1087,22 @@ if (chatForm) {
             const { error: uploadErr } = await supabase.storage.from("chat_attachments").upload(fileName, file);
             if (!uploadErr) {
                 const { data: pubData } = supabase.storage.from("chat_attachments").getPublicUrl(fileName);
-                imageUrls.push(pubData.publicUrl);
+                mediaUrls.push(pubData.publicUrl);
             }
         }
 
-        const finalImageUrl = imageUrls.length > 0 ? imageUrls.join(",") : null;
+        const finalMediaUrl = mediaUrls.length > 0 ? mediaUrls.join(",") : null;
 
         try {
             await supabase.from("messages").insert([{
                 chat_id: activeChatId,
                 sender_id: currentUser.id,
-                text: text || (finalImageUrl ? "[Foto]" : ""),
-                image_url: finalImageUrl
+                text: text || (finalMediaUrl ? "[Medien]" : ""),
+                image_url: finalMediaUrl
             }]);
 
             await supabase.from("chats").update({
-                last_message: text || "[Foto]"
+                last_message: text || "[Medien]"
             }).eq("id", activeChatId);
 
             markChatAsRead(activeChatId);
