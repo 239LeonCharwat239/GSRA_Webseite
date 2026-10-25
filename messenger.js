@@ -883,43 +883,51 @@ async function renderMessages(messages) {
     }
 }
 
-// PRÄZISE BEREINIGTE SYSTEMNACHRICHTEN-LOGIK (KORRIGIERT DAS "DU HAST X HAT Y" PROBLEM)
+// 100% ROBUSTE SYSTEMNACHRICHTEN-LOGIK FÜR DU / DICH & HINZUFÜGEN
 async function formatSystemMessage(text, senderId) {
     if (!text) return "";
-    let formatted = text;
-
     const isOwnAction = String(senderId) === String(currentUser?.id);
+    const actorName = await fetchUserName(senderId);
 
-    if (isOwnAction) {
-        if (formatted.includes("hat den Chat eröffnet")) {
-            formatted = "Du hast den Chat eröffnet.";
-        } else if (formatted.includes("hat das Forum erstellt")) {
-            formatted = "Du hast das Forum erstellt.";
-        } else if (formatted.includes("hat hinzugefügt")) {
-            // Wir suchen gezielt nach dem Namen des hinzugefügten Nutzers zwischen "hat " und " zum Forum"
-            const match = formatted.match(/hat\s+(.+?)\s+zum Forum hinzugefügt/i);
-            if (match && match[1]) {
-                formatted = `Du hast ${match[1]} zum Forum hinzugefügt.`;
-            } else {
-                formatted = "Du hast ein Mitglied zum Forum hinzugefügt.";
-            }
-        } else if (formatted.includes("umbenannt")) {
-            formatted = formatted.replace(new RegExp(`^.+? hat `, "i"), "Du hast ");
-        }
-    } else {
-        if (formatted.includes("hinzugefügt")) {
-            const senderName = await fetchUserName(senderId);
-            formatted = `Du wurdest von ${senderName} zum Forum hinzugefügt.`;
+    // 1. Person zum Forum hinzugefügt
+    if (text.includes("zum Forum hinzugefügt")) {
+        const match = text.match(/^(.+?)\s+hat\s+(.+?)\s+zum Forum hinzugefügt/i);
+        const target = match && match[2] ? match[2] : "jemanden";
+        if (isOwnAction) {
+            return `Du hast ${target} zum Forum hinzugefügt.`;
         } else {
-            if (currentUsername) {
-                const regex = new RegExp(currentUsername, "gi");
-                formatted = formatted.replace(regex, "dir");
-            }
-            formatted = formatted.replace(/\bhat dir eröffnet\b/gi, "hat den Chat mit dir eröffnet");
+            return `Du wurdest von ${actorName} zum Forum hinzugefügt.`;
         }
     }
 
-    return formatted;
+    // 2. Chat eröffnet
+    if (text.includes("hat den Chat eröffnet")) {
+        if (isOwnAction) {
+            return "Du hast den Chat eröffnet.";
+        } else {
+            return `${actorName} hat den Chat mit dir eröffnet.`;
+        }
+    }
+
+    // 3. Forum erstellt
+    if (text.includes("hat das Forum erstellt")) {
+        if (isOwnAction) {
+            return "Du hast das Forum erstellt.";
+        } else {
+            return `${actorName} hat das Forum erstellt.`;
+        }
+    }
+
+    // 4. Umbenannt
+    if (text.includes("umbenannt")) {
+        if (isOwnAction) {
+            return text.replace(new RegExp(`^${actorName}\\s+hat`, 'i'), 'Du hast');
+        } else {
+            return text;
+        }
+    }
+
+    return text;
 }
 
 async function appendSingleMessage(msg) {
@@ -1011,7 +1019,7 @@ async function appendSingleMessage(msg) {
     if (msg.text && msg.text !== "[Medien]") {
         const textDiv = document.createElement("div");
         
-        const isSystem = msg.text.includes("hat den Chat") || msg.text.includes("hat das Forum") || msg.text.includes("hat hinzugefügt") || msg.text.includes("umbenannt");
+        const isSystem = msg.text.includes("hat den Chat") || msg.text.includes("hat das Forum") || msg.text.includes("zum Forum hinzugefügt") || msg.text.includes("umbenannt");
         
         if (isSystem) {
             textDiv.innerText = await formatSystemMessage(msg.text, msg.sender_id);
@@ -1197,7 +1205,7 @@ if (chatForm) {
         } catch (err) {
             console.error("Fehler beim Senden:", err);
             if (err.message && err.message.includes("maximum allowed size")) {
-                alert("Dein Medium konnte nicht hochgeladen werden, da die Datei zu groß für das Server-Limit ist.");
+                alert("Dein Medium konnte nicht hochgeladen werden, da die Datei das Dateigrößen-Limit überschreitet.");
             } else {
                 alert("Fehler beim Hochladen/Senden der Nachricht. Bitte versuche es erneut.");
             }
