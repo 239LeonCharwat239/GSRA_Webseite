@@ -906,7 +906,6 @@ async function renderMessages(messages) {
     chatMessages.innerHTML = "";
     const seenSystemTexts = new Set();
     for (const msg of messages) {
-        // Nur Chat/Forum-Aktionen als Systemnachricht (Löschen erfolgt nun direkt in der Nachrichtenblase im WhatsApp-Style!)
         const isSystem = msg.text && (msg.text.includes("hat den Chat") || msg.text.includes("hat das Forum") || msg.text.includes("zum Forum hinzugefügt") || msg.text.includes("umbenannt"));
         if (isSystem && !msg.image_url && !msg.reply_to) {
             const formatted = await formatSystemMessage(msg.text, msg.sender_id);
@@ -978,7 +977,7 @@ async function appendSingleMessage(msg, isSystem = false) {
 
     const isDeleted = msg.text === "Du hast diese Nachricht gelöscht" || msg.text === "Diese Nachricht wurde gelöscht";
 
-    // Nur für normale, nicht-gelöschte Nachrichten die Aktionsleiste anzeigen
+    // JEDER ist gleichberechtigt: Nur der Verfasser (isOwn) kann seine eigenen Nachrichten bearbeiten oder löschen!
     if (!isSystem && !isDeleted) {
         const actionsDiv = document.createElement("div");
         actionsDiv.className = "message-actions";
@@ -1014,9 +1013,9 @@ async function appendSingleMessage(msg, isSystem = false) {
         });
         actionsDiv.appendChild(copyBtn);
 
-        // Bearbeiten & Löschen
-        if (isOwn || isAdminUser) {
-            if (isOwn && msg.text && !msg.text.includes("hat den Chat") && !msg.text.includes("hat das Forum")) {
+        // Bearbeiten & Löschen (nur für den eigenen Sender erlaubt!)
+        if (isOwn) {
+            if (msg.text && !msg.text.includes("hat den Chat") && !msg.text.includes("hat das Forum")) {
                 const editBtn = document.createElement("button");
                 editBtn.className = "msg-action-btn";
                 editBtn.title = "Bearbeiten";
@@ -1042,8 +1041,7 @@ async function appendSingleMessage(msg, isSystem = false) {
                     const supabase = window.supabaseClient || window.supabase;
                     if (!supabase) return;
 
-                    // WhatsApp-Style: Nachricht wird direkt an ihrer Position als gelöscht markiert (behält Uhrzeit & Position)
-                    const deleteText = isOwn ? "Du hast diese Nachricht gelöscht" : "Diese Nachricht wurde gelöscht";
+                    const deleteText = "Du hast diese Nachricht gelöscht";
                     await supabase.from("messages").update({
                         text: deleteText,
                         image_url: null,
@@ -1176,12 +1174,13 @@ async function appendSingleMessage(msg, isSystem = false) {
         bubble.appendChild(textDiv);
     }
 
+    // Fußzeile mit sauber zentrierter und ausgerichteter „bearbeitet“-Anzeige direkt neben der Uhrzeit
     const footerDiv = document.createElement("div");
-    footerDiv.style.cssText = "display: flex; justify-content: flex-end; align-items: center; gap: 6px; margin-top: 4px;";
+    footerDiv.style.cssText = "display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 4px;";
 
     if (!isDeleted && msg.is_edited) {
         const editedSpan = document.createElement("span");
-        editedSpan.style.cssText = "font-size: 10px; opacity: 0.6; font-style: italic;";
+        editedSpan.style.cssText = "font-size: 10px; opacity: 0.6; font-style: italic; line-height: 1;";
         editedSpan.innerText = "bearbeitet";
         footerDiv.appendChild(editedSpan);
     }
@@ -1317,7 +1316,7 @@ if (chatForm) {
         }
 
         try {
-            // BEARBEITEN-MODUS (Aktualisiert die Originalnachricht in der Datenbank)
+            // BEARBEITEN-MODUS
             if (editingMessageId) {
                 const targetIdToEdit = editingMessageId;
                 editingMessageId = null;
@@ -1328,7 +1327,7 @@ if (chatForm) {
                 }).eq("id", targetIdToEdit);
 
                 if (editErr) {
-                    alert("Fehler beim Bearbeiten (Bitte prüfe die Supabase RLS Policies für UPDATE): " + editErr.message);
+                    alert("Fehler beim Bearbeiten: " + editErr.message);
                     throw editErr;
                 }
 
