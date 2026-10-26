@@ -15,6 +15,11 @@ let userNamesCache = {};
 let officialForumChatId = null;
 let isRendering = false;
 
+// Neue States für WhatsApp-Funktionen
+let replyingToId = null;
+let editingMessageId = null;
+let messagesCacheMap = new Map();
+
 function escapeHtml(str) {
     if (!str) return "";
     return String(str)
@@ -60,6 +65,12 @@ const closeForumModal = document.getElementById("closeForumModal");
 const newForumForm = document.getElementById("newForumForm");
 const forumNameInput = document.getElementById("forumNameInput");
 
+// Neue DOM-Elemente für Antworten
+const replyPreviewBanner = document.getElementById("replyPreviewBanner");
+const replyBannerAuthor = document.getElementById("replyBannerAuthor");
+const replyBannerText = document.getElementById("replyBannerText");
+const cancelReplyBtn = document.getElementById("cancelReplyBtn");
+
 document.addEventListener("DOMContentLoaded", async () => {
     const supabase = window.supabaseClient || window.supabase;
     if (!supabase) return;
@@ -93,6 +104,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (chatSearchInput) {
         chatSearchInput.addEventListener("input", () => {
             renderChatsList();
+        });
+    }
+
+    if (cancelReplyBtn) {
+        cancelReplyBtn.addEventListener("click", () => {
+            replyingToId = null;
+            if (replyPreviewBanner) replyPreviewBanner.style.display = "none";
         });
     }
 
@@ -345,17 +363,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (closeImageModal && imageModal) {
         closeImageModal.addEventListener("click", () => {
             imageModal.style.display = "none";
-            if (modalVideoFull) { 
-                modalVideoFull.style.display = "none"; 
-            }
+            if (modalVideoFull) { modalVideoFull.style.display = "none"; }
             if (modalImageFull) modalImageFull.style.display = "none";
         });
         imageModal.addEventListener("click", (e) => {
             if (e.target === imageModal) {
                 imageModal.style.display = "none";
-                if (modalVideoFull) { 
-                    modalVideoFull.style.display = "none"; 
-                }
+                if (modalVideoFull) { modalVideoFull.style.display = "none"; }
                 if (modalImageFull) modalImageFull.style.display = "none";
             }
         });
@@ -857,20 +871,32 @@ async function loadChatMessages(chatId) {
         .eq("chat_id", chatId)
         .order("created_at", { ascending: true });
 
+    messagesCacheMap.clear();
+    if (messages) {
+        messages.forEach(m => messagesCacheMap.set(m.id, m));
+    }
+
     await renderMessages(messages || []);
 
     messageSubscription = supabase
         .channel(`chat_${chatId}`)
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` }, (payload) => {
-            appendSingleMessage(payload.new);
-            if (activeChatId === chatId && !document.hidden) {
-                markChatAsRead(chatId);
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` }, async () => {
+            // Bei Änderungen (Insert, Update, Delete) Nachrichten neu laden
+            const { data: updatedMessages } = await supabase
+                .from("messages")
+                .select("*")
+                .eq("chat_id", chatId)
+                .order("created_at", { ascending: true });
+            
+            messagesCacheMap.clear();
+            if (updatedMessages) {
+                updatedMessages.forEach(m => messagesCacheMap.set(m.id, m));
             }
+            await renderMessages(updatedMessages || []);
         })
         .subscribe();
 }
 
-// INTELIGENTE DEDUPLIZIERUNG VON SYSTEMNACHRICHTEN GEGEN DOPPELTER ANZEIGE
 async function renderMessages(messages) {
     if (!chatMessages) return;
     if (messages.length === 0) {
@@ -884,7 +910,7 @@ async function renderMessages(messages) {
         if (isSystem) {
             const formatted = await formatSystemMessage(msg.text, msg.sender_id);
             if (seenSystemTexts.has(formatted)) {
-                continue; // Verhindert doppelte Systemnachrichten im UI
+                continue;
             }
             seenSystemTexts.add(formatted);
         }
@@ -897,7 +923,6 @@ async function formatSystemMessage(text, senderId) {
     const isOwnAction = String(senderId) === String(currentUser?.id);
     const actorName = await fetchUserName(senderId);
 
-    // 1. Person zum Forum hinzugefügt
     if (text.includes("zum Forum hinzugefügt")) {
         const match = text.match(/^(.+?)\s+hat\s+(.+?)\s+zum Forum hinzugefügt/i);
         const target = match && match[2] ? match[2] : "jemanden";
@@ -908,7 +933,6 @@ async function formatSystemMessage(text, senderId) {
         }
     }
 
-    // 2. Chat eröffnet
     if (text.includes("hat den Chat eröffnet")) {
         if (isOwnAction) {
             return "Du hast den Chat eröffnet.";
@@ -917,7 +941,6 @@ async function formatSystemMessage(text, senderId) {
         }
     }
 
-    // 3. Forum erstellt
     if (text.includes("hat das Forum erstellt")) {
         if (isOwnAction) {
             return "Du hast das Forum erstellt.";
@@ -926,7 +949,6 @@ async function formatSystemMessage(text, senderId) {
         }
     }
 
-    // 4. Umbenannt
     if (text.includes("umbenannt")) {
         if (isOwnAction) {
             return text.replace(new RegExp(`^${actorName}\\s+hat`, 'i'), 'Du hast');
@@ -951,12 +973,80 @@ async function appendSingleMessage(msg) {
     const senderName = isOwn ? "Du" : await fetchUserName(msg.sender_id);
     const dateObj = msg.created_at ? new Date(msg.created_at) : new Date();
     const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const dateStr = dateObj.toLocaleDateString([], { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+    // WhatsApp-ähnliche Aktionsleiste (Antworten, Bearbeiten, Löschen) beim Hover
+    const actionsDiv = document.createElement("div");
+    actionsDiv.className = "message-actions";
+
+    const replyBtn = document.createElement("button");
+    replyBtn.className = "msg-action-btn";
+    replyBtn.title = "Antworten";
+    replyBtn.innerHTML = '<i class="fa-solid fa-reply"></i>';
+    replyBtn.addEventListener("click", () => {
+        replyingToId = msg.id;
+        if (replyPreviewBanner && replyBannerAuthor && replyBannerText) {
+            replyBannerAuthor.innerText = `Antwort an ${senderName}`;
+            replyBannerText.innerText = msg.text || "[Medien]";
+            replyPreviewBanner.style.display = "flex";
+        }
+        if (messageInput) messageInput.focus();
+    });
+    actionsDiv.appendChild(replyBtn);
+
+    // Bearbeiten & Löschen (nur für eigene Nachrichten oder Admins)
+    if (isOwn || isAdminUser) {
+        if (isOwn && msg.text && !msg.text.includes("hat den Chat") && !msg.text.includes("hat das Forum")) {
+            const editBtn = document.createElement("button");
+            editBtn.className = "msg-action-btn";
+            editBtn.title = "Bearbeiten";
+            editBtn.innerHTML = '<i class="fa-solid fa-pen"></i>';
+            editBtn.addEventListener("click", () => {
+                editingMessageId = msg.id;
+                if (messageInput) {
+                    messageInput.value = msg.text;
+                    messageInput.focus();
+                    messageInput.style.height = "auto";
+                    messageInput.style.height = Math.min(messageInput.scrollHeight, 140) + "px";
+                }
+            });
+            actionsDiv.appendChild(editBtn);
+        }
+
+        const deleteMsgBtn = document.createElement("button");
+        deleteMsgBtn.className = "msg-action-btn delete-btn";
+        deleteMsgBtn.title = "Löschen";
+        deleteMsgBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
+        deleteMsgBtn.addEventListener("click", async () => {
+            if (confirm("Möchtest du diese Nachricht löschen?")) {
+                const supabase = window.supabaseClient || window.supabase;
+                if (!supabase) return;
+                await supabase.from("messages").delete().eq("id", msg.id);
+                loadChatMessages(activeChatId);
+            }
+        });
+        actionsDiv.appendChild(deleteMsgBtn);
+    }
+
+    bubble.appendChild(actionsDiv);
 
     const authorDiv = document.createElement("div");
     authorDiv.className = "msg-author";
     authorDiv.innerText = senderName;
     bubble.appendChild(authorDiv);
+
+    // Zitat anzeigen, falls vorhanden
+    if (msg.reply_to && messagesCacheMap.has(msg.reply_to)) {
+        const quotedMsg = messagesCacheMap.get(msg.reply_to);
+        const quotedAuthor = String(quotedMsg.sender_id) === String(currentUser?.id) ? "Du" : await fetchUserName(quotedMsg.sender_id);
+        
+        const quoteDiv = document.createElement("div");
+        quoteDiv.className = "message-quoted";
+        quoteDiv.innerHTML = `
+            <div class="message-quoted-author">${escapeHtml(quotedAuthor)}</div>
+            <div style="font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.9;">${escapeHtml(quotedMsg.text || "[Medien]")}</div>
+        `;
+        bubble.appendChild(quoteDiv);
+    }
 
     if (msg.image_url) {
         const urls = msg.image_url.split(",").map(u => u.trim()).filter(Boolean);
@@ -1026,7 +1116,6 @@ async function appendSingleMessage(msg) {
 
     if (msg.text && msg.text !== "[Medien]") {
         const textDiv = document.createElement("div");
-        
         const isSystem = msg.text.includes("hat den Chat") || msg.text.includes("hat das Forum") || msg.text.includes("zum Forum hinzugefügt") || msg.text.includes("umbenannt");
         
         if (isSystem) {
@@ -1042,11 +1131,22 @@ async function appendSingleMessage(msg) {
         bubble.appendChild(textDiv);
     }
 
+    const footerDiv = document.createElement("div");
+    footerDiv.style.cssText = "display: flex; justify-content: flex-end; align-items: center; gap: 6px; margin-top: 4px;";
+
+    if (msg.is_edited) {
+        const editedSpan = document.createElement("span");
+        editedSpan.style.cssText = "font-size: 10px; opacity: 0.6; font-style: italic;";
+        editedSpan.innerText = "bearbeitet";
+        footerDiv.appendChild(editedSpan);
+    }
+
     const timeSpan = document.createElement("span");
     timeSpan.className = "message-time";
-    timeSpan.innerText = `${dateStr}, ${timeStr}`;
-    bubble.appendChild(timeSpan);
+    timeSpan.innerText = timeStr;
+    footerDiv.appendChild(timeSpan);
 
+    bubble.appendChild(footerDiv);
     chatMessages.appendChild(bubble);
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
@@ -1171,9 +1271,24 @@ if (chatForm) {
             sendBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Sende...`;
         }
 
-        let mediaUrls = [];
-
         try {
+            // BEARBEITEN-MODUS: Wenn eine Nachricht bearbeitet wird
+            if (editingMessageId) {
+                await supabase.from("messages").update({
+                    text: text,
+                    is_edited: true
+                }).eq("id", editingMessageId);
+
+                editingMessageId = null;
+                if (messageInput) {
+                    messageInput.value = "";
+                    messageInput.style.height = "42px";
+                }
+                loadChatMessages(activeChatId);
+                return;
+            }
+
+            let mediaUrls = [];
             for (const file of files) {
                 const fileExt = file.name.split('.').pop();
                 const fileName = `chat_${Date.now()}_${Math.random().toString(36).substring(2,7)}.${fileExt}`;
@@ -1188,11 +1303,13 @@ if (chatForm) {
 
             const finalMediaUrl = mediaUrls.length > 0 ? mediaUrls.join(",") : null;
 
+            // Nachricht senden inklusive Antwort (reply_to)
             await supabase.from("messages").insert([{
                 chat_id: activeChatId,
                 sender_id: currentUser.id,
                 text: text || (finalMediaUrl ? "[Medien]" : ""),
-                image_url: finalMediaUrl
+                image_url: finalMediaUrl,
+                reply_to: replyingToId || null
             }]);
 
             await supabase.from("chats").update({
@@ -1206,16 +1323,16 @@ if (chatForm) {
             if (imageUploadInput) imageUploadInput.value = "";
             if (imagePreviewContainer) imagePreviewContainer.style.display = "none";
             if (emojiPickerWrapper) emojiPickerWrapper.style.display = "none";
+            
+            // Antwort-Zustand zurücksetzen
+            replyingToId = null;
+            if (replyPreviewBanner) replyPreviewBanner.style.display = "none";
 
             markChatAsRead(activeChatId);
             loadUserChats();
         } catch (err) {
             console.error("Fehler beim Senden:", err);
-            if (err.message && err.message.includes("maximum allowed size")) {
-                alert("Dein Medium konnte nicht hochgeladen werden, da die Datei das Dateigrößenlimit überschreitet.");
-            } else {
-                alert("Fehler beim Hochladen/Senden der Nachricht. Bitte versuche es erneut.");
-            }
+            alert("Fehler beim Hochladen/Senden der Nachricht. Bitte versuche es erneut.");
         } finally {
             if (sendBtn) {
                 sendBtn.disabled = false;

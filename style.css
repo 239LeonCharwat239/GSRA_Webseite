@@ -1171,6 +1171,59 @@ p {
     font-size: 14px;
     line-height: 1.4;
     word-wrap: break-word;
+    position: relative;
+}
+
+/* WhatsApp Hover-Aktionen für Nachrichten */
+.message-actions {
+    position: absolute;
+    top: 4px;
+    right: 8px;
+    display: none;
+    gap: 6px;
+    background: rgba(15, 17, 23, 0.9);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--border-subtle);
+    z-index: 5;
+}
+
+.message-bubble:hover .message-actions {
+    display: flex;
+}
+
+.msg-action-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 11px;
+    transition: color 0.2s;
+}
+
+.msg-action-btn:hover {
+    color: var(--gsra-yellow);
+}
+
+.msg-action-btn.delete-btn:hover {
+    color: #ff4d4d;
+}
+
+/* Zitat-Box in der Nachricht */
+.message-quoted {
+    background: rgba(0, 0, 0, 0.25);
+    border-left: 3px solid var(--gsra-yellow);
+    padding: 6px 10px;
+    margin-bottom: 6px;
+    border-radius: 0 4px 4px 0;
+    font-size: 12px;
+    opacity: 0.9;
+}
+
+.message-quoted-author {
+    font-weight: bold;
+    color: var(--gsra-yellow);
+    margin-bottom: 2px;
 }
 
 .message-own {

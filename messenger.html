@@ -107,6 +107,15 @@
                         <emoji-picker class="dark"></emoji-picker>
                     </div>
 
+                    <!-- Antwort-Vorschau Banner -->
+                    <div id="replyPreviewBanner" style="display: none; padding: 8px 15px; background: #121317; border-top: 1px solid var(--border-subtle); align-items: center; justify-content: space-between; gap: 10px;">
+                        <div style="display: flex; flex-direction: column; overflow: hidden; text-align: left;">
+                            <span style="font-size: 11px; color: var(--gsra-yellow); font-weight: bold;" id="replyBannerAuthor">Antwort an ...</span>
+                            <span style="font-size: 12px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" id="replyBannerText">...</span>
+                        </div>
+                        <button type="button" id="cancelReplyBtn" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px;"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+
                     <div id="imagePreviewContainer" style="display: none; padding: 8px 15px; background: #121317; border-top: 1px solid var(--border-subtle); align-items: center; gap: 10px; flex-wrap: wrap;">
                         <div id="previewThumbsList" style="display: flex; gap: 8px; flex-wrap: wrap;"></div>
                         <span id="imagePreviewName" style="font-size: 12px; color: #fff; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"></span>
