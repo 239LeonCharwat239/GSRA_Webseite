@@ -15,7 +15,7 @@ let userNamesCache = {};
 let officialForumChatId = null;
 let isRendering = false;
 
-// Neue States für WhatsApp-Funktionen
+// States für WhatsApp-Funktionen
 let replyingToId = null;
 let editingMessageId = null;
 let messagesCacheMap = new Map();
@@ -65,7 +65,7 @@ const closeForumModal = document.getElementById("closeForumModal");
 const newForumForm = document.getElementById("newForumForm");
 const forumNameInput = document.getElementById("forumNameInput");
 
-// Neue DOM-Elemente für Antworten
+// DOM-Elemente für Antworten
 const replyPreviewBanner = document.getElementById("replyPreviewBanner");
 const replyBannerAuthor = document.getElementById("replyBannerAuthor");
 const replyBannerText = document.getElementById("replyBannerText");
@@ -906,7 +906,8 @@ async function renderMessages(messages) {
     chatMessages.innerHTML = "";
     const seenSystemTexts = new Set();
     for (const msg of messages) {
-        const isSystem = msg.text && (msg.text.includes("hat den Chat") || msg.text.includes("hat das Forum") || msg.text.includes("zum Forum hinzugefügt") || msg.text.includes("umbenannt") || msg.text.includes("hat eine Nachricht gelöscht") || msg.text.includes("hat eine Nachricht bearbeitet"));
+        // Ausschließlich Lösch- und Chat-Ereignisse als Systemnachricht (Bearbeiten läuft direkt an der Nachricht!)
+        const isSystem = msg.text && (msg.text.includes("hat den Chat") || msg.text.includes("hat das Forum") || msg.text.includes("zum Forum hinzugefügt") || msg.text.includes("umbenannt") || msg.text.includes("hat eine Nachricht gelöscht"));
         if (isSystem && !msg.image_url && !msg.reply_to) {
             const formatted = await formatSystemMessage(msg.text, msg.sender_id);
             if (seenSystemTexts.has(formatted)) {
@@ -962,14 +963,6 @@ async function formatSystemMessage(text, senderId) {
             return "Du hast eine Nachricht gelöscht.";
         } else {
             return `${actorName} hat eine Nachricht gelöscht.`;
-        }
-    }
-
-    if (text.includes("hat eine Nachricht bearbeitet")) {
-        if (isOwnAction) {
-            return "Du hast eine Nachricht bearbeitet.";
-        } else {
-            return `${actorName} hat eine Nachricht bearbeitet.`;
         }
     }
 
@@ -1055,10 +1048,8 @@ async function appendSingleMessage(msg, isSystem = false) {
                     const supabase = window.supabaseClient || window.supabase;
                     if (!supabase) return;
 
-                    // Löschen in DB
                     await supabase.from("messages").delete().eq("id", msg.id);
 
-                    // Transparenz-Systemnachricht erzeugen für andere Teilnehmer
                     const sysDeleteMsg = `${currentUsername} hat eine Nachricht gelöscht.`;
                     await supabase.from("messages").insert([{
                         chat_id: activeChatId,
@@ -1081,7 +1072,7 @@ async function appendSingleMessage(msg, isSystem = false) {
     authorDiv.innerText = senderName;
     bubble.appendChild(authorDiv);
 
-    // Zitat anzeigen mit Sprung-Funktion zur Originalnachricht
+    // Zitat anzeigen mit Sprung-Funktion
     if (msg.reply_to && messagesCacheMap.has(msg.reply_to)) {
         const quotedMsg = messagesCacheMap.get(msg.reply_to);
         const quotedAuthor = String(quotedMsg.sender_id) === String(currentUser?.id) ? "Du" : await fetchUserName(quotedMsg.sender_id);
@@ -1093,7 +1084,6 @@ async function appendSingleMessage(msg, isSystem = false) {
             <div style="font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.9;">${escapeHtml(quotedMsg.text || "[Medien]")}</div>
         `;
         
-        // Klick springt zur Originalnachricht
         quoteDiv.addEventListener("click", () => {
             const targetElement = document.getElementById(`msg-${msg.reply_to}`);
             if (targetElement) {
@@ -1187,6 +1177,7 @@ async function appendSingleMessage(msg, isSystem = false) {
 
         textDiv.style.whiteSpace = "pre-wrap";
         textDiv.style.wordBreak = "break-word";
+        textDiv.style.overflowWrap = "break-word";
         bubble.appendChild(textDiv);
     }
 
@@ -1331,10 +1322,10 @@ if (chatForm) {
         }
 
         try {
-            // KORRIGIERTER BEARBEITEN-MODUS (Präzise Aktualisierung & Zurücksetzung des States)
+            // KORRIGIERTER BEARBEITEN-MODUS (Aktualisiert die Originalnachricht und setzt is_edited auf true)
             if (editingMessageId) {
                 const targetIdToEdit = editingMessageId;
-                editingMessageId = null; // Sofort zurücksetzen, damit kein Loop entsteht
+                editingMessageId = null;
 
                 const { error: editErr } = await supabase.from("messages").update({
                     text: text,
@@ -1344,14 +1335,6 @@ if (chatForm) {
                 if (editErr) {
                     throw editErr;
                 }
-
-                // Transparenz-Hinweis im Chat erzeugen
-                const sysEditMsg = `${currentUsername} hat eine Nachricht bearbeitet.`;
-                await supabase.from("messages").insert([{
-                    chat_id: activeChatId,
-                    sender_id: currentUser.id,
-                    text: sysEditMsg
-                }]);
 
                 if (messageInput) {
                     messageInput.value = "";

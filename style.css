@@ -1171,8 +1171,13 @@ p {
     font-size: 14px;
     line-height: 1.4;
     word-break: break-word;
+    overflow-wrap: break-word;
     position: relative;
-    /* Verhindert Layout-Verrutschen bei extremen Leerzeilen */
+}
+
+/* Garantiert sauberes Wrapping auch bei extrem vielen Leerzeilen */
+.message-bubble div {
+    word-break: break-word;
     overflow-wrap: break-word;
 }
 
@@ -1230,7 +1235,7 @@ p {
     color: #ff4d4d;
 }
 
-/* Zitat-Box in der Nachricht (klickbar zum Springen) */
+/* Zitat-Box in der Nachricht */
 .message-quoted {
     background: rgba(0, 0, 0, 0.25);
     border-left: 3px solid var(--gsra-yellow);
