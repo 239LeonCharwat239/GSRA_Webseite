@@ -906,8 +906,8 @@ async function renderMessages(messages) {
     chatMessages.innerHTML = "";
     const seenSystemTexts = new Set();
     for (const msg of messages) {
-        // Ausschließlich Lösch- und Chat-Ereignisse als Systemnachricht (Bearbeiten läuft direkt an der Nachricht!)
-        const isSystem = msg.text && (msg.text.includes("hat den Chat") || msg.text.includes("hat das Forum") || msg.text.includes("zum Forum hinzugefügt") || msg.text.includes("umbenannt") || msg.text.includes("hat eine Nachricht gelöscht"));
+        // Nur Chat/Forum-Aktionen als Systemnachricht (Löschen erfolgt nun direkt in der Nachrichtenblase im WhatsApp-Style!)
+        const isSystem = msg.text && (msg.text.includes("hat den Chat") || msg.text.includes("hat das Forum") || msg.text.includes("zum Forum hinzugefügt") || msg.text.includes("umbenannt"));
         if (isSystem && !msg.image_url && !msg.reply_to) {
             const formatted = await formatSystemMessage(msg.text, msg.sender_id);
             if (seenSystemTexts.has(formatted)) {
@@ -958,14 +958,6 @@ async function formatSystemMessage(text, senderId) {
         }
     }
 
-    if (text.includes("hat eine Nachricht gelöscht")) {
-        if (isOwnAction) {
-            return "Du hast eine Nachricht gelöscht.";
-        } else {
-            return `${actorName} hat eine Nachricht gelöscht.`;
-        }
-    }
-
     return text;
 }
 
@@ -984,8 +976,10 @@ async function appendSingleMessage(msg, isSystem = false) {
     const dateObj = msg.created_at ? new Date(msg.created_at) : new Date();
     const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    // Nur für normale Nachrichten die Hover-Aktionsleiste anzeigen
-    if (!isSystem) {
+    const isDeleted = msg.text === "Du hast diese Nachricht gelöscht" || msg.text === "Diese Nachricht wurde gelöscht";
+
+    // Nur für normale, nicht-gelöschte Nachrichten die Aktionsleiste anzeigen
+    if (!isSystem && !isDeleted) {
         const actionsDiv = document.createElement("div");
         actionsDiv.className = "message-actions";
 
@@ -1048,14 +1042,14 @@ async function appendSingleMessage(msg, isSystem = false) {
                     const supabase = window.supabaseClient || window.supabase;
                     if (!supabase) return;
 
-                    await supabase.from("messages").delete().eq("id", msg.id);
-
-                    const sysDeleteMsg = `${currentUsername} hat eine Nachricht gelöscht.`;
-                    await supabase.from("messages").insert([{
-                        chat_id: activeChatId,
-                        sender_id: currentUser.id,
-                        text: sysDeleteMsg
-                    }]);
+                    // WhatsApp-Style: Nachricht wird direkt an ihrer Position als gelöscht markiert (behält Uhrzeit & Position)
+                    const deleteText = isOwn ? "Du hast diese Nachricht gelöscht" : "Diese Nachricht wurde gelöscht";
+                    await supabase.from("messages").update({
+                        text: deleteText,
+                        image_url: null,
+                        reply_to: null,
+                        is_edited: false
+                    }).eq("id", msg.id);
 
                     await loadChatMessages(activeChatId);
                     await loadUserChats();
@@ -1073,7 +1067,7 @@ async function appendSingleMessage(msg, isSystem = false) {
     bubble.appendChild(authorDiv);
 
     // Zitat anzeigen mit Sprung-Funktion
-    if (msg.reply_to && messagesCacheMap.has(msg.reply_to)) {
+    if (!isDeleted && msg.reply_to && messagesCacheMap.has(msg.reply_to)) {
         const quotedMsg = messagesCacheMap.get(msg.reply_to);
         const quotedAuthor = String(quotedMsg.sender_id) === String(currentUser?.id) ? "Du" : await fetchUserName(quotedMsg.sender_id);
         
@@ -1098,7 +1092,7 @@ async function appendSingleMessage(msg, isSystem = false) {
         bubble.appendChild(quoteDiv);
     }
 
-    if (msg.image_url) {
+    if (!isDeleted && msg.image_url) {
         const urls = msg.image_url.split(",").map(u => u.trim()).filter(Boolean);
         const gridContainer = document.createElement("div");
         gridContainer.className = "wa-media-grid";
@@ -1171,20 +1165,21 @@ async function appendSingleMessage(msg, isSystem = false) {
             textDiv.innerText = await formatSystemMessage(msg.text, msg.sender_id);
             textDiv.style.fontStyle = "italic";
             textDiv.style.opacity = "0.85";
+        } else if (isDeleted) {
+            textDiv.innerText = msg.text;
+            textDiv.style.fontStyle = "italic";
+            textDiv.style.opacity = "0.7";
         } else {
             textDiv.innerText = msg.text;
         }
 
-        textDiv.style.whiteSpace = "pre-wrap";
-        textDiv.style.wordBreak = "break-word";
-        textDiv.style.overflowWrap = "break-word";
         bubble.appendChild(textDiv);
     }
 
     const footerDiv = document.createElement("div");
     footerDiv.style.cssText = "display: flex; justify-content: flex-end; align-items: center; gap: 6px; margin-top: 4px;";
 
-    if (msg.is_edited) {
+    if (!isDeleted && msg.is_edited) {
         const editedSpan = document.createElement("span");
         editedSpan.style.cssText = "font-size: 10px; opacity: 0.6; font-style: italic;";
         editedSpan.innerText = "bearbeitet";
@@ -1322,7 +1317,7 @@ if (chatForm) {
         }
 
         try {
-            // KORRIGIERTER BEARBEITEN-MODUS (Aktualisiert die Originalnachricht und setzt is_edited auf true)
+            // BEARBEITEN-MODUS (Aktualisiert die Originalnachricht in der Datenbank)
             if (editingMessageId) {
                 const targetIdToEdit = editingMessageId;
                 editingMessageId = null;
@@ -1333,6 +1328,7 @@ if (chatForm) {
                 }).eq("id", targetIdToEdit);
 
                 if (editErr) {
+                    alert("Fehler beim Bearbeiten (Bitte prüfe die Supabase RLS Policies für UPDATE): " + editErr.message);
                     throw editErr;
                 }
 

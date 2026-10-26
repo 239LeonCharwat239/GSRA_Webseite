@@ -1173,12 +1173,8 @@ p {
     word-break: break-word;
     overflow-wrap: break-word;
     position: relative;
-}
-
-/* Garantiert sauberes Wrapping auch bei extrem vielen Leerzeilen */
-.message-bubble div {
-    word-break: break-word;
-    overflow-wrap: break-word;
+    /* Verhindert Layout-Verrutschen bei extremen Leerzeilen durch saubere Komprimierung */
+    white-space: pre-line;
 }
 
 /* Hervorhebung beim Hinspringen auf zitierte Nachricht */
