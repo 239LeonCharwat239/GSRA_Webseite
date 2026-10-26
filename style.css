@@ -1174,18 +1174,20 @@ p {
     position: relative;
 }
 
-/* WhatsApp Hover-Aktionen für Nachrichten */
+/* Discord-inspirierte schicke Hover-Leiste */
 .message-actions {
     position: absolute;
-    top: 4px;
-    right: 8px;
+    top: -12px;
+    right: 12px;
     display: none;
-    gap: 6px;
-    background: rgba(15, 17, 23, 0.9);
+    background: #111214;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
     padding: 2px 6px;
-    border-radius: 4px;
-    border: 1px solid var(--border-subtle);
-    z-index: 5;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+    z-index: 10;
+    gap: 4px;
+    align-items: center;
 }
 
 .message-bubble:hover .message-actions {
@@ -1193,19 +1195,27 @@ p {
 }
 
 .msg-action-btn {
-    background: none;
+    background: transparent;
     border: none;
     color: var(--text-muted);
     cursor: pointer;
-    font-size: 11px;
-    transition: color 0.2s;
+    font-size: 13px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s ease;
 }
 
 .msg-action-btn:hover {
-    color: var(--gsra-yellow);
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
 }
 
 .msg-action-btn.delete-btn:hover {
+    background: rgba(255, 77, 77, 0.15);
     color: #ff4d4d;
 }
 

@@ -667,6 +667,7 @@ async function loadUserChats() {
             chat.last_message = latestMsg.text || "[Medien]";
         } else {
             chat.last_msg_time = chat.created_at;
+            chat.last_message = "Keine Nachrichten";
         }
 
         if (chat.id === activeChatId) {
@@ -881,7 +882,6 @@ async function loadChatMessages(chatId) {
     messageSubscription = supabase
         .channel(`chat_${chatId}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` }, async () => {
-            // Bei Änderungen (Insert, Update, Delete) Nachrichten neu laden
             const { data: updatedMessages } = await supabase
                 .from("messages")
                 .select("*")
@@ -914,7 +914,7 @@ async function renderMessages(messages) {
             }
             seenSystemTexts.add(formatted);
         }
-        await appendSingleMessage(msg);
+        await appendSingleMessage(msg, isSystem);
     }
 }
 
@@ -960,7 +960,7 @@ async function formatSystemMessage(text, senderId) {
     return text;
 }
 
-async function appendSingleMessage(msg) {
+async function appendSingleMessage(msg, isSystem = false) {
     if (!chatMessages) return;
     const placeholder = chatMessages.querySelector(".chat-placeholder");
     if (placeholder) placeholder.remove();
@@ -974,60 +974,79 @@ async function appendSingleMessage(msg) {
     const dateObj = msg.created_at ? new Date(msg.created_at) : new Date();
     const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    // WhatsApp-ähnliche Aktionsleiste (Antworten, Bearbeiten, Löschen) beim Hover
-    const actionsDiv = document.createElement("div");
-    actionsDiv.className = "message-actions";
+    // Nur für normale Nachrichten die Hover-Aktionsleiste anzeigen (Systemnachrichten bleiben geschützt & fix)
+    if (!isSystem) {
+        const actionsDiv = document.createElement("div");
+        actionsDiv.className = "message-actions";
 
-    const replyBtn = document.createElement("button");
-    replyBtn.className = "msg-action-btn";
-    replyBtn.title = "Antworten";
-    replyBtn.innerHTML = '<i class="fa-solid fa-reply"></i>';
-    replyBtn.addEventListener("click", () => {
-        replyingToId = msg.id;
-        if (replyPreviewBanner && replyBannerAuthor && replyBannerText) {
-            replyBannerAuthor.innerText = `Antwort an ${senderName}`;
-            replyBannerText.innerText = msg.text || "[Medien]";
-            replyPreviewBanner.style.display = "flex";
-        }
-        if (messageInput) messageInput.focus();
-    });
-    actionsDiv.appendChild(replyBtn);
+        // Antworten
+        const replyBtn = document.createElement("button");
+        replyBtn.className = "msg-action-btn";
+        replyBtn.title = "Antworten";
+        replyBtn.innerHTML = '<i class="fa-solid fa-reply"></i>';
+        replyBtn.addEventListener("click", () => {
+            replyingToId = msg.id;
+            if (replyPreviewBanner && replyBannerAuthor && replyBannerText) {
+                replyBannerAuthor.innerText = `Antwort an ${senderName}`;
+                replyBannerText.innerText = msg.text || "[Medien]";
+                replyPreviewBanner.style.display = "flex";
+            }
+            if (messageInput) messageInput.focus();
+        });
+        actionsDiv.appendChild(replyBtn);
 
-    // Bearbeiten & Löschen (nur für eigene Nachrichten oder Admins)
-    if (isOwn || isAdminUser) {
-        if (isOwn && msg.text && !msg.text.includes("hat den Chat") && !msg.text.includes("hat das Forum")) {
-            const editBtn = document.createElement("button");
-            editBtn.className = "msg-action-btn";
-            editBtn.title = "Bearbeiten";
-            editBtn.innerHTML = '<i class="fa-solid fa-pen"></i>';
-            editBtn.addEventListener("click", () => {
-                editingMessageId = msg.id;
-                if (messageInput) {
-                    messageInput.value = msg.text;
-                    messageInput.focus();
-                    messageInput.style.height = "auto";
-                    messageInput.style.height = Math.min(messageInput.scrollHeight, 140) + "px";
+        // Nachricht kopieren
+        const copyBtn = document.createElement("button");
+        copyBtn.className = "msg-action-btn";
+        copyBtn.title = "Text kopieren";
+        copyBtn.innerHTML = '<i class="fa-solid fa-copy"></i>';
+        copyBtn.addEventListener("click", () => {
+            const textToCopy = msg.text || "";
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                alert("Nachricht in die Zwischenablage kopiert!");
+            }).catch(err => {
+                console.error("Fehler beim Kopieren:", err);
+            });
+        });
+        actionsDiv.appendChild(copyBtn);
+
+        // Bearbeiten & Löschen (für eigene Nachrichten oder Admins)
+        if (isOwn || isAdminUser) {
+            if (isOwn && msg.text && !msg.text.includes("hat den Chat") && !msg.text.includes("hat das Forum")) {
+                const editBtn = document.createElement("button");
+                editBtn.className = "msg-action-btn";
+                editBtn.title = "Bearbeiten";
+                editBtn.innerHTML = '<i class="fa-solid fa-pen"></i>';
+                editBtn.addEventListener("click", () => {
+                    editingMessageId = msg.id;
+                    if (messageInput) {
+                        messageInput.value = msg.text;
+                        messageInput.focus();
+                        messageInput.style.height = "auto";
+                        messageInput.style.height = Math.min(messageInput.scrollHeight, 140) + "px";
+                    }
+                });
+                actionsDiv.appendChild(editBtn);
+            }
+
+            const deleteMsgBtn = document.createElement("button");
+            deleteMsgBtn.className = "msg-action-btn delete-btn";
+            deleteMsgBtn.title = "Löschen";
+            deleteMsgBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
+            deleteMsgBtn.addEventListener("click", async () => {
+                if (confirm("Möchtest du diese Nachricht löschen?")) {
+                    const supabase = window.supabaseClient || window.supabase;
+                    if (!supabase) return;
+                    await supabase.from("messages").delete().eq("id", msg.id);
+                    await loadChatMessages(activeChatId);
+                    await loadUserChats();
                 }
             });
-            actionsDiv.appendChild(editBtn);
+            actionsDiv.appendChild(deleteMsgBtn);
         }
 
-        const deleteMsgBtn = document.createElement("button");
-        deleteMsgBtn.className = "msg-action-btn delete-btn";
-        deleteMsgBtn.title = "Löschen";
-        deleteMsgBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
-        deleteMsgBtn.addEventListener("click", async () => {
-            if (confirm("Möchtest du diese Nachricht löschen?")) {
-                const supabase = window.supabaseClient || window.supabase;
-                if (!supabase) return;
-                await supabase.from("messages").delete().eq("id", msg.id);
-                loadChatMessages(activeChatId);
-            }
-        });
-        actionsDiv.appendChild(deleteMsgBtn);
+        bubble.appendChild(actionsDiv);
     }
-
-    bubble.appendChild(actionsDiv);
 
     const authorDiv = document.createElement("div");
     authorDiv.className = "msg-author";
@@ -1116,7 +1135,6 @@ async function appendSingleMessage(msg) {
 
     if (msg.text && msg.text !== "[Medien]") {
         const textDiv = document.createElement("div");
-        const isSystem = msg.text.includes("hat den Chat") || msg.text.includes("hat das Forum") || msg.text.includes("zum Forum hinzugefügt") || msg.text.includes("umbenannt");
         
         if (isSystem) {
             textDiv.innerText = await formatSystemMessage(msg.text, msg.sender_id);
@@ -1272,19 +1290,27 @@ if (chatForm) {
         }
 
         try {
-            // BEARBEITEN-MODUS: Wenn eine Nachricht bearbeitet wird
+            // KORRIGIERTER BEARBEITEN-MODUS
             if (editingMessageId) {
-                await supabase.from("messages").update({
+                const { error: editErr } = await supabase.from("messages").update({
                     text: text,
                     is_edited: true
                 }).eq("id", editingMessageId);
+
+                if (editErr) {
+                    throw editErr;
+                }
 
                 editingMessageId = null;
                 if (messageInput) {
                     messageInput.value = "";
                     messageInput.style.height = "42px";
                 }
-                loadChatMessages(activeChatId);
+                if (imageUploadInput) imageUploadInput.value = "";
+                if (imagePreviewContainer) imagePreviewContainer.style.display = "none";
+
+                await loadChatMessages(activeChatId);
+                await loadUserChats();
                 return;
             }
 
@@ -1303,7 +1329,6 @@ if (chatForm) {
 
             const finalMediaUrl = mediaUrls.length > 0 ? mediaUrls.join(",") : null;
 
-            // Nachricht senden inklusive Antwort (reply_to)
             await supabase.from("messages").insert([{
                 chat_id: activeChatId,
                 sender_id: currentUser.id,
@@ -1324,7 +1349,6 @@ if (chatForm) {
             if (imagePreviewContainer) imagePreviewContainer.style.display = "none";
             if (emojiPickerWrapper) emojiPickerWrapper.style.display = "none";
             
-            // Antwort-Zustand zurücksetzen
             replyingToId = null;
             if (replyPreviewBanner) replyPreviewBanner.style.display = "none";
 
@@ -1332,7 +1356,7 @@ if (chatForm) {
             loadUserChats();
         } catch (err) {
             console.error("Fehler beim Senden:", err);
-            alert("Fehler beim Hochladen/Senden der Nachricht. Bitte versuche es erneut.");
+            alert("Fehler beim Verarbeiten der Nachricht. Bitte versuche es erneut.");
         } finally {
             if (sendBtn) {
                 sendBtn.disabled = false;
