@@ -1170,8 +1170,19 @@ p {
     border-radius: 8px;
     font-size: 14px;
     line-height: 1.4;
-    word-wrap: break-word;
+    word-break: break-word;
     position: relative;
+    /* Verhindert Layout-Verrutschen bei extremen Leerzeilen */
+    overflow-wrap: break-word;
+}
+
+/* Hervorhebung beim Hinspringen auf zitierte Nachricht */
+@keyframes highlightPulse {
+    0% { background-color: rgba(255, 204, 0, 0.4); transform: scale(1.02); }
+    100% { background-color: inherit; transform: scale(1); }
+}
+.message-highlight {
+    animation: highlightPulse 1.5s ease-in-out;
 }
 
 /* Discord-inspirierte schicke Hover-Leiste */
@@ -1219,7 +1230,7 @@ p {
     color: #ff4d4d;
 }
 
-/* Zitat-Box in der Nachricht */
+/* Zitat-Box in der Nachricht (klickbar zum Springen) */
 .message-quoted {
     background: rgba(0, 0, 0, 0.25);
     border-left: 3px solid var(--gsra-yellow);
@@ -1228,6 +1239,12 @@ p {
     border-radius: 0 4px 4px 0;
     font-size: 12px;
     opacity: 0.9;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.message-quoted:hover {
+    background: rgba(255, 204, 0, 0.15);
 }
 
 .message-quoted-author {

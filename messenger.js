@@ -906,8 +906,8 @@ async function renderMessages(messages) {
     chatMessages.innerHTML = "";
     const seenSystemTexts = new Set();
     for (const msg of messages) {
-        const isSystem = msg.text && (msg.text.includes("hat den Chat") || msg.text.includes("hat das Forum") || msg.text.includes("zum Forum hinzugefügt") || msg.text.includes("umbenannt"));
-        if (isSystem) {
+        const isSystem = msg.text && (msg.text.includes("hat den Chat") || msg.text.includes("hat das Forum") || msg.text.includes("zum Forum hinzugefügt") || msg.text.includes("umbenannt") || msg.text.includes("hat eine Nachricht gelöscht") || msg.text.includes("hat eine Nachricht bearbeitet"));
+        if (isSystem && !msg.image_url && !msg.reply_to) {
             const formatted = await formatSystemMessage(msg.text, msg.sender_id);
             if (seenSystemTexts.has(formatted)) {
                 continue;
@@ -957,6 +957,22 @@ async function formatSystemMessage(text, senderId) {
         }
     }
 
+    if (text.includes("hat eine Nachricht gelöscht")) {
+        if (isOwnAction) {
+            return "Du hast eine Nachricht gelöscht.";
+        } else {
+            return `${actorName} hat eine Nachricht gelöscht.`;
+        }
+    }
+
+    if (text.includes("hat eine Nachricht bearbeitet")) {
+        if (isOwnAction) {
+            return "Du hast eine Nachricht bearbeitet.";
+        } else {
+            return `${actorName} hat eine Nachricht bearbeitet.`;
+        }
+    }
+
     return text;
 }
 
@@ -966,6 +982,7 @@ async function appendSingleMessage(msg, isSystem = false) {
     if (placeholder) placeholder.remove();
 
     const bubble = document.createElement("div");
+    bubble.id = `msg-${msg.id}`;
     
     const isOwn = String(msg.sender_id) === String(currentUser?.id);
     bubble.className = `message-bubble ${isOwn ? 'message-own' : 'message-other'}`;
@@ -974,7 +991,7 @@ async function appendSingleMessage(msg, isSystem = false) {
     const dateObj = msg.created_at ? new Date(msg.created_at) : new Date();
     const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    // Nur für normale Nachrichten die Hover-Aktionsleiste anzeigen (Systemnachrichten bleiben geschützt & fix)
+    // Nur für normale Nachrichten die Hover-Aktionsleiste anzeigen
     if (!isSystem) {
         const actionsDiv = document.createElement("div");
         actionsDiv.className = "message-actions";
@@ -1010,7 +1027,7 @@ async function appendSingleMessage(msg, isSystem = false) {
         });
         actionsDiv.appendChild(copyBtn);
 
-        // Bearbeiten & Löschen (für eigene Nachrichten oder Admins)
+        // Bearbeiten & Löschen
         if (isOwn || isAdminUser) {
             if (isOwn && msg.text && !msg.text.includes("hat den Chat") && !msg.text.includes("hat das Forum")) {
                 const editBtn = document.createElement("button");
@@ -1037,7 +1054,18 @@ async function appendSingleMessage(msg, isSystem = false) {
                 if (confirm("Möchtest du diese Nachricht löschen?")) {
                     const supabase = window.supabaseClient || window.supabase;
                     if (!supabase) return;
+
+                    // Löschen in DB
                     await supabase.from("messages").delete().eq("id", msg.id);
+
+                    // Transparenz-Systemnachricht erzeugen für andere Teilnehmer
+                    const sysDeleteMsg = `${currentUsername} hat eine Nachricht gelöscht.`;
+                    await supabase.from("messages").insert([{
+                        chat_id: activeChatId,
+                        sender_id: currentUser.id,
+                        text: sysDeleteMsg
+                    }]);
+
                     await loadChatMessages(activeChatId);
                     await loadUserChats();
                 }
@@ -1053,7 +1081,7 @@ async function appendSingleMessage(msg, isSystem = false) {
     authorDiv.innerText = senderName;
     bubble.appendChild(authorDiv);
 
-    // Zitat anzeigen, falls vorhanden
+    // Zitat anzeigen mit Sprung-Funktion zur Originalnachricht
     if (msg.reply_to && messagesCacheMap.has(msg.reply_to)) {
         const quotedMsg = messagesCacheMap.get(msg.reply_to);
         const quotedAuthor = String(quotedMsg.sender_id) === String(currentUser?.id) ? "Du" : await fetchUserName(quotedMsg.sender_id);
@@ -1064,6 +1092,19 @@ async function appendSingleMessage(msg, isSystem = false) {
             <div class="message-quoted-author">${escapeHtml(quotedAuthor)}</div>
             <div style="font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.9;">${escapeHtml(quotedMsg.text || "[Medien]")}</div>
         `;
+        
+        // Klick springt zur Originalnachricht
+        quoteDiv.addEventListener("click", () => {
+            const targetElement = document.getElementById(`msg-${msg.reply_to}`);
+            if (targetElement) {
+                targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                targetElement.classList.add('message-highlight');
+                setTimeout(() => {
+                    targetElement.classList.remove('message-highlight');
+                }, 1500);
+            }
+        });
+
         bubble.appendChild(quoteDiv);
     }
 
@@ -1290,18 +1331,28 @@ if (chatForm) {
         }
 
         try {
-            // KORRIGIERTER BEARBEITEN-MODUS
+            // KORRIGIERTER BEARBEITEN-MODUS (Präzise Aktualisierung & Zurücksetzung des States)
             if (editingMessageId) {
+                const targetIdToEdit = editingMessageId;
+                editingMessageId = null; // Sofort zurücksetzen, damit kein Loop entsteht
+
                 const { error: editErr } = await supabase.from("messages").update({
                     text: text,
                     is_edited: true
-                }).eq("id", editingMessageId);
+                }).eq("id", targetIdToEdit);
 
                 if (editErr) {
                     throw editErr;
                 }
 
-                editingMessageId = null;
+                // Transparenz-Hinweis im Chat erzeugen
+                const sysEditMsg = `${currentUsername} hat eine Nachricht bearbeitet.`;
+                await supabase.from("messages").insert([{
+                    chat_id: activeChatId,
+                    sender_id: currentUser.id,
+                    text: sysEditMsg
+                }]);
+
                 if (messageInput) {
                     messageInput.value = "";
                     messageInput.style.height = "42px";
