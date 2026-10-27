@@ -30,7 +30,7 @@ function escapeHtml(str) {
         .replace(/'/g, "&#039;");
 }
 
-// Hilfsfunktion: Komprimiert mehrfache Zeilenumbrüche/Leerzeichen zu einer einzeiligen, sauberen Vorschau
+// Komprimiert mehrfache Zeilenumbrüche/Leerzeichen zu einer sauberen, einzeiligen Vorschau (für Zitate & Bearbeiten)
 function sanitizeQuoteText(text) {
     if (!text) return "";
     return text.replace(/\s+/g, ' ').trim();
@@ -77,18 +77,18 @@ const replyBannerAuthor = document.getElementById("replyBannerAuthor");
 const replyBannerText = document.getElementById("replyBannerText");
 const cancelReplyBtn = document.getElementById("cancelReplyBtn");
 
-// Dynamischer Bearbeitungs-Banner
+// Kompakter Bearbeitungs-Banner mit Sanitize-Funktion gegen das Aufblähen durch Leerzeilen
 let editPreviewBanner = document.getElementById("editPreviewBanner");
 if (!editPreviewBanner && chatForm) {
     editPreviewBanner = document.createElement("div");
     editPreviewBanner.id = "editPreviewBanner";
-    editPreviewBanner.style.cssText = "display: none; background: #202c33; border-left: 4px solid var(--gsra-blue); padding: 8px 14px; align-items: center; justify-content: space-between; font-size: 13px; color: #fff; margin-bottom: 8px; border-radius: 4px;";
+    editPreviewBanner.style.cssText = "display: none; background: #202c33; border-left: 4px solid var(--gsra-blue); padding: 8px 14px; align-items: center; justify-content: space-between; font-size: 13px; color: #fff; margin-bottom: 8px; border-radius: 4px; width: 100%; box-sizing: border-box;";
     editPreviewBanner.innerHTML = `
-        <div style="display: flex; flex-direction: column; overflow: hidden;">
+        <div style="display: flex; flex-direction: column; overflow: hidden; max-width: calc(100% - 30px);">
             <span style="font-weight: bold; color: var(--gsra-blue); font-size: 11px; text-transform: uppercase;">Nachricht bearbeiten</span>
             <span id="editBannerText" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-muted); font-size: 12px;"></span>
         </div>
-        <button type="button" id="cancelEditBtn" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px; padding: 4px;" title="Bearbeiten abbrechen"><i class="fa-solid fa-xmark"></i></button>
+        <button type="button" id="cancelEditBtn" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px; padding: 4px; flex-shrink: 0;" title="Bearbeiten abbrechen"><i class="fa-solid fa-xmark"></i></button>
     `;
     chatForm.parentNode.insertBefore(editPreviewBanner, chatForm);
 
@@ -1023,7 +1023,6 @@ async function appendSingleMessage(msg, isSystem = false) {
             replyingToId = msg.id;
             if (replyPreviewBanner && replyBannerAuthor && replyBannerText) {
                 replyBannerAuthor.innerText = `Antwort an ${senderName}`;
-                // Hier wird der Zitattext für die Vorschau bereinigt (verhindert Aufblähung bei Leerzeilen)
                 replyBannerText.innerText = sanitizeQuoteText(msg.text || "[Medien]");
                 replyPreviewBanner.style.display = "flex";
             }
@@ -1062,7 +1061,8 @@ async function appendSingleMessage(msg, isSystem = false) {
                         messageInput.style.height = Math.min(messageInput.scrollHeight, 140) + "px";
                     }
                     if (editPreviewBanner) {
-                        document.getElementById("editBannerText").innerText = msg.text;
+                        // Hier wird der Text im Bearbeitungs-Banner ebenfalls über sanitizeQuoteText geleert/komprimiert!
+                        document.getElementById("editBannerText").innerText = sanitizeQuoteText(msg.text);
                         editPreviewBanner.style.display = "flex";
                     }
                 });
@@ -1101,7 +1101,7 @@ async function appendSingleMessage(msg, isSystem = false) {
     authorDiv.innerText = senderName;
     bubble.appendChild(authorDiv);
 
-    // Zitat anzeigen (Mit Sanitize-Funktion, sodass Leerzeilen-Wüsten im Chat-Zitat sofort einzeilig und kompakt dargestellt werden)
+    // Zitat anzeigen
     if (!isDeleted && msg.reply_to && messagesCacheMap.has(msg.reply_to)) {
         const quotedMsg = messagesCacheMap.get(msg.reply_to);
         const quotedAuthor = String(quotedMsg.sender_id) === String(currentUser?.id) ? "Du" : await fetchUserName(quotedMsg.sender_id);
