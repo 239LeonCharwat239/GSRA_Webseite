@@ -1094,26 +1094,25 @@ async function appendSingleMessage(msg, isSystem = false) {
         }
     });
 
-    // Aktionsbalken, Reagieren-Button & Leiste
+    // Aktionsbalken mit Schnell-Emojis (Daumen hoch, Herz, Lachen, Erstaunen, Plus)
     if (!isSystem && !isDeleted) {
         const actionsDiv = document.createElement("div");
         actionsDiv.className = "message-actions";
 
-        // 1. Reagieren-Button in der Multifunktionsleiste (ganz links neben Antworten)
-        const reactBtnInBar = document.createElement("button");
-        reactBtnInBar.className = "msg-action-btn";
-        reactBtnInBar.title = "Reagieren";
-        reactBtnInBar.innerHTML = '<i class="fa-regular fa-face-smile"></i>';
+        // 1. Die 4 Haupt-Emojis direkt in der Leiste
+        const quickEmojis = ["👍", "❤️", "😂", "😮"];
+        quickEmojis.forEach(emoji => {
+            const btn = document.createElement("button");
+            btn.className = "msg-action-btn";
+            btn.title = `Mit ${emoji} reagieren`;
+            btn.innerText = emoji;
+            btn.style.cssText = "font-size: 14px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; cursor: pointer; border-radius: 4px; transition: transform 0.2s;";
+            
+            btn.addEventListener("mouseover", () => btn.style.transform = "scale(1.2)");
+            btn.addEventListener("mouseout", () => btn.style.transform = "scale(1)");
 
-        const reactPicker = document.createElement("div");
-        reactPicker.className = "message-react-picker";
-        const emojis = ["👍", "❤️", "😂", "😮", "😢", "🔥"];
-        emojis.forEach(emoji => {
-            const span = document.createElement("span");
-            span.innerText = emoji;
-            span.addEventListener("click", async (e) => {
+            btn.addEventListener("click", async (e) => {
                 e.stopPropagation();
-                reactPicker.style.display = "none";
                 const supabase = window.supabaseClient || window.supabase;
                 if (supabase) {
                     let currentReactions = msg.reactions || {};
@@ -1122,22 +1121,84 @@ async function appendSingleMessage(msg, isSystem = false) {
                     await loadChatMessages(activeChatId);
                 }
             });
-            reactPicker.appendChild(span);
+            actionsDiv.appendChild(btn);
         });
 
-        reactBtnInBar.addEventListener("click", (e) => {
+        // 2. Das Plus-Symbol (+) für weitere Emojis (öffnet kompaktes Such-Popup)
+        const plusBtn = document.createElement("button");
+        plusBtn.className = "msg-action-btn";
+        plusBtn.title = "Weitere Emojis";
+        plusBtn.innerHTML = '<i class="fa-solid fa-plus"></i>';
+
+        const pickerPopup = document.createElement("div");
+        pickerPopup.className = "message-react-picker-popup";
+        
+        const searchInput = document.createElement("input");
+        searchInput.type = "text";
+        searchInput.placeholder = "Emoji suchen...";
+        
+        const grid = document.createElement("div");
+        grid.className = "message-react-picker-grid";
+
+        const allAvailableEmojis = [
+            "😀","😃","😄","😁","😆","😅","😂","🤣","😊","😇","🙂","🙃","😉","😌","😍","🥰","😘","😗","😙","😚",
+            "😋","😛","😝","😜","🤪","🤨","🧐","🤓","😎","🤩","🥳","😏","😒","😞","😔","worried","😕","🙁","☹️","😣",
+            "😖","tired","😫","😩","🥺","cry","😢","😭","fury","😤","😠","😡","🤬","mindblown","🤯","hot","🥵","cold","🥶",
+            "scream","😱","fear","😨","scared","😰","sad","😥","😢","drop","😓","group","🤗","thinking","🤔","chuckle","🤭","shh","🤫",
+            "liar","🤥","no","😶","mute","😐","expressionless","😑","grimace","😬","roll","🙄","hush","😯","frown","😦","anguish","😧","open","😮",
+            "hush","😲","sleepy","😴","drool","🤤","sleepy","😪","dizzy","😵","zipped","🤐","mummy","🥴","nauseated","🤢","vomit","🤮",
+            "sneezing","🤧","mask","😷","thermometer","🤒","bandage","🤕","money","🤑","cowboy","🤠","devil","😈","imp","👿","ogre","👹","goblin","👺",
+            "clown","🤡","poop","💩","ghost","👻","skull","💀","alien","👽","space","👾","robot","🤖","jack","🎃","cat","😺","grin","😸",
+            "joy","😹","smile","😻","heart","😼","kiss","😽","weary","🙀","crying","😿","pouting","😾","thumbsup","👍","thumbsdown","👎",
+            "clap","👏","raised","🙌","open","👐","palms","🤲","handshake","🤝","pray","🙏","muscle","💪","mechanical","🦾","leg","🦵",
+            "fire","🔥","star","⭐","sparkles","✨","heart","❤️","orange","🧡","yellow","💛","green","💚","blue","💙","purple","💜","black","🖤","white","🤍","brown","🤎"
+        ];
+
+        const renderEmojiGrid = (filter = "") => {
+            grid.innerHTML = "";
+            const uniqueList = Array.from(new Set(allAvailableEmojis));
+            uniqueList.forEach(em => {
+                if (filter && !em.includes(filter)) return;
+                const span = document.createElement("span");
+                span.innerText = em;
+                span.addEventListener("click", async (e) => {
+                    e.stopPropagation();
+                    pickerPopup.style.display = "none";
+                    const supabase = window.supabaseClient || window.supabase;
+                    if (supabase) {
+                        let currentReactions = msg.reactions || {};
+                        currentReactions[currentUser.id] = em;
+                        await supabase.from("messages").update({ reactions: currentReactions }).eq("id", msg.id);
+                        await loadChatMessages(activeChatId);
+                    }
+                });
+                grid.appendChild(span);
+            });
+        };
+
+        renderEmojiGrid();
+
+        searchInput.addEventListener("input", (e) => {
+            renderEmojiGrid(e.target.value.trim());
+        });
+
+        pickerPopup.appendChild(searchInput);
+        pickerPopup.appendChild(grid);
+
+        plusBtn.addEventListener("click", (e) => {
             e.stopPropagation();
-            const isOpen = reactPicker.style.display === "flex";
-            document.querySelectorAll(".message-react-picker").forEach(p => p.style.display = "none");
-            reactPicker.style.display = isOpen ? "none" : "flex";
+            const isOpen = pickerPopup.style.display === "flex";
+            document.querySelectorAll(".message-react-picker-popup").forEach(p => p.style.display = "none");
+            pickerPopup.style.display = isOpen ? "none" : "flex";
+            if (!isOpen) searchInput.focus();
         });
 
         document.addEventListener("click", () => {
-            reactPicker.style.display = "none";
+            pickerPopup.style.display = "none";
         });
 
-        actionsDiv.appendChild(reactBtnInBar);
-        actionsDiv.appendChild(reactPicker);
+        actionsDiv.appendChild(plusBtn);
+        actionsDiv.appendChild(pickerPopup);
 
         // Antworten
         const replyBtn = document.createElement("button");
@@ -1202,7 +1263,6 @@ async function appendSingleMessage(msg, isSystem = false) {
             deleteMsgBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
             deleteMsgBtn.addEventListener("click", (e) => {
                 e.stopPropagation();
-                // Startet direkt den Multi-Select-Modus und selektiert diese Nachricht sofort
                 isMultiSelectMode = true;
                 selectedMessageIds.clear();
                 selectedMessageIds.add(msg.id);
