@@ -998,10 +998,13 @@ async function appendSingleMessage(msg, isSystem = false) {
     const placeholder = chatMessages.querySelector(".chat-placeholder");
     if (placeholder) placeholder.remove();
 
+    const wrapperDiv = document.createElement("div");
+    wrapperDiv.style.cssText = "display: flex; flex-direction: column; width: 100%; position: relative;";
+    const isOwn = String(msg.sender_id) === String(currentUser?.id);
+    wrapperDiv.style.alignItems = isOwn ? "flex-end" : "flex-start";
+
     const bubble = document.createElement("div");
     bubble.id = `msg-${msg.id}`;
-    
-    const isOwn = String(msg.sender_id) === String(currentUser?.id);
     bubble.className = `message-bubble ${isOwn ? 'message-own' : 'message-other'}`;
 
     const senderName = isOwn ? "Du" : await fetchUserName(msg.sender_id);
@@ -1037,7 +1040,7 @@ async function appendSingleMessage(msg, isSystem = false) {
         const actionsDiv = document.createElement("div");
         actionsDiv.className = "message-actions";
 
-        // 1. Emoji-Smiley Button (öffnet die Quick-Bar im WhatsApp-Stil exakt vom Button aus)
+        // 1. Emoji-Smiley Button
         const emojiBtn = document.createElement("button");
         emojiBtn.className = "msg-action-btn";
         emojiBtn.title = "Mit Emoji reagieren";
@@ -1176,7 +1179,7 @@ async function appendSingleMessage(msg, isSystem = false) {
         actionsDiv.appendChild(quickBar);
         actionsDiv.appendChild(pickerPopup);
 
-        // 2. Pfeil-nach-unten Button (Multifunktions-Dropdown exakt vom Button aus)
+        // 2. Pfeil-nach-unten Button (Dropdown)
         const arrowBtn = document.createElement("button");
         arrowBtn.className = "msg-action-btn";
         arrowBtn.title = "Mehr Optionen";
@@ -1412,11 +1415,13 @@ async function appendSingleMessage(msg, isSystem = false) {
     footerDiv.appendChild(timeSpan);
 
     bubble.appendChild(footerDiv);
+    wrapperDiv.appendChild(bubble);
 
+    // Getrennte Reaktions-Bubble unterhalb der Nachrichten-Bubble im WhatsApp-Stil
     if (!isDeleted && msg.reactions && typeof msg.reactions === 'object' && Object.keys(msg.reactions).length > 0) {
-        const reactionsDiv = document.createElement("div");
-        reactionsDiv.className = "message-reactions-display";
-        
+        const reactionsContainer = document.createElement("div");
+        reactionsContainer.className = `message-reactions-container ${isOwn ? 'align-right' : 'align-left'}`;
+
         const counts = {};
         Object.entries(msg.reactions).forEach(([userId, emoji]) => {
             counts[emoji] = (counts[emoji] || 0) + 1;
@@ -1425,9 +1430,9 @@ async function appendSingleMessage(msg, isSystem = false) {
         const sortedEmojis = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 4);
 
         sortedEmojis.forEach(([emoji, count]) => {
-            const pill = document.createElement("span");
+            const reactionBubble = document.createElement("div");
             const hasUserReacted = msg.reactions[currentUser.id] === emoji;
-            pill.className = `reaction-pill ${hasUserReacted ? 'user-reacted' : ''}`;
+            reactionBubble.className = `reaction-bubble-wrapper ${hasUserReacted ? 'user-reacted' : ''}`;
             
             const totalReactionsCount = Object.keys(msg.reactions).length;
             const isGroupOrForum = activeChatId === officialForumChatId || allChatsCache.find(c => c.id === activeChatId)?.user1_id === allChatsCache.find(c => c.id === activeChatId)?.user2_id;
@@ -1437,9 +1442,9 @@ async function appendSingleMessage(msg, isSystem = false) {
                 countDisplay = ` <span style="font-size: 11px; opacity: 0.9;">${formatCount(totalReactionsCount)}</span>`;
             }
 
-            pill.innerHTML = `${emoji}${countDisplay}`;
+            reactionBubble.innerHTML = `${emoji}${countDisplay}`;
             
-            pill.addEventListener("click", async (e) => {
+            reactionBubble.addEventListener("click", async (e) => {
                 e.stopPropagation();
                 const supabase = window.supabaseClient || window.supabase;
                 if (supabase) {
@@ -1455,12 +1460,12 @@ async function appendSingleMessage(msg, isSystem = false) {
                 }
             });
 
-            reactionsDiv.appendChild(pill);
+            reactionsContainer.appendChild(reactionBubble);
         });
-        bubble.appendChild(reactionsDiv);
+        wrapperDiv.appendChild(reactionsContainer);
     }
 
-    chatMessages.appendChild(bubble);
+    chatMessages.appendChild(wrapperDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 

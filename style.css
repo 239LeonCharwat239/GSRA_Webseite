@@ -1224,12 +1224,12 @@ body.multi-select-active .message-actions {
     animation: highlightPulse 1.5s ease-in-out;
 }
 
-/* Eigene Nachricht (rechts): Aktionsleiste links vom Kasten */
+/* Eigene Nachricht (rechts): Aktionsleiste links vom Kasten mit unsichtbarem Brücken-Padding zur Vermeidung der toten Zone */
 .message-own .message-actions {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    right: calc(100% + 8px);
+    right: calc(100% + 4px);
     display: none;
     background: #15161a;
     border: 1px solid var(--border-subtle);
@@ -1241,12 +1241,12 @@ body.multi-select-active .message-actions {
     align-items: center;
 }
 
-/* Fremde Nachricht (links): Aktionsleiste rechts vom Kasten */
+/* Fremde Nachricht (links): Aktionsleiste rechts vom Kasten mit Brücken-Padding */
 .message-other .message-actions {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    left: calc(100% + 8px);
+    left: calc(100% + 4px);
     display: none;
     background: #15161a;
     border: 1px solid var(--border-subtle);
@@ -1263,8 +1263,8 @@ body.multi-select-active .message-actions {
     position: absolute;
     top: 0;
     bottom: 0;
-    right: -8px;
-    width: 10px;
+    right: -12px;
+    width: 16px;
     background: transparent;
 }
 
@@ -1273,8 +1273,8 @@ body.multi-select-active .message-actions {
     position: absolute;
     top: 0;
     bottom: 0;
-    left: -8px;
-    width: 10px;
+    left: -12px;
+    width: 16px;
     background: transparent;
 }
 
@@ -1307,7 +1307,7 @@ body.multi-select-active .message-actions {
     color: #ff4d4d;
 }
 
-/* WhatsApp-Dropdown Menü (Intelligente Ausrichtung vom Button ausgehend) */
+/* WhatsApp-Dropdown Menü mit unsichtbarer Hover-Brücke */
 .wa-msg-dropdown {
     position: absolute;
     background: #15161a;
@@ -1323,11 +1323,31 @@ body.multi-select-active .message-actions {
 }
 
 .wa-msg-dropdown.dropdown-above {
-    bottom: calc(100% + 4px);
+    bottom: calc(100% + 2px);
+    padding-bottom: 12px;
+}
+.wa-msg-dropdown.dropdown-above::before {
+    content: '';
+    position: absolute;
+    bottom: -12px;
+    left: 0;
+    right: 0;
+    height: 14px;
+    background: transparent;
 }
 
 .wa-msg-dropdown.dropdown-below {
-    top: calc(100% + 4px);
+    top: calc(100% + 2px);
+    padding-top: 12px;
+}
+.wa-msg-dropdown.dropdown-below::before {
+    content: '';
+    position: absolute;
+    top: -12px;
+    left: 0;
+    right: 0;
+    height: 14px;
+    background: transparent;
 }
 
 .wa-msg-dropdown button {
@@ -1349,7 +1369,7 @@ body.multi-select-active .message-actions {
     color: var(--gsra-yellow);
 }
 
-/* WhatsApp-Reaktionsleiste über dem Smiley (Quick Bar - exakt am Button ausgerichtet) */
+/* WhatsApp-Reaktionsleiste (Quick Bar) mit Hover-Brücke gegen die tote Zone */
 .wa-quick-reaction-bar {
     position: absolute;
     background: #15161a;
@@ -1366,11 +1386,31 @@ body.multi-select-active .message-actions {
 }
 
 .wa-quick-reaction-bar.bar-above {
-    bottom: calc(100% + 8px);
+    bottom: calc(100% + 4px);
+    padding-bottom: 14px;
+}
+.wa-quick-reaction-bar.bar-above::before {
+    content: '';
+    position: absolute;
+    bottom: -14px;
+    left: 0;
+    right: 0;
+    height: 16px;
+    background: transparent;
 }
 
 .wa-quick-reaction-bar.bar-below {
-    top: calc(100% + 8px);
+    top: calc(100% + 4px);
+    padding-top: 14px;
+}
+.wa-quick-reaction-bar.bar-below::before {
+    content: '';
+    position: absolute;
+    top: -14px;
+    left: 0;
+    right: 0;
+    height: 16px;
+    background: transparent;
 }
 
 .wa-quick-reaction-bar span {
@@ -1383,7 +1423,7 @@ body.multi-select-active .message-actions {
     transform: scale(1.25);
 }
 
-/* Erweitertes Emoji-Such-Popup (exakt am Button ausgerichtet) */
+/* Erweitertes Emoji-Such-Popup mit Hover-Brücke */
 .message-react-picker-popup {
     position: absolute;
     background: #15161a;
@@ -1401,13 +1441,33 @@ body.multi-select-active .message-actions {
 }
 
 .message-react-picker-popup.popup-above {
-    bottom: calc(100% + 4px);
+    bottom: calc(100% + 2px);
     border-top: 3px solid var(--gsra-yellow);
+    padding-bottom: 12px;
+}
+.message-react-picker-popup.popup-above::before {
+    content: '';
+    position: absolute;
+    bottom: -12px;
+    left: 0;
+    right: 0;
+    height: 14px;
+    background: transparent;
 }
 
 .message-react-picker-popup.popup-below {
-    top: calc(100% + 4px);
+    top: calc(100% + 2px);
     border-bottom: 3px solid var(--gsra-yellow);
+    padding-top: 12px;
+}
+.message-react-picker-popup.popup-below::before {
+    content: '';
+    position: absolute;
+    top: -12px;
+    left: 0;
+    right: 0;
+    height: 14px;
+    background: transparent;
 }
 
 .message-react-picker-popup input {
@@ -1441,38 +1501,47 @@ body.multi-select-active .message-actions {
     background: rgba(255, 204, 0, 0.2);
 }
 
-/* Unten angehängte Reaktionen im WhatsApp-Stil */
-.message-reactions-display {
+/* Eigene Reaktions-Bubble unter der Nachrichten-Bubble (WhatsApp-Stil) */
+.message-reactions-container {
     display: flex;
-    gap: 4px;
-    flex-wrap: wrap;
-    margin-top: 4px;
+    flex-direction: column;
+    margin-top: 3px;
+    margin-bottom: 4px;
 }
 
-.reaction-pill {
-    background: #202c33;
+.message-reactions-container.align-right {
+    align-items: flex-end;
+}
+
+.message-reactions-container.align-left {
+    align-items: flex-start;
+}
+
+.reaction-bubble-wrapper {
+    background: #15161a;
     border: 1px solid var(--border-subtle);
     border-radius: 12px;
     padding: 2px 8px;
-    font-size: 12px;
+    font-size: 13px;
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
     cursor: pointer;
     color: #fff;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-    transition: background 0.2s ease, border-color 0.2s ease;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.6);
+    transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
 }
 
-.reaction-pill.user-reacted {
-    background: var(--gsra-blue) !important;
+.reaction-bubble-wrapper.user-reacted {
+    background: rgba(0, 85, 255, 0.25) !important;
     border-color: var(--gsra-yellow) !important;
     box-shadow: var(--blue-glow);
 }
 
-.reaction-pill:hover {
-    background: rgba(255, 204, 0, 0.2);
+.reaction-bubble-wrapper:hover {
+    background: rgba(255, 204, 0, 0.15);
     border-color: var(--gsra-yellow);
+    transform: translateY(-1px);
 }
 
 /* Zitat-Block kompakt */
