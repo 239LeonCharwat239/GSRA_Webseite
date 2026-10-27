@@ -148,6 +148,7 @@ if (!multiDeleteBar && chatForm) {
 function exitMultiSelectMode() {
     isMultiSelectMode = false;
     selectedMessageIds.clear();
+    document.body.classList.remove("multi-select-active");
     if (multiDeleteBar) multiDeleteBar.style.display = "none";
     document.querySelectorAll(".message-bubble").forEach(b => {
         b.classList.remove("selection-mode", "selected-bubble");
@@ -1124,7 +1125,7 @@ async function appendSingleMessage(msg, isSystem = false) {
             actionsDiv.appendChild(btn);
         });
 
-        // 2. Das Plus-Symbol (+) für weitere Emojis (öffnet kompaktes Such-Popup)
+        // 2. Das Plus-Symbol (+) für weitere Emojis (öffnet kompaktes Such-Popup mit intelligenter Positionierung)
         const plusBtn = document.createElement("button");
         plusBtn.className = "msg-action-btn";
         plusBtn.title = "Weitere Emojis";
@@ -1133,6 +1134,11 @@ async function appendSingleMessage(msg, isSystem = false) {
         const pickerPopup = document.createElement("div");
         pickerPopup.className = "message-react-picker-popup";
         
+        // Verhindert, dass Klicks im Popup das Popup sofort schließen
+        pickerPopup.addEventListener("click", (e) => {
+            e.stopPropagation();
+        });
+
         const searchInput = document.createElement("input");
         searchInput.type = "text";
         searchInput.placeholder = "Emoji suchen...";
@@ -1142,13 +1148,13 @@ async function appendSingleMessage(msg, isSystem = false) {
 
         const allAvailableEmojis = [
             "😀","😃","😄","😁","😆","😅","😂","🤣","😊","😇","🙂","🙃","😉","😌","😍","🥰","😘","😗","😙","😚",
-            "😋","😛","😝","😜","🤪","🤨","🧐","🤓","😎","🤩","🥳","😏","😒","😞","😔","worried","😕","🙁","☹️","😣",
-            "😖","tired","😫","😩","🥺","cry","😢","😭","fury","😤","😠","😡","🤬","mindblown","🤯","hot","🥵","cold","🥶",
-            "scream","😱","fear","😨","scared","😰","sad","😥","😢","drop","😓","group","🤗","thinking","🤔","chuckle","🤭","shh","🤫",
-            "liar","🤥","no","😶","mute","😐","expressionless","😑","grimace","😬","roll","🙄","hush","😯","frown","😦","anguish","😧","open","😮",
-            "hush","😲","sleepy","😴","drool","🤤","sleepy","😪","dizzy","😵","zipped","🤐","mummy","🥴","nauseated","🤢","vomit","🤮",
-            "sneezing","🤧","mask","😷","thermometer","🤒","bandage","🤕","money","🤑","cowboy","🤠","devil","😈","imp","👿","ogre","👹","goblin","👺",
-            "clown","🤡","poop","💩","ghost","👻","skull","💀","alien","👽","space","👾","robot","🤖","jack","🎃","cat","😺","grin","😸",
+            "😋","😛","😝","😜","🤪","🤨","🧐","🤓","😎","🤩","🥳","😏","😒","😞","😔","😕","🙁","☹️","😣",
+            "😖","😫","😩","🥺","😢","😭","😤","😠","😡","🤬","🤯","🥵","🥶",
+            "😱","😨","😰","😥","😢","😓","🤗","🤔","🤭","🤫",
+            "🤥","😶","😐","😑","😬","🙄","😯","😦","😧","😮",
+            "😲","😴","🤤","😪","😵","🤐","🥴","🤢","🤮",
+            "🤧","😷","🤒","🤕","🤑","🤠","😈","👿","👹","👺",
+            "clown","🤡","poop","💩","ghost","👻","skull","💀","alien","👽","👾","robot","🤖","jack","🎃","cat","😺","grin","😸",
             "joy","😹","smile","😻","heart","😼","kiss","😽","weary","🙀","crying","😿","pouting","😾","thumbsup","👍","thumbsdown","👎",
             "clap","👏","raised","🙌","open","👐","palms","🤲","handshake","🤝","pray","🙏","muscle","💪","mechanical","🦾","leg","🦵",
             "fire","🔥","star","⭐","sparkles","✨","heart","❤️","orange","🧡","yellow","💛","green","💚","blue","💙","purple","💜","black","🖤","white","🤍","brown","🤎"
@@ -1189,8 +1195,24 @@ async function appendSingleMessage(msg, isSystem = false) {
             e.stopPropagation();
             const isOpen = pickerPopup.style.display === "flex";
             document.querySelectorAll(".message-react-picker-popup").forEach(p => p.style.display = "none");
-            pickerPopup.style.display = isOpen ? "none" : "flex";
-            if (!isOpen) searchInput.focus();
+            
+            if (!isOpen) {
+                // Intelligente Positionierung: Prüfen ob Nachricht in der oberen Hälfte des Chats ist
+                const bubbleRect = bubble.getBoundingClientRect();
+                const chatContainerRect = chatMessages.getBoundingClientRect();
+                
+                // Wenn die Nachricht nah am oberen Rand ist, Popup nach UNTEN öffnen, sonst nach OBEN
+                if (bubbleRect.top - chatContainerRect.top < 220) {
+                    pickerPopup.className = "message-react-picker-popup popup-below";
+                } else {
+                    pickerPopup.className = "message-react-picker-popup popup-above";
+                }
+
+                pickerPopup.style.display = "flex";
+                searchInput.focus();
+            } else {
+                pickerPopup.style.display = "none";
+            }
         });
 
         document.addEventListener("click", () => {
@@ -1264,6 +1286,7 @@ async function appendSingleMessage(msg, isSystem = false) {
             deleteMsgBtn.addEventListener("click", (e) => {
                 e.stopPropagation();
                 isMultiSelectMode = true;
+                document.body.classList.add("multi-select-active");
                 selectedMessageIds.clear();
                 selectedMessageIds.add(msg.id);
 
