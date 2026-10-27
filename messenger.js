@@ -975,7 +975,7 @@ async function appendSingleMessage(msg, isSystem = false) {
         const hoverControls = document.createElement("div");
         hoverControls.className = "wa-msg-hover-controls";
 
-        // 1. Emoji-Button zum Reagieren beim Hovern (WhatsApp-Stil)
+        // Emoji-Button mit intelligenter Kollisionsprüfung für das Picker-Popup
         const emojiHoverBtn = document.createElement("button");
         emojiHoverBtn.className = "wa-msg-icon-btn";
         emojiHoverBtn.title = "Reagieren";
@@ -992,34 +992,60 @@ async function appendSingleMessage(msg, isSystem = false) {
         const grid = document.createElement("div");
         grid.className = "message-react-picker-grid";
 
-        const allAvailableEmojis = [
-            "😀","😃","😄","😁","😆","😅","😂","🤣","😊","😇","🙂","🙃","😉","😌","😍","🥰","😘","😗","😙","😚",
-            "😋","😛","😝","😜","🤪","🤨","🧐","🤓","😎","🤩","🥳","😏","😒","😞","😔","😕","🙁","☹️","😣",
-            "😖","😫","😩","🥺","😢","😭","😤","😠","😡","🤬","🤯","🥵","🥶",
-            "😱","😨","😰","😥","😢","😓","🤗","🤔","🤭","🤫",
-            "🤥","😶","😐","😑","😬","🙄","😯","😦","😧","😮",
-            "😲","😴","🤤","😪","😵","🤐","🥴","🤢","🤮",
-            "🤧","😷","🤒","🤕","🤑","🤠","😈","👿","👹","👺",
-            "👍","👎","👏","🙌","👐","🤲","🤝","🙏","💪","🔥","⭐","✨","❤️","🧡","💛","💚","💙","💜","🖤","🤍","🤎"
+        // Umfassende Emoji-Liste mit deutschen Schlüsselwörtern zur echten Filterung
+        const emojiDatabase = [
+            { emoji: "😀", name: "grinsen lachen lächeln glücklich" },
+            { emoji: "😃", name: "grinsen freude glücklich" },
+            { emoji: "😄", name: "lachen lächeln freude" },
+            { emoji: "😁", name: "strahlen lachen" },
+            { emoji: "😅", name: "schweiss lachen erleichterung" },
+            { emoji: "😂", name: "tränen lachen rofl lachend" },
+            { emoji: "🤣", name: "wegschmeißen lachen kichern" },
+            { emoji: "😊", name: "lächeln verlegen glücklich" },
+            { emoji: "😇", name: "heilig engel" },
+            { emoji: "😉", name: "zwinkern" },
+            { emoji: "😍", name: "verliebt herzen augen" },
+            { emoji: "🥰", name: "liebe lächeln herzen" },
+            { emoji: "😘", name: "kuss küssen" },
+            { emoji: "😋", name: "lecker mjam" },
+            { emoji: "😎", name: "cool sonnenbrille" },
+            { emoji: "🥳", name: "party feiern geburtstag" },
+            { emoji: "🤔", name: "nachdenken überlegen" },
+            { emoji: "👍", name: "daumen hoch gutlike" },
+            { emoji: "👎", name: "daumen runter schlecht" },
+            { emoji: "👏", name: "applaus klatschen" },
+            { emoji: "🙏", name: "danke bitte beten" },
+            { emoji: "💪", name: "muskel stärke stark" },
+            { emoji: "🔥", name: "feuer heiß" },
+            { emoji: "⭐", name: "stern" },
+            { emoji: "❤️", name: "herz liebe rot" },
+            { emoji: "💙", name: "blaues herz" },
+            { emoji: "💚", name: "grünes herz" },
+            { emoji: "🎉", name: "konfetti party" },
+            { emoji: "😮", name: "erstaunt oho" },
+            { emoji: "😢", name: "weinen traurig träne" },
+            { emoji: "😭", name: "heulen weinen extrem" },
+            { emoji: "😡", name: "wütend sauer böse" }
         ];
 
         const renderEmojiGrid = (filter = "") => {
             grid.innerHTML = "";
-            const uniqueList = Array.from(new Set(allAvailableEmojis));
-            uniqueList.forEach(em => {
-                if (filter && !em.includes(filter)) return;
+            const query = filter.toLowerCase().trim();
+            emojiDatabase.forEach(item => {
+                if (query && !item.name.includes(query) && !item.emoji.includes(query)) return;
                 const span = document.createElement("span");
-                span.innerText = em;
+                span.innerText = item.emoji;
+                span.title = item.name.split(' ')[0];
                 span.addEventListener("click", async (e) => {
                     e.stopPropagation();
                     pickerPopup.style.display = "none";
                     const supabase = window.supabaseClient || window.supabase;
                     if (supabase) {
                         let currentReactions = msg.reactions || {};
-                        if (currentReactions[currentUser.id] === em) {
+                        if (currentReactions[currentUser.id] === item.emoji) {
                             delete currentReactions[currentUser.id];
                         } else {
-                            currentReactions[currentUser.id] = em;
+                            currentReactions[currentUser.id] = item.emoji;
                         }
                         await supabase.from("messages").update({ reactions: currentReactions }).eq("id", msg.id);
                         await loadChatMessages(activeChatId);
@@ -1028,10 +1054,13 @@ async function appendSingleMessage(msg, isSystem = false) {
                 });
                 grid.appendChild(span);
             });
+            if (grid.children.length === 0) {
+                grid.innerHTML = `<span style="grid-column: span 6; font-size: 11px; text-align: center; color: var(--text-muted); padding: 8px;">Kein Emoji gefunden</span>`;
+            }
         };
 
         renderEmojiGrid();
-        searchInput.addEventListener("input", (e) => renderEmojiGrid(e.target.value.trim()));
+        searchInput.addEventListener("input", (e) => renderEmojiGrid(e.target.value));
 
         pickerPopup.appendChild(searchInput);
         pickerPopup.appendChild(grid);
@@ -1039,21 +1068,29 @@ async function appendSingleMessage(msg, isSystem = false) {
         emojiHoverBtn.addEventListener("click", (e) => {
             e.stopPropagation();
             const isOpen = pickerPopup.style.display === "flex";
-            document.querySelectorAll(".message-react-picker-popup").forEach(p => p.style.display = "none");
+            document.querySelectorAll(".message-react-picker-popup, .wa-msg-dropdown").forEach(p => p.style.display = "none");
+            document.querySelectorAll(".wa-msg-dropdown").forEach(d => d.classList.remove("show"));
+            
             if (!isOpen) {
-                pickerPopup.className = "message-react-picker-popup popup-below";
+                const rect = bubble.getBoundingClientRect();
+                const containerRect = chatMessages.getBoundingClientRect();
+                // Intelligente Kollisionsprüfung: Wenn Nachricht zu weit oben am Header liegt -> nach unten öffnen
+                if (rect.top - containerRect.top < 220) {
+                    pickerPopup.className = "message-react-picker-popup popup-below";
+                } else {
+                    pickerPopup.className = "message-react-picker-popup popup-above";
+                }
                 pickerPopup.style.display = "flex";
                 searchInput.focus();
             } else {
                 pickerPopup.style.display = "none";
             }
         });
-        document.addEventListener("click", () => { pickerPopup.style.display = "none"; });
 
         emojiHoverBtn.appendChild(pickerPopup);
         hoverControls.appendChild(emojiHoverBtn);
 
-        // 2. Dropdown-Pfeil für vertikales Menü (wie in WhatsApp)
+        // Dropdown-Pfeil für vertikales Menü mit Kollisionsprüfung (nach oben/unten)
         const menuBtn = document.createElement("button");
         menuBtn.className = "wa-msg-icon-btn";
         menuBtn.title = "Mehr Optionen";
@@ -1122,11 +1159,28 @@ async function appendSingleMessage(msg, isSystem = false) {
 
         menuBtn.addEventListener("click", (e) => {
             e.stopPropagation();
-            document.querySelectorAll(".wa-msg-dropdown").forEach(d => { if (d !== dropdownMenu) d.classList.remove("show"); });
-            dropdownMenu.classList.toggle("show");
+            const isOpen = dropdownMenu.classList.contains("show");
+            document.querySelectorAll(".wa-msg-dropdown").forEach(d => d.classList.remove("show"));
+            document.querySelectorAll(".message-react-picker-popup").forEach(p => p.style.display = "none");
+
+            if (!isOpen) {
+                const rect = bubble.getBoundingClientRect();
+                const containerRect = chatMessages.getBoundingClientRect();
+                // Kollisionsprüfung für das Dropdown-Menü
+                if (rect.top - containerRect.top < 180) {
+                    dropdownMenu.style.top = "calc(100% + 4px)";
+                    dropdownMenu.style.bottom = "auto";
+                } else {
+                    dropdownMenu.style.bottom = "calc(100% + 4px)";
+                    dropdownMenu.style.top = "auto";
+                }
+                dropdownMenu.classList.add("show");
+            } else {
+                dropdownMenu.classList.remove("show");
+            }
         });
 
-        document.addEventListener("click", () => { dropdownMenu.classList.remove("show"); });
+        document.addEventListener("click", () => { dropdownMenu.classList.remove("show"); document.querySelectorAll(".message-react-picker-popup").forEach(p => p.style.display = "none"); });
 
         menuBtn.appendChild(dropdownMenu);
         hoverControls.appendChild(menuBtn);
@@ -1245,7 +1299,7 @@ async function appendSingleMessage(msg, isSystem = false) {
         bubble.appendChild(textDiv);
     }
 
-    // Reaktionen nebeneinander in einer gemeinsamen Blase unten
+    // Reaktionen nebeneinander in gemeinsamer Blase unten
     if (!isDeleted && msg.reactions && typeof msg.reactions === 'object' && Object.keys(msg.reactions).length > 0) {
         const reactionsDiv = document.createElement("div");
         reactionsDiv.className = "message-reactions-display";

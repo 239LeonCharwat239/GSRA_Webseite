@@ -1164,7 +1164,6 @@ p {
     gap: 16px;
 }
 
-/* Kompakte Nachrichtenblasen ohne unnötigen Freiraum unten */
 .message-bubble {
     max-width: 65%;
     padding: 10px 15px;
@@ -1177,7 +1176,6 @@ p {
     white-space: pre-line;
 }
 
-/* Mehrfachauswahl-Markierung im WhatsApp-Stil */
 .message-bubble.selection-mode {
     cursor: pointer;
 }
@@ -1222,12 +1220,13 @@ body.multi-select-active .wa-msg-hover-controls {
     animation: highlightPulse 1.5s ease-in-out;
 }
 
-/* WhatsApp-Hover-Steuerung (Emoji-Button & Dropdown-Pfeil) */
+/* STABILISIERTER HOVER-BEREICH (Inklusive unsichtbarem Padding als Brücke) */
 .message-own .wa-msg-hover-controls {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    right: calc(100% + 8px);
+    right: calc(100% + 4px);
+    padding-right: 12px; /* Brücke gegen Lücken-Verschwinden */
     display: none;
     align-items: center;
     gap: 4px;
@@ -1238,7 +1237,8 @@ body.multi-select-active .wa-msg-hover-controls {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    left: calc(100% + 8px);
+    left: calc(100% + 4px);
+    padding-left: 12px; /* Brücke gegen Lücken-Verschwinden */
     display: none;
     align-items: center;
     gap: 4px;
@@ -1272,10 +1272,9 @@ body.multi-select-active .wa-msg-hover-controls {
     border-color: var(--gsra-blue);
 }
 
-/* Vertikales Dropdown-Menü (von oben nach unten wie in WhatsApp) */
+/* Vertikales Dropdown-Menü */
 .wa-msg-dropdown {
     position: absolute;
-    top: calc(100% + 4px);
     right: 0;
     background: #15161a;
     border: 1px solid var(--border-subtle);
@@ -1318,7 +1317,7 @@ body.multi-select-active .wa-msg-hover-controls {
     background: rgba(255, 77, 77, 0.2);
 }
 
-/* Kompaktes Emoji-Auswahl-Popup */
+/* Emoji-Auswahl-Popup mit intelligenter Ausrichtung */
 .message-react-picker-popup {
     position: absolute;
     background: #15161a;
@@ -1336,12 +1335,12 @@ body.multi-select-active .wa-msg-hover-controls {
 }
 
 .message-react-picker-popup.popup-above {
-    bottom: calc(100% + 2px);
+    bottom: calc(100% + 4px);
     border-top: 3px solid var(--gsra-yellow);
 }
 
 .message-react-picker-popup.popup-below {
-    top: calc(100% + 2px);
+    top: calc(100% + 4px);
     border-bottom: 3px solid var(--gsra-yellow);
 }
 
@@ -1349,7 +1348,7 @@ body.multi-select-active .wa-msg-hover-controls {
     background: #0b0c10;
     border: 1px solid var(--border-subtle);
     color: #fff;
-    padding: 4px 8px;
+    padding: 6px 10px;
     border-radius: 4px;
     font-size: 12px;
     outline: none;
@@ -1368,7 +1367,7 @@ body.multi-select-active .wa-msg-hover-controls {
     font-size: 16px;
     cursor: pointer;
     text-align: center;
-    padding: 2px;
+    padding: 4px;
     border-radius: 4px;
     transition: background 0.2s ease;
 }
@@ -1377,7 +1376,7 @@ body.multi-select-active .wa-msg-hover-controls {
     background: rgba(255, 204, 0, 0.2);
 }
 
-/* Reaktionen nebeneinander in einer Blase unten */
+/* Reaktionen nebeneinander in gemeinsamer Blase unten */
 .message-reactions-display {
     position: absolute;
     bottom: -10px;
@@ -1440,7 +1439,7 @@ body.multi-select-active .wa-msg-hover-controls {
     background: var(--gsra-blue);
     color: #fff;
     border-bottom-right-radius: 2px;
-    margin-bottom: 14px; /* Platz für Reaktionsblase falls vorhanden */
+    margin-bottom: 14px;
 }
 
 .message-other {
