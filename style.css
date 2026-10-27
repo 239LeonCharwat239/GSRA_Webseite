@@ -1387,7 +1387,7 @@ body.multi-select-active .message-actions {
     background: #15161a;
     border: 1px solid var(--border-subtle);
     border-radius: 20px;
-    padding: 5px 10px;
+    padding: 3px 8px;
     display: none;
     align-items: center;
     justify-content: center;

@@ -1107,7 +1107,6 @@ async function appendSingleMessage(msg, isSystem = false) {
                 span.addEventListener("click", async (e) => {
                     e.stopPropagation();
                     pickerPopup.style.display = "none";
-                    quickBar.style.display = "none";
                     const supabase = window.supabaseClient || window.supabase;
                     if (supabase) {
                         let currentReactions = msg.reactions || {};
