@@ -1164,10 +1164,14 @@ p {
     gap: 12px;
 }
 
+/* =========================================
+   NACHRICHTENBLASEN & AKTIONEN (FEINTUNING)
+========================================= */
 .message-bubble {
     max-width: 65%;
-    padding: 10px 15px 24px 15px; /* Extra Platz unten für angehängte Reaktionen */
-    border-radius: 8px;
+    width: fit-content;
+    padding: 10px 15px 26px 15px; /* Extra Platz unten für angehängte Reaktionen */
+    border-radius: 10px;
     font-size: 14px;
     line-height: 1.4;
     word-break: break-word;
@@ -1223,16 +1227,16 @@ body.multi-select-active .message-actions {
     animation: highlightPulse 1.5s ease-in-out;
 }
 
-/* Aktionsbalken exakt an der Außenkante */
+/* Präzise Eck-Ausrichtung & Hover-Brücke ohne Flackern */
 .message-own .message-actions {
     position: absolute;
-    top: -22px;
+    top: -26px;
     right: 0;
     display: none;
     background: #15161a;
     border: 1px solid var(--border-subtle);
     border-radius: 6px;
-    padding: 2px 6px;
+    padding: 3px 6px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.8);
     z-index: 20;
     gap: 4px;
@@ -1241,17 +1245,29 @@ body.multi-select-active .message-actions {
 
 .message-other .message-actions {
     position: absolute;
-    top: -22px;
+    top: -26px;
     left: 0;
     display: none;
     background: #15161a;
     border: 1px solid var(--border-subtle);
     border-radius: 6px;
-    padding: 2px 6px;
+    padding: 3px 6px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.8);
     z-index: 20;
     gap: 4px;
     align-items: center;
+}
+
+/* Unsichtbare Hover-Brücke per Pseudo-Element zur Verhinderung des Flackerns */
+.message-own .message-actions::after,
+.message-other .message-actions::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 0;
+    right: 0;
+    height: 10px;
+    background: transparent;
 }
 
 .message-bubble:hover .message-actions {
