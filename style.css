@@ -1166,7 +1166,7 @@ p {
 
 .message-bubble {
     max-width: 65%;
-    padding: 10px 15px 24px 15px; /* Extra Platz unten für angehängte Reaktionen */
+    padding: 10px 15px 24px 15px;
     border-radius: 8px;
     font-size: 14px;
     line-height: 1.4;
@@ -1208,13 +1208,11 @@ p {
     border-color: var(--gsra-blue);
 }
 
-/* Löschmodus aktiv: Keine Hover-Aktionsleiste anzeigen */
 body.multi-select-active .message-actions {
     display: none !important;
     pointer-events: none !important;
 }
 
-/* Hervorhebung beim Hinspringen auf zitierte Nachricht */
 @keyframes highlightPulse {
     0% { background-color: rgba(255, 204, 0, 0.4); transform: scale(1.02); }
     100% { background-color: inherit; transform: scale(1); }
@@ -1223,34 +1221,36 @@ body.multi-select-active .message-actions {
     animation: highlightPulse 1.5s ease-in-out;
 }
 
-/* Aktionsbalken exakt an der Außenkante */
+/* Stabilisierter Hover-Bereich mit Brücke */
 .message-own .message-actions {
     position: absolute;
-    top: -22px;
+    top: -26px;
     right: 0;
+    padding-right: 12px;
     display: none;
     background: #15161a;
     border: 1px solid var(--border-subtle);
     border-radius: 6px;
-    padding: 2px 6px;
+    padding: 3px 8px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.8);
     z-index: 20;
-    gap: 4px;
+    gap: 6px;
     align-items: center;
 }
 
 .message-other .message-actions {
     position: absolute;
-    top: -22px;
+    top: -26px;
     left: 0;
+    padding-left: 12px;
     display: none;
     background: #15161a;
     border: 1px solid var(--border-subtle);
     border-radius: 6px;
-    padding: 2px 6px;
+    padding: 3px 8px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.8);
     z-index: 20;
-    gap: 4px;
+    gap: 6px;
     align-items: center;
 }
 
@@ -1271,6 +1271,7 @@ body.multi-select-active .message-actions {
     justify-content: center;
     border-radius: 4px;
     transition: all 0.2s ease;
+    position: relative;
 }
 
 .msg-action-btn:hover {
@@ -1283,7 +1284,52 @@ body.multi-select-active .message-actions {
     color: #ff4d4d;
 }
 
-/* Kompaktes Emoji-Auswahl-Popup (nahtlos angebunden mit dynamischer Positionierung) */
+/* Vertikales Dropdown-Menü für Multifunktionsleiste */
+.wa-msg-dropdown {
+    position: absolute;
+    right: 0;
+    background: #15161a;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.9);
+    display: none;
+    flex-direction: column;
+    min-width: 160px;
+    z-index: 50;
+    overflow: hidden;
+}
+
+.wa-msg-dropdown.show {
+    display: flex;
+}
+
+.wa-dropdown-item {
+    padding: 10px 14px;
+    font-size: 13px;
+    color: #fff;
+    background: transparent;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: background 0.2s ease;
+}
+
+.wa-dropdown-item:hover {
+    background: rgba(0, 85, 255, 0.25);
+    color: var(--gsra-yellow);
+}
+
+.wa-dropdown-item.delete-action {
+    color: #ff4d4d;
+}
+.wa-dropdown-item.delete-action:hover {
+    background: rgba(255, 77, 77, 0.2);
+}
+
+/* Emoji-Auswahl-Popup mit intelligenter Ausrichtung */
 .message-react-picker-popup {
     position: absolute;
     background: #15161a;
@@ -1293,21 +1339,20 @@ body.multi-select-active .message-actions {
     display: none;
     flex-direction: column;
     gap: 6px;
-    z-index: 40;
+    z-index: 60;
     box-shadow: 0 10px 30px rgba(0,0,0,0.9);
     width: 220px;
     max-height: 180px;
+    left: 0;
 }
 
 .message-react-picker-popup.popup-above {
-    bottom: calc(100% + 2px);
-    left: 0;
+    bottom: calc(100% + 4px);
     border-top: 3px solid var(--gsra-yellow);
 }
 
 .message-react-picker-popup.popup-below {
-    top: calc(100% + 2px);
-    left: 0;
+    top: calc(100% + 4px);
     border-bottom: 3px solid var(--gsra-yellow);
 }
 
@@ -1315,10 +1360,11 @@ body.multi-select-active .message-actions {
     background: #0b0c10;
     border: 1px solid var(--border-subtle);
     color: #fff;
-    padding: 4px 8px;
+    padding: 6px 10px;
     border-radius: 4px;
     font-size: 12px;
     outline: none;
+    width: 100%;
 }
 
 .message-react-picker-grid {
@@ -1333,7 +1379,7 @@ body.multi-select-active .message-actions {
     font-size: 16px;
     cursor: pointer;
     text-align: center;
-    padding: 2px;
+    padding: 4px;
     border-radius: 4px;
     transition: background 0.2s ease;
 }
@@ -1342,7 +1388,7 @@ body.multi-select-active .message-actions {
     background: rgba(255, 204, 0, 0.2);
 }
 
-/* Unten angehängte Reaktionen im WhatsApp-Stil mit GSRA-Look */
+/* Reaktionen nebeneinander in gemeinsamer Blase unten */
 .message-reactions-display {
     position: absolute;
     bottom: -12px;
