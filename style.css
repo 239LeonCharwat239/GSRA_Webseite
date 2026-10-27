@@ -1164,9 +1164,10 @@ p {
     gap: 16px;
 }
 
+/* Kompakte Nachrichtenblasen ohne unnötigen Freiraum unten */
 .message-bubble {
     max-width: 65%;
-    padding: 10px 15px 24px 15px;
+    padding: 10px 15px;
     border-radius: 8px;
     font-size: 14px;
     line-height: 1.4;
@@ -1174,11 +1175,6 @@ p {
     overflow-wrap: break-word;
     position: relative;
     white-space: pre-line;
-}
-
-/* Mindestbreite, damit 4 Emojis + Counter sauber in die Reaktionsblase passen */
-.message-bubble {
-    min-width: 140px;
 }
 
 /* Mehrfachauswahl-Markierung im WhatsApp-Stil */
@@ -1213,7 +1209,7 @@ p {
     border-color: var(--gsra-blue);
 }
 
-body.multi-select-active .message-actions {
+body.multi-select-active .wa-msg-hover-controls {
     display: none !important;
     pointer-events: none !important;
 }
@@ -1226,64 +1222,100 @@ body.multi-select-active .message-actions {
     animation: highlightPulse 1.5s ease-in-out;
 }
 
-/* Aktionsbalken exakt an der Außenkante */
-.message-own .message-actions {
+/* WhatsApp-Hover-Steuerung (Emoji-Button & Dropdown-Pfeil) */
+.message-own .wa-msg-hover-controls {
     position: absolute;
-    top: -22px;
-    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    right: calc(100% + 8px);
     display: none;
-    background: #15161a;
-    border: 1px solid var(--border-subtle);
-    border-radius: 6px;
-    padding: 2px 6px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.8);
-    z-index: 20;
-    gap: 4px;
     align-items: center;
+    gap: 4px;
+    z-index: 20;
 }
 
-.message-other .message-actions {
+.message-other .wa-msg-hover-controls {
     position: absolute;
-    top: -22px;
-    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    left: calc(100% + 8px);
     display: none;
-    background: #15161a;
-    border: 1px solid var(--border-subtle);
-    border-radius: 6px;
-    padding: 2px 6px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.8);
-    z-index: 20;
-    gap: 4px;
     align-items: center;
+    gap: 4px;
+    z-index: 20;
 }
 
-.message-bubble:hover .message-actions {
+.message-bubble:hover .wa-msg-hover-controls {
     display: flex;
 }
 
-.msg-action-btn {
-    background: transparent;
-    border: none;
+.wa-msg-icon-btn {
+    background: #15161a;
+    border: 1px solid var(--border-subtle);
     color: var(--text-muted);
-    cursor: pointer;
-    font-size: 13px;
     width: 28px;
     height: 28px;
+    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
     transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    position: relative;
 }
 
-.msg-action-btn:hover {
-    background: rgba(255, 255, 255, 0.08);
+.wa-msg-icon-btn:hover {
+    background: var(--gsra-blue);
     color: #fff;
+    border-color: var(--gsra-blue);
 }
 
-.msg-action-btn.delete-btn:hover {
-    background: rgba(255, 77, 77, 0.15);
+/* Vertikales Dropdown-Menü (von oben nach unten wie in WhatsApp) */
+.wa-msg-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    background: #15161a;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.9);
+    display: none;
+    flex-direction: column;
+    min-width: 160px;
+    z-index: 50;
+    overflow: hidden;
+}
+
+.wa-msg-dropdown.show {
+    display: flex;
+}
+
+.wa-dropdown-item {
+    padding: 10px 14px;
+    font-size: 13px;
+    color: #fff;
+    background: transparent;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: background 0.2s ease;
+}
+
+.wa-dropdown-item:hover {
+    background: rgba(0, 85, 255, 0.25);
+    color: var(--gsra-yellow);
+}
+
+.wa-dropdown-item.delete-action {
     color: #ff4d4d;
+}
+.wa-dropdown-item.delete-action:hover {
+    background: rgba(255, 77, 77, 0.2);
 }
 
 /* Kompaktes Emoji-Auswahl-Popup */
@@ -1296,21 +1328,20 @@ body.multi-select-active .message-actions {
     display: none;
     flex-direction: column;
     gap: 6px;
-    z-index: 40;
+    z-index: 60;
     box-shadow: 0 10px 30px rgba(0,0,0,0.9);
     width: 220px;
     max-height: 180px;
+    left: 0;
 }
 
 .message-react-picker-popup.popup-above {
     bottom: calc(100% + 2px);
-    left: 0;
     border-top: 3px solid var(--gsra-yellow);
 }
 
 .message-react-picker-popup.popup-below {
     top: calc(100% + 2px);
-    left: 0;
     border-bottom: 3px solid var(--gsra-yellow);
 }
 
@@ -1322,6 +1353,7 @@ body.multi-select-active .message-actions {
     border-radius: 4px;
     font-size: 12px;
     outline: none;
+    width: 100%;
 }
 
 .message-react-picker-grid {
@@ -1345,21 +1377,23 @@ body.multi-select-active .message-actions {
     background: rgba(255, 204, 0, 0.2);
 }
 
-/* NEU: Gemeinsame Reaktionsblase unten, in der alle Emojis NEBENEINANDER gereiht sind */
+/* Reaktionen nebeneinander in einer Blase unten */
 .message-reactions-display {
     position: absolute;
-    bottom: -12px;
+    bottom: -10px;
     right: 12px;
     background: #202c33;
     border: 1px solid var(--border-subtle);
     border-radius: 12px;
     padding: 2px 8px;
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     z-index: 5;
     box-shadow: 0 2px 6px rgba(0,0,0,0.4);
     cursor: pointer;
+    font-size: 12px;
+    color: #fff;
     transition: background 0.2s ease;
 }
 
@@ -1371,14 +1405,7 @@ body.multi-select-active .message-actions {
 .reaction-pill-item {
     display: inline-flex;
     align-items: center;
-    gap: 3px;
     font-size: 13px;
-    color: #fff;
-}
-
-.reaction-pill-item.user-reacted-pill {
-    color: var(--gsra-yellow);
-    font-weight: bold;
 }
 
 /* Zitat-Block kompakt */
@@ -1413,6 +1440,7 @@ body.multi-select-active .message-actions {
     background: var(--gsra-blue);
     color: #fff;
     border-bottom-right-radius: 2px;
+    margin-bottom: 14px; /* Platz für Reaktionsblase falls vorhanden */
 }
 
 .message-other {
@@ -1421,6 +1449,7 @@ body.multi-select-active .message-actions {
     color: #fff;
     border-bottom-left-radius: 2px;
     border: 1px solid var(--border-subtle);
+    margin-bottom: 14px;
 }
 
 .wa-media-grid {
