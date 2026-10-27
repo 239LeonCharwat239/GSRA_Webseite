@@ -103,7 +103,7 @@ if (!editPreviewBanner && chatForm) {
     });
 }
 
-// WhatsApp-Multi-Lösch-Leiste erstellen (erscheint über dem Input-Bereich bei Mehrfachauswahl)
+// WhatsApp-Multi-Lösch-Leiste erstellen
 let multiDeleteBar = document.getElementById("multiDeleteBar");
 if (!multiDeleteBar && chatForm) {
     multiDeleteBar = document.createElement("div");
@@ -143,29 +143,6 @@ if (!multiDeleteBar && chatForm) {
             await loadUserChats();
         }
     });
-}
-
-// Multi-Auswahl-Button in den Chat-Aktionen hinzufügen (falls noch nicht vorhanden)
-if (chatActions && !document.getElementById("toggleMultiSelectBtn")) {
-    const multiSelectBtn = document.createElement("button");
-    multiSelectBtn.id = "toggleMultiSelectBtn";
-    multiSelectBtn.className = "msg-action-btn";
-    multiSelectBtn.style.cssText = "width: auto; padding: 4px 10px; font-size: 13px; background: rgba(0,85,255,0.15); border: 1px solid var(--gsra-blue); border-radius: 4px; color: #fff;";
-    multiSelectBtn.innerHTML = '<i class="fa-solid fa-list-check"></i> Auswählen';
-    multiSelectBtn.addEventListener("click", () => {
-        if (!isMultiSelectMode) {
-            isMultiSelectMode = true;
-            selectedMessageIds.clear();
-            if (multiDeleteBar) multiDeleteBar.style.display = "flex";
-            updateMultiDeleteCount();
-            document.querySelectorAll(".message-bubble.message-own").forEach(b => {
-                b.classList.add("selection-mode");
-            });
-        } else {
-            exitMultiSelectMode();
-        }
-    });
-    chatActions.insertBefore(multiSelectBtn, chatActions.firstChild);
 }
 
 function exitMultiSelectMode() {
@@ -1086,24 +1063,23 @@ async function appendSingleMessage(msg, isSystem = false) {
     const isOwn = String(msg.sender_id) === String(currentUser?.id);
     bubble.className = `message-bubble ${isOwn ? 'message-own' : 'message-other'}`;
 
-    if (isMultiSelectMode && isOwn) {
-        bubble.classList.add("selection-mode");
-    }
-
     const senderName = isOwn ? "Du" : await fetchUserName(msg.sender_id);
     const dateObj = msg.created_at ? new Date(msg.created_at) : new Date();
     const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     const isDeleted = msg.text === "Du hast diese Nachricht gelöscht" || msg.text === "Diese Nachricht wurde gelöscht";
+    const isSystemOrDeletedMsg = isSystem || isDeleted;
 
-    // Checkbox für Mehrfachauswahl hinzufügen
+    // Checkbox für Mehrfachauswahl (nur bei normalen eigenen Nachrichten)
     const selectionCb = document.createElement("div");
     selectionCb.className = "msg-selection-checkbox";
-    bubble.appendChild(selectionCb);
+    if (isOwn && !isSystemOrDeletedMsg) {
+        bubble.appendChild(selectionCb);
+    }
 
-    // Klick-Verhalten im Mehrfachauswahl-Modus
+    // Klick im Multi-Select-Modus
     bubble.addEventListener("click", (e) => {
-        if (isMultiSelectMode && isOwn && !isSystem && !isDeleted) {
+        if (isMultiSelectMode && isOwn && !isSystemOrDeletedMsg) {
             e.stopPropagation();
             if (selectedMessageIds.has(msg.id)) {
                 selectedMessageIds.delete(msg.id);
@@ -1118,10 +1094,50 @@ async function appendSingleMessage(msg, isSystem = false) {
         }
     });
 
-    // Aktionsbalken & Reaktions-Button
+    // Aktionsbalken, Reagieren-Button & Leiste
     if (!isSystem && !isDeleted) {
         const actionsDiv = document.createElement("div");
         actionsDiv.className = "message-actions";
+
+        // 1. Reagieren-Button in der Multifunktionsleiste (ganz links neben Antworten)
+        const reactBtnInBar = document.createElement("button");
+        reactBtnInBar.className = "msg-action-btn";
+        reactBtnInBar.title = "Reagieren";
+        reactBtnInBar.innerHTML = '<i class="fa-regular fa-face-smile"></i>';
+
+        const reactPicker = document.createElement("div");
+        reactPicker.className = "message-react-picker";
+        const emojis = ["👍", "❤️", "😂", "😮", "😢", "🔥"];
+        emojis.forEach(emoji => {
+            const span = document.createElement("span");
+            span.innerText = emoji;
+            span.addEventListener("click", async (e) => {
+                e.stopPropagation();
+                reactPicker.style.display = "none";
+                const supabase = window.supabaseClient || window.supabase;
+                if (supabase) {
+                    let currentReactions = msg.reactions || {};
+                    currentReactions[currentUser.id] = emoji;
+                    await supabase.from("messages").update({ reactions: currentReactions }).eq("id", msg.id);
+                    await loadChatMessages(activeChatId);
+                }
+            });
+            reactPicker.appendChild(span);
+        });
+
+        reactBtnInBar.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const isOpen = reactPicker.style.display === "flex";
+            document.querySelectorAll(".message-react-picker").forEach(p => p.style.display = "none");
+            reactPicker.style.display = isOpen ? "none" : "flex";
+        });
+
+        document.addEventListener("click", () => {
+            reactPicker.style.display = "none";
+        });
+
+        actionsDiv.appendChild(reactBtnInBar);
+        actionsDiv.appendChild(reactPicker);
 
         // Antworten
         const replyBtn = document.createElement("button");
@@ -1156,7 +1172,7 @@ async function appendSingleMessage(msg, isSystem = false) {
         });
         actionsDiv.appendChild(copyBtn);
 
-        // Bearbeiten & Löschen
+        // Bearbeiten & Mehrfach-Löschen starten via Mülleimer
         if (isOwn) {
             if (msg.text && !msg.text.includes("hat den Chat") && !msg.text.includes("hat das Forum")) {
                 const editBtn = document.createElement("button");
@@ -1182,70 +1198,28 @@ async function appendSingleMessage(msg, isSystem = false) {
 
             const deleteMsgBtn = document.createElement("button");
             deleteMsgBtn.className = "msg-action-btn delete-btn";
-            deleteMsgBtn.title = "Löschen";
+            deleteMsgBtn.title = "Auswählen / Mehrere löschen";
             deleteMsgBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
-            deleteMsgBtn.addEventListener("click", async (e) => {
+            deleteMsgBtn.addEventListener("click", (e) => {
                 e.stopPropagation();
-                if (confirm("Möchtest du diese Nachricht löschen?")) {
-                    const supabase = window.supabaseClient || window.supabase;
-                    if (!supabase) return;
+                // Startet direkt den Multi-Select-Modus und selektiert diese Nachricht sofort
+                isMultiSelectMode = true;
+                selectedMessageIds.clear();
+                selectedMessageIds.add(msg.id);
 
-                    const deleteText = "Du hast diese Nachricht gelöscht";
-                    await supabase.from("messages").update({
-                        text: deleteText,
-                        image_url: null,
-                        reply_to: null,
-                        is_edited: false
-                    }).eq("id", msg.id);
+                if (multiDeleteBar) multiDeleteBar.style.display = "flex";
+                updateMultiDeleteCount();
 
-                    await loadChatMessages(activeChatId);
-                    await loadUserChats();
-                }
+                document.querySelectorAll(".message-bubble.message-own").forEach(b => {
+                    b.classList.add("selection-mode");
+                });
+                bubble.classList.add("selected-bubble");
+                selectionCb.innerHTML = '<i class="fa-solid fa-check"></i>';
             });
             actionsDiv.appendChild(deleteMsgBtn);
         }
 
         bubble.appendChild(actionsDiv);
-
-        // Reaktions-Button direkt neben der Multifunktionsleiste auf gleicher Höhe
-        const reactBtn = document.createElement("button");
-        reactBtn.className = "message-react-btn";
-        reactBtn.title = "Reagieren";
-        reactBtn.innerHTML = '<i class="fa-regular fa-face-smile"></i>';
-
-        const reactPicker = document.createElement("div");
-        reactPicker.className = "message-react-picker";
-        const emojis = ["👍", "❤️", "😂", "😮", "😢", "🔥"];
-        emojis.forEach(emoji => {
-            const span = document.createElement("span");
-            span.innerText = emoji;
-            span.addEventListener("click", async (e) => {
-                e.stopPropagation();
-                reactPicker.style.display = "none";
-                const supabase = window.supabaseClient || window.supabase;
-                if (supabase) {
-                    let currentReactions = msg.reactions || {};
-                    currentReactions[currentUser.id] = emoji;
-                    await supabase.from("messages").update({ reactions: currentReactions }).eq("id", msg.id);
-                    await loadChatMessages(activeChatId);
-                }
-            });
-            reactPicker.appendChild(span);
-        });
-
-        reactBtn.addEventListener("click", (e) => {
-            e.stopPropagation();
-            const isOpen = reactPicker.style.display === "flex";
-            document.querySelectorAll(".message-react-picker").forEach(p => p.style.display = "none");
-            reactPicker.style.display = isOpen ? "none" : "flex";
-        });
-
-        document.addEventListener("click", () => {
-            reactPicker.style.display = "none";
-        });
-
-        bubble.appendChild(reactBtn);
-        bubble.appendChild(reactPicker);
     }
 
     const authorDiv = document.createElement("div");

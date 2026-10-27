@@ -1152,9 +1152,6 @@ p {
     font-weight: bold;
     color: #fff;
     flex-shrink: 0;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
 }
 
 .chat-messages {
@@ -1251,63 +1248,36 @@ p {
     align-items: center;
 }
 
-/* Reaktions-Smiley-Button direkt neben der Multifunktionsleiste auf gleicher Höhe */
-.message-own .message-react-btn {
-    position: absolute;
-    top: -22px;
-    right: calc(100% + 6px);
-    display: none;
-    background: #15161a;
-    border: 1px solid var(--border-subtle);
-    border-radius: 6px;
-    padding: 2px 6px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.8);
-    z-index: 20;
-    cursor: pointer;
-    color: var(--text-muted);
-    font-size: 13px;
-    width: 28px;
-    height: 28px;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s ease;
-}
-
-.message-other .message-react-btn {
-    position: absolute;
-    top: -22px;
-    left: calc(100% + 6px);
-    display: none;
-    background: #15161a;
-    border: 1px solid var(--border-subtle);
-    border-radius: 6px;
-    padding: 2px 6px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.8);
-    z-index: 20;
-    cursor: pointer;
-    color: var(--text-muted);
-    font-size: 13px;
-    width: 28px;
-    height: 28px;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s ease;
-}
-
-.message-react-btn:hover {
-    background: rgba(255, 204, 0, 0.15);
-    color: var(--gsra-yellow);
-}
-
-.message-bubble:hover .message-react-btn {
+.message-bubble:hover .message-actions {
     display: flex;
 }
 
-.message-bubble:has(.message-react-btn:hover) .message-actions,
-.message-bubble:has(.message-react-picker:not([style*="display: none"])) .message-actions {
-    display: none !important;
+.msg-action-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 13px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s ease;
 }
 
+.msg-action-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+}
+
+.msg-action-btn.delete-btn:hover {
+    background: rgba(255, 77, 77, 0.15);
+    color: #ff4d4d;
+}
+
+/* Reaktions-Emoji-Popup im GSRA-Look */
 .message-react-picker {
     position: absolute;
     top: -62px;
@@ -1357,35 +1327,6 @@ p {
 .reaction-pill:hover {
     background: rgba(255, 204, 0, 0.2);
     border-color: var(--gsra-yellow);
-}
-
-.message-bubble:hover .message-actions {
-    display: flex;
-}
-
-.msg-action-btn {
-    background: transparent;
-    border: none;
-    color: var(--text-muted);
-    cursor: pointer;
-    font-size: 13px;
-    width: 28px;
-    height: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 4px;
-    transition: all 0.2s ease;
-}
-
-.msg-action-btn:hover {
-    background: rgba(255, 255, 255, 0.08);
-    color: #fff;
-}
-
-.msg-action-btn.delete-btn:hover {
-    background: rgba(255, 77, 77, 0.15);
-    color: #ff4d4d;
 }
 
 /* Zitat-Block kompakt */
