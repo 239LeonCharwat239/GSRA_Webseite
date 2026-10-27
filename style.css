@@ -1165,12 +1165,12 @@ p {
 }
 
 /* =========================================
-   NACHRICHTENBLASEN & AKTIONEN (FEINTUNING)
+   NACHRICHTENBLASEN & WHATSAPP-HOVER-AKTIONEN
 ========================================= */
 .message-bubble {
     max-width: 65%;
     width: fit-content;
-    padding: 10px 15px 26px 15px; /* Extra Platz unten für angehängte Reaktionen */
+    padding: 8px 12px;
     border-radius: 10px;
     font-size: 14px;
     line-height: 1.4;
@@ -1212,13 +1212,11 @@ p {
     border-color: var(--gsra-blue);
 }
 
-/* Löschmodus aktiv: Keine Hover-Aktionsleiste anzeigen */
 body.multi-select-active .message-actions {
     display: none !important;
     pointer-events: none !important;
 }
 
-/* Hervorhebung beim Hinspringen auf zitierte Nachricht */
 @keyframes highlightPulse {
     0% { background-color: rgba(255, 204, 0, 0.4); transform: scale(1.02); }
     100% { background-color: inherit; transform: scale(1); }
@@ -1227,46 +1225,33 @@ body.multi-select-active .message-actions {
     animation: highlightPulse 1.5s ease-in-out;
 }
 
-/* Präzise Eck-Ausrichtung & Hover-Brücke ohne Flackern */
-.message-own .message-actions {
-    position: absolute;
-    top: -26px;
-    right: 0;
-    display: none;
-    background: #15161a;
-    border: 1px solid var(--border-subtle);
-    border-radius: 6px;
-    padding: 3px 6px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.8);
-    z-index: 20;
-    gap: 4px;
-    align-items: center;
-}
-
+/* Exakte WhatsApp-Position der Hover-Aktionsleiste oben rechts/links an der Blase */
+.message-own .message-actions,
 .message-other .message-actions {
     position: absolute;
-    top: -26px;
-    left: 0;
+    top: -14px;
     display: none;
     background: #15161a;
     border: 1px solid var(--border-subtle);
     border-radius: 6px;
-    padding: 3px 6px;
+    padding: 2px 4px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.8);
     z-index: 20;
-    gap: 4px;
+    gap: 3px;
     align-items: center;
 }
+.message-own .message-actions { right: 8px; }
+.message-other .message-actions { left: 8px; }
 
-/* Unsichtbare Hover-Brücke per Pseudo-Element zur Verhinderung des Flackerns */
+/* Unsichtbare Hover-Brücke */
 .message-own .message-actions::after,
 .message-other .message-actions::after {
     content: '';
     position: absolute;
-    bottom: -8px;
+    bottom: -6px;
     left: 0;
     right: 0;
-    height: 10px;
+    height: 8px;
     background: transparent;
 }
 
@@ -1280,8 +1265,8 @@ body.multi-select-active .message-actions {
     color: var(--text-muted);
     cursor: pointer;
     font-size: 13px;
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1299,7 +1284,42 @@ body.multi-select-active .message-actions {
     color: #ff4d4d;
 }
 
-/* Kompaktes Emoji-Auswahl-Popup (nahtlos angebunden mit dynamischer Positionierung) */
+/* WhatsApp-Dropdown Menü für den Pfeil-nach-unten-Button */
+.wa-msg-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    background: #15161a;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.9);
+    display: none;
+    flex-direction: column;
+    z-index: 50;
+    min-width: 140px;
+    padding: 4px 0;
+}
+
+.wa-msg-dropdown button {
+    background: transparent;
+    border: none;
+    color: #fff;
+    padding: 8px 14px;
+    text-align: left;
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.2s ease;
+}
+
+.wa-msg-dropdown button:hover {
+    background: rgba(0, 85, 255, 0.25);
+    color: var(--gsra-yellow);
+}
+
+/* WhatsApp-Reaktions-Popup über dem Emoji-Button */
 .message-react-picker-popup {
     position: absolute;
     background: #15161a;
@@ -1309,21 +1329,21 @@ body.multi-select-active .message-actions {
     display: none;
     flex-direction: column;
     gap: 6px;
-    z-index: 40;
+    z-index: 60;
     box-shadow: 0 10px 30px rgba(0,0,0,0.9);
     width: 220px;
     max-height: 180px;
 }
 
 .message-react-picker-popup.popup-above {
-    bottom: calc(100% + 2px);
-    left: 0;
+    bottom: calc(100% + 4px);
+    right: 0;
     border-top: 3px solid var(--gsra-yellow);
 }
 
 .message-react-picker-popup.popup-below {
-    top: calc(100% + 2px);
-    left: 0;
+    top: calc(100% + 4px);
+    right: 0;
     border-bottom: 3px solid var(--gsra-yellow);
 }
 
@@ -1358,15 +1378,12 @@ body.multi-select-active .message-actions {
     background: rgba(255, 204, 0, 0.2);
 }
 
-/* Unten angehängte Reaktionen im WhatsApp-Stil mit GSRA-Look */
+/* Unten angehängte Reaktionen im WhatsApp-Stil */
 .message-reactions-display {
-    position: absolute;
-    bottom: -12px;
-    right: 12px;
     display: flex;
     gap: 4px;
     flex-wrap: wrap;
-    z-index: 5;
+    margin-top: 4px;
 }
 
 .reaction-pill {
@@ -1486,6 +1503,14 @@ body.multi-select-active .message-actions {
     font-weight: 700;
     color: var(--gsra-yellow);
     margin-bottom: 3px;
+}
+
+.message-footer {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 6px;
+    margin-top: 2px;
 }
 
 .message-time {
