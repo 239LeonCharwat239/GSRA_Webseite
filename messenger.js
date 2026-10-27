@@ -1037,11 +1037,42 @@ async function appendSingleMessage(msg, isSystem = false) {
         const actionsDiv = document.createElement("div");
         actionsDiv.className = "message-actions";
 
-        // 1. Emoji-Smiley Button
+        // 1. Emoji-Smiley Button (öffnet die Quick-Bar im WhatsApp-Stil)
         const emojiBtn = document.createElement("button");
         emojiBtn.className = "msg-action-btn";
         emojiBtn.title = "Mit Emoji reagieren";
         emojiBtn.innerHTML = '<i class="fa-regular fa-face-smile"></i>';
+
+        const quickBar = document.createElement("div");
+        quickBar.className = "wa-quick-reaction-bar";
+        quickBar.addEventListener("click", (e) => e.stopPropagation());
+
+        const topEmojis = ["👍", "❤️", "😂", "😮"];
+        topEmojis.forEach(em => {
+            const span = document.createElement("span");
+            span.innerText = em;
+            span.addEventListener("click", async (e) => {
+                e.stopPropagation();
+                quickBar.style.display = "none";
+                const supabase = window.supabaseClient || window.supabase;
+                if (supabase) {
+                    let currentReactions = msg.reactions || {};
+                    if (currentReactions[currentUser.id] === em) {
+                        delete currentReactions[currentUser.id];
+                    } else {
+                        currentReactions[currentUser.id] = em;
+                    }
+                    await supabase.from("messages").update({ reactions: currentReactions }).eq("id", msg.id);
+                    await loadChatMessages(activeChatId);
+                    await loadUserChats();
+                }
+            });
+            quickBar.appendChild(span);
+        });
+
+        const plusSpan = document.createElement("span");
+        plusSpan.innerHTML = '<i class="fa-solid fa-plus" style="font-size: 14px;"></i>';
+        plusSpan.title = "Weitere Emojis";
 
         const pickerPopup = document.createElement("div");
         pickerPopup.className = "message-react-picker-popup";
@@ -1071,6 +1102,7 @@ async function appendSingleMessage(msg, isSystem = false) {
                 span.addEventListener("click", async (e) => {
                     e.stopPropagation();
                     pickerPopup.style.display = "none";
+                    quickBar.style.display = "none";
                     const supabase = window.supabaseClient || window.supabase;
                     if (supabase) {
                         let currentReactions = msg.reactions || {};
@@ -1094,11 +1126,11 @@ async function appendSingleMessage(msg, isSystem = false) {
         pickerPopup.appendChild(searchInput);
         pickerPopup.appendChild(grid);
 
-        emojiBtn.addEventListener("click", (e) => {
+        plusSpan.addEventListener("click", (e) => {
             e.stopPropagation();
+            quickBar.style.display = "none";
             const isOpen = pickerPopup.style.display === "flex";
             document.querySelectorAll(".message-react-picker-popup").forEach(p => p.style.display = "none");
-            document.querySelectorAll(".wa-msg-dropdown").forEach(d => d.style.display = "none");
             
             if (!isOpen) {
                 const bubbleRect = bubble.getBoundingClientRect();
@@ -1115,10 +1147,34 @@ async function appendSingleMessage(msg, isSystem = false) {
             }
         });
 
+        quickBar.appendChild(plusSpan);
+
+        emojiBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const isOpen = quickBar.style.display === "flex";
+            document.querySelectorAll(".wa-quick-reaction-bar").forEach(b => b.style.display = "none");
+            document.querySelectorAll(".wa-msg-dropdown").forEach(d => d.style.display = "none");
+            document.querySelectorAll(".message-react-picker-popup").forEach(p => p.style.display = "none");
+            
+            if (!isOpen) {
+                const bubbleRect = bubble.getBoundingClientRect();
+                const chatContainerRect = chatMessages.getBoundingClientRect();
+                if (bubbleRect.top - chatContainerRect.top < 150) {
+                    quickBar.className = "wa-quick-reaction-bar bar-below";
+                } else {
+                    quickBar.className = "wa-quick-reaction-bar bar-above";
+                }
+                quickBar.style.display = "flex";
+            } else {
+                quickBar.style.display = "none";
+            }
+        });
+
         actionsDiv.appendChild(emojiBtn);
+        actionsDiv.appendChild(quickBar);
         actionsDiv.appendChild(pickerPopup);
 
-        // 2. Pfeil-nach-unten Button (Multifunktions-Dropdown)
+        // 2. Pfeil-nach-unten Button (Multifunktions-Dropdown mit intelligentem Smart Positioning)
         const arrowBtn = document.createElement("button");
         arrowBtn.className = "msg-action-btn";
         arrowBtn.title = "Mehr Optionen";
@@ -1199,9 +1255,17 @@ async function appendSingleMessage(msg, isSystem = false) {
             e.stopPropagation();
             const isOpen = dropdownMenu.style.display === "flex";
             document.querySelectorAll(".wa-msg-dropdown").forEach(d => d.style.display = "none");
+            document.querySelectorAll(".wa-quick-reaction-bar").forEach(b => b.style.display = "none");
             document.querySelectorAll(".message-react-picker-popup").forEach(p => p.style.display = "none");
 
             if (!isOpen) {
+                const bubbleRect = bubble.getBoundingClientRect();
+                const chatContainerRect = chatMessages.getBoundingClientRect();
+                if (bubbleRect.top - chatContainerRect.top < 160) {
+                    dropdownMenu.className = "wa-msg-dropdown dropdown-below";
+                } else {
+                    dropdownMenu.className = "wa-msg-dropdown dropdown-above";
+                }
                 dropdownMenu.style.display = "flex";
             } else {
                 dropdownMenu.style.display = "none";
@@ -1210,6 +1274,7 @@ async function appendSingleMessage(msg, isSystem = false) {
 
         document.addEventListener("click", () => {
             dropdownMenu.style.display = "none";
+            quickBar.style.display = "none";
             pickerPopup.style.display = "none";
         });
 
