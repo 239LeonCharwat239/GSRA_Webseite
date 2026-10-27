@@ -15,9 +15,11 @@ let userNamesCache = {};
 let officialForumChatId = null;
 let isRendering = false;
 
-// States für WhatsApp-Funktionen
+// States für WhatsApp-Funktionen & Mehrfachauswahl-Löschen
 let replyingToId = null;
 let editingMessageId = null;
+let isMultiSelectMode = false;
+let selectedMessageIds = new Set();
 let messagesCacheMap = new Map();
 
 function escapeHtml(str) {
@@ -30,7 +32,6 @@ function escapeHtml(str) {
         .replace(/'/g, "&#039;");
 }
 
-// Komprimiert mehrfache Zeilenumbrüche/Leerzeichen zu einer sauberen, einzeiligen Vorschau (für Zitate & Bearbeiten)
 function sanitizeQuoteText(text) {
     if (!text) return "";
     return text.replace(/\s+/g, ' ').trim();
@@ -71,13 +72,12 @@ const closeForumModal = document.getElementById("closeForumModal");
 const newForumForm = document.getElementById("newForumForm");
 const forumNameInput = document.getElementById("forumNameInput");
 
-// DOM-Elemente für Antworten
+// DOM-Elemente für Antworten & Bearbeiten
 const replyPreviewBanner = document.getElementById("replyPreviewBanner");
 const replyBannerAuthor = document.getElementById("replyBannerAuthor");
 const replyBannerText = document.getElementById("replyBannerText");
 const cancelReplyBtn = document.getElementById("cancelReplyBtn");
 
-// Kompakter Bearbeitungs-Banner mit Sanitize-Funktion gegen das Aufblähen durch Leerzeilen
 let editPreviewBanner = document.getElementById("editPreviewBanner");
 if (!editPreviewBanner && chatForm) {
     editPreviewBanner = document.createElement("div");
@@ -101,6 +101,89 @@ if (!editPreviewBanner && chatForm) {
             messageInput.placeholder = "Gib eine Nachricht ein...";
         }
     });
+}
+
+// WhatsApp-Multi-Lösch-Leiste erstellen (erscheint über dem Input-Bereich bei Mehrfachauswahl)
+let multiDeleteBar = document.getElementById("multiDeleteBar");
+if (!multiDeleteBar && chatForm) {
+    multiDeleteBar = document.createElement("div");
+    multiDeleteBar.id = "multiDeleteBar";
+    multiDeleteBar.style.cssText = "display: none; background: #202c33; border-top: 1px solid var(--border-subtle); padding: 12px 20px; align-items: center; justify-content: space-between; font-size: 14px; color: #fff; flex-shrink: 0;";
+    multiDeleteBar.innerHTML = `
+        <span id="multiDeleteCount" style="font-weight: bold; color: var(--gsra-yellow);">0 ausgewählt</span>
+        <div style="display: flex; gap: 12px; align-items: center;">
+            <button type="button" id="executeMultiDeleteBtn" class="btn-delete" style="padding: 6px 14px;"><i class="fa-solid fa-trash"></i> Ausgewählte löschen</button>
+            <button type="button" id="cancelMultiDeleteBtn" class="msg-action-btn" style="font-size: 18px;" title="Abbrechen"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+    `;
+    chatForm.parentNode.insertBefore(multiDeleteBar, chatForm);
+
+    document.getElementById("cancelMultiDeleteBtn").addEventListener("click", () => {
+        exitMultiSelectMode();
+    });
+
+    document.getElementById("executeMultiDeleteBtn").addEventListener("click", async () => {
+        if (selectedMessageIds.size === 0) return;
+        if (confirm(`Möchtest du ${selectedMessageIds.size} ausgewählte Nachricht(en) wirklich löschen?`)) {
+            const supabase = window.supabaseClient || window.supabase;
+            if (!supabase) return;
+
+            for (const msgId of selectedMessageIds) {
+                const deleteText = "Du hast diese Nachricht gelöscht";
+                await supabase.from("messages").update({
+                    text: deleteText,
+                    image_url: null,
+                    reply_to: null,
+                    is_edited: false
+                }).eq("id", msgId);
+            }
+
+            exitMultiSelectMode();
+            await loadChatMessages(activeChatId);
+            await loadUserChats();
+        }
+    });
+}
+
+// Multi-Auswahl-Button in den Chat-Aktionen hinzufügen (falls noch nicht vorhanden)
+if (chatActions && !document.getElementById("toggleMultiSelectBtn")) {
+    const multiSelectBtn = document.createElement("button");
+    multiSelectBtn.id = "toggleMultiSelectBtn";
+    multiSelectBtn.className = "msg-action-btn";
+    multiSelectBtn.style.cssText = "width: auto; padding: 4px 10px; font-size: 13px; background: rgba(0,85,255,0.15); border: 1px solid var(--gsra-blue); border-radius: 4px; color: #fff;";
+    multiSelectBtn.innerHTML = '<i class="fa-solid fa-list-check"></i> Auswählen';
+    multiSelectBtn.addEventListener("click", () => {
+        if (!isMultiSelectMode) {
+            isMultiSelectMode = true;
+            selectedMessageIds.clear();
+            if (multiDeleteBar) multiDeleteBar.style.display = "flex";
+            updateMultiDeleteCount();
+            document.querySelectorAll(".message-bubble.message-own").forEach(b => {
+                b.classList.add("selection-mode");
+            });
+        } else {
+            exitMultiSelectMode();
+        }
+    });
+    chatActions.insertBefore(multiSelectBtn, chatActions.firstChild);
+}
+
+function exitMultiSelectMode() {
+    isMultiSelectMode = false;
+    selectedMessageIds.clear();
+    if (multiDeleteBar) multiDeleteBar.style.display = "none";
+    document.querySelectorAll(".message-bubble").forEach(b => {
+        b.classList.remove("selection-mode", "selected-bubble");
+        const cb = b.querySelector(".msg-selection-checkbox");
+        if (cb) cb.innerHTML = "";
+    });
+}
+
+function updateMultiDeleteCount() {
+    const countSpan = document.getElementById("multiDeleteCount");
+    if (countSpan) {
+        countSpan.innerText = `${selectedMessageIds.size} ausgewählt`;
+    }
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -1003,13 +1086,39 @@ async function appendSingleMessage(msg, isSystem = false) {
     const isOwn = String(msg.sender_id) === String(currentUser?.id);
     bubble.className = `message-bubble ${isOwn ? 'message-own' : 'message-other'}`;
 
+    if (isMultiSelectMode && isOwn) {
+        bubble.classList.add("selection-mode");
+    }
+
     const senderName = isOwn ? "Du" : await fetchUserName(msg.sender_id);
     const dateObj = msg.created_at ? new Date(msg.created_at) : new Date();
     const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     const isDeleted = msg.text === "Du hast diese Nachricht gelöscht" || msg.text === "Diese Nachricht wurde gelöscht";
 
-    // Aktionsbalken
+    // Checkbox für Mehrfachauswahl hinzufügen
+    const selectionCb = document.createElement("div");
+    selectionCb.className = "msg-selection-checkbox";
+    bubble.appendChild(selectionCb);
+
+    // Klick-Verhalten im Mehrfachauswahl-Modus
+    bubble.addEventListener("click", (e) => {
+        if (isMultiSelectMode && isOwn && !isSystem && !isDeleted) {
+            e.stopPropagation();
+            if (selectedMessageIds.has(msg.id)) {
+                selectedMessageIds.delete(msg.id);
+                bubble.classList.remove("selected-bubble");
+                selectionCb.innerHTML = "";
+            } else {
+                selectedMessageIds.add(msg.id);
+                bubble.classList.add("selected-bubble");
+                selectionCb.innerHTML = '<i class="fa-solid fa-check"></i>';
+            }
+            updateMultiDeleteCount();
+        }
+    });
+
+    // Aktionsbalken & Reaktions-Button
     if (!isSystem && !isDeleted) {
         const actionsDiv = document.createElement("div");
         actionsDiv.className = "message-actions";
@@ -1019,7 +1128,8 @@ async function appendSingleMessage(msg, isSystem = false) {
         replyBtn.className = "msg-action-btn";
         replyBtn.title = "Antworten";
         replyBtn.innerHTML = '<i class="fa-solid fa-reply"></i>';
-        replyBtn.addEventListener("click", () => {
+        replyBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
             replyingToId = msg.id;
             if (replyPreviewBanner && replyBannerAuthor && replyBannerText) {
                 replyBannerAuthor.innerText = `Antwort an ${senderName}`;
@@ -1035,7 +1145,8 @@ async function appendSingleMessage(msg, isSystem = false) {
         copyBtn.className = "msg-action-btn";
         copyBtn.title = "Text kopieren";
         copyBtn.innerHTML = '<i class="fa-solid fa-copy"></i>';
-        copyBtn.addEventListener("click", () => {
+        copyBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
             const textToCopy = msg.text || "";
             navigator.clipboard.writeText(textToCopy).then(() => {
                 alert("Nachricht in die Zwischenablage kopiert!");
@@ -1052,7 +1163,8 @@ async function appendSingleMessage(msg, isSystem = false) {
                 editBtn.className = "msg-action-btn";
                 editBtn.title = "Bearbeiten";
                 editBtn.innerHTML = '<i class="fa-solid fa-pen"></i>';
-                editBtn.addEventListener("click", () => {
+                editBtn.addEventListener("click", (e) => {
+                    e.stopPropagation();
                     editingMessageId = msg.id;
                     if (messageInput) {
                         messageInput.value = msg.text;
@@ -1061,7 +1173,6 @@ async function appendSingleMessage(msg, isSystem = false) {
                         messageInput.style.height = Math.min(messageInput.scrollHeight, 140) + "px";
                     }
                     if (editPreviewBanner) {
-                        // Hier wird der Text im Bearbeitungs-Banner ebenfalls über sanitizeQuoteText geleert/komprimiert!
                         document.getElementById("editBannerText").innerText = sanitizeQuoteText(msg.text);
                         editPreviewBanner.style.display = "flex";
                     }
@@ -1073,7 +1184,8 @@ async function appendSingleMessage(msg, isSystem = false) {
             deleteMsgBtn.className = "msg-action-btn delete-btn";
             deleteMsgBtn.title = "Löschen";
             deleteMsgBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
-            deleteMsgBtn.addEventListener("click", async () => {
+            deleteMsgBtn.addEventListener("click", async (e) => {
+                e.stopPropagation();
                 if (confirm("Möchtest du diese Nachricht löschen?")) {
                     const supabase = window.supabaseClient || window.supabase;
                     if (!supabase) return;
@@ -1094,6 +1206,46 @@ async function appendSingleMessage(msg, isSystem = false) {
         }
 
         bubble.appendChild(actionsDiv);
+
+        // Reaktions-Button direkt neben der Multifunktionsleiste auf gleicher Höhe
+        const reactBtn = document.createElement("button");
+        reactBtn.className = "message-react-btn";
+        reactBtn.title = "Reagieren";
+        reactBtn.innerHTML = '<i class="fa-regular fa-face-smile"></i>';
+
+        const reactPicker = document.createElement("div");
+        reactPicker.className = "message-react-picker";
+        const emojis = ["👍", "❤️", "😂", "😮", "😢", "🔥"];
+        emojis.forEach(emoji => {
+            const span = document.createElement("span");
+            span.innerText = emoji;
+            span.addEventListener("click", async (e) => {
+                e.stopPropagation();
+                reactPicker.style.display = "none";
+                const supabase = window.supabaseClient || window.supabase;
+                if (supabase) {
+                    let currentReactions = msg.reactions || {};
+                    currentReactions[currentUser.id] = emoji;
+                    await supabase.from("messages").update({ reactions: currentReactions }).eq("id", msg.id);
+                    await loadChatMessages(activeChatId);
+                }
+            });
+            reactPicker.appendChild(span);
+        });
+
+        reactBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const isOpen = reactPicker.style.display === "flex";
+            document.querySelectorAll(".message-react-picker").forEach(p => p.style.display = "none");
+            reactPicker.style.display = isOpen ? "none" : "flex";
+        });
+
+        document.addEventListener("click", () => {
+            reactPicker.style.display = "none";
+        });
+
+        bubble.appendChild(reactBtn);
+        bubble.appendChild(reactPicker);
     }
 
     const authorDiv = document.createElement("div");
@@ -1114,7 +1266,8 @@ async function appendSingleMessage(msg, isSystem = false) {
             <div style="font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.9;">${escapeHtml(sanitizedQuote)}</div>
         `;
         
-        quoteDiv.addEventListener("click", () => {
+        quoteDiv.addEventListener("click", (e) => {
+            e.stopPropagation();
             const targetElement = document.getElementById(`msg-${msg.reply_to}`);
             if (targetElement) {
                 targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1153,7 +1306,8 @@ async function appendSingleMessage(msg, isSystem = false) {
                 videoWrap.appendChild(videoElem);
                 videoWrap.appendChild(overlayDiv);
 
-                videoWrap.addEventListener("click", () => {
+                videoWrap.addEventListener("click", (e) => {
+                    e.stopPropagation();
                     if (modalVideoFull && imageModal) {
                         if (modalImageFull) modalImageFull.style.display = "none";
                         modalVideoFull.src = cleanUrl;
@@ -1171,7 +1325,8 @@ async function appendSingleMessage(msg, isSystem = false) {
                 const img = document.createElement("img");
                 img.src = cleanUrl;
                 img.alt = "Bild";
-                img.addEventListener("click", () => {
+                img.addEventListener("click", (e) => {
+                    e.stopPropagation();
                     if (modalImageFull && imageModal) {
                         if (modalVideoFull) modalVideoFull.style.display = "none";
                         modalImageFull.src = cleanUrl;
@@ -1212,7 +1367,24 @@ async function appendSingleMessage(msg, isSystem = false) {
         bubble.appendChild(textDiv);
     }
 
-    // Fußzeile
+    if (msg.reactions && typeof msg.reactions === 'object' && Object.keys(msg.reactions).length > 0) {
+        const reactionsDiv = document.createElement("div");
+        reactionsDiv.className = "message-reactions-display";
+        
+        const counts = {};
+        Object.values(msg.reactions).forEach(emoji => {
+            counts[emoji] = (counts[emoji] || 0) + 1;
+        });
+
+        Object.entries(counts).forEach(([emoji, count]) => {
+            const pill = document.createElement("span");
+            pill.className = "reaction-pill";
+            pill.innerHTML = `${emoji} <span style="font-size: 10px; opacity: 0.8;">${count}</span>`;
+            reactionsDiv.appendChild(pill);
+        });
+        bubble.appendChild(reactionsDiv);
+    }
+
     const footerDiv = document.createElement("div");
     footerDiv.style.cssText = "display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 4px;";
 
@@ -1354,7 +1526,6 @@ if (chatForm) {
         }
 
         try {
-            // BEARBEITEN-MODUS
             if (editingMessageId) {
                 const targetIdToEdit = editingMessageId;
                 editingMessageId = null;
