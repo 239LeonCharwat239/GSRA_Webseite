@@ -1224,7 +1224,7 @@ body.multi-select-active .message-actions {
     animation: highlightPulse 1.5s ease-in-out;
 }
 
-/* Eigene Nachricht (rechts): Aktionsleiste links vom Kasten mit unsichtbarem Brücken-Padding zur Vermeidung der toten Zone */
+/* Eigene Nachricht (rechts): Aktionsleiste links vom Kasten mit unsichtbarem Brücken-Padding */
 .message-own .message-actions {
     position: absolute;
     top: 50%;
@@ -1307,6 +1307,19 @@ body.multi-select-active .message-actions {
     color: #ff4d4d;
 }
 
+/* Ausrichtung für eigene vs. fremde Nachrichten (Dropdown, Quick-Bar, Picker) */
+.message-own .wa-msg-dropdown,
+.message-own .wa-quick-reaction-bar,
+.message-own .message-react-picker-popup {
+    right: 0;
+}
+
+.message-other .wa-msg-dropdown,
+.message-other .wa-quick-reaction-bar,
+.message-other .message-react-picker-popup {
+    left: 0;
+}
+
 /* WhatsApp-Dropdown Menü mit unsichtbarer Hover-Brücke */
 .wa-msg-dropdown {
     position: absolute;
@@ -1319,7 +1332,6 @@ body.multi-select-active .message-actions {
     z-index: 50;
     min-width: 140px;
     padding: 4px 0;
-    right: 0;
 }
 
 .wa-msg-dropdown.dropdown-above {
@@ -1369,53 +1381,56 @@ body.multi-select-active .message-actions {
     color: var(--gsra-yellow);
 }
 
-/* WhatsApp-Reaktionsleiste (Quick Bar) mit Hover-Brücke gegen die tote Zone */
+/* WhatsApp-Reaktionsleiste (Quick Bar) - verkleinert & perfekt zentriert mit größeren Emojis */
 .wa-quick-reaction-bar {
     position: absolute;
     background: #15161a;
     border: 1px solid var(--border-subtle);
     border-radius: 20px;
-    padding: 6px 12px;
+    padding: 5px 10px;
     display: none;
     align-items: center;
+    justify-content: center;
     gap: 8px;
     z-index: 70;
     box-shadow: 0 8px 25px rgba(0,0,0,0.8);
-    right: 0;
     white-space: nowrap;
 }
 
 .wa-quick-reaction-bar.bar-above {
     bottom: calc(100% + 4px);
-    padding-bottom: 14px;
+    padding-bottom: 12px;
 }
 .wa-quick-reaction-bar.bar-above::before {
     content: '';
     position: absolute;
-    bottom: -14px;
+    bottom: -12px;
     left: 0;
     right: 0;
-    height: 16px;
+    height: 14px;
     background: transparent;
 }
 
 .wa-quick-reaction-bar.bar-below {
     top: calc(100% + 4px);
-    padding-top: 14px;
+    padding-top: 12px;
 }
 .wa-quick-reaction-bar.bar-below::before {
     content: '';
     position: absolute;
-    top: -14px;
+    top: -12px;
     left: 0;
     right: 0;
-    height: 16px;
+    height: 14px;
     background: transparent;
 }
 
 .wa-quick-reaction-bar span {
-    font-size: 18px;
+    font-size: 20px;
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     transition: transform 0.2s ease;
 }
 
@@ -1437,7 +1452,6 @@ body.multi-select-active .message-actions {
     box-shadow: 0 10px 30px rgba(0,0,0,0.9);
     width: 220px;
     max-height: 180px;
-    right: 0;
 }
 
 .message-react-picker-popup.popup-above {
