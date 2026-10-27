@@ -15,7 +15,6 @@ let userNamesCache = {};
 let officialForumChatId = null;
 let isRendering = false;
 
-// States für WhatsApp-Funktionen & Mehrfachauswahl-Löschen
 let replyingToId = null;
 let editingMessageId = null;
 let isMultiSelectMode = false;
@@ -35,6 +34,17 @@ function escapeHtml(str) {
 function sanitizeQuoteText(text) {
     if (!text) return "";
     return text.replace(/\s+/g, ' ').trim();
+}
+
+// Hilfsfunktion zum Runden großer Zahlen (z.B. 27900 -> "27,9 Tsd.")
+function formatCount(num) {
+    if (num >= 1000000) {
+        return (num / 1000000).toFixed(1).replace('.', ',') + " Mio.";
+    }
+    if (num >= 1000) {
+        return (num / 1000).toFixed(1).replace('.', ',') + " Tsd.";
+    }
+    return num.toString();
 }
 
 const chatsList = document.getElementById("chatsList");
@@ -72,7 +82,6 @@ const closeForumModal = document.getElementById("closeForumModal");
 const newForumForm = document.getElementById("newForumForm");
 const forumNameInput = document.getElementById("forumNameInput");
 
-// DOM-Elemente für Antworten & Bearbeiten
 const replyPreviewBanner = document.getElementById("replyPreviewBanner");
 const replyBannerAuthor = document.getElementById("replyBannerAuthor");
 const replyBannerText = document.getElementById("replyBannerText");
@@ -103,7 +112,6 @@ if (!editPreviewBanner && chatForm) {
     });
 }
 
-// WhatsApp-Multi-Lösch-Leiste erstellen
 let multiDeleteBar = document.getElementById("multiDeleteBar");
 if (!multiDeleteBar && chatForm) {
     multiDeleteBar = document.createElement("div");
@@ -134,7 +142,8 @@ if (!multiDeleteBar && chatForm) {
                     text: deleteText,
                     image_url: null,
                     reply_to: null,
-                    is_edited: false
+                    is_edited: false,
+                    reactions: {} // Reaktionen beim Löschen komplett entfernen
                 }).eq("id", msgId);
             }
 
@@ -607,13 +616,23 @@ function setupGlobalMessageListener() {
 
     globalListenerChannel = supabase
         .channel('global_messages_channel')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
-            const newMsg = payload.new;
-            const targetChat = allChatsCache.find(c => c.id === newMsg.chat_id);
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, async (payload) => {
+            const msg = payload.new;
+            const targetChat = allChatsCache.find(c => c.id === msg.chat_id);
             if (targetChat) {
-                targetChat.last_msg_time = newMsg.created_at || new Date().toISOString();
-                targetChat.last_message = newMsg.text || "[Medien]";
-                if (newMsg.sender_id !== currentUser.id) {
+                targetChat.last_msg_time = msg.created_at || new Date().toISOString();
+                
+                // Exakte WhatsApp-Vorschau für Reaktionen in der Sidebar
+                if (msg.reactions && Object.keys(msg.reactions).length > 0) {
+                    const lastUserId = Object.keys(msg.reactions).pop();
+                    const lastEmoji = msg.reactions[lastUserId];
+                    const reactorName = (String(lastUserId) === String(currentUser.id)) ? "Du" : await fetchUserName(lastUserId);
+                    targetChat.last_message = `${reactorName} hat mit ${lastEmoji} reagiert`;
+                } else {
+                    targetChat.last_message = msg.text || "[Medien]";
+                }
+
+                if (msg.sender_id !== currentUser.id) {
                     if (targetChat.id !== activeChatId || document.hidden) {
                         targetChat.unread = true;
                     }
@@ -664,23 +683,11 @@ async function loadUserChats() {
 
     let rawChats = [];
     try {
-        const { data: chatsAsUser1 } = await supabase
-            .from("chats")
-            .select("*")
-            .eq("user1_id", currentUser.id);
-
-        const { data: chatsAsUser2 } = await supabase
-            .from("chats")
-            .select("*")
-            .eq("user2_id", currentUser.id);
-
-        const { data: groupChats } = await supabase
-            .from("chats")
-            .select("*")
-            .not("title", "is", null);
+        const { data: chatsAsUser1 } = await supabase.from("chats").select("*").eq("user1_id", currentUser.id);
+        const { data: chatsAsUser2 } = await supabase.from("chats").select("*").eq("user2_id", currentUser.id);
+        const { data: groupChats } = await supabase.from("chats").select("*").not("title", "is", null);
 
         const combined = [...(chatsAsUser1 || []), ...(chatsAsUser2 || []), ...(groupChats || [])];
-        
         const map = new Map();
         combined.forEach(c => map.set(c.id, c));
         rawChats = Array.from(map.values());
@@ -691,24 +698,17 @@ async function loadUserChats() {
     let forumChat = rawChats.find(c => c.title === 'GSRA Official / Community Forum' || (c.title && c.title.includes('Official')));
     
     if (!forumChat) {
-        const { data: globalForum } = await supabase
-            .from("chats")
-            .select("*")
-            .eq("title", 'GSRA Official / Community Forum')
-            .maybeSingle();
-
+        const { data: globalForum } = await supabase.from("chats").select("*").eq("title", 'GSRA Official / Community Forum').maybeSingle();
         if (globalForum) {
             forumChat = globalForum;
             rawChats.unshift(globalForum);
         } else if (isAdminUser) {
-            const { data: createdForum, err: forumErr } = await supabase
-                .from("chats")
-                .insert([{
-                    user1_id: currentUser.id,
-                    user2_id: currentUser.id,
-                    title: 'GSRA Official / Community Forum',
-                    last_message: 'Willkommen im offiziellen Community-Forum!'
-                }]).select().single();
+            const { data: createdForum, err: forumErr } = await supabase.from("chats").insert([{
+                user1_id: currentUser.id,
+                user2_id: currentUser.id,
+                title: 'GSRA Official / Community Forum',
+                last_message: 'Willkommen im offiziellen Community-Forum!'
+            }]).select().single();
 
             if (!forumErr && createdForum) {
                 forumChat = createdForum;
@@ -717,26 +717,19 @@ async function loadUserChats() {
         }
     }
 
-    if (forumChat) {
-        officialForumChatId = forumChat.id;
-    }
+    if (forumChat) officialForumChatId = forumChat.id;
 
     let accessibleChats = [];
     for (const chat of rawChats) {
         const isOfficial = (chat.id === officialForumChatId || (chat.title && chat.title.includes('Official')));
         const isDirect = (chat.user1_id !== chat.user2_id);
         const isGroup = (chat.user1_id === chat.user2_id);
-        
-        if (isOfficial || isDirect || isGroup) {
-            accessibleChats.push(chat);
-        }
+        if (isOfficial || isDirect || isGroup) accessibleChats.push(chat);
     }
 
     let uniqueMap = new Map();
     for (const chat of accessibleChats) {
-        if (!uniqueMap.has(chat.id)) {
-            uniqueMap.set(chat.id, chat);
-        }
+        if (!uniqueMap.has(chat.id)) uniqueMap.set(chat.id, chat);
     }
 
     allChatsCache = Array.from(uniqueMap.values());
@@ -749,7 +742,7 @@ async function loadUserChats() {
 
         const { data: latestMsg } = await supabase
             .from("messages")
-            .select("created_at, sender_id, text")
+            .select("created_at, sender_id, text, reactions")
             .eq("chat_id", chat.id)
             .order("created_at", { ascending: false })
             .limit(1)
@@ -757,7 +750,14 @@ async function loadUserChats() {
 
         if (latestMsg) {
             chat.last_msg_time = latestMsg.created_at;
-            chat.last_message = latestMsg.text || "[Medien]";
+            if (latestMsg.reactions && Object.keys(latestMsg.reactions).length > 0) {
+                const lastUserId = Object.keys(latestMsg.reactions).pop();
+                const lastEmoji = latestMsg.reactions[lastUserId];
+                const reactorName = (String(lastUserId) === String(currentUser.id)) ? "Du" : await fetchUserName(lastUserId);
+                chat.last_message = `${reactorName} hat mit ${lastEmoji} reagiert`;
+            } else {
+                chat.last_message = latestMsg.text || "[Medien]";
+            }
         } else {
             chat.last_msg_time = chat.created_at;
             chat.last_message = "Keine Nachrichten";
@@ -792,7 +792,6 @@ async function renderChatsList() {
     isRendering = true;
 
     chatsList.innerHTML = "";
-
     const searchTerm = chatSearchInput ? chatSearchInput.value.toLowerCase() : "";
 
     let filtered = allChatsCache.filter(chat => {
@@ -805,15 +804,9 @@ async function renderChatsList() {
         const matchesSearch = searchTarget.includes(searchTerm);
         if (!matchesSearch) return false;
 
-        if (currentFilter === 'unread') {
-            return chat.unread === true;
-        }
-        if (currentFilter === 'favorites') {
-            return userFavorites.has(chat.id);
-        }
-        if (currentFilter === 'forums') {
-            return isGroup || isOfficial;
-        }
+        if (currentFilter === 'unread') return chat.unread === true;
+        if (currentFilter === 'favorites') return userFavorites.has(chat.id);
+        if (currentFilter === 'forums') return isGroup || isOfficial;
         return true;
     });
 
@@ -843,17 +836,7 @@ async function renderChatsList() {
 
         item.className = `wa-chat-item ${isSelected ? 'active' : ''} ${isUnread ? 'unread' : ''}`;
         
-        let displayTitle = "";
-        if (isOfficial) {
-            displayTitle = "GSRA Official / Community Forum";
-        } else if (isGroup) {
-            displayTitle = chat.title;
-        } else if (chat.title) {
-            displayTitle = `${chat.title} (${otherUserName})`;
-        } else {
-            displayTitle = `Chat mit ${otherUserName}`;
-        }
-
+        let displayTitle = isOfficial ? "GSRA Official / Community Forum" : (isGroup ? chat.title : (chat.title ? `${chat.title} (${otherUserName})` : `Chat mit ${otherUserName}`));
         const lastMsg = escapeHtml(chat.last_message || 'Keine Nachrichten');
 
         item.innerHTML = `
@@ -867,21 +850,16 @@ async function renderChatsList() {
             </div>
         `;
 
-        const favBtn = item.querySelector(".wa-favorite-btn");
-        favBtn.addEventListener("click", (e) => toggleFavorite(chat.id, e));
+        item.querySelector(".wa-favorite-btn").addEventListener("click", (e) => toggleFavorite(chat.id, e));
 
         item.addEventListener("click", () => {
             activeChatId = chat.id;
             markChatAsRead(chat.id);
-            
             if (waWelcomeScreen) waWelcomeScreen.style.display = "none";
             if (waChatActivePane) waChatActivePane.style.display = "flex";
 
-            if (isForumOrGroup) {
-                openForumChat(chat);
-            } else {
-                openChat(chat.id, otherUserName, chat.title);
-            }
+            if (isForumOrGroup) openForumChat(chat);
+            else openChat(chat.id, otherUserName, chat.title);
             renderChatsList();
         });
 
@@ -900,31 +878,19 @@ function openForumChat(forumChat = null) {
 
     if (chatTitleText) chatTitleText.innerText = forumChat?.title || "GSRA Official / Community Forum";
     if (chatActions) chatActions.style.display = "flex";
-    
-    if (addMemberBtn) {
-        addMemberBtn.style.display = (chatId === officialForumChatId) ? "none" : "block";
-    }
+    if (addMemberBtn) addMemberBtn.style.display = (chatId === officialForumChatId) ? "none" : "block";
     if (blockUserBtn) blockUserBtn.style.display = "none";
 
     const isOfficialAnnouncement = (chatId === officialForumChatId);
-
     if (isOfficialAnnouncement && !isAdminUser) {
-        if (messageInput) {
-            messageInput.disabled = true;
-            messageInput.placeholder = "Nur Administratoren können im offiziellen Forum schreiben.";
-        }
+        if (messageInput) { messageInput.disabled = true; messageInput.placeholder = "Nur Administratoren können im offiziellen Forum schreiben."; }
         if (sendBtn) sendBtn.disabled = true;
     } else {
-        if (messageInput) {
-            messageInput.disabled = false;
-            messageInput.placeholder = "Schreibe eine Nachricht...";
-        }
+        if (messageInput) { messageInput.disabled = false; messageInput.placeholder = "Schreibe eine Nachricht..."; }
         if (sendBtn) sendBtn.disabled = false;
     }
 
-    if (chatMessages) {
-        chatMessages.innerHTML = "";
-    }
+    if (chatMessages) chatMessages.innerHTML = "";
     loadChatMessages(chatId);
     renderChatsList();
 }
@@ -966,9 +932,7 @@ async function loadChatMessages(chatId) {
         .order("created_at", { ascending: true });
 
     messagesCacheMap.clear();
-    if (messages) {
-        messages.forEach(m => messagesCacheMap.set(m.id, m));
-    }
+    if (messages) messages.forEach(m => messagesCacheMap.set(m.id, m));
 
     await renderMessages(messages || []);
 
@@ -982,9 +946,7 @@ async function loadChatMessages(chatId) {
                 .order("created_at", { ascending: true });
             
             messagesCacheMap.clear();
-            if (updatedMessages) {
-                updatedMessages.forEach(m => messagesCacheMap.set(m.id, m));
-            }
+            if (updatedMessages) updatedMessages.forEach(m => messagesCacheMap.set(m.id, m));
             await renderMessages(updatedMessages || []);
         })
         .subscribe();
@@ -1002,9 +964,7 @@ async function renderMessages(messages) {
         const isSystem = msg.text && (msg.text.includes("hat den Chat") || msg.text.includes("hat das Forum") || msg.text.includes("zum Forum hinzugefügt") || msg.text.includes("umbenannt"));
         if (isSystem && !msg.image_url && !msg.reply_to) {
             const formatted = await formatSystemMessage(msg.text, msg.sender_id);
-            if (seenSystemTexts.has(formatted)) {
-                continue;
-            }
+            if (seenSystemTexts.has(formatted)) continue;
             seenSystemTexts.add(formatted);
         }
         await appendSingleMessage(msg, isSystem);
@@ -1019,37 +979,17 @@ async function formatSystemMessage(text, senderId) {
     if (text.includes("zum Forum hinzugefügt")) {
         const match = text.match(/^(.+?)\s+hat\s+(.+?)\s+zum Forum hinzugefügt/i);
         const target = match && match[2] ? match[2] : "jemanden";
-        if (isOwnAction) {
-            return `Du hast ${target} zum Forum hinzugefügt.`;
-        } else {
-            return `Du wurdest von ${actorName} zum Forum hinzugefügt.`;
-        }
+        return isOwnAction ? `Du hast ${target} zum Forum hinzugefügt.` : `Du wurdest von ${actorName} zum Forum hinzugefügt.`;
     }
-
     if (text.includes("hat den Chat eröffnet")) {
-        if (isOwnAction) {
-            return "Du hast den Chat eröffnet.";
-        } else {
-            return `${actorName} hat den Chat mit dir eröffnet.`;
-        }
+        return isOwnAction ? "Du hast den Chat eröffnet." : `${actorName} hat den Chat mit dir eröffnet.`;
     }
-
     if (text.includes("hat das Forum erstellt")) {
-        if (isOwnAction) {
-            return "Du hast das Forum erstellt.";
-        } else {
-            return `${actorName} hat das Forum erstellt.`;
-        }
+        return isOwnAction ? "Du hast das Forum erstellt." : `${actorName} hat das Forum erstellt.`;
     }
-
     if (text.includes("umbenannt")) {
-        if (isOwnAction) {
-            return text.replace(new RegExp(`^${actorName}\\s+hat`, 'i'), 'Du hast');
-        } else {
-            return text;
-        }
+        return isOwnAction ? text.replace(new RegExp(`^${actorName}\\s+hat`, 'i'), 'Du hast') : text;
     }
-
     return text;
 }
 
@@ -1071,14 +1011,12 @@ async function appendSingleMessage(msg, isSystem = false) {
     const isDeleted = msg.text === "Du hast diese Nachricht gelöscht" || msg.text === "Diese Nachricht wurde gelöscht";
     const isSystemOrDeletedMsg = isSystem || isDeleted;
 
-    // Checkbox für Mehrfachauswahl (nur bei normalen eigenen Nachrichten)
     const selectionCb = document.createElement("div");
     selectionCb.className = "msg-selection-checkbox";
     if (isOwn && !isSystemOrDeletedMsg) {
         bubble.appendChild(selectionCb);
     }
 
-    // Klick im Multi-Select-Modus
     bubble.addEventListener("click", (e) => {
         if (isMultiSelectMode && isOwn && !isSystemOrDeletedMsg) {
             e.stopPropagation();
@@ -1095,12 +1033,10 @@ async function appendSingleMessage(msg, isSystem = false) {
         }
     });
 
-    // Aktionsbalken mit Schnell-Emojis (Daumen hoch, Herz, Lachen, Erstaunen, Plus)
     if (!isSystem && !isDeleted) {
         const actionsDiv = document.createElement("div");
         actionsDiv.className = "message-actions";
 
-        // 1. Die 4 Haupt-Emojis direkt in der Leiste
         const quickEmojis = ["👍", "❤️", "😂", "😮"];
         quickEmojis.forEach(emoji => {
             const btn = document.createElement("button");
@@ -1117,15 +1053,20 @@ async function appendSingleMessage(msg, isSystem = false) {
                 const supabase = window.supabaseClient || window.supabase;
                 if (supabase) {
                     let currentReactions = msg.reactions || {};
-                    currentReactions[currentUser.id] = emoji;
+                    // Toggle-Funktion: Wenn man selbst bereits mit genau diesem Emoji reagiert hat -> entfernen, sonst setzen
+                    if (currentReactions[currentUser.id] === emoji) {
+                        delete currentReactions[currentUser.id];
+                    } else {
+                        currentReactions[currentUser.id] = emoji;
+                    }
                     await supabase.from("messages").update({ reactions: currentReactions }).eq("id", msg.id);
                     await loadChatMessages(activeChatId);
+                    await loadUserChats();
                 }
             });
             actionsDiv.appendChild(btn);
         });
 
-        // 2. Das Plus-Symbol (+) für weitere Emojis (öffnet kompaktes Such-Popup mit intelligenter Positionierung)
         const plusBtn = document.createElement("button");
         plusBtn.className = "msg-action-btn";
         plusBtn.title = "Weitere Emojis";
@@ -1133,11 +1074,7 @@ async function appendSingleMessage(msg, isSystem = false) {
 
         const pickerPopup = document.createElement("div");
         pickerPopup.className = "message-react-picker-popup";
-        
-        // Verhindert, dass Klicks im Popup das Popup sofort schließen
-        pickerPopup.addEventListener("click", (e) => {
-            e.stopPropagation();
-        });
+        pickerPopup.addEventListener("click", (e) => e.stopPropagation());
 
         const searchInput = document.createElement("input");
         searchInput.type = "text";
@@ -1154,10 +1091,7 @@ async function appendSingleMessage(msg, isSystem = false) {
             "🤥","😶","😐","😑","😬","🙄","😯","😦","😧","😮",
             "😲","😴","🤤","😪","😵","🤐","🥴","🤢","🤮",
             "🤧","😷","🤒","🤕","🤑","🤠","😈","👿","👹","👺",
-            "clown","🤡","poop","💩","ghost","👻","skull","💀","alien","👽","👾","robot","🤖","jack","🎃","cat","😺","grin","😸",
-            "joy","😹","smile","😻","heart","😼","kiss","😽","weary","🙀","crying","😿","pouting","😾","thumbsup","👍","thumbsdown","👎",
-            "clap","👏","raised","🙌","open","👐","palms","🤲","handshake","🤝","pray","🙏","muscle","💪","mechanical","🦾","leg","🦵",
-            "fire","🔥","star","⭐","sparkles","✨","heart","❤️","orange","🧡","yellow","💛","green","💚","blue","💙","purple","💜","black","🖤","white","🤍","brown","🤎"
+            "👍","👎","👏","🙌","👐","🤲","🤝","pray","🙏","muscle","💪","fire","🔥","⭐","✨","❤️","🧡","💛","💚","💙","💜","🖤","🤍","🤎"
         ];
 
         const renderEmojiGrid = (filter = "") => {
@@ -1173,9 +1107,14 @@ async function appendSingleMessage(msg, isSystem = false) {
                     const supabase = window.supabaseClient || window.supabase;
                     if (supabase) {
                         let currentReactions = msg.reactions || {};
-                        currentReactions[currentUser.id] = em;
+                        if (currentReactions[currentUser.id] === em) {
+                            delete currentReactions[currentUser.id];
+                        } else {
+                            currentReactions[currentUser.id] = em;
+                        }
                         await supabase.from("messages").update({ reactions: currentReactions }).eq("id", msg.id);
                         await loadChatMessages(activeChatId);
+                        await loadUserChats();
                     }
                 });
                 grid.appendChild(span);
@@ -1183,10 +1122,7 @@ async function appendSingleMessage(msg, isSystem = false) {
         };
 
         renderEmojiGrid();
-
-        searchInput.addEventListener("input", (e) => {
-            renderEmojiGrid(e.target.value.trim());
-        });
+        searchInput.addEventListener("input", (e) => renderEmojiGrid(e.target.value.trim()));
 
         pickerPopup.appendChild(searchInput);
         pickerPopup.appendChild(grid);
@@ -1197,17 +1133,13 @@ async function appendSingleMessage(msg, isSystem = false) {
             document.querySelectorAll(".message-react-picker-popup").forEach(p => p.style.display = "none");
             
             if (!isOpen) {
-                // Intelligente Positionierung: Prüfen ob Nachricht in der oberen Hälfte des Chats ist
                 const bubbleRect = bubble.getBoundingClientRect();
                 const chatContainerRect = chatMessages.getBoundingClientRect();
-                
-                // Wenn die Nachricht nah am oberen Rand ist, Popup nach UNTEN öffnen, sonst nach OBEN
                 if (bubbleRect.top - chatContainerRect.top < 220) {
                     pickerPopup.className = "message-react-picker-popup popup-below";
                 } else {
                     pickerPopup.className = "message-react-picker-popup popup-above";
                 }
-
                 pickerPopup.style.display = "flex";
                 searchInput.focus();
             } else {
@@ -1215,14 +1147,11 @@ async function appendSingleMessage(msg, isSystem = false) {
             }
         });
 
-        document.addEventListener("click", () => {
-            pickerPopup.style.display = "none";
-        });
+        document.addEventListener("click", () => { pickerPopup.style.display = "none"; });
 
         actionsDiv.appendChild(plusBtn);
         actionsDiv.appendChild(pickerPopup);
 
-        // Antworten
         const replyBtn = document.createElement("button");
         replyBtn.className = "msg-action-btn";
         replyBtn.title = "Antworten";
@@ -1239,23 +1168,16 @@ async function appendSingleMessage(msg, isSystem = false) {
         });
         actionsDiv.appendChild(replyBtn);
 
-        // Nachricht kopieren
         const copyBtn = document.createElement("button");
         copyBtn.className = "msg-action-btn";
         copyBtn.title = "Text kopieren";
         copyBtn.innerHTML = '<i class="fa-solid fa-copy"></i>';
         copyBtn.addEventListener("click", (e) => {
             e.stopPropagation();
-            const textToCopy = msg.text || "";
-            navigator.clipboard.writeText(textToCopy).then(() => {
-                alert("Nachricht in die Zwischenablage kopiert!");
-            }).catch(err => {
-                console.error("Fehler beim Kopieren:", err);
-            });
+            navigator.clipboard.writeText(msg.text || "").then(() => alert("Nachricht in die Zwischenablage kopiert!"));
         });
         actionsDiv.appendChild(copyBtn);
 
-        // Bearbeiten & Mehrfach-Löschen starten via Mülleimer
         if (isOwn) {
             if (msg.text && !msg.text.includes("hat den Chat") && !msg.text.includes("hat das Forum")) {
                 const editBtn = document.createElement("button");
@@ -1293,9 +1215,7 @@ async function appendSingleMessage(msg, isSystem = false) {
                 if (multiDeleteBar) multiDeleteBar.style.display = "flex";
                 updateMultiDeleteCount();
 
-                document.querySelectorAll(".message-bubble.message-own").forEach(b => {
-                    b.classList.add("selection-mode");
-                });
+                document.querySelectorAll(".message-bubble.message-own").forEach(b => b.classList.add("selection-mode"));
                 bubble.classList.add("selected-bubble");
                 selectionCb.innerHTML = '<i class="fa-solid fa-check"></i>';
             });
@@ -1310,7 +1230,6 @@ async function appendSingleMessage(msg, isSystem = false) {
     authorDiv.innerText = senderName;
     bubble.appendChild(authorDiv);
 
-    // Zitat anzeigen
     if (!isDeleted && msg.reply_to && messagesCacheMap.has(msg.reply_to)) {
         const quotedMsg = messagesCacheMap.get(msg.reply_to);
         const quotedAuthor = String(quotedMsg.sender_id) === String(currentUser?.id) ? "Du" : await fetchUserName(quotedMsg.sender_id);
@@ -1329,12 +1248,9 @@ async function appendSingleMessage(msg, isSystem = false) {
             if (targetElement) {
                 targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 targetElement.classList.add('message-highlight');
-                setTimeout(() => {
-                    targetElement.classList.remove('message-highlight');
-                }, 1500);
+                setTimeout(() => targetElement.classList.remove('message-highlight'), 1500);
             }
         });
-
         bubble.appendChild(quoteDiv);
     }
 
@@ -1373,7 +1289,6 @@ async function appendSingleMessage(msg, isSystem = false) {
                         modalVideoFull.play();
                     }
                 });
-
                 gridContainer.appendChild(videoWrap);
             } else {
                 const imgWrap = document.createElement("div");
@@ -1399,7 +1314,6 @@ async function appendSingleMessage(msg, isSystem = false) {
                     overlay.innerText = `+${urls.length - 4}`;
                     imgWrap.appendChild(overlay);
                 }
-
                 gridContainer.appendChild(imgWrap);
             }
         }
@@ -1408,7 +1322,6 @@ async function appendSingleMessage(msg, isSystem = false) {
 
     if (msg.text && msg.text !== "[Medien]") {
         const textDiv = document.createElement("div");
-        
         if (isSystem) {
             textDiv.innerText = await formatSystemMessage(msg.text, msg.sender_id);
             textDiv.style.fontStyle = "italic";
@@ -1420,23 +1333,54 @@ async function appendSingleMessage(msg, isSystem = false) {
         } else {
             textDiv.innerText = msg.text;
         }
-
         bubble.appendChild(textDiv);
     }
 
-    if (msg.reactions && typeof msg.reactions === 'object' && Object.keys(msg.reactions).length > 0) {
+    // Reaktionen unten angehängt (ohne Counter in 1-zu-1-Chats, mit gerundetem Counter / Tsd. in Gruppen/Formelsicht)
+    if (!isDeleted && msg.reactions && typeof msg.reactions === 'object' && Object.keys(msg.reactions).length > 0) {
         const reactionsDiv = document.createElement("div");
         reactionsDiv.className = "message-reactions-display";
         
         const counts = {};
-        Object.values(msg.reactions).forEach(emoji => {
+        const emojisByCount = {};
+        Object.entries(msg.reactions).forEach(([userId, emoji]) => {
             counts[emoji] = (counts[emoji] || 0) + 1;
         });
 
-        Object.entries(counts).forEach(([emoji, count]) => {
+        // Maximal 4 Smileys anzeigen wie auf dem Formel 1 Beispielbild
+        const sortedEmojis = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 4);
+
+        sortedEmojis.forEach(([emoji, count]) => {
             const pill = document.createElement("span");
-            pill.className = "reaction-pill";
-            pill.innerHTML = `${emoji} <span style="font-size: 10px; opacity: 0.8;">${count}</span>`;
+            const hasUserReacted = msg.reactions[currentUser.id] === emoji;
+            pill.className = `reaction-pill ${hasUserReacted ? 'user-reacted' : ''}`;
+            
+            const totalReactionsCount = Object.keys(msg.reactions).length;
+            const isGroupOrForum = activeChatId === officialForumChatId || allChatsCache.find(c => c.id === activeChatId)?.user1_id === allChatsCache.find(c => c.id === activeChatId)?.user2_id;
+
+            let countDisplay = "";
+            if (isGroupOrForum && totalReactionsCount > 1) {
+                countDisplay = ` <span style="font-size: 11px; opacity: 0.9;">${formatCount(totalReactionsCount)}</span>`;
+            }
+
+            pill.innerHTML = `${emoji}${countDisplay}`;
+            
+            pill.addEventListener("click", async (e) => {
+                e.stopPropagation();
+                const supabase = window.supabaseClient || window.supabase;
+                if (supabase) {
+                    let currentReactions = msg.reactions || {};
+                    if (currentReactions[currentUser.id] === emoji) {
+                        delete currentReactions[currentUser.id];
+                    } else {
+                        currentReactions[currentUser.id] = emoji;
+                    }
+                    await supabase.from("messages").update({ reactions: currentReactions }).eq("id", msg.id);
+                    await loadChatMessages(activeChatId);
+                    await loadUserChats();
+                }
+            });
+
             reactionsDiv.appendChild(pill);
         });
         bubble.appendChild(reactionsDiv);
@@ -1475,18 +1419,12 @@ if (editChatTitleBtn) {
             const trimmedTitle = newTitle.trim();
             const chatObj = allChatsCache.find(c => c.id === activeChatId);
             const isForum = (chatObj && chatObj.user1_id === chatObj.user2_id);
-            
             const articleText = isForum ? "das Forum" : "den Chat";
 
             await supabase.from("chats").update({ title: trimmedTitle }).eq("id", activeChatId);
 
             const sysMsg = `${currentUsername} hat ${articleText} in "${trimmedTitle}" umbenannt.`;
-            await supabase.from("messages").insert([{
-                chat_id: activeChatId,
-                sender_id: currentUser.id,
-                text: sysMsg
-            }]);
-
+            await supabase.from("messages").insert([{ chat_id: activeChatId, sender_id: currentUser.id, text: sysMsg }]);
             await supabase.from("chats").update({ last_message: sysMsg }).eq("id", activeChatId);
 
             loadUserChats();
@@ -1504,17 +1442,9 @@ if (deleteChatBtn) {
         }
 
         if (confirm("Möchtest du dieses Forum / diesen Chat wirklich löschen?")) {
-            const { error: msgErr } = await supabase.from("messages").delete().eq("chat_id", activeChatId);
-            if (msgErr) {
-                alert("Fehler beim Löschen der Nachrichten: " + msgErr.message);
-                return;
-            }
+            await supabase.from("messages").delete().eq("chat_id", activeChatId);
             try { await supabase.from("chat_favorites").delete().eq("chat_id", activeChatId); } catch(e){}
-            const { error: chatErr } = await supabase.from("chats").delete().eq("id", activeChatId);
-            if (chatErr) {
-                alert("Fehler beim Löschen: " + chatErr.message);
-                return;
-            }
+            await supabase.from("chats").delete().eq("id", activeChatId);
             
             activeChatId = null;
             if (waWelcomeScreen) waWelcomeScreen.style.display = "flex";
@@ -1532,17 +1462,9 @@ if (blockUserBtn) {
         if (!activeChatId || activeChatId === officialForumChatId) return;
 
         if (confirm("Möchtest du diesen Nutzer blockieren und den Chat entfernen?")) {
-            const { error: msgErr } = await supabase.from("messages").delete().eq("chat_id", activeChatId);
-            if (msgErr) {
-                alert("Fehler: " + msgErr.message);
-                return;
-            }
+            await supabase.from("messages").delete().eq("chat_id", activeChatId);
             try { await supabase.from("chat_favorites").delete().eq("chat_id", activeChatId); } catch(e){}
-            const { error: chatErr } = await supabase.from("chats").delete().eq("id", activeChatId);
-            if (chatErr) {
-                alert("Fehler: " + chatErr.message);
-                return;
-            }
+            await supabase.from("chats").delete().eq("id", activeChatId);
             
             activeChatId = null;
             if (waWelcomeScreen) waWelcomeScreen.style.display = "flex";
@@ -1588,20 +1510,9 @@ if (chatForm) {
                 editingMessageId = null;
                 if (editPreviewBanner) editPreviewBanner.style.display = "none";
 
-                const { error: editErr } = await supabase.from("messages").update({
-                    text: text,
-                    is_edited: true
-                }).eq("id", targetIdToEdit);
+                await supabase.from("messages").update({ text: text, is_edited: true }).eq("id", targetIdToEdit);
 
-                if (editErr) {
-                    alert("Fehler beim Bearbeiten: " + editErr.message);
-                    throw editErr;
-                }
-
-                if (messageInput) {
-                    messageInput.value = "";
-                    messageInput.style.height = "42px";
-                }
+                if (messageInput) { messageInput.value = ""; messageInput.style.height = "42px"; }
                 if (imageUploadInput) imageUploadInput.value = "";
                 if (imagePreviewContainer) imagePreviewContainer.style.display = "none";
 
@@ -1614,11 +1525,8 @@ if (chatForm) {
             for (const file of files) {
                 const fileExt = file.name.split('.').pop();
                 const fileName = `chat_${Date.now()}_${Math.random().toString(36).substring(2,7)}.${fileExt}`;
-                
                 const { error: uploadErr } = await supabase.storage.from("chat_attachments").upload(fileName, file);
-                if (uploadErr) {
-                    throw uploadErr;
-                }
+                if (uploadErr) throw uploadErr;
                 const { data: pubData } = supabase.storage.from("chat_attachments").getPublicUrl(fileName);
                 mediaUrls.push(pubData.publicUrl);
             }
@@ -1637,10 +1545,7 @@ if (chatForm) {
                 last_message: text || "[Medien]"
             }).eq("id", activeChatId);
 
-            if (messageInput) {
-                messageInput.value = "";
-                messageInput.style.height = "42px";
-            }
+            if (messageInput) { messageInput.value = ""; messageInput.style.height = "42px"; }
             if (imageUploadInput) imageUploadInput.value = "";
             if (imagePreviewContainer) imagePreviewContainer.style.display = "none";
             if (emojiPickerWrapper) emojiPickerWrapper.style.display = "none";
