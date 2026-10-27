@@ -1037,7 +1037,7 @@ async function appendSingleMessage(msg, isSystem = false) {
         const actionsDiv = document.createElement("div");
         actionsDiv.className = "message-actions";
 
-        // 1. Emoji-Smiley Button (öffnet die Quick-Bar im WhatsApp-Stil)
+        // 1. Emoji-Smiley Button (öffnet die Quick-Bar im WhatsApp-Stil exakt vom Button aus)
         const emojiBtn = document.createElement("button");
         emojiBtn.className = "msg-action-btn";
         emojiBtn.title = "Mit Emoji reagieren";
@@ -1080,6 +1080,8 @@ async function appendSingleMessage(msg, isSystem = false) {
 
         const searchInput = document.createElement("input");
         searchInput.type = "text";
+        searchInput.id = `emojiSearch_${msg.id}`;
+        searchInput.name = "emojiSearchInput";
         searchInput.placeholder = "Emoji suchen...";
         
         const grid = document.createElement("div");
@@ -1174,7 +1176,7 @@ async function appendSingleMessage(msg, isSystem = false) {
         actionsDiv.appendChild(quickBar);
         actionsDiv.appendChild(pickerPopup);
 
-        // 2. Pfeil-nach-unten Button (Multifunktions-Dropdown mit intelligentem Smart Positioning)
+        // 2. Pfeil-nach-unten Button (Multifunktions-Dropdown exakt vom Button aus)
         const arrowBtn = document.createElement("button");
         arrowBtn.className = "msg-action-btn";
         arrowBtn.title = "Mehr Optionen";

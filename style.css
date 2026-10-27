@@ -1307,7 +1307,7 @@ body.multi-select-active .message-actions {
     color: #ff4d4d;
 }
 
-/* WhatsApp-Dropdown Menü (Intelligente Ausrichtung) */
+/* WhatsApp-Dropdown Menü (Intelligente Ausrichtung vom Button ausgehend) */
 .wa-msg-dropdown {
     position: absolute;
     background: #15161a;
@@ -1319,16 +1319,15 @@ body.multi-select-active .message-actions {
     z-index: 50;
     min-width: 140px;
     padding: 4px 0;
+    right: 0;
 }
 
 .wa-msg-dropdown.dropdown-above {
     bottom: calc(100% + 4px);
-    left: 0;
 }
 
 .wa-msg-dropdown.dropdown-below {
     top: calc(100% + 4px);
-    left: 0;
 }
 
 .wa-msg-dropdown button {
@@ -1350,7 +1349,7 @@ body.multi-select-active .message-actions {
     color: var(--gsra-yellow);
 }
 
-/* WhatsApp-Reaktionsleiste über dem Smiley (Quick Bar) */
+/* WhatsApp-Reaktionsleiste über dem Smiley (Quick Bar - exakt am Button ausgerichtet) */
 .wa-quick-reaction-bar {
     position: absolute;
     background: #15161a;
@@ -1362,16 +1361,16 @@ body.multi-select-active .message-actions {
     gap: 8px;
     z-index: 70;
     box-shadow: 0 8px 25px rgba(0,0,0,0.8);
+    right: 0;
+    white-space: nowrap;
 }
 
 .wa-quick-reaction-bar.bar-above {
     bottom: calc(100% + 8px);
-    left: 0;
 }
 
 .wa-quick-reaction-bar.bar-below {
     top: calc(100% + 8px);
-    left: 0;
 }
 
 .wa-quick-reaction-bar span {
@@ -1384,7 +1383,7 @@ body.multi-select-active .message-actions {
     transform: scale(1.25);
 }
 
-/* Erweitertes Emoji-Such-Popup */
+/* Erweitertes Emoji-Such-Popup (exakt am Button ausgerichtet) */
 .message-react-picker-popup {
     position: absolute;
     background: #15161a;
@@ -1398,17 +1397,16 @@ body.multi-select-active .message-actions {
     box-shadow: 0 10px 30px rgba(0,0,0,0.9);
     width: 220px;
     max-height: 180px;
+    right: 0;
 }
 
 .message-react-picker-popup.popup-above {
     bottom: calc(100% + 4px);
-    left: 0;
     border-top: 3px solid var(--gsra-yellow);
 }
 
 .message-react-picker-popup.popup-below {
     top: calc(100% + 4px);
-    left: 0;
     border-bottom: 3px solid var(--gsra-yellow);
 }
 
