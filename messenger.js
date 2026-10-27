@@ -30,6 +30,12 @@ function escapeHtml(str) {
         .replace(/'/g, "&#039;");
 }
 
+// Hilfsfunktion: Komprimiert mehrfache Zeilenumbrüche/Leerzeichen zu einer einzeiligen, sauberen Vorschau
+function sanitizeQuoteText(text) {
+    if (!text) return "";
+    return text.replace(/\s+/g, ' ').trim();
+}
+
 const chatsList = document.getElementById("chatsList");
 const chatTitleText = document.getElementById("chatTitleText");
 const chatMessages = document.getElementById("chatMessages");
@@ -70,6 +76,32 @@ const replyPreviewBanner = document.getElementById("replyPreviewBanner");
 const replyBannerAuthor = document.getElementById("replyBannerAuthor");
 const replyBannerText = document.getElementById("replyBannerText");
 const cancelReplyBtn = document.getElementById("cancelReplyBtn");
+
+// Dynamischer Bearbeitungs-Banner
+let editPreviewBanner = document.getElementById("editPreviewBanner");
+if (!editPreviewBanner && chatForm) {
+    editPreviewBanner = document.createElement("div");
+    editPreviewBanner.id = "editPreviewBanner";
+    editPreviewBanner.style.cssText = "display: none; background: #202c33; border-left: 4px solid var(--gsra-blue); padding: 8px 14px; align-items: center; justify-content: space-between; font-size: 13px; color: #fff; margin-bottom: 8px; border-radius: 4px;";
+    editPreviewBanner.innerHTML = `
+        <div style="display: flex; flex-direction: column; overflow: hidden;">
+            <span style="font-weight: bold; color: var(--gsra-blue); font-size: 11px; text-transform: uppercase;">Nachricht bearbeiten</span>
+            <span id="editBannerText" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-muted); font-size: 12px;"></span>
+        </div>
+        <button type="button" id="cancelEditBtn" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px; padding: 4px;" title="Bearbeiten abbrechen"><i class="fa-solid fa-xmark"></i></button>
+    `;
+    chatForm.parentNode.insertBefore(editPreviewBanner, chatForm);
+
+    document.getElementById("cancelEditBtn").addEventListener("click", () => {
+        editingMessageId = null;
+        editPreviewBanner.style.display = "none";
+        if (messageInput) {
+            messageInput.value = "";
+            messageInput.style.height = "42px";
+            messageInput.placeholder = "Gib eine Nachricht ein...";
+        }
+    });
+}
 
 document.addEventListener("DOMContentLoaded", async () => {
     const supabase = window.supabaseClient || window.supabase;
@@ -977,7 +1009,7 @@ async function appendSingleMessage(msg, isSystem = false) {
 
     const isDeleted = msg.text === "Du hast diese Nachricht gelöscht" || msg.text === "Diese Nachricht wurde gelöscht";
 
-    // JEDER ist gleichberechtigt: Nur der Verfasser (isOwn) kann seine eigenen Nachrichten bearbeiten oder löschen!
+    // Aktionsbalken
     if (!isSystem && !isDeleted) {
         const actionsDiv = document.createElement("div");
         actionsDiv.className = "message-actions";
@@ -991,7 +1023,8 @@ async function appendSingleMessage(msg, isSystem = false) {
             replyingToId = msg.id;
             if (replyPreviewBanner && replyBannerAuthor && replyBannerText) {
                 replyBannerAuthor.innerText = `Antwort an ${senderName}`;
-                replyBannerText.innerText = msg.text || "[Medien]";
+                // Hier wird der Zitattext für die Vorschau bereinigt (verhindert Aufblähung bei Leerzeilen)
+                replyBannerText.innerText = sanitizeQuoteText(msg.text || "[Medien]");
                 replyPreviewBanner.style.display = "flex";
             }
             if (messageInput) messageInput.focus();
@@ -1013,7 +1046,7 @@ async function appendSingleMessage(msg, isSystem = false) {
         });
         actionsDiv.appendChild(copyBtn);
 
-        // Bearbeiten & Löschen (nur für den eigenen Sender erlaubt!)
+        // Bearbeiten & Löschen
         if (isOwn) {
             if (msg.text && !msg.text.includes("hat den Chat") && !msg.text.includes("hat das Forum")) {
                 const editBtn = document.createElement("button");
@@ -1027,6 +1060,10 @@ async function appendSingleMessage(msg, isSystem = false) {
                         messageInput.focus();
                         messageInput.style.height = "auto";
                         messageInput.style.height = Math.min(messageInput.scrollHeight, 140) + "px";
+                    }
+                    if (editPreviewBanner) {
+                        document.getElementById("editBannerText").innerText = msg.text;
+                        editPreviewBanner.style.display = "flex";
                     }
                 });
                 actionsDiv.appendChild(editBtn);
@@ -1064,16 +1101,17 @@ async function appendSingleMessage(msg, isSystem = false) {
     authorDiv.innerText = senderName;
     bubble.appendChild(authorDiv);
 
-    // Zitat anzeigen mit Sprung-Funktion
+    // Zitat anzeigen (Mit Sanitize-Funktion, sodass Leerzeilen-Wüsten im Chat-Zitat sofort einzeilig und kompakt dargestellt werden)
     if (!isDeleted && msg.reply_to && messagesCacheMap.has(msg.reply_to)) {
         const quotedMsg = messagesCacheMap.get(msg.reply_to);
         const quotedAuthor = String(quotedMsg.sender_id) === String(currentUser?.id) ? "Du" : await fetchUserName(quotedMsg.sender_id);
+        const sanitizedQuote = sanitizeQuoteText(quotedMsg.text || "[Medien]");
         
         const quoteDiv = document.createElement("div");
         quoteDiv.className = "message-quoted";
         quoteDiv.innerHTML = `
             <div class="message-quoted-author">${escapeHtml(quotedAuthor)}</div>
-            <div style="font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.9;">${escapeHtml(quotedMsg.text || "[Medien]")}</div>
+            <div style="font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.9;">${escapeHtml(sanitizedQuote)}</div>
         `;
         
         quoteDiv.addEventListener("click", () => {
@@ -1174,7 +1212,7 @@ async function appendSingleMessage(msg, isSystem = false) {
         bubble.appendChild(textDiv);
     }
 
-    // Fußzeile mit sauber zentrierter und ausgerichteter „bearbeitet“-Anzeige direkt neben der Uhrzeit
+    // Fußzeile
     const footerDiv = document.createElement("div");
     footerDiv.style.cssText = "display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 4px;";
 
@@ -1320,6 +1358,7 @@ if (chatForm) {
             if (editingMessageId) {
                 const targetIdToEdit = editingMessageId;
                 editingMessageId = null;
+                if (editPreviewBanner) editPreviewBanner.style.display = "none";
 
                 const { error: editErr } = await supabase.from("messages").update({
                     text: text,
