@@ -1161,12 +1161,12 @@ p {
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
 }
 
 .message-bubble {
     max-width: 65%;
-    padding: 10px 15px;
+    padding: 10px 15px 24px 15px; /* Extra Platz unten für angehängte Reaktionen */
     border-radius: 8px;
     font-size: 14px;
     line-height: 1.4;
@@ -1176,6 +1176,7 @@ p {
     white-space: pre-line;
 }
 
+/* Mehrfachauswahl-Markierung im WhatsApp-Stil */
 .message-bubble.selection-mode {
     cursor: pointer;
 }
@@ -1207,11 +1208,13 @@ p {
     border-color: var(--gsra-blue);
 }
 
-body.multi-select-active .wa-msg-hover-controls {
+/* Löschmodus aktiv: Keine Hover-Aktionsleiste anzeigen */
+body.multi-select-active .message-actions {
     display: none !important;
     pointer-events: none !important;
 }
 
+/* Hervorhebung beim Hinspringen auf zitierte Nachricht */
 @keyframes highlightPulse {
     0% { background-color: rgba(255, 204, 0, 0.4); transform: scale(1.02); }
     100% { background-color: inherit; transform: scale(1); }
@@ -1220,104 +1223,67 @@ body.multi-select-active .wa-msg-hover-controls {
     animation: highlightPulse 1.5s ease-in-out;
 }
 
-/* STABILISIERTER HOVER-BEREICH (Inklusive unsichtbarem Padding als Brücke) */
-.message-own .wa-msg-hover-controls {
+/* Aktionsbalken exakt an der Außenkante */
+.message-own .message-actions {
     position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    right: calc(100% + 4px);
-    padding-right: 12px; /* Brücke gegen Lücken-Verschwinden */
+    top: -22px;
+    right: 0;
     display: none;
-    align-items: center;
-    gap: 4px;
+    background: #15161a;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    padding: 2px 6px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.8);
     z-index: 20;
+    gap: 4px;
+    align-items: center;
 }
 
-.message-other .wa-msg-hover-controls {
+.message-other .message-actions {
     position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    left: calc(100% + 4px);
-    padding-left: 12px; /* Brücke gegen Lücken-Verschwinden */
+    top: -22px;
+    left: 0;
     display: none;
-    align-items: center;
-    gap: 4px;
+    background: #15161a;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    padding: 2px 6px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.8);
     z-index: 20;
+    gap: 4px;
+    align-items: center;
 }
 
-.message-bubble:hover .wa-msg-hover-controls {
+.message-bubble:hover .message-actions {
     display: flex;
 }
 
-.wa-msg-icon-btn {
-    background: #15161a;
-    border: 1px solid var(--border-subtle);
+.msg-action-btn {
+    background: transparent;
+    border: none;
     color: var(--text-muted);
+    cursor: pointer;
+    font-size: 13px;
     width: 28px;
     height: 28px;
-    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    cursor: pointer;
-    font-size: 13px;
+    border-radius: 4px;
     transition: all 0.2s ease;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-    position: relative;
 }
 
-.wa-msg-icon-btn:hover {
-    background: var(--gsra-blue);
+.msg-action-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
     color: #fff;
-    border-color: var(--gsra-blue);
 }
 
-/* Vertikales Dropdown-Menü */
-.wa-msg-dropdown {
-    position: absolute;
-    right: 0;
-    background: #15161a;
-    border: 1px solid var(--border-subtle);
-    border-radius: 8px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.9);
-    display: none;
-    flex-direction: column;
-    min-width: 160px;
-    z-index: 50;
-    overflow: hidden;
-}
-
-.wa-msg-dropdown.show {
-    display: flex;
-}
-
-.wa-dropdown-item {
-    padding: 10px 14px;
-    font-size: 13px;
-    color: #fff;
-    background: transparent;
-    border: none;
-    text-align: left;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    transition: background 0.2s ease;
-}
-
-.wa-dropdown-item:hover {
-    background: rgba(0, 85, 255, 0.25);
-    color: var(--gsra-yellow);
-}
-
-.wa-dropdown-item.delete-action {
+.msg-action-btn.delete-btn:hover {
+    background: rgba(255, 77, 77, 0.15);
     color: #ff4d4d;
 }
-.wa-dropdown-item.delete-action:hover {
-    background: rgba(255, 77, 77, 0.2);
-}
 
-/* Emoji-Auswahl-Popup mit intelligenter Ausrichtung */
+/* Kompaktes Emoji-Auswahl-Popup (nahtlos angebunden mit dynamischer Positionierung) */
 .message-react-picker-popup {
     position: absolute;
     background: #15161a;
@@ -1327,20 +1293,21 @@ body.multi-select-active .wa-msg-hover-controls {
     display: none;
     flex-direction: column;
     gap: 6px;
-    z-index: 60;
+    z-index: 40;
     box-shadow: 0 10px 30px rgba(0,0,0,0.9);
     width: 220px;
     max-height: 180px;
-    left: 0;
 }
 
 .message-react-picker-popup.popup-above {
-    bottom: calc(100% + 4px);
+    bottom: calc(100% + 2px);
+    left: 0;
     border-top: 3px solid var(--gsra-yellow);
 }
 
 .message-react-picker-popup.popup-below {
-    top: calc(100% + 4px);
+    top: calc(100% + 2px);
+    left: 0;
     border-bottom: 3px solid var(--gsra-yellow);
 }
 
@@ -1348,11 +1315,10 @@ body.multi-select-active .wa-msg-hover-controls {
     background: #0b0c10;
     border: 1px solid var(--border-subtle);
     color: #fff;
-    padding: 6px 10px;
+    padding: 4px 8px;
     border-radius: 4px;
     font-size: 12px;
     outline: none;
-    width: 100%;
 }
 
 .message-react-picker-grid {
@@ -1367,7 +1333,7 @@ body.multi-select-active .wa-msg-hover-controls {
     font-size: 16px;
     cursor: pointer;
     text-align: center;
-    padding: 4px;
+    padding: 2px;
     border-radius: 4px;
     transition: background 0.2s ease;
 }
@@ -1376,35 +1342,41 @@ body.multi-select-active .wa-msg-hover-controls {
     background: rgba(255, 204, 0, 0.2);
 }
 
-/* Reaktionen nebeneinander in gemeinsamer Blase unten */
+/* Unten angehängte Reaktionen im WhatsApp-Stil mit GSRA-Look */
 .message-reactions-display {
     position: absolute;
-    bottom: -10px;
+    bottom: -12px;
     right: 12px;
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    z-index: 5;
+}
+
+.reaction-pill {
     background: #202c33;
     border: 1px solid var(--border-subtle);
     border-radius: 12px;
     padding: 2px 8px;
+    font-size: 12px;
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    z-index: 5;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
     cursor: pointer;
-    font-size: 12px;
     color: #fff;
-    transition: background 0.2s ease;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    transition: background 0.2s ease, border-color 0.2s ease;
 }
 
-.message-reactions-display:hover {
-    background: rgba(255, 204, 0, 0.15);
+.reaction-pill.user-reacted {
+    background: var(--gsra-blue) !important;
+    border-color: var(--gsra-yellow) !important;
+    box-shadow: var(--blue-glow);
+}
+
+.reaction-pill:hover {
+    background: rgba(255, 204, 0, 0.2);
     border-color: var(--gsra-yellow);
-}
-
-.reaction-pill-item {
-    display: inline-flex;
-    align-items: center;
-    font-size: 13px;
 }
 
 /* Zitat-Block kompakt */
@@ -1439,7 +1411,6 @@ body.multi-select-active .wa-msg-hover-controls {
     background: var(--gsra-blue);
     color: #fff;
     border-bottom-right-radius: 2px;
-    margin-bottom: 14px;
 }
 
 .message-other {
@@ -1448,7 +1419,6 @@ body.multi-select-active .wa-msg-hover-controls {
     color: #fff;
     border-bottom-left-radius: 2px;
     border: 1px solid var(--border-subtle);
-    margin-bottom: 14px;
 }
 
 .wa-media-grid {
