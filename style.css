@@ -1165,7 +1165,7 @@ p {
 }
 
 /* =========================================
-   NACHRICHTENBLASEN & WHATSAPP-HOVER-AKTIONEN
+   NACHRICHTENBLASEN & WHATSAPP-HOVER-AKTIONEN (GESPIEGELT)
 ========================================= */
 .message-bubble {
     max-width: 65%;
@@ -1180,7 +1180,6 @@ p {
     white-space: pre-line;
 }
 
-/* Mehrfachauswahl-Markierung im WhatsApp-Stil */
 .message-bubble.selection-mode {
     cursor: pointer;
 }
@@ -1225,11 +1224,12 @@ body.multi-select-active .message-actions {
     animation: highlightPulse 1.5s ease-in-out;
 }
 
-/* Exakte WhatsApp-Position der Hover-Aktionsleiste oben rechts/links an der Blase */
-.message-own .message-actions,
-.message-other .message-actions {
+/* Eigene Nachricht (rechts): Aktionsleiste links vom Kasten */
+.message-own .message-actions {
     position: absolute;
-    top: -14px;
+    top: 50%;
+    transform: translateY(-50%);
+    right: calc(100% + 8px);
     display: none;
     background: #15161a;
     border: 1px solid var(--border-subtle);
@@ -1240,18 +1240,42 @@ body.multi-select-active .message-actions {
     gap: 3px;
     align-items: center;
 }
-.message-own .message-actions { right: 8px; }
-.message-other .message-actions { left: 8px; }
+
+/* Fremde Nachricht (links): Aktionsleiste rechts vom Kasten */
+.message-other .message-actions {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    left: calc(100% + 8px);
+    display: none;
+    background: #15161a;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    padding: 2px 4px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.8);
+    z-index: 20;
+    gap: 3px;
+    align-items: center;
+}
 
 /* Unsichtbare Hover-Brücke */
-.message-own .message-actions::after,
+.message-own .message-actions::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: -8px;
+    width: 10px;
+    background: transparent;
+}
+
 .message-other .message-actions::after {
     content: '';
     position: absolute;
-    bottom: -6px;
-    left: 0;
-    right: 0;
-    height: 8px;
+    top: 0;
+    bottom: 0;
+    left: -8px;
+    width: 10px;
     background: transparent;
 }
 
@@ -1284,11 +1308,11 @@ body.multi-select-active .message-actions {
     color: #ff4d4d;
 }
 
-/* WhatsApp-Dropdown Menü für den Pfeil-nach-unten-Button */
+/* WhatsApp-Dropdown Menü */
 .wa-msg-dropdown {
     position: absolute;
     top: calc(100% + 4px);
-    right: 0;
+    left: 0;
     background: #15161a;
     border: 1px solid var(--border-subtle);
     border-radius: 6px;
@@ -1319,7 +1343,7 @@ body.multi-select-active .message-actions {
     color: var(--gsra-yellow);
 }
 
-/* WhatsApp-Reaktions-Popup über dem Emoji-Button */
+/* WhatsApp-Reaktions-Popup (über dem Smiley-Button) */
 .message-react-picker-popup {
     position: absolute;
     background: #15161a;
@@ -1337,13 +1361,13 @@ body.multi-select-active .message-actions {
 
 .message-react-picker-popup.popup-above {
     bottom: calc(100% + 4px);
-    right: 0;
+    left: 0;
     border-top: 3px solid var(--gsra-yellow);
 }
 
 .message-react-picker-popup.popup-below {
     top: calc(100% + 4px);
-    right: 0;
+    left: 0;
     border-bottom: 3px solid var(--gsra-yellow);
 }
 

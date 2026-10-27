@@ -611,10 +611,11 @@ function setupGlobalMessageListener() {
 
     if (globalListenerChannel) {
         supabase.removeChannel(globalListenerChannel);
+        globalListenerChannel = null;
     }
 
     globalListenerChannel = supabase
-        .channel('global_messages_channel')
+        .channel(`global_messages_channel_${Math.random()}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, async (payload) => {
             const msg = payload.new;
             const targetChat = allChatsCache.find(c => c.id === msg.chat_id);
@@ -934,8 +935,9 @@ async function loadChatMessages(chatId) {
 
     await renderMessages(messages || []);
 
+    const channelName = `chat_${chatId}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     messageSubscription = supabase
-        .channel(`chat_${chatId}`)
+        .channel(channelName)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` }, async () => {
             const { data: updatedMessages } = await supabase
                 .from("messages")
@@ -1035,7 +1037,7 @@ async function appendSingleMessage(msg, isSystem = false) {
         const actionsDiv = document.createElement("div");
         actionsDiv.className = "message-actions";
 
-        // 1. Emoji-Smiley Button (öffnet das Reaktions-Popup mit Suche)
+        // 1. Emoji-Smiley Button
         const emojiBtn = document.createElement("button");
         emojiBtn.className = "msg-action-btn";
         emojiBtn.title = "Mit Emoji reagieren";
@@ -1116,7 +1118,7 @@ async function appendSingleMessage(msg, isSystem = false) {
         actionsDiv.appendChild(emojiBtn);
         actionsDiv.appendChild(pickerPopup);
 
-        // 2. Pfeil-nach-unten Button (öffnet das Multifunktions-Dropdown)
+        // 2. Pfeil-nach-unten Button (Multifunktions-Dropdown)
         const arrowBtn = document.createElement("button");
         arrowBtn.className = "msg-action-btn";
         arrowBtn.title = "Mehr Optionen";
@@ -1344,7 +1346,6 @@ async function appendSingleMessage(msg, isSystem = false) {
 
     bubble.appendChild(footerDiv);
 
-    // Reaktionen unten angehängt (WhatsApp-Stil)
     if (!isDeleted && msg.reactions && typeof msg.reactions === 'object' && Object.keys(msg.reactions).length > 0) {
         const reactionsDiv = document.createElement("div");
         reactionsDiv.className = "message-reactions-display";
