@@ -1,1568 +1,1563 @@
 /* =========================================
-   GSRA - Messenger Logik (Vollständig & Korrigiert)
+   GSRA - Master Design (Vollständig & Ungekürzt)
 ========================================= */
 
-let currentUser = null;
-let currentUsername = "";
-let activeChatId = null;
-let messageSubscription = null;
-let globalListenerChannel = null;
-let allChatsCache = [];
-let currentFilter = 'all';
-let userFavorites = new Set();
-let isAdminUser = false;
-let userNamesCache = {};
-let officialForumChatId = null;
-let isRendering = false;
-
-let replyingToId = null;
-let editingMessageId = null;
-let isMultiSelectMode = false;
-let selectedMessageIds = new Set();
-let messagesCacheMap = new Map();
-
-function escapeHtml(str) {
-    if (!str) return "";
-    return String(str)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-}
-
-function sanitizeQuoteText(text) {
-    if (!text) return "";
-    return text.replace(/\s+/g, ' ').trim();
-}
-
-// Hilfsfunktion zum Runden großer Zahlen (z.B. 27900 -> "27,9 Tsd.")
-function formatCount(num) {
-    if (num >= 1000000) {
-        return (num / 1000000).toFixed(1).replace('.', ',') + " Mio.";
-    }
-    if (num >= 1000) {
-        return (num / 1000).toFixed(1).replace('.', ',') + " Tsd.";
-    }
-    return num.toString();
-}
-
-const chatsList = document.getElementById("chatsList");
-const chatTitleText = document.getElementById("chatTitleText");
-const chatMessages = document.getElementById("chatMessages");
-const messageInput = document.getElementById("messageInput");
-const sendBtn = document.getElementById("sendBtn");
-const chatForm = document.getElementById("chatForm");
-const chatActions = document.getElementById("chatActions");
-const editChatTitleBtn = document.getElementById("editChatTitleBtn");
-const deleteChatBtn = document.getElementById("deleteChatBtn");
-const blockUserBtn = document.getElementById("blockUserBtn");
-const addMemberBtn = document.getElementById("addMemberBtn");
-const imageUploadInput = document.getElementById("imageUploadInput");
-const emojiToggleBtn = document.getElementById("emojiToggleBtn");
-const emojiPickerWrapper = document.getElementById("emojiPickerWrapper");
-const imagePreviewContainer = document.getElementById("imagePreviewContainer");
-const previewThumbsList = document.getElementById("previewThumbsList");
-const imagePreviewName = document.getElementById("imagePreviewName");
-const removeImageBtn = document.getElementById("removeImageBtn");
-const imageModal = document.getElementById("imageModal");
-const modalImageFull = document.getElementById("modalImageFull");
-const modalVideoFull = document.getElementById("modalVideoFull");
-const closeImageModal = document.getElementById("closeImageModal");
-const waWelcomeScreen = document.getElementById("waWelcomeScreen");
-const waChatActivePane = document.getElementById("waChatActivePane");
-const chatSearchInput = document.getElementById("chatSearchInput");
-const tileInvite = document.getElementById("tileInvite");
-const tileAddFriend = document.getElementById("tileAddFriend");
-const tileForum = document.getElementById("tileForum");
-const addFriendBtn = document.getElementById("addFriendBtn");
-const newChatPlusBtn = document.getElementById("newChatPlusBtn");
-const newForumModal = document.getElementById("newForumModal");
-const closeForumModal = document.getElementById("closeForumModal");
-const newForumForm = document.getElementById("newForumForm");
-const forumNameInput = document.getElementById("forumNameInput");
-
-const replyPreviewBanner = document.getElementById("replyPreviewBanner");
-const replyBannerAuthor = document.getElementById("replyBannerAuthor");
-const replyBannerText = document.getElementById("replyBannerText");
-const cancelReplyBtn = document.getElementById("cancelReplyBtn");
-
-let editPreviewBanner = document.getElementById("editPreviewBanner");
-if (!editPreviewBanner && chatForm) {
-    editPreviewBanner = document.createElement("div");
-    editPreviewBanner.id = "editPreviewBanner";
-    editPreviewBanner.style.cssText = "display: none; background: #202c33; border-left: 4px solid var(--gsra-blue); padding: 8px 14px; align-items: center; justify-content: space-between; font-size: 13px; color: #fff; margin-bottom: 8px; border-radius: 4px; width: 100%; box-sizing: border-box;";
-    editPreviewBanner.innerHTML = `
-        <div style="display: flex; flex-direction: column; overflow: hidden; max-width: calc(100% - 30px);">
-            <span style="font-weight: bold; color: var(--gsra-blue); font-size: 11px; text-transform: uppercase;">Nachricht bearbeiten</span>
-            <span id="editBannerText" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-muted); font-size: 12px;"></span>
-        </div>
-        <button type="button" id="cancelEditBtn" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px; padding: 4px; flex-shrink: 0;" title="Bearbeiten abbrechen"><i class="fa-solid fa-xmark"></i></button>
-    `;
-    chatForm.parentNode.insertBefore(editPreviewBanner, chatForm);
-
-    document.getElementById("cancelEditBtn").addEventListener("click", () => {
-        editingMessageId = null;
-        editPreviewBanner.style.display = "none";
-        if (messageInput) {
-            messageInput.value = "";
-            messageInput.style.height = "42px";
-            messageInput.placeholder = "Gib eine Nachricht ein...";
-        }
-    });
-}
-
-let multiDeleteBar = document.getElementById("multiDeleteBar");
-if (!multiDeleteBar && chatForm) {
-    multiDeleteBar = document.createElement("div");
-    multiDeleteBar.id = "multiDeleteBar";
-    multiDeleteBar.style.cssText = "display: none; background: #202c33; border-top: 1px solid var(--border-subtle); padding: 12px 20px; align-items: center; justify-content: space-between; font-size: 14px; color: #fff; flex-shrink: 0;";
-    multiDeleteBar.innerHTML = `
-        <span id="multiDeleteCount" style="font-weight: bold; color: var(--gsra-yellow);">0 ausgewählt</span>
-        <div style="display: flex; gap: 12px; align-items: center;">
-            <button type="button" id="executeMultiDeleteBtn" class="btn-delete" style="padding: 6px 14px;"><i class="fa-solid fa-trash"></i> Ausgewählte löschen</button>
-            <button type="button" id="cancelMultiDeleteBtn" class="msg-action-btn" style="font-size: 18px;" title="Abbrechen"><i class="fa-solid fa-xmark"></i></button>
-        </div>
-    `;
-    chatForm.parentNode.insertBefore(multiDeleteBar, chatForm);
-
-    document.getElementById("cancelMultiDeleteBtn").addEventListener("click", () => {
-        exitMultiSelectMode();
-    });
-
-    document.getElementById("executeMultiDeleteBtn").addEventListener("click", async () => {
-        if (selectedMessageIds.size === 0) return;
-        if (confirm(`Möchtest du ${selectedMessageIds.size} ausgewählte Nachricht(en) wirklich löschen?`)) {
-            const supabase = window.supabaseClient || window.supabase;
-            if (!supabase) return;
-
-            for (const msgId of selectedMessageIds) {
-                const deleteText = "Du hast diese Nachricht gelöscht";
-                await supabase.from("messages").update({
-                    text: deleteText,
-                    image_url: null,
-                    reply_to: null,
-                    is_edited: false,
-                    reactions: {} // Reaktionen beim Löschen komplett entfernen
-                }).eq("id", msgId);
-            }
-
-            exitMultiSelectMode();
-            await loadChatMessages(activeChatId);
-            await loadUserChats();
-        }
-    });
-}
-
-function exitMultiSelectMode() {
-    isMultiSelectMode = false;
-    selectedMessageIds.clear();
-    document.body.classList.remove("multi-select-active");
-    if (multiDeleteBar) multiDeleteBar.style.display = "none";
-    document.querySelectorAll(".message-bubble").forEach(b => {
-        b.classList.remove("selection-mode", "selected-bubble");
-        const cb = b.querySelector(".msg-selection-checkbox");
-        if (cb) cb.innerHTML = "";
-    });
-}
-
-function updateMultiDeleteCount() {
-    const countSpan = document.getElementById("multiDeleteCount");
-    if (countSpan) {
-        countSpan.innerText = `${selectedMessageIds.size} ausgewählt`;
-    }
-}
-
-document.addEventListener("DOMContentLoaded", async () => {
-    const supabase = window.supabaseClient || window.supabase;
-    if (!supabase) return;
-
-    const { data: { session } } = await supabase.auth.getSession();
-    currentUser = session?.user || null;
-
-    if (!currentUser || !currentUser.id) {
-        if (chatsList) chatsList.innerHTML = `<p style="padding: 15px; font-size: 13px; color: var(--text-muted);">Bitte logge dich ein.</p>`;
-        return;
-    }
-
-    currentUsername = await fetchUserName(currentUser.id);
-    allChatsCache = [];
-    activeChatId = null;
-
-    await checkUserAdminStatus();
-    await loadFavorites();
-    await loadUserChats();
-    await checkUrlParameters();
-
-    document.querySelectorAll(".wa-pill").forEach(pill => {
-        pill.addEventListener("click", (e) => {
-            document.querySelectorAll(".wa-pill").forEach(p => p.classList.remove("active"));
-            e.target.classList.add("active");
-            currentFilter = e.target.getAttribute("data-filter");
-            renderChatsList();
-        });
-    });
-
-    if (chatSearchInput) {
-        chatSearchInput.addEventListener("input", () => {
-            renderChatsList();
-        });
-    }
-
-    if (cancelReplyBtn) {
-        cancelReplyBtn.addEventListener("click", () => {
-            replyingToId = null;
-            if (replyPreviewBanner) replyPreviewBanner.style.display = "none";
-        });
-    }
-
-    if (messageInput) {
-        messageInput.addEventListener("input", () => {
-            messageInput.style.height = "auto";
-            messageInput.style.height = Math.min(messageInput.scrollHeight, 140) + "px";
-        });
-
-        messageInput.addEventListener("keydown", (e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                if (chatForm) chatForm.requestSubmit();
-            }
-        });
-    }
-
-    if (newChatPlusBtn && newForumModal) {
-        newChatPlusBtn.addEventListener("click", () => {
-            newForumModal.style.display = "flex";
-        });
-    }
-
-    if (closeForumModal && newForumModal) {
-        closeForumModal.addEventListener("click", () => {
-            newForumModal.style.display = "none";
-        });
-    }
-
-    if (newForumForm) {
-        newForumForm.addEventListener("submit", async (e) => {
-            e.preventDefault();
-            const forumName = forumNameInput.value.trim();
-            if (!forumName || !supabase || !currentUser?.id) return;
-
-            const sysMsg = `${currentUsername} hat das Forum erstellt.`;
-            const { data: createdGroup, error } = await supabase.from("chats").insert([{
-                user1_id: currentUser.id,
-                user2_id: currentUser.id,
-                title: forumName,
-                last_message: sysMsg
-            }]).select().single();
-
-            if (!error && createdGroup) {
-                await supabase.from("messages").insert([{
-                    chat_id: createdGroup.id,
-                    sender_id: currentUser.id,
-                    text: sysMsg
-                }]);
-
-                newForumModal.style.display = "none";
-                forumNameInput.value = "";
-                await loadUserChats();
-            } else {
-                alert("Fehler beim Erstellen: " + (error?.message || "Unbekannter Fehler"));
-            }
-        });
-    }
-
-    const handleAddFriend = async () => {
-        if (!currentUser?.id) return;
-        const friendName = prompt("Gib den Benutzernamen (Username) deines Freundes ein:");
-        if (!friendName) return;
-
-        const { data: foundProfiles, error } = await supabase
-            .from("profiles")
-            .select("id, username")
-            .ilike("username", friendName.trim())
-            .maybeSingle();
-
-        if (error || !foundProfiles) {
-            alert("Nutzer nicht gefunden.");
-            return;
-        }
-
-        if (foundProfiles.id === currentUser.id) {
-            alert("Du kannst dich nicht selbst hinzufügen.");
-            return;
-        }
-
-        const [u1, u2] = [currentUser.id, foundProfiles.id].sort();
-        let existingChat = allChatsCache.find(c => c.user1_id !== c.user2_id && ((c.user1_id === u1 && c.user2_id === u2)));
-
-        if (!existingChat) {
-            const { data: fetched } = await supabase
-                .from("chats")
-                .select("*")
-                .eq("user1_id", u1)
-                .eq("user2_id", u2)
-                .maybeSingle();
-
-            if (fetched && fetched.user1_id !== fetched.user2_id) {
-                existingChat = fetched;
-            } else {
-                const sysMsg = `${currentUsername} hat den Chat eröffnet.`;
-                const { data: newChat, error: newErr } = await supabase
-                    .from("chats")
-                    .insert([{
-                        user1_id: u1,
-                        user2_id: u2,
-                        title: null,
-                        last_message: sysMsg
-                    }])
-                    .select()
-                    .single();
-
-                if (!newErr && newChat) {
-                    await supabase.from("messages").insert([{
-                        chat_id: newChat.id,
-                        sender_id: currentUser.id,
-                        text: sysMsg
-                    }]);
-                    existingChat = newChat;
-                }
-            }
-        }
-
-        if (existingChat) {
-            activeChatId = existingChat.id;
-            markChatAsRead(activeChatId);
-            if (waWelcomeScreen) waWelcomeScreen.style.display = "none";
-            if (waChatActivePane) waChatActivePane.style.display = "flex";
-            openChat(existingChat.id, foundProfiles.username, existingChat.title);
-            await loadUserChats();
-        }
-    };
-
-    if (tileAddFriend) tileAddFriend.addEventListener("click", handleAddFriend);
-    if (addFriendBtn) addFriendBtn.addEventListener("click", handleAddFriend);
-
-    if (tileInvite) {
-        tileInvite.addEventListener("click", () => {
-            const inviteLink = window.location.origin + "/messenger.html";
-            prompt("Kopiere diesen Link, um einen Freund einzuladen:", inviteLink);
-        });
-    }
-
-    if (tileForum) {
-        tileForum.addEventListener("click", () => {
-            if (officialForumChatId) {
-                activeChatId = officialForumChatId;
-                markChatAsRead(activeChatId);
-                if (waWelcomeScreen) waWelcomeScreen.style.display = "none";
-                if (waChatActivePane) waChatActivePane.style.display = "flex";
-                renderChatsList();
-                openForumChat(allChatsCache.find(c => c.id === officialForumChatId));
-            }
-        });
-    }
-
-    if (addMemberBtn) {
-        addMemberBtn.addEventListener("click", async () => {
-            if (!currentUser?.id || !activeChatId) return;
-            const memberName = prompt("Gib den Benutzernamen des hinzuzufügenden Mitglieds ein:");
-            if (!memberName) return;
-
-            const { data: targetUser } = await supabase
-                .from("profiles")
-                .select("id, username")
-                .ilike("username", memberName.trim())
-                .maybeSingle();
-
-            if (!targetUser) {
-                alert("Nutzer nicht gefunden.");
-                return;
-            }
-
-            if (targetUser.id === currentUser.id) {
-                alert("Du kannst dich nicht selbst hinzufügen.");
-                return;
-            }
-
-            const sysMsg = `${currentUsername} hat ${targetUser.username} zum Forum hinzugefügt.`;
-
-            await supabase.from("chats").update({
-                last_message: sysMsg
-            }).eq("id", activeChatId);
-
-            await supabase.from("messages").insert([{
-                chat_id: activeChatId,
-                sender_id: currentUser.id,
-                text: sysMsg
-            }]);
-
-            await loadUserChats();
-            alert(`Mitglied ${targetUser.username} wurde erfolgreich hinzugefügt!`);
-        });
-    }
-
-    if (emojiToggleBtn && emojiPickerWrapper) {
-        emojiToggleBtn.addEventListener("click", (e) => {
-            e.stopPropagation();
-            const isVisible = emojiPickerWrapper.style.display === "block";
-            emojiPickerWrapper.style.display = isVisible ? "none" : "block";
-        });
-
-        document.addEventListener("click", (e) => {
-            if (!emojiPickerWrapper.contains(e.target) && e.target !== emojiToggleBtn) {
-                emojiPickerWrapper.style.display = "none";
-            }
-        });
-
-        const picker = emojiPickerWrapper.querySelector("emoji-picker");
-        if (picker) {
-            picker.addEventListener("emoji-click", (event) => {
-                if (messageInput) {
-                    messageInput.value += event.detail.unicode;
-                    messageInput.focus();
-                    messageInput.dispatchEvent(new Event('input'));
-                }
-            });
-        }
-    }
-
-    if (imageUploadInput) {
-        imageUploadInput.addEventListener("change", () => {
-            const files = Array.from(imageUploadInput.files);
-            if (files.length > 0) {
-                const MAX_FILE_SIZE = 200 * 1024 * 1024;
-                for (const file of files) {
-                    if (file.size > MAX_FILE_SIZE) {
-                        alert("Dein Medium konnte nicht hochgeladen werden, da die Datei das Dateigrößenlimit überschreitet.");
-                        imageUploadInput.value = "";
-                        if (imagePreviewContainer) imagePreviewContainer.style.display = "none";
-                        return;
-                    }
-                }
-                if (previewThumbsList) previewThumbsList.innerHTML = "";
-                files.forEach(file => {
-                    const isVid = file.type.startsWith('video/');
-                    const elem = isVid ? document.createElement("video") : document.createElement("img");
-                    elem.src = URL.createObjectURL(file);
-                    elem.style.cssText = "width: 40px; height: 40px; object-fit: cover; border-radius: 4px; border: 1px solid var(--gsra-blue);";
-                    if (previewThumbsList) previewThumbsList.appendChild(elem);
-                });
-                if (imagePreviewName) imagePreviewName.textContent = `${files.length} Datei(en) ausgewählt`;
-                if (imagePreviewContainer) imagePreviewContainer.style.display = "flex";
-            }
-        });
-    }
-
-    if (removeImageBtn) {
-        removeImageBtn.addEventListener("click", () => {
-            if (imageUploadInput) imageUploadInput.value = "";
-            if (previewThumbsList) previewThumbsList.innerHTML = "";
-            if (imagePreviewContainer) imagePreviewContainer.style.display = "none";
-        });
-    }
-
-    if (closeImageModal && imageModal) {
-        closeImageModal.addEventListener("click", () => {
-            imageModal.style.display = "none";
-            if (modalVideoFull) { modalVideoFull.style.display = "none"; }
-            if (modalImageFull) modalImageFull.style.display = "none";
-        });
-        imageModal.addEventListener("click", (e) => {
-            if (e.target === imageModal) {
-                imageModal.style.display = "none";
-                if (modalVideoFull) { modalVideoFull.style.display = "none"; }
-                if (modalImageFull) modalImageFull.style.display = "none";
-            }
-        });
-    }
-});
-
-async function checkUserAdminStatus() {
-    const supabase = window.supabaseClient || window.supabase;
-    if (!supabase || !currentUser?.id) return;
-    try {
-        const { data } = await supabase
-            .from("profiles")
-            .select("role")
-            .eq("id", currentUser.id)
-            .maybeSingle();
-        isAdminUser = data?.role === 'admin';
-    } catch (e) {
-        isAdminUser = false;
-    }
-}
-
-async function loadFavorites() {
-    const supabase = window.supabaseClient || window.supabase;
-    if (!supabase || !currentUser?.id) return;
-    try {
-        const { data } = await supabase
-            .from("chat_favorites")
-            .select("chat_id")
-            .eq("user_id", currentUser.id);
-
-        if (data) {
-            userFavorites = new Set(data.map(f => f.chat_id));
-        }
-    } catch (e) {
-        userFavorites = new Set();
-    }
-}
-
-async function toggleFavorite(chatId, event) {
-    if (event) event.stopPropagation();
-    const supabase = window.supabaseClient || window.supabase;
-    if (!supabase || !currentUser?.id) return;
-
-    try {
-        if (userFavorites.has(chatId)) {
-            await supabase.from("chat_favorites").delete().match({ user_id: currentUser.id, chat_id: chatId });
-            userFavorites.delete(chatId);
-        } else {
-            await supabase.from("chat_favorites").insert([{ user_id: currentUser.id, chat_id: chatId }]);
-            userFavorites.add(chatId);
-        }
-        renderChatsList();
-    } catch (e) {
-        console.error("Favoriten-Fehler:", e);
-    }
-}
-
-async function fetchUserName(userId) {
-    if (userNamesCache[userId]) return userNamesCache[userId];
-    const supabase = window.supabaseClient || window.supabase;
-    if (!supabase || !userId) return `Fahrer`;
+:root {
+    --gsra-blue: #0055ff;
+    --gsra-yellow: #ffcc00;
     
-    try {
-        const { data } = await supabase
-            .from("profiles")
-            .select("username, full_name")
-            .eq("id", userId)
-            .maybeSingle();
-
-        const name = data?.username || data?.full_name || `Fahrer`;
-        userNamesCache[userId] = name;
-        return name;
-    } catch (e) {
-        return `Fahrer`;
-    }
-}
-
-async function checkUrlParameters() {
-    const supabase = window.supabaseClient || window.supabase;
-    if (!supabase || !currentUser?.id) return;
-    const urlParams = new URLSearchParams(window.location.search);
-    const sellerId = urlParams.get("sellerId");
-    const sellerName = urlParams.get("sellerName") || "Verkäufer";
-    const itemTitle = urlParams.get("itemTitle");
-    const friendId = urlParams.get("friendId");
-
-    const targetId = sellerId || friendId;
-    if (targetId && targetId !== currentUser.id) {
-        const [u1, u2] = [currentUser.id, targetId].sort();
-        let existingChat = null;
-
-        const { data: fetched } = await supabase
-            .from("chats")
-            .select("*")
-            .eq("user1_id", u1)
-            .eq("user2_id", u2)
-            .maybeSingle();
-
-        if (fetched && fetched.user1_id !== fetched.user2_id) {
-            existingChat = fetched;
-        } else {
-            const sysMsg = itemTitle ? `Anfrage zu: ${itemTitle}` : `${currentUsername} hat den Chat eröffnet.`;
-            const { data: newChat, error } = await supabase
-                .from("chats")
-                .insert([{
-                    user1_id: u1,
-                    user2_id: u2,
-                    title: null,
-                    last_message: sysMsg
-                }])
-                .select()
-                .single();
-
-            if (!error && newChat) {
-                await supabase.from("messages").insert([{
-                    chat_id: newChat.id,
-                    sender_id: currentUser.id,
-                    text: sysMsg
-                }]);
-                existingChat = newChat;
-            }
-        }
-
-        if (existingChat) {
-            activeChatId = existingChat.id;
-            markChatAsRead(activeChatId);
-            if (waWelcomeScreen) waWelcomeScreen.style.display = "none";
-            if (waChatActivePane) waChatActivePane.style.display = "flex";
-            openChat(existingChat.id, sellerName, existingChat.title);
-            window.history.replaceState({}, document.title, window.location.pathname);
-        }
-    }
-}
-
-function setupGlobalMessageListener() {
-    const supabase = window.supabaseClient || window.supabase;
-    if (!supabase || !currentUser?.id) return;
-
-    if (globalListenerChannel) {
-        supabase.removeChannel(globalListenerChannel);
-    }
-
-    globalListenerChannel = supabase
-        .channel('global_messages_channel')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, async (payload) => {
-            const msg = payload.new;
-            const targetChat = allChatsCache.find(c => c.id === msg.chat_id);
-            if (targetChat) {
-                targetChat.last_msg_time = msg.created_at || new Date().toISOString();
-                
-                // Exakte WhatsApp-Vorschau für Reaktionen in der Sidebar
-                if (msg.reactions && Object.keys(msg.reactions).length > 0) {
-                    const lastUserId = Object.keys(msg.reactions).pop();
-                    const lastEmoji = msg.reactions[lastUserId];
-                    const reactorName = (String(lastUserId) === String(currentUser.id)) ? "Du" : await fetchUserName(lastUserId);
-                    targetChat.last_message = `${reactorName} hat mit ${lastEmoji} reagiert`;
-                } else {
-                    targetChat.last_message = msg.text || "[Medien]";
-                }
-
-                if (msg.sender_id !== currentUser.id) {
-                    if (targetChat.id !== activeChatId || document.hidden) {
-                        targetChat.unread = true;
-                    }
-                }
-                allChatsCache.sort((a, b) => new Date(b.last_msg_time || b.created_at || 0) - new Date(a.last_msg_time || a.created_at || 0));
-                updateGlobalUnreadState();
-                renderChatsList();
-            } else {
-                loadUserChats();
-            }
-        })
-        .subscribe();
-}
-
-function updateGlobalUnreadState() {
-    const hasUnread = allChatsCache.some(c => c.unread === true);
-    localStorage.setItem('gsra_has_unread', hasUnread ? 'true' : 'false');
-
-    const navBtn = document.getElementById("messengerNavBtn") || document.querySelector('a[href="messenger.html"]');
-    if (navBtn) {
-        if (hasUnread) {
-            navBtn.classList.add("nav-unread-glow");
-        } else {
-            navBtn.classList.remove("nav-unread-glow");
-        }
-    }
-}
-
-function getLastReadTime(chatId) {
-    if (!currentUser?.id) return 0;
-    const val = localStorage.getItem(`gsra_last_read_${currentUser.id}_${chatId}`);
-    return val ? new Date(val).getTime() : 0;
-}
-
-function markChatAsRead(chatId) {
-    if (!currentUser?.id || !chatId) return;
-    localStorage.setItem(`gsra_last_read_${currentUser.id}_${chatId}`, new Date().toISOString());
-    const chatObj = allChatsCache.find(c => c.id === chatId);
-    if (chatObj) {
-        chatObj.unread = false;
-    }
-    updateGlobalUnreadState();
-}
-
-async function loadUserChats() {
-    const supabase = window.supabaseClient || window.supabase;
-    if (!chatsList || !currentUser?.id || !supabase) return;
-
-    let rawChats = [];
-    try {
-        const { data: chatsAsUser1 } = await supabase.from("chats").select("*").eq("user1_id", currentUser.id);
-        const { data: chatsAsUser2 } = await supabase.from("chats").select("*").eq("user2_id", currentUser.id);
-        const { data: groupChats } = await supabase.from("chats").select("*").not("title", "is", null);
-
-        const combined = [...(chatsAsUser1 || []), ...(chatsAsUser2 || []), ...(groupChats || [])];
-        const map = new Map();
-        combined.forEach(c => map.set(c.id, c));
-        rawChats = Array.from(map.values());
-    } catch (err) {
-        console.error("Fehler beim Laden der Chats:", err);
-    }
-
-    let forumChat = rawChats.find(c => c.title === 'GSRA Official / Community Forum' || (c.title && c.title.includes('Official')));
+    --bg-main: #0b0c10;
+    --bg-card: #15161a;
+    --text-light: #ffffff;
+    --text-muted: #a0a5b1;
     
-    if (!forumChat) {
-        const { data: globalForum } = await supabase.from("chats").select("*").eq("title", 'GSRA Official / Community Forum').maybeSingle();
-        if (globalForum) {
-            forumChat = globalForum;
-            rawChats.unshift(globalForum);
-        } else if (isAdminUser) {
-            const { data: createdForum, err: forumErr } = await supabase.from("chats").insert([{
-                user1_id: currentUser.id,
-                user2_id: currentUser.id,
-                title: 'GSRA Official / Community Forum',
-                last_message: 'Willkommen im offiziellen Community-Forum!'
-            }]).select().single();
-
-            if (!forumErr && createdForum) {
-                forumChat = createdForum;
-                rawChats.unshift(createdForum);
-            }
-        }
-    }
-
-    if (forumChat) officialForumChatId = forumChat.id;
-
-    let accessibleChats = [];
-    for (const chat of rawChats) {
-        const isOfficial = (chat.id === officialForumChatId || (chat.title && chat.title.includes('Official')));
-        const isDirect = (chat.user1_id !== chat.user2_id);
-        const isGroup = (chat.user1_id === chat.user2_id);
-        if (isOfficial || isDirect || isGroup) accessibleChats.push(chat);
-    }
-
-    let uniqueMap = new Map();
-    for (const chat of accessibleChats) {
-        if (!uniqueMap.has(chat.id)) uniqueMap.set(chat.id, chat);
-    }
-
-    allChatsCache = Array.from(uniqueMap.values());
-
-    for (const chat of allChatsCache) {
-        if (chat.user1_id !== chat.user2_id) {
-            const otherUserId = chat.user1_id === currentUser.id ? chat.user2_id : chat.user1_id;
-            await fetchUserName(otherUserId);
-        }
-
-        const { data: latestMsg } = await supabase
-            .from("messages")
-            .select("created_at, sender_id, text, reactions")
-            .eq("chat_id", chat.id)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-        if (latestMsg) {
-            chat.last_msg_time = latestMsg.created_at;
-            if (latestMsg.reactions && Object.keys(latestMsg.reactions).length > 0) {
-                const lastUserId = Object.keys(latestMsg.reactions).pop();
-                const lastEmoji = latestMsg.reactions[lastUserId];
-                const reactorName = (String(lastUserId) === String(currentUser.id)) ? "Du" : await fetchUserName(lastUserId);
-                chat.last_message = `${reactorName} hat mit ${lastEmoji} reagiert`;
-            } else {
-                chat.last_message = latestMsg.text || "[Medien]";
-            }
-        } else {
-            chat.last_msg_time = chat.created_at;
-            chat.last_message = "Keine Nachrichten";
-        }
-
-        if (chat.id === activeChatId) {
-            chat.unread = false;
-        } else {
-            const lastRead = getLastReadTime(chat.id);
-            const lastReadIso = lastRead === 0 ? '1970-01-01T00:00:00.000Z' : new Date(lastRead).toISOString();
-            const { data: unreadMsgs } = await supabase
-                .from("messages")
-                .select("id")
-                .eq("chat_id", chat.id)
-                .neq("sender_id", currentUser.id)
-                .gt("created_at", lastReadIso)
-                .limit(1);
-
-            chat.unread = Boolean(unreadMsgs && unreadMsgs.length > 0);
-        }
-    }
-
-    allChatsCache.sort((a, b) => new Date(b.last_msg_time || b.created_at || 0) - new Date(a.last_msg_time || a.created_at || 0));
-
-    updateGlobalUnreadState();
-    renderChatsList();
-    setupGlobalMessageListener();
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --blue-glow: 0 0 15px rgba(0, 85, 255, 0.4);
+    --yellow-glow: 0 0 15px rgba(255, 204, 0, 0.4);
 }
 
-async function renderChatsList() {
-    if (!chatsList || isRendering) return;
-    isRendering = true;
-
-    chatsList.innerHTML = "";
-    const searchTerm = chatSearchInput ? chatSearchInput.value.toLowerCase() : "";
-
-    let filtered = allChatsCache.filter(chat => {
-        const isOfficial = (chat.id === officialForumChatId || (chat.title && chat.title.includes('Official')));
-        const isGroup = (chat.title !== null && chat.user1_id === chat.user2_id && !isOfficial);
-        const otherUserId = (chat.user1_id !== chat.user2_id) ? (chat.user1_id === currentUser.id ? chat.user2_id : chat.user1_id) : null;
-        const otherUserName = otherUserId ? (userNamesCache[otherUserId] || "Fahrer") : "";
-        
-        const searchTarget = (chat.title ? chat.title + " " + otherUserName : otherUserName).toLowerCase();
-        const matchesSearch = searchTarget.includes(searchTerm);
-        if (!matchesSearch) return false;
-
-        if (currentFilter === 'unread') return chat.unread === true;
-        if (currentFilter === 'favorites') return userFavorites.has(chat.id);
-        if (currentFilter === 'forums') return isGroup || isOfficial;
-        return true;
-    });
-
-    if (filtered.length === 0) {
-        chatsList.innerHTML = `<p style="padding: 15px; font-size: 13px; color: var(--text-muted);">Keine Chats gefunden.</p>`;
-        isRendering = false;
-        return;
-    }
-
-    const fragment = document.createDocumentFragment();
-
-    for (const chat of filtered) {
-        const isOfficial = (chat.id === officialForumChatId || (chat.title && chat.title.includes('Official')));
-        const isGroup = (chat.title !== null && chat.user1_id === chat.user2_id && !isOfficial);
-        const isForumOrGroup = isOfficial || isGroup;
-
-        let otherUserName = "Fahrer";
-        if (!isForumOrGroup && chat.user1_id !== chat.user2_id) {
-            const otherUserId = chat.user1_id === currentUser.id ? chat.user2_id : chat.user1_id;
-            otherUserName = userNamesCache[otherUserId] || "Fahrer";
-        }
-
-        const item = document.createElement("div");
-        const isSelected = chat.id === activeChatId;
-        const isUnread = chat.unread === true;
-        const isFav = userFavorites.has(chat.id);
-
-        item.className = `wa-chat-item ${isSelected ? 'active' : ''} ${isUnread ? 'unread' : ''}`;
-        
-        let displayTitle = isOfficial ? "GSRA Official / Community Forum" : (isGroup ? chat.title : (chat.title ? `${chat.title} (${otherUserName})` : `Chat mit ${otherUserName}`));
-        const lastMsg = escapeHtml(chat.last_message || 'Keine Nachrichten');
-
-        item.innerHTML = `
-            <div class="wa-avatar"><i class="fa-solid ${isForumOrGroup ? 'fa-bullhorn text-yellow' : 'fa-user'}"></i></div>
-            <div class="wa-chat-info">
-                <div class="wa-chat-row">
-                    <span class="wa-chat-name">${escapeHtml(displayTitle)}</span>
-                    <button class="wa-favorite-btn ${isFav ? 'favorited' : ''}" title="Als Favorit markieren"><i class="fa-solid fa-star"></i></button>
-                </div>
-                <div class="wa-chat-msg">${lastMsg}</div>
-            </div>
-        `;
-
-        item.querySelector(".wa-favorite-btn").addEventListener("click", (e) => toggleFavorite(chat.id, e));
-
-        item.addEventListener("click", () => {
-            activeChatId = chat.id;
-            markChatAsRead(chat.id);
-            if (waWelcomeScreen) waWelcomeScreen.style.display = "none";
-            if (waChatActivePane) waChatActivePane.style.display = "flex";
-
-            if (isForumOrGroup) openForumChat(chat);
-            else openChat(chat.id, otherUserName, chat.title);
-            renderChatsList();
-        });
-
-        fragment.appendChild(item);
-    }
-
-    chatsList.appendChild(fragment);
-    isRendering = false;
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
 }
 
-function openForumChat(forumChat = null) {
-    const chatId = forumChat?.id || officialForumChatId;
-    if (!chatId) return;
-    activeChatId = chatId;
-    markChatAsRead(chatId);
-
-    if (chatTitleText) chatTitleText.innerText = forumChat?.title || "GSRA Official / Community Forum";
-    if (chatActions) chatActions.style.display = "flex";
-    if (addMemberBtn) addMemberBtn.style.display = (chatId === officialForumChatId) ? "none" : "block";
-    if (blockUserBtn) blockUserBtn.style.display = "none";
-
-    const isOfficialAnnouncement = (chatId === officialForumChatId);
-    if (isOfficialAnnouncement && !isAdminUser) {
-        if (messageInput) { messageInput.disabled = true; messageInput.placeholder = "Nur Administratoren können im offiziellen Forum schreiben."; }
-        if (sendBtn) sendBtn.disabled = true;
-    } else {
-        if (messageInput) { messageInput.disabled = false; messageInput.placeholder = "Schreibe eine Nachricht..."; }
-        if (sendBtn) sendBtn.disabled = false;
-    }
-
-    if (chatMessages) chatMessages.innerHTML = "";
-    loadChatMessages(chatId);
-    renderChatsList();
+body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    line-height: 1.6;
+    background-color: var(--bg-main);
+    color: var(--text-muted);
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
 }
 
-async function openChat(chatId, recipientName, chatTitle = null) {
-    if (!chatId) return;
-    activeChatId = chatId;
-    markChatAsRead(chatId);
-
-    const displayName = chatTitle ? `${chatTitle} (${recipientName})` : `Chat mit ${recipientName}`;
-    if (chatTitleText) chatTitleText.innerText = displayName;
-    
-    if (chatActions) chatActions.style.display = "flex";
-    if (addMemberBtn) addMemberBtn.style.display = "none";
-    if (blockUserBtn) blockUserBtn.style.display = "block";
-
-    if (messageInput) { messageInput.disabled = false; messageInput.placeholder = "Gib eine Nachricht ein..."; }
-    if (imageUploadInput) imageUploadInput.disabled = false;
-    if (emojiToggleBtn) emojiToggleBtn.disabled = false;
-    if (sendBtn) sendBtn.disabled = false;
-
-    loadChatMessages(chatId);
-    renderChatsList();
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 130px 20px 60px 20px;
+    width: 100%;
+    flex: 1;
+    text-align: center;
 }
 
-async function loadChatMessages(chatId) {
-    const supabase = window.supabaseClient || window.supabase;
-    if (!supabase || !chatId) return;
-
-    if (messageSubscription) {
-        supabase.removeChannel(messageSubscription);
-        messageSubscription = null;
-    }
-
-    const { data: messages } = await supabase
-        .from("messages")
-        .select("*")
-        .eq("chat_id", chatId)
-        .order("created_at", { ascending: true });
-
-    messagesCacheMap.clear();
-    if (messages) messages.forEach(m => messagesCacheMap.set(m.id, m));
-
-    await renderMessages(messages || []);
-
-    messageSubscription = supabase
-        .channel(`chat_${chatId}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` }, async () => {
-            const { data: updatedMessages } = await supabase
-                .from("messages")
-                .select("*")
-                .eq("chat_id", chatId)
-                .order("created_at", { ascending: true });
-            
-            messagesCacheMap.clear();
-            if (updatedMessages) updatedMessages.forEach(m => messagesCacheMap.set(m.id, m));
-            await renderMessages(updatedMessages || []);
-        })
-        .subscribe();
+/* =========================================
+   FARB-KLASSEN
+========================================= */
+.text-blue {
+    color: var(--gsra-blue) !important;
+    text-shadow: 0 0 12px rgba(0, 85, 255, 0.3);
 }
 
-async function renderMessages(messages) {
-    if (!chatMessages) return;
-    if (messages.length === 0) {
-        chatMessages.innerHTML = `<p class="chat-placeholder" style="text-align: center; color: var(--text-muted); margin: auto;">Schreibe die erste Nachricht...</p>`;
-        return;
-    }
-    chatMessages.innerHTML = "";
-    const seenSystemTexts = new Set();
-    for (const msg of messages) {
-        const isSystem = msg.text && (msg.text.includes("hat den Chat") || msg.text.includes("hat das Forum") || msg.text.includes("zum Forum hinzugefügt") || msg.text.includes("umbenannt"));
-        if (isSystem && !msg.image_url && !msg.reply_to) {
-            const formatted = await formatSystemMessage(msg.text, msg.sender_id);
-            if (seenSystemTexts.has(formatted)) continue;
-            seenSystemTexts.add(formatted);
-        }
-        await appendSingleMessage(msg, isSystem);
+.text-yellow {
+    color: var(--gsra-yellow) !important;
+    text-shadow: 0 0 12px rgba(255, 204, 0, 0.3);
+}
+
+.text-white {
+    color: var(--text-light) !important;
+}
+
+/* =========================================
+   HEADER & NAVIGATION
+========================================= */
+header {
+    background-color: #000000;
+    min-height: 85px; 
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 30px;
+    border-bottom: 3px solid var(--gsra-blue);
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    box-shadow: 0 4px 25px rgba(0, 0, 0, 0.9);
+    width: 100%;
+    gap: 20px;
+}
+
+.logo-slogan-container {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-shrink: 0;
+}
+
+.logo-link {
+    display: flex;
+    align-items: center;
+}
+
+header .logo {
+    height: 70px;
+    width: auto;
+    filter: drop-shadow(0px 4px 8px rgba(0,0,0,0.8));
+    transition: transform 0.3s ease;
+    display: block;
+}
+
+header .logo:hover {
+    transform: scale(1.04);
+}
+
+.header-slogan {
+    font-size: 13px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    white-space: nowrap;
+    display: flex;
+    flex-direction: row;
+    gap: 6px;
+    margin-right: 15px;
+}
+
+nav {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+nav a {
+    text-decoration: none;
+    color: var(--text-light);
+    font-weight: 600;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    white-space: nowrap;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+nav a::after {
+    content: '';
+    position: absolute;
+    width: 0;
+    height: 2px;
+    bottom: -6px;
+    left: 0;
+    background-color: var(--gsra-blue);
+    transition: width 0.3s ease;
+}
+
+nav a:hover, nav a.active {
+    color: var(--gsra-blue);
+}
+
+nav a:hover::after, nav a.active::after {
+    width: 100%;
+}
+
+nav a.nav-unread-glow {
+    color: #ff4d4d !important;
+    text-shadow: 0 0 12px rgba(255, 77, 77, 0.9) !important;
+}
+nav a.nav-unread-glow::after {
+    background-color: #ff4d4d !important;
+    width: 100% !important;
+}
+
+.login-btn, #logoutBtn {
+    color: #000000 !important;
+    background-color: var(--gsra-yellow) !important;
+    padding: 8px 16px !important;
+    border-radius: 4px !important;
+    font-weight: 700 !important;
+    font-size: 13px !important;
+    text-transform: uppercase !important;
+    letter-spacing: 1px !important;
+    border: 2px solid var(--gsra-yellow) !important;
+    white-space: nowrap !important;
+    cursor: pointer !important;
+    text-decoration: none !important;
+    transition: all 0.3s ease !important;
+}
+
+.login-btn::after, #logoutBtn::after {
+    display: none !important;
+}
+
+.login-btn:hover, #logoutBtn:hover {
+    background-color: transparent !important;
+    color: var(--gsra-yellow) !important;
+    box-shadow: var(--yellow-glow) !important;
+    transform: translateY(-2px);
+}
+
+/* =========================================
+   WHATSAPP-ÄHNLICHER VIDEO- & MEDIENPLAYER
+========================================= */
+.wa-video-preview-wrapper {
+    position: relative;
+    width: 100%;
+    max-width: 320px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #000;
+    cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    transition: transform 0.2s ease;
+}
+
+.wa-video-preview-wrapper:hover {
+    transform: scale(1.02);
+}
+
+.wa-video-preview-wrapper video {
+    width: 100%;
+    max-height: 220px;
+    object-fit: cover;
+    display: block;
+    pointer-events: none;
+}
+
+.wa-video-play-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 42px;
+    transition: background 0.2s ease;
+}
+
+.wa-video-preview-wrapper:hover .wa-video-play-overlay {
+    background: rgba(0, 0, 0, 0.25);
+    color: var(--gsra-yellow);
+}
+
+/* =========================================
+   STYLISCHE FILTERBAR (MODERN & CLEAN)
+========================================= */
+.filter-bar {
+    background: rgba(21, 22, 26, 0.85);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 35px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.filter-inputs-group {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+    flex: 1;
+}
+
+.filter-bar input,
+.filter-bar select {
+    height: 40px;
+    padding: 8px 14px;
+    background: #0b0c10 !important;
+    border: 1px solid var(--border-subtle) !important;
+    color: #ffffff !important;
+    border-radius: 6px !important;
+    font-size: 13px;
+    outline: none;
+    transition: all 0.25s ease;
+}
+
+.filter-bar input:focus,
+.filter-bar select:focus {
+    border-color: var(--gsra-blue) !important;
+    box-shadow: 0 0 10px rgba(0, 85, 255, 0.3);
+}
+
+.filter-bar input::placeholder {
+    color: #717786;
+}
+
+/* =========================================
+   FORMULAR-INPUTS & TEXTAREA FIX
+========================================= */
+#create-event-form input,
+#create-event-form select,
+#create-item-form input,
+#create-item-form select,
+#create-item-form textarea,
+#create-setup-form input,
+#create-setup-form select,
+#create-setup-form textarea {
+    width: 100%;
+    height: 42px;
+    padding: 10px 12px;
+    background: #0b0c10 !important;
+    border: 1px solid var(--border-subtle) !important;
+    color: #ffffff !important;
+    border-radius: 6px !important;
+    font-family: inherit;
+    font-size: 14px;
+    box-sizing: border-box;
+    outline: none;
+}
+
+#create-item-form textarea,
+#create-setup-form textarea {
+    height: 110px !important;
+    resize: none !important;
+}
+
+.location-container {
+    position: relative;
+    display: inline-block;
+}
+
+.autocomplete-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    min-width: 250px;
+    background: #15161a;
+    border: 1px solid var(--gsra-blue);
+    border-radius: 6px;
+    max-height: 240px;
+    overflow-y: auto;
+    z-index: 2500;
+    display: none;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.9);
+}
+
+.autocomplete-item {
+    padding: 10px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #fff;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    text-align: left;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.autocomplete-item:hover {
+    background: rgba(0, 85, 255, 0.25);
+    color: var(--gsra-yellow);
+}
+
+input[type="date"],
+input[type="datetime-local"] {
+    position: relative;
+    padding-right: 40px !important;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    filter: invert(0.85);
+    cursor: pointer;
+    opacity: 0.8;
+    transition: transform 0.2s ease, filter 0.2s ease, opacity 0.2s ease;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+    transform: translateY(-50%) scale(1.25);
+    filter: invert(0.7) sepia(1) saturate(5) hue-rotate(175deg);
+}
+
+/* =========================================
+   MÜLLEIMER & BEARBEITEN BUTTONS
+========================================= */
+.btn-delete {
+    background: rgba(255, 77, 77, 0.1);
+    border: 1px solid #ff4d4d;
+    color: #ff4d4d;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.25s ease;
+}
+
+.btn-delete i {
+    transition: transform 0.25s ease;
+}
+
+.btn-delete:hover {
+    background: #ff4d4d;
+    color: #ffffff;
+    box-shadow: 0 0 10px rgba(255, 77, 77, 0.6);
+    transform: translateY(-1px);
+}
+
+.btn-delete:hover i {
+    transform: scale(1.2) rotate(-10deg);
+}
+
+.btn-edit {
+    background: rgba(0, 85, 255, 0.15);
+    border: 1px solid var(--gsra-blue);
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.25s ease;
+}
+
+.btn-edit:hover {
+    background: var(--gsra-blue);
+    color: #ffffff;
+    box-shadow: var(--blue-glow);
+    transform: translateY(-1px);
+}
+
+/* =========================================
+   BESTEHENDE BILDER & NEON-HOVER X-EFFEKT
+========================================= */
+.existing-img-wrapper {
+    position: relative;
+    display: inline-block;
+    width: 80px;
+    height: 80px;
+    border-radius: 6px;
+}
+
+.existing-img-wrapper img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid var(--border-subtle);
+    background: #0d0e12;
+}
+
+.existing-img-remove {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: #15161a;
+    color: #ff4d4d;
+    border: 2px solid #ff4d4d;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.8);
+    transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.existing-img-remove:hover {
+    background: #ff4d4d;
+    color: #ffffff;
+    transform: scale(1.25) rotate(90deg);
+    box-shadow: 0 0 12px rgba(255, 77, 77, 0.9);
+}
+
+/* =========================================
+   MARKTPLATZ GRID & BILDER
+========================================= */
+#marketplaceGrid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 25px;
+    margin-top: 30px;
+    text-align: left;
+}
+
+.marketplace-card-img {
+    width: 100%;
+    height: 220px;
+    object-fit: contain;
+    background-color: #0d0e12;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    border: 1px solid var(--border-subtle);
+    padding: 8px;
+}
+
+@media (max-width: 992px) {
+    #marketplaceGrid {
+        grid-template-columns: repeat(2, 1fr);
     }
 }
 
-async function formatSystemMessage(text, senderId) {
-    if (!text) return "";
-    const isOwnAction = String(senderId) === String(currentUser?.id);
-    const actorName = await fetchUserName(senderId);
-
-    if (text.includes("zum Forum hinzugefügt")) {
-        const match = text.match(/^(.+?)\s+hat\s+(.+?)\s+zum Forum hinzugefügt/i);
-        const target = match && match[2] ? match[2] : "jemanden";
-        return isOwnAction ? `Du hast ${target} zum Forum hinzugefügt.` : `Du wurdest von ${actorName} zum Forum hinzugefügt.`;
+@media (max-width: 600px) {
+    #marketplaceGrid {
+        grid-template-columns: 1fr;
     }
-    if (text.includes("hat den Chat eröffnet")) {
-        return isOwnAction ? "Du hast den Chat eröffnet." : `${actorName} hat den Chat mit dir eröffnet.`;
-    }
-    if (text.includes("hat das Forum erstellt")) {
-        return isOwnAction ? "Du hast das Forum erstellt." : `${actorName} hat das Forum erstellt.`;
-    }
-    if (text.includes("umbenannt")) {
-        return isOwnAction ? text.replace(new RegExp(`^${actorName}\\s+hat`, 'i'), 'Du hast') : text;
-    }
-    return text;
 }
 
-async function appendSingleMessage(msg, isSystem = false) {
-    if (!chatMessages) return;
-    const placeholder = chatMessages.querySelector(".chat-placeholder");
-    if (placeholder) placeholder.remove();
-
-    const bubble = document.createElement("div");
-    bubble.id = `msg-${msg.id}`;
-    
-    const isOwn = String(msg.sender_id) === String(currentUser?.id);
-    bubble.className = `message-bubble ${isOwn ? 'message-own' : 'message-other'}`;
-
-    const senderName = isOwn ? "Du" : await fetchUserName(msg.sender_id);
-    const dateObj = msg.created_at ? new Date(msg.created_at) : new Date();
-    const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    const isDeleted = msg.text === "Du hast diese Nachricht gelöscht" || msg.text === "Diese Nachricht wurde gelöscht";
-    const isSystemOrDeletedMsg = isSystem || isDeleted;
-
-    const selectionCb = document.createElement("div");
-    selectionCb.className = "msg-selection-checkbox";
-    if (isOwn && !isSystemOrDeletedMsg) {
-        bubble.appendChild(selectionCb);
-    }
-
-    bubble.addEventListener("click", (e) => {
-        if (isMultiSelectMode && isOwn && !isSystemOrDeletedMsg) {
-            e.stopPropagation();
-            if (selectedMessageIds.has(msg.id)) {
-                selectedMessageIds.delete(msg.id);
-                bubble.classList.remove("selected-bubble");
-                selectionCb.innerHTML = "";
-            } else {
-                selectedMessageIds.add(msg.id);
-                bubble.classList.add("selected-bubble");
-                selectionCb.innerHTML = '<i class="fa-solid fa-check"></i>';
-            }
-            updateMultiDeleteCount();
-        }
-    });
-
-    if (!isSystem && !isDeleted) {
-        const actionsDiv = document.createElement("div");
-        actionsDiv.className = "message-actions";
-
-        const quickEmojis = ["👍", "❤️", "😂", "😮"];
-        quickEmojis.forEach(emoji => {
-            const btn = document.createElement("button");
-            btn.className = "msg-action-btn";
-            btn.title = `Mit ${emoji} reagieren`;
-            btn.innerText = emoji;
-            btn.style.cssText = "font-size: 14px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; cursor: pointer; border-radius: 4px; transition: transform 0.2s;";
-            
-            btn.addEventListener("mouseover", () => btn.style.transform = "scale(1.2)");
-            btn.addEventListener("mouseout", () => btn.style.transform = "scale(1)");
-
-            btn.addEventListener("click", async (e) => {
-                e.stopPropagation();
-                const supabase = window.supabaseClient || window.supabase;
-                if (supabase) {
-                    let currentReactions = msg.reactions || {};
-                    // Toggle-Funktion: Wenn man selbst bereits mit genau diesem Emoji reagiert hat -> entfernen, sonst setzen
-                    if (currentReactions[currentUser.id] === emoji) {
-                        delete currentReactions[currentUser.id];
-                    } else {
-                        currentReactions[currentUser.id] = emoji;
-                    }
-                    await supabase.from("messages").update({ reactions: currentReactions }).eq("id", msg.id);
-                    await loadChatMessages(activeChatId);
-                    await loadUserChats();
-                }
-            });
-            actionsDiv.appendChild(btn);
-        });
-
-        const plusBtn = document.createElement("button");
-        plusBtn.className = "msg-action-btn";
-        plusBtn.title = "Weitere Emojis";
-        plusBtn.innerHTML = '<i class="fa-solid fa-plus"></i>';
-
-        const pickerPopup = document.createElement("div");
-        pickerPopup.className = "message-react-picker-popup";
-        pickerPopup.addEventListener("click", (e) => e.stopPropagation());
-
-        const searchInput = document.createElement("input");
-        searchInput.type = "text";
-        searchInput.placeholder = "Emoji suchen...";
-        
-        const grid = document.createElement("div");
-        grid.className = "message-react-picker-grid";
-
-        const allAvailableEmojis = [
-            "😀","😃","😄","😁","😆","😅","😂","🤣","😊","😇","🙂","🙃","😉","😌","😍","🥰","😘","😗","😙","😚",
-            "😋","😛","😝","😜","🤪","🤨","🧐","🤓","😎","🤩","🥳","😏","😒","😞","😔","😕","🙁","☹️","😣",
-            "😖","😫","😩","🥺","😢","😭","😤","😠","😡","🤬","🤯","🥵","🥶",
-            "😱","😨","😰","😥","😢","😓","🤗","🤔","🤭","🤫",
-            "🤥","😶","😐","😑","😬","🙄","😯","😦","😧","😮",
-            "😲","😴","🤤","😪","😵","🤐","🥴","🤢","🤮",
-            "🤧","😷","🤒","🤕","🤑","🤠","😈","👿","👹","👺",
-            "👍","👎","👏","🙌","👐","🤲","🤝","pray","🙏","muscle","💪","fire","🔥","⭐","✨","❤️","🧡","💛","💚","💙","💜","🖤","🤍","🤎"
-        ];
-
-        const renderEmojiGrid = (filter = "") => {
-            grid.innerHTML = "";
-            const uniqueList = Array.from(new Set(allAvailableEmojis));
-            uniqueList.forEach(em => {
-                if (filter && !em.includes(filter)) return;
-                const span = document.createElement("span");
-                span.innerText = em;
-                span.addEventListener("click", async (e) => {
-                    e.stopPropagation();
-                    pickerPopup.style.display = "none";
-                    const supabase = window.supabaseClient || window.supabase;
-                    if (supabase) {
-                        let currentReactions = msg.reactions || {};
-                        if (currentReactions[currentUser.id] === em) {
-                            delete currentReactions[currentUser.id];
-                        } else {
-                            currentReactions[currentUser.id] = em;
-                        }
-                        await supabase.from("messages").update({ reactions: currentReactions }).eq("id", msg.id);
-                        await loadChatMessages(activeChatId);
-                        await loadUserChats();
-                    }
-                });
-                grid.appendChild(span);
-            });
-        };
-
-        renderEmojiGrid();
-        searchInput.addEventListener("input", (e) => renderEmojiGrid(e.target.value.trim()));
-
-        pickerPopup.appendChild(searchInput);
-        pickerPopup.appendChild(grid);
-
-        plusBtn.addEventListener("click", (e) => {
-            e.stopPropagation();
-            const isOpen = pickerPopup.style.display === "flex";
-            document.querySelectorAll(".message-react-picker-popup").forEach(p => p.style.display = "none");
-            
-            if (!isOpen) {
-                const bubbleRect = bubble.getBoundingClientRect();
-                const chatContainerRect = chatMessages.getBoundingClientRect();
-                if (bubbleRect.top - chatContainerRect.top < 220) {
-                    pickerPopup.className = "message-react-picker-popup popup-below";
-                } else {
-                    pickerPopup.className = "message-react-picker-popup popup-above";
-                }
-                pickerPopup.style.display = "flex";
-                searchInput.focus();
-            } else {
-                pickerPopup.style.display = "none";
-            }
-        });
-
-        document.addEventListener("click", () => { pickerPopup.style.display = "none"; });
-
-        actionsDiv.appendChild(plusBtn);
-        actionsDiv.appendChild(pickerPopup);
-
-        const replyBtn = document.createElement("button");
-        replyBtn.className = "msg-action-btn";
-        replyBtn.title = "Antworten";
-        replyBtn.innerHTML = '<i class="fa-solid fa-reply"></i>';
-        replyBtn.addEventListener("click", (e) => {
-            e.stopPropagation();
-            replyingToId = msg.id;
-            if (replyPreviewBanner && replyBannerAuthor && replyBannerText) {
-                replyBannerAuthor.innerText = `Antwort an ${senderName}`;
-                replyBannerText.innerText = sanitizeQuoteText(msg.text || "[Medien]");
-                replyPreviewBanner.style.display = "flex";
-            }
-            if (messageInput) messageInput.focus();
-        });
-        actionsDiv.appendChild(replyBtn);
-
-        const copyBtn = document.createElement("button");
-        copyBtn.className = "msg-action-btn";
-        copyBtn.title = "Text kopieren";
-        copyBtn.innerHTML = '<i class="fa-solid fa-copy"></i>';
-        copyBtn.addEventListener("click", (e) => {
-            e.stopPropagation();
-            navigator.clipboard.writeText(msg.text || "").then(() => alert("Nachricht in die Zwischenablage kopiert!"));
-        });
-        actionsDiv.appendChild(copyBtn);
-
-        if (isOwn) {
-            if (msg.text && !msg.text.includes("hat den Chat") && !msg.text.includes("hat das Forum")) {
-                const editBtn = document.createElement("button");
-                editBtn.className = "msg-action-btn";
-                editBtn.title = "Bearbeiten";
-                editBtn.innerHTML = '<i class="fa-solid fa-pen"></i>';
-                editBtn.addEventListener("click", (e) => {
-                    e.stopPropagation();
-                    editingMessageId = msg.id;
-                    if (messageInput) {
-                        messageInput.value = msg.text;
-                        messageInput.focus();
-                        messageInput.style.height = "auto";
-                        messageInput.style.height = Math.min(messageInput.scrollHeight, 140) + "px";
-                    }
-                    if (editPreviewBanner) {
-                        document.getElementById("editBannerText").innerText = sanitizeQuoteText(msg.text);
-                        editPreviewBanner.style.display = "flex";
-                    }
-                });
-                actionsDiv.appendChild(editBtn);
-            }
-
-            const deleteMsgBtn = document.createElement("button");
-            deleteMsgBtn.className = "msg-action-btn delete-btn";
-            deleteMsgBtn.title = "Auswählen / Mehrere löschen";
-            deleteMsgBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
-            deleteMsgBtn.addEventListener("click", (e) => {
-                e.stopPropagation();
-                isMultiSelectMode = true;
-                document.body.classList.add("multi-select-active");
-                selectedMessageIds.clear();
-                selectedMessageIds.add(msg.id);
-
-                if (multiDeleteBar) multiDeleteBar.style.display = "flex";
-                updateMultiDeleteCount();
-
-                document.querySelectorAll(".message-bubble.message-own").forEach(b => b.classList.add("selection-mode"));
-                bubble.classList.add("selected-bubble");
-                selectionCb.innerHTML = '<i class="fa-solid fa-check"></i>';
-            });
-            actionsDiv.appendChild(deleteMsgBtn);
-        }
-
-        bubble.appendChild(actionsDiv);
-    }
-
-    const authorDiv = document.createElement("div");
-    authorDiv.className = "msg-author";
-    authorDiv.innerText = senderName;
-    bubble.appendChild(authorDiv);
-
-    if (!isDeleted && msg.reply_to && messagesCacheMap.has(msg.reply_to)) {
-        const quotedMsg = messagesCacheMap.get(msg.reply_to);
-        const quotedAuthor = String(quotedMsg.sender_id) === String(currentUser?.id) ? "Du" : await fetchUserName(quotedMsg.sender_id);
-        const sanitizedQuote = sanitizeQuoteText(quotedMsg.text || "[Medien]");
-        
-        const quoteDiv = document.createElement("div");
-        quoteDiv.className = "message-quoted";
-        quoteDiv.innerHTML = `
-            <div class="message-quoted-author">${escapeHtml(quotedAuthor)}</div>
-            <div style="font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.9;">${escapeHtml(sanitizedQuote)}</div>
-        `;
-        
-        quoteDiv.addEventListener("click", (e) => {
-            e.stopPropagation();
-            const targetElement = document.getElementById(`msg-${msg.reply_to}`);
-            if (targetElement) {
-                targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                targetElement.classList.add('message-highlight');
-                setTimeout(() => targetElement.classList.remove('message-highlight'), 1500);
-            }
-        });
-        bubble.appendChild(quoteDiv);
-    }
-
-    if (!isDeleted && msg.image_url) {
-        const urls = msg.image_url.split(",").map(u => u.trim()).filter(Boolean);
-        const gridContainer = document.createElement("div");
-        gridContainer.className = "wa-media-grid";
-
-        const displayCount = Math.min(urls.length, 4);
-        for (let i = 0; i < displayCount; i++) {
-            const cleanUrl = urls[i];
-            const isVideo = /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(cleanUrl);
-
-            if (isVideo) {
-                const videoWrap = document.createElement("div");
-                videoWrap.className = "wa-video-preview-wrapper";
-                
-                const videoElem = document.createElement("video");
-                videoElem.src = cleanUrl;
-                videoElem.preload = "metadata";
-
-                const overlayDiv = document.createElement("div");
-                overlayDiv.className = "wa-video-play-overlay";
-                overlayDiv.innerHTML = '<i class="fa-solid fa-play"></i>';
-
-                videoWrap.appendChild(videoElem);
-                videoWrap.appendChild(overlayDiv);
-
-                videoWrap.addEventListener("click", (e) => {
-                    e.stopPropagation();
-                    if (modalVideoFull && imageModal) {
-                        if (modalImageFull) modalImageFull.style.display = "none";
-                        modalVideoFull.src = cleanUrl;
-                        modalVideoFull.style.display = "block";
-                        imageModal.style.display = "flex";
-                        modalVideoFull.play();
-                    }
-                });
-                gridContainer.appendChild(videoWrap);
-            } else {
-                const imgWrap = document.createElement("div");
-                imgWrap.className = "wa-media-item";
-
-                const img = document.createElement("img");
-                img.src = cleanUrl;
-                img.alt = "Bild";
-                img.addEventListener("click", (e) => {
-                    e.stopPropagation();
-                    if (modalImageFull && imageModal) {
-                        if (modalVideoFull) modalVideoFull.style.display = "none";
-                        modalImageFull.src = cleanUrl;
-                        modalImageFull.style.display = "block";
-                        imageModal.style.display = "flex";
-                    }
-                });
-                imgWrap.appendChild(img);
-
-                if (i === 3 && urls.length > 4) {
-                    const overlay = document.createElement("div");
-                    overlay.className = "wa-media-overlay";
-                    overlay.innerText = `+${urls.length - 4}`;
-                    imgWrap.appendChild(overlay);
-                }
-                gridContainer.appendChild(imgWrap);
-            }
-        }
-        bubble.appendChild(gridContainer);
-    }
-
-    if (msg.text && msg.text !== "[Medien]") {
-        const textDiv = document.createElement("div");
-        if (isSystem) {
-            textDiv.innerText = await formatSystemMessage(msg.text, msg.sender_id);
-            textDiv.style.fontStyle = "italic";
-            textDiv.style.opacity = "0.85";
-        } else if (isDeleted) {
-            textDiv.innerText = msg.text;
-            textDiv.style.fontStyle = "italic";
-            textDiv.style.opacity = "0.7";
-        } else {
-            textDiv.innerText = msg.text;
-        }
-        bubble.appendChild(textDiv);
-    }
-
-    // Reaktionen unten angehängt (ohne Counter in 1-zu-1-Chats, mit gerundetem Counter / Tsd. in Gruppen/Formelsicht)
-    if (!isDeleted && msg.reactions && typeof msg.reactions === 'object' && Object.keys(msg.reactions).length > 0) {
-        const reactionsDiv = document.createElement("div");
-        reactionsDiv.className = "message-reactions-display";
-        
-        const counts = {};
-        const emojisByCount = {};
-        Object.entries(msg.reactions).forEach(([userId, emoji]) => {
-            counts[emoji] = (counts[emoji] || 0) + 1;
-        });
-
-        // Maximal 4 Smileys anzeigen wie auf dem Formel 1 Beispielbild
-        const sortedEmojis = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 4);
-
-        sortedEmojis.forEach(([emoji, count]) => {
-            const pill = document.createElement("span");
-            const hasUserReacted = msg.reactions[currentUser.id] === emoji;
-            pill.className = `reaction-pill ${hasUserReacted ? 'user-reacted' : ''}`;
-            
-            const totalReactionsCount = Object.keys(msg.reactions).length;
-            const isGroupOrForum = activeChatId === officialForumChatId || allChatsCache.find(c => c.id === activeChatId)?.user1_id === allChatsCache.find(c => c.id === activeChatId)?.user2_id;
-
-            let countDisplay = "";
-            if (isGroupOrForum && totalReactionsCount > 1) {
-                countDisplay = ` <span style="font-size: 11px; opacity: 0.9;">${formatCount(totalReactionsCount)}</span>`;
-            }
-
-            pill.innerHTML = `${emoji}${countDisplay}`;
-            
-            pill.addEventListener("click", async (e) => {
-                e.stopPropagation();
-                const supabase = window.supabaseClient || window.supabase;
-                if (supabase) {
-                    let currentReactions = msg.reactions || {};
-                    if (currentReactions[currentUser.id] === emoji) {
-                        delete currentReactions[currentUser.id];
-                    } else {
-                        currentReactions[currentUser.id] = emoji;
-                    }
-                    await supabase.from("messages").update({ reactions: currentReactions }).eq("id", msg.id);
-                    await loadChatMessages(activeChatId);
-                    await loadUserChats();
-                }
-            });
-
-            reactionsDiv.appendChild(pill);
-        });
-        bubble.appendChild(reactionsDiv);
-    }
-
-    const footerDiv = document.createElement("div");
-    footerDiv.style.cssText = "display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 4px;";
-
-    if (!isDeleted && msg.is_edited) {
-        const editedSpan = document.createElement("span");
-        editedSpan.style.cssText = "font-size: 10px; opacity: 0.6; font-style: italic; line-height: 1;";
-        editedSpan.innerText = "bearbeitet";
-        footerDiv.appendChild(editedSpan);
-    }
-
-    const timeSpan = document.createElement("span");
-    timeSpan.className = "message-time";
-    timeSpan.innerText = timeStr;
-    footerDiv.appendChild(timeSpan);
-
-    bubble.appendChild(footerDiv);
-    chatMessages.appendChild(bubble);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+/* =========================================
+   MARKTPLATZ MODAL & GALERIE
+========================================= */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(5px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    padding: 20px;
 }
 
-if (editChatTitleBtn) {
-    editChatTitleBtn.addEventListener("click", async () => {
-        const supabase = window.supabaseClient || window.supabase;
-        if (!activeChatId || activeChatId === officialForumChatId) {
-            alert("Das offizielle Forum kann nicht umbenannt werden.");
-            return;
-        }
-
-        const newTitle = prompt("Gib einen neuen Namen ein:");
-        if (newTitle !== null && newTitle.trim() !== "") {
-            const trimmedTitle = newTitle.trim();
-            const chatObj = allChatsCache.find(c => c.id === activeChatId);
-            const isForum = (chatObj && chatObj.user1_id === chatObj.user2_id);
-            const articleText = isForum ? "das Forum" : "den Chat";
-
-            await supabase.from("chats").update({ title: trimmedTitle }).eq("id", activeChatId);
-
-            const sysMsg = `${currentUsername} hat ${articleText} in "${trimmedTitle}" umbenannt.`;
-            await supabase.from("messages").insert([{ chat_id: activeChatId, sender_id: currentUser.id, text: sysMsg }]);
-            await supabase.from("chats").update({ last_message: sysMsg }).eq("id", activeChatId);
-
-            loadUserChats();
-            alert("Aktualisiert!");
-        }
-    });
+.modal-content {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-top: 4px solid var(--gsra-blue);
+    border-radius: 10px;
+    max-width: 850px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 30px;
+    position: relative;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+    text-align: left;
 }
 
-if (deleteChatBtn) {
-    deleteChatBtn.addEventListener("click", async () => {
-        const supabase = window.supabaseClient || window.supabase;
-        if (!activeChatId || activeChatId === officialForumChatId) {
-            alert("Das offizielle Forum kann nicht gelöscht werden.");
-            return;
-        }
-
-        if (confirm("Möchtest du dieses Forum / diesen Chat wirklich löschen?")) {
-            await supabase.from("messages").delete().eq("chat_id", activeChatId);
-            try { await supabase.from("chat_favorites").delete().eq("chat_id", activeChatId); } catch(e){}
-            await supabase.from("chats").delete().eq("id", activeChatId);
-            
-            activeChatId = null;
-            if (waWelcomeScreen) waWelcomeScreen.style.display = "flex";
-            if (waChatActivePane) waChatActivePane.style.display = "none";
-
-            await loadUserChats();
-            alert("Gelöscht.");
-        }
-    });
+.modal-close {
+    position: absolute;
+    top: 15px;
+    right: 20px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 26px;
+    cursor: pointer;
+    transition: color 0.2s;
 }
 
-if (blockUserBtn) {
-    blockUserBtn.addEventListener("click", async () => {
-        const supabase = window.supabaseClient || window.supabase;
-        if (!activeChatId || activeChatId === officialForumChatId) return;
-
-        if (confirm("Möchtest du diesen Nutzer blockieren und den Chat entfernen?")) {
-            await supabase.from("messages").delete().eq("chat_id", activeChatId);
-            try { await supabase.from("chat_favorites").delete().eq("chat_id", activeChatId); } catch(e){}
-            await supabase.from("chats").delete().eq("id", activeChatId);
-            
-            activeChatId = null;
-            if (waWelcomeScreen) waWelcomeScreen.style.display = "flex";
-            if (waChatActivePane) waChatActivePane.style.display = "none";
-
-            await loadUserChats();
-            alert("Nutzer blockiert.");
-        }
-    });
+.modal-close:hover {
+    color: #ff4d4d;
 }
 
-if (chatForm) {
-    chatForm.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const supabase = window.supabaseClient || window.supabase;
-        const text = messageInput ? messageInput.value.trim() : "";
-        const files = imageUploadInput ? Array.from(imageUploadInput.files) : [];
+.modal-main-image {
+    width: 100%;
+    max-height: 420px;
+    object-fit: contain;
+    background: #0d0e12;
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+    margin-bottom: 12px;
+    padding: 10px;
+}
 
-        if ((!text && files.length === 0) || !activeChatId || !currentUser?.id || !supabase) return;
+.gallery-container {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding: 6px;
+    margin-bottom: 20px;
+}
 
-        const MAX_FILE_SIZE = 200 * 1024 * 1024;
-        for (const file of files) {
-            if (file.size > MAX_FILE_SIZE) {
-                alert("Dein Medium konnte nicht hochgeladen werden, da die Datei das Dateigrößenlimit überschreitet.");
-                return;
-            }
-        }
+.gallery-thumbnail {
+    width: 75px;
+    height: 75px;
+    border-radius: 6px;
+    object-fit: contain;
+    background: #0d0e12;
+    border: 2px solid var(--border-subtle);
+    cursor: pointer;
+    opacity: 0.7;
+    transition: transform 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+    flex-shrink: 0;
+    padding: 4px;
+}
 
-        const isOfficialAnnouncement = (activeChatId === officialForumChatId);
-        if (isOfficialAnnouncement && !isAdminUser) {
-            alert("Nur Administratoren können im offiziellen Forum schreiben.");
-            return;
-        }
+.gallery-thumbnail:hover, .gallery-thumbnail.active {
+    opacity: 1;
+    transform: scale(1.05);
+    border-color: var(--gsra-blue);
+}
 
-        if (sendBtn) {
-            sendBtn.disabled = true;
-            sendBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Sende...`;
-        }
+.marketplace-card-clickable {
+    cursor: pointer;
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
 
-        try {
-            if (editingMessageId) {
-                const targetIdToEdit = editingMessageId;
-                editingMessageId = null;
-                if (editPreviewBanner) editPreviewBanner.style.display = "none";
+.marketplace-card-clickable:hover {
+    transform: translateY(-5px);
+    border-color: var(--gsra-blue);
+    box-shadow: var(--blue-glow);
+}
 
-                await supabase.from("messages").update({ text: text, is_edited: true }).eq("id", targetIdToEdit);
+/* =========================================
+   CUSTOM TOAST NOTIFICATIONS
+========================================= */
+#toastContainer {
+    position: fixed;
+    bottom: 25px;
+    right: 25px;
+    z-index: 3000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+}
 
-                if (messageInput) { messageInput.value = ""; messageInput.style.height = "42px"; }
-                if (imageUploadInput) imageUploadInput.value = "";
-                if (imagePreviewContainer) imagePreviewContainer.style.display = "none";
+.toast {
+    pointer-events: auto;
+    background: var(--bg-card);
+    color: var(--text-light);
+    border: 1px solid var(--border-subtle);
+    border-left: 4px solid var(--gsra-blue);
+    padding: 14px 20px;
+    border-radius: 6px;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.7);
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    animation: toastSlideIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
 
-                await loadChatMessages(activeChatId);
-                await loadUserChats();
-                return;
-            }
+.toast.toast-error { border-left-color: #ff4d4d; }
+.toast.toast-success { border-left-color: #00ff88; }
+.toast.toast-info { border-left-color: var(--gsra-yellow); }
 
-            let mediaUrls = [];
-            for (const file of files) {
-                const fileExt = file.name.split('.').pop();
-                const fileName = `chat_${Date.now()}_${Math.random().toString(36).substring(2,7)}.${fileExt}`;
-                const { error: uploadErr } = await supabase.storage.from("chat_attachments").upload(fileName, file);
-                if (uploadErr) throw uploadErr;
-                const { data: pubData } = supabase.storage.from("chat_attachments").getPublicUrl(fileName);
-                mediaUrls.push(pubData.publicUrl);
-            }
+@keyframes toastSlideIn {
+    from { transform: translateX(110%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
 
-            const finalMediaUrl = mediaUrls.length > 0 ? mediaUrls.join(",") : null;
+/* =========================================
+   HERO & GENERAL CARDS
+========================================= */
+.hero-section {
+    padding: 40px 0;
+    margin-bottom: 40px;
+}
 
-            await supabase.from("messages").insert([{
-                chat_id: activeChatId,
-                sender_id: currentUser.id,
-                text: text || (finalMediaUrl ? "[Medien]" : ""),
-                image_url: finalMediaUrl,
-                reply_to: replyingToId || null
-            }]);
+.hero-title {
+    font-size: 42px;
+    font-weight: 900;
+    color: var(--text-light);
+    letter-spacing: 3px;
+    margin-bottom: 15px;
+    text-transform: uppercase;
+}
 
-            await supabase.from("chats").update({
-                last_message: text || "[Medien]"
-            }).eq("id", activeChatId);
+.hero-subtitle {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    max-width: 900px;
+    margin: 0 auto;
+}
 
-            if (messageInput) { messageInput.value = ""; messageInput.style.height = "42px"; }
-            if (imageUploadInput) imageUploadInput.value = "";
-            if (imagePreviewContainer) imagePreviewContainer.style.display = "none";
-            if (emojiPickerWrapper) emojiPickerWrapper.style.display = "none";
-            
-            replyingToId = null;
-            if (replyPreviewBanner) replyPreviewBanner.style.display = "none";
+h2 {
+    color: var(--text-light);
+    font-size: 32px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 15px;
+    display: inline-block;
+    border-bottom: 3px solid var(--gsra-blue);
+    padding-bottom: 8px;
+}
 
-            markChatAsRead(activeChatId);
-            loadUserChats();
-        } catch (err) {
-            console.error("Fehler beim Senden:", err);
-            alert("Fehler beim Verarbeiten der Nachricht. Bitte versuche es erneut.");
-        } finally {
-            if (sendBtn) {
-                sendBtn.disabled = false;
-                sendBtn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Senden`;
-            }
-        }
-    });
+p {
+    font-size: 17px;
+    color: var(--text-muted);
+    max-width: 750px;
+    margin: 0 auto 25px auto;
+}
+
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 30px;
+    margin-top: 40px;
+    text-align: left;
+}
+
+.card {
+    background: var(--bg-card);
+    padding: 25px;
+    border-radius: 10px;
+    border: 1px solid var(--border-subtle);
+    border-top: 4px solid var(--gsra-blue);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.card h3 {
+    color: var(--text-light);
+    margin-bottom: 10px;
+    font-size: 20px;
+}
+
+.card:hover {
+    transform: translateY(-8px);
+    box-shadow: var(--blue-glow);
+}
+
+/* =========================================
+   RENNKALENDER TABELLE
+========================================= */
+.event-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 30px;
+    background-color: var(--bg-card);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    border: 1px solid var(--border-subtle);
+    text-align: left;
+}
+
+.event-table th, .event-table td {
+    padding: 18px 22px;
+    font-size: 15px;
+}
+
+.event-table th {
+    background-color: #0d0e12;
+    color: var(--gsra-blue);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-size: 13px;
+    border-bottom: 2px solid var(--gsra-blue);
+}
+
+.event-table td {
+    color: var(--text-light);
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+
+/* =========================================
+   SOCIAL MEDIA ICONS
+========================================= */
+.social-section {
+    margin-top: 60px;
+    padding: 50px 20px;
+    background: linear-gradient(180deg, var(--bg-main) 0%, #0d0e12 100%);
+    border-top: 1px solid var(--border-subtle);
+    border-radius: 12px;
+}
+
+.social-subtext {
+    font-size: 16px;
+}
+
+.social-container {
+    display: flex;
+    justify-content: center;
+    gap: 35px;
+    margin-top: 25px;
+}
+
+.social-container a {
+    font-size: 38px;
+    color: var(--text-muted);
+    transition: all 0.3s ease;
+}
+
+.icon-youtube:hover { color: #FF0000 !important; transform: scale(1.2) translateY(-4px); }
+.icon-instagram:hover { color: #E1306C !important; transform: scale(1.2) translateY(-4px); }
+.icon-discord:hover { color: #5865F2 !important; transform: scale(1.2) translateY(-4px); }
+.icon-reddit:hover { color: #FF4500 !important; transform: scale(1.2) translateY(-4px); }
+.icon-twitch:hover { color: #9146FF !important; transform: scale(1.2) translateY(-4px); }
+
+/* =========================================
+   ZUSATZ FÜR DASHBOARD & AUTH
+========================================= */
+.grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 30px;
+    text-align: left;
+}
+
+.auth-only {
+    display: none;
+}
+
+/* =========================================
+   GSRA SETUPS & COMBOBOX STYLES
+========================================= */
+.combo-box-container {
+    position: relative;
+    width: 100%;
+}
+
+.combo-box-input {
+    width: 100%;
+    padding: 12px;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--border-subtle);
+    color: #fff;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+.combo-box-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    max-height: 220px;
+    overflow-y: auto;
+    background: #121620;
+    border: 1px solid var(--border-subtle);
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    z-index: 100;
+    display: none;
+}
+
+.combo-option {
+    padding: 10px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.combo-option:hover {
+    background: rgba(255,204,0,0.15);
+    color: var(--gsra-yellow);
+}
+
+.layout-tag {
+    font-size: 11px;
+    background: rgba(255,255,255,0.1);
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: var(--text-muted);
+}
+
+.vote-btn {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border-subtle);
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: 0.2s;
+    font-size: 13px;
+}
+
+.vote-btn:hover {
+    background: rgba(255,255,255,0.2);
+}
+
+.vote-btn.like-btn:hover {
+    color: #00ff88;
+    border-color: #00ff88;
+}
+
+.vote-btn.dislike-btn:hover {
+    color: #ff4d4d;
+    border-color: #ff4d4d;
+}
+
+/* =========================================
+   WHATSAPP DESKTOP LAYOUT (GSRA MESSENGER)
+========================================= */
+.wa-container {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    height: 75vh;
+    background: #111b21;
+    border-radius: 12px;
+    border: 1px solid var(--border-subtle);
+    overflow: hidden;
+    margin-top: 20px;
+    box-shadow: 0 15px 50px rgba(0,0,0,0.8);
+    text-align: left;
+}
+
+.wa-sidebar {
+    background: #111b21;
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.wa-sidebar-header {
+    padding: 15px 20px;
+    background: #202c33;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.wa-search-bar {
+    padding: 10px 15px;
+    background: #111b21;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    flex-shrink: 0;
+}
+
+.wa-search-bar input {
+    background: #202c33;
+    border: none;
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    width: 100%;
+    outline: none;
+}
+
+.wa-filter-pills {
+    display: flex;
+    gap: 6px;
+    padding: 10px 15px;
+    background: #111b21;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.wa-pill {
+    background: #202c33;
+    color: var(--text-muted);
+    border: none;
+    padding: 6px 12px;
+    border-radius: 16px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.wa-pill:hover, .wa-pill.active {
+    background: var(--gsra-blue);
+    color: #fff;
+}
+
+.chat-sidebar-list {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.wa-chat-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 18px;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    transition: background 0.2s ease;
+    position: relative;
+}
+
+.wa-chat-item:hover {
+    background: #202c33;
+}
+
+.wa-chat-item.active {
+    background: #2a3942;
+}
+
+.wa-chat-item.unread {
+    background: rgba(255, 77, 77, 0.15);
+    border-left: 4px solid #ff4d4d;
+}
+
+.wa-avatar {
+    width: 45px;
+    height: 45px;
+    background: #2a3942;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.wa-chat-info {
+    flex: 1;
+    overflow: hidden;
+}
+
+.wa-chat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 3px;
+}
+
+.wa-chat-name {
+    color: #fff;
+    font-weight: 600;
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.wa-favorite-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 13px;
+    transition: color 0.2s ease;
+    padding: 4px;
+}
+.wa-favorite-btn.favorited {
+    color: var(--gsra-yellow);
+}
+.wa-favorite-btn:hover {
+    color: var(--gsra-yellow);
+}
+
+.wa-chat-msg {
+    font-size: 12px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.wa-main-pane {
+    display: flex;
+    flex-direction: column;
+    background: #0b0c10;
+    position: relative;
+    overflow: hidden;
+}
+
+.wa-welcome-screen {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 40px;
+    text-align: center;
+    background: radial-gradient(circle at center, #151c24 0%, #0b0c10 100%);
+}
+
+.wa-welcome-icon {
+    font-size: 64px;
+    color: var(--gsra-blue);
+    margin-bottom: 20px;
+    filter: drop-shadow(0 0 20px rgba(0, 85, 255, 0.4));
+}
+
+.wa-welcome-screen h2 {
+    color: #fff;
+    font-size: 26px;
+    margin-bottom: 12px;
+    border: none;
+}
+
+.wa-welcome-screen p {
+    color: var(--text-muted);
+    font-size: 14px;
+    max-width: 480px;
+    margin-bottom: 30px;
+}
+
+.wa-quick-tiles {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.wa-quick-tile {
+    background: #15161a;
+    border: 1px solid var(--border-subtle);
+    padding: 15px 20px;
+    border-radius: 10px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.25s ease;
+    width: 130px;
+}
+
+.wa-quick-tile i {
+    font-size: 22px;
+    color: var(--gsra-yellow);
+}
+
+.wa-quick-tile span {
+    font-size: 12px;
+    font-weight: 600;
+    color: #fff;
+}
+
+.wa-quick-tile:hover {
+    background: rgba(0, 85, 255, 0.15);
+    border-color: var(--gsra-blue);
+    transform: translateY(-3px);
+    box-shadow: var(--blue-glow);
+}
+
+.wa-active-pane {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    justify-content: space-between;
+}
+
+.chat-header {
+    padding: 15px 20px;
+    background: #15161a;
+    border-bottom: 1px solid var(--border-subtle);
+    text-align: left;
+    font-weight: bold;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.chat-messages {
+    flex: 1;
+    min-height: 0;
+    padding: 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* Kompakte Nachrichtenblase im WhatsApp-Stil */
+.message-bubble {
+    max-width: 65%;
+    padding: 8px 12px 22px 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    line-height: 1.4;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    position: relative;
+    white-space: pre-line;
+    display: inline-block;
+}
+
+/* Mehrfachauswahl-Markierung im WhatsApp-Stil */
+.message-bubble.selection-mode {
+    cursor: pointer;
+}
+.message-bubble.selected-bubble {
+    background: rgba(0, 85, 255, 0.4) !important;
+    border-color: var(--gsra-blue) !important;
+}
+.msg-selection-checkbox {
+    position: absolute;
+    left: -32px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--text-muted);
+    border-radius: 4px;
+    background: #15161a;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 12px;
+}
+.message-bubble.selection-mode .msg-selection-checkbox {
+    display: flex;
+}
+.message-bubble.selected-bubble .msg-selection-checkbox {
+    background: var(--gsra-blue);
+    border-color: var(--gsra-blue);
+}
+
+body.multi-select-active .message-actions {
+    display: none !important;
+    pointer-events: none !important;
+}
+
+@keyframes highlightPulse {
+    0% { background-color: rgba(255, 204, 0, 0.4); transform: scale(1.02); }
+    100% { background-color: inherit; transform: scale(1); }
+}
+.message-highlight {
+    animation: highlightPulse 1.5s ease-in-out;
+}
+
+/* Präzise Button-Platzierung an den Außenkanten mit Hover-Brücke (padding statt margin verhindert Lücken) */
+.message-own .message-actions {
+    position: absolute;
+    top: -26px;
+    right: 0;
+    padding-bottom: 6px;
+    display: none;
+    background: #15161a;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    padding: 3px 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.8);
+    z-index: 20;
+    gap: 6px;
+    align-items: center;
+}
+
+.message-other .message-actions {
+    position: absolute;
+    top: -26px;
+    left: 0;
+    padding-bottom: 6px;
+    display: none;
+    background: #15161a;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    padding: 3px 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.8);
+    z-index: 20;
+    gap: 6px;
+    align-items: center;
+}
+
+.message-bubble:hover .message-actions {
+    display: flex;
+}
+
+.msg-action-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 13px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.msg-action-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+}
+
+.msg-action-btn.delete-btn:hover {
+    background: rgba(255, 77, 77, 0.15);
+    color: #ff4d4d;
+}
+
+/* Intelligente Boxen-Positionierung mit Kollisionsprüfung */
+.message-react-picker-popup {
+    position: absolute;
+    background: #15161a;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 8px;
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+    z-index: 40;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.9);
+    width: 220px;
+    max-height: 180px;
+}
+
+.message-react-picker-popup.popup-above {
+    bottom: calc(100% + 4px);
+    left: 0;
+    border-top: 3px solid var(--gsra-yellow);
+}
+
+.message-react-picker-popup.popup-below {
+    top: calc(100% + 4px);
+    left: 0;
+    border-bottom: 3px solid var(--gsra-yellow);
+}
+
+.message-react-picker-popup input {
+    background: #0b0c10;
+    border: 1px solid var(--border-subtle);
+    color: #fff;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    outline: none;
+}
+
+.message-react-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 4px;
+    overflow-y: auto;
+    max-height: 120px;
+}
+
+.message-react-picker-grid span {
+    font-size: 16px;
+    cursor: pointer;
+    text-align: center;
+    padding: 4px;
+    border-radius: 4px;
+    transition: background 0.2s ease;
+}
+
+.message-react-picker-grid span:hover {
+    background: rgba(255, 204, 0, 0.2);
+}
+
+/* Reaktionen-Pills unten an der Blase */
+.message-reactions-display {
+    position: absolute;
+    bottom: -12px;
+    right: 12px;
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    z-index: 5;
+}
+
+.reaction-pill {
+    background: #202c33;
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    padding: 2px 8px;
+    font-size: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    color: #fff;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.reaction-pill.user-reacted {
+    background: var(--gsra-blue) !important;
+    border-color: var(--gsra-yellow) !important;
+    box-shadow: var(--blue-glow);
+}
+
+.reaction-pill:hover {
+    background: rgba(255, 204, 0, 0.2);
+    border-color: var(--gsra-yellow);
+}
+
+/* Zitat-Block kompakt */
+.message-quoted {
+    background: rgba(0, 0, 0, 0.25);
+    border-left: 3px solid var(--gsra-yellow);
+    padding: 5px 8px;
+    margin-bottom: 6px;
+    border-radius: 0 4px 4px 0;
+    font-size: 11px;
+    opacity: 0.9;
+    cursor: pointer;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: background 0.2s ease;
+}
+
+.message-quoted:hover {
+    background: rgba(255, 204, 0, 0.15);
+}
+
+.message-quoted-author {
+    font-weight: bold;
+    color: var(--gsra-yellow);
+    margin-bottom: 1px;
+}
+
+.message-own {
+    align-self: flex-end;
+    background: var(--gsra-blue);
+    color: #fff;
+    border-bottom-right-radius: 2px;
+}
+
+.message-other {
+    align-self: flex-start;
+    background: #1f2128;
+    color: #fff;
+    border-bottom-left-radius: 2px;
+    border: 1px solid var(--border-subtle);
+}
+
+.wa-media-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 4px;
+    max-width: 260px;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 6px;
+}
+
+.wa-media-item {
+    position: relative;
+    width: 100%;
+    height: 110px;
+    background: #0d0e12;
+}
+
+.wa-media-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    cursor: pointer;
+    display: block;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.wa-media-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.65);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: bold;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.msg-author {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--gsra-yellow);
+    margin-bottom: 3px;
+}
+
+.message-time {
+    font-size: 10px;
+    opacity: 0.7;
+}
+
+.chat-input-area {
+    padding: 15px;
+    background: #15161a;
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    gap: 10px;
+    flex-shrink: 0;
+    align-items: center;
+    position: relative;
+}
+
+.chat-input-area input,
+.chat-input-area textarea {
+    flex: 1;
+    padding: 10px 14px;
+    background: #0b0c10;
+    border: 1px solid var(--border-subtle);
+    color: #fff;
+    border-radius: 4px;
+    outline: none;
+    font-family: inherit;
+    font-size: 14px;
+    resize: none;
+    min-height: 42px;
+    max-height: 140px;
+    overflow-y: auto;
+    line-height: 20px;
+}
+
+.emoji-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 0 5px;
+    display: flex;
+    align-items: center;
+    transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.emoji-btn:hover {
+    color: var(--gsra-yellow);
+    transform: scale(1.15);
+}
+
+.attachment-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0 5px;
+    display: flex;
+    align-items: center;
+    transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.attachment-btn:hover {
+    color: var(--gsra-blue);
+    transform: scale(1.15);
+}
+
+.emoji-picker-container {
+    position: absolute;
+    bottom: 70px;
+    left: 20px;
+    z-index: 1000;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+    border-radius: 10px;
+    overflow: hidden;
+    display: none;
+}
+
+@media (max-width: 850px) {
+    .wa-container {
+        grid-template-columns: 1fr;
+    }
+    .wa-sidebar {
+        display: none;
+    }
 }
