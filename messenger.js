@@ -36,6 +36,7 @@ function sanitizeQuoteText(text) {
     return text.replace(/\s+/g, ' ').trim();
 }
 
+// Hilfsfunktion zum Runden großer Zahlen (z.B. 27900 -> "27,9 Tsd.")
 function formatCount(num) {
     if (num >= 1000000) {
         return (num / 1000000).toFixed(1).replace('.', ',') + " Mio.";
@@ -142,7 +143,7 @@ if (!multiDeleteBar && chatForm) {
                     image_url: null,
                     reply_to: null,
                     is_edited: false,
-                    reactions: {}
+                    reactions: {} // Reaktionen beim Löschen komplett entfernen
                 }).eq("id", msgId);
             }
 
@@ -167,7 +168,9 @@ function exitMultiSelectMode() {
 
 function updateMultiDeleteCount() {
     const countSpan = document.getElementById("multiDeleteCount");
-    if (countSpan) countSpan.innerText = `${selectedMessageIds.size} ausgewählt`;
+    if (countSpan) {
+        countSpan.innerText = `${selectedMessageIds.size} ausgewählt`;
+    }
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -201,7 +204,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     if (chatSearchInput) {
-        chatSearchInput.addEventListener("input", () => renderChatsList());
+        chatSearchInput.addEventListener("input", () => {
+            renderChatsList();
+        });
     }
 
     if (cancelReplyBtn) {
@@ -226,11 +231,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     if (newChatPlusBtn && newForumModal) {
-        newChatPlusBtn.addEventListener("click", () => newForumModal.style.display = "flex");
+        newChatPlusBtn.addEventListener("click", () => {
+            newForumModal.style.display = "flex";
+        });
     }
 
     if (closeForumModal && newForumModal) {
-        closeForumModal.addEventListener("click", () => newForumModal.style.display = "none");
+        closeForumModal.addEventListener("click", () => {
+            newForumModal.style.display = "none";
+        });
     }
 
     if (newForumForm) {
@@ -285,7 +294,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         const [u1, u2] = [currentUser.id, foundProfiles.id].sort();
-        let existingChat = allChatsCache.find(c => c.user1_id !== c.user2_id && (c.user1_id === u1 && c.user2_id === u2));
+        let existingChat = allChatsCache.find(c => c.user1_id !== c.user2_id && ((c.user1_id === u1 && c.user2_id === u2)));
 
         if (!existingChat) {
             const { data: fetched } = await supabase
@@ -377,8 +386,16 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
 
             const sysMsg = `${currentUsername} hat ${targetUser.username} zum Forum hinzugefügt.`;
-            await supabase.from("chats").update({ last_message: sysMsg }).eq("id", activeChatId);
-            await supabase.from("messages").insert([{ chat_id: activeChatId, sender_id: currentUser.id, text: sysMsg }]);
+
+            await supabase.from("chats").update({
+                last_message: sysMsg
+            }).eq("id", activeChatId);
+
+            await supabase.from("messages").insert([{
+                chat_id: activeChatId,
+                sender_id: currentUser.id,
+                text: sysMsg
+            }]);
 
             await loadUserChats();
             alert(`Mitglied ${targetUser.username} wurde erfolgreich hinzugefügt!`);
@@ -400,7 +417,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         const picker = emojiPickerWrapper.querySelector("emoji-picker");
         if (picker) {
-            picker.setAttribute('locale', 'de');
             picker.addEventListener("emoji-click", (event) => {
                 if (messageInput) {
                     messageInput.value += event.detail.unicode;
@@ -449,13 +465,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (closeImageModal && imageModal) {
         closeImageModal.addEventListener("click", () => {
             imageModal.style.display = "none";
-            if (modalVideoFull) modalVideoFull.style.display = "none";
+            if (modalVideoFull) { modalVideoFull.style.display = "none"; }
             if (modalImageFull) modalImageFull.style.display = "none";
         });
         imageModal.addEventListener("click", (e) => {
             if (e.target === imageModal) {
                 imageModal.style.display = "none";
-                if (modalVideoFull) modalVideoFull.style.display = "none";
+                if (modalVideoFull) { modalVideoFull.style.display = "none"; }
                 if (modalImageFull) modalImageFull.style.display = "none";
             }
         });
@@ -466,7 +482,11 @@ async function checkUserAdminStatus() {
     const supabase = window.supabaseClient || window.supabase;
     if (!supabase || !currentUser?.id) return;
     try {
-        const { data } = await supabase.from("profiles").select("role").eq("id", currentUser.id).maybeSingle();
+        const { data } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", currentUser.id)
+            .maybeSingle();
         isAdminUser = data?.role === 'admin';
     } catch (e) {
         isAdminUser = false;
@@ -477,8 +497,14 @@ async function loadFavorites() {
     const supabase = window.supabaseClient || window.supabase;
     if (!supabase || !currentUser?.id) return;
     try {
-        const { data } = await supabase.from("chat_favorites").select("chat_id").eq("user_id", currentUser.id);
-        if (data) userFavorites = new Set(data.map(f => f.chat_id));
+        const { data } = await supabase
+            .from("chat_favorites")
+            .select("chat_id")
+            .eq("user_id", currentUser.id);
+
+        if (data) {
+            userFavorites = new Set(data.map(f => f.chat_id));
+        }
     } catch (e) {
         userFavorites = new Set();
     }
@@ -509,7 +535,12 @@ async function fetchUserName(userId) {
     if (!supabase || !userId) return `Fahrer`;
     
     try {
-        const { data } = await supabase.from("profiles").select("username, full_name").eq("id", userId).maybeSingle();
+        const { data } = await supabase
+            .from("profiles")
+            .select("username, full_name")
+            .eq("id", userId)
+            .maybeSingle();
+
         const name = data?.username || data?.full_name || `Fahrer`;
         userNamesCache[userId] = name;
         return name;
@@ -532,18 +563,34 @@ async function checkUrlParameters() {
         const [u1, u2] = [currentUser.id, targetId].sort();
         let existingChat = null;
 
-        const { data: fetched } = await supabase.from("chats").select("*").eq("user1_id", u1).eq("user2_id", u2).maybeSingle();
+        const { data: fetched } = await supabase
+            .from("chats")
+            .select("*")
+            .eq("user1_id", u1)
+            .eq("user2_id", u2)
+            .maybeSingle();
 
         if (fetched && fetched.user1_id !== fetched.user2_id) {
             existingChat = fetched;
         } else {
             const sysMsg = itemTitle ? `Anfrage zu: ${itemTitle}` : `${currentUsername} hat den Chat eröffnet.`;
-            const { data: newChat, error } = await supabase.from("chats").insert([{
-                user1_id: u1, user2_id: u2, title: null, last_message: sysMsg
-            }]).select().single();
+            const { data: newChat, error } = await supabase
+                .from("chats")
+                .insert([{
+                    user1_id: u1,
+                    user2_id: u2,
+                    title: null,
+                    last_message: sysMsg
+                }])
+                .select()
+                .single();
 
             if (!error && newChat) {
-                await supabase.from("messages").insert([{ chat_id: newChat.id, sender_id: currentUser.id, text: sysMsg }]);
+                await supabase.from("messages").insert([{
+                    chat_id: newChat.id,
+                    sender_id: currentUser.id,
+                    text: sysMsg
+                }]);
                 existingChat = newChat;
             }
         }
@@ -563,7 +610,9 @@ function setupGlobalMessageListener() {
     const supabase = window.supabaseClient || window.supabase;
     if (!supabase || !currentUser?.id) return;
 
-    if (globalListenerChannel) supabase.removeChannel(globalListenerChannel);
+    if (globalListenerChannel) {
+        supabase.removeChannel(globalListenerChannel);
+    }
 
     globalListenerChannel = supabase
         .channel('global_messages_channel')
@@ -573,6 +622,7 @@ function setupGlobalMessageListener() {
             if (targetChat) {
                 targetChat.last_msg_time = msg.created_at || new Date().toISOString();
                 
+                // Exakte WhatsApp-Vorschau für Reaktionen in der Sidebar
                 if (msg.reactions && Object.keys(msg.reactions).length > 0) {
                     const lastUserId = Object.keys(msg.reactions).pop();
                     const lastEmoji = msg.reactions[lastUserId];
@@ -583,7 +633,9 @@ function setupGlobalMessageListener() {
                 }
 
                 if (msg.sender_id !== currentUser.id) {
-                    if (targetChat.id !== activeChatId || document.hidden) targetChat.unread = true;
+                    if (targetChat.id !== activeChatId || document.hidden) {
+                        targetChat.unread = true;
+                    }
                 }
                 allChatsCache.sort((a, b) => new Date(b.last_msg_time || b.created_at || 0) - new Date(a.last_msg_time || a.created_at || 0));
                 updateGlobalUnreadState();
@@ -601,8 +653,11 @@ function updateGlobalUnreadState() {
 
     const navBtn = document.getElementById("messengerNavBtn") || document.querySelector('a[href="messenger.html"]');
     if (navBtn) {
-        if (hasUnread) navBtn.classList.add("nav-unread-glow");
-        else navBtn.classList.remove("nav-unread-glow");
+        if (hasUnread) {
+            navBtn.classList.add("nav-unread-glow");
+        } else {
+            navBtn.classList.remove("nav-unread-glow");
+        }
     }
 }
 
@@ -616,7 +671,9 @@ function markChatAsRead(chatId) {
     if (!currentUser?.id || !chatId) return;
     localStorage.setItem(`gsra_last_read_${currentUser.id}_${chatId}`, new Date().toISOString());
     const chatObj = allChatsCache.find(c => c.id === chatId);
-    if (chatObj) chatObj.unread = false;
+    if (chatObj) {
+        chatObj.unread = false;
+    }
     updateGlobalUnreadState();
 }
 
@@ -626,11 +683,11 @@ async function loadUserChats() {
 
     let rawChats = [];
     try {
-        const { data: u1 } = await supabase.from("chats").select("*").eq("user1_id", currentUser.id);
-        const { data: u2 } = await supabase.from("chats").select("*").eq("user2_id", currentUser.id);
-        const { data: groups } = await supabase.from("chats").select("*").not("title", "is", null);
+        const { data: chatsAsUser1 } = await supabase.from("chats").select("*").eq("user1_id", currentUser.id);
+        const { data: chatsAsUser2 } = await supabase.from("chats").select("*").eq("user2_id", currentUser.id);
+        const { data: groupChats } = await supabase.from("chats").select("*").not("title", "is", null);
 
-        const combined = [...(u1 || []), ...(u2 || []), ...(groups || [])];
+        const combined = [...(chatsAsUser1 || []), ...(chatsAsUser2 || []), ...(groupChats || [])];
         const map = new Map();
         combined.forEach(c => map.set(c.id, c));
         rawChats = Array.from(map.values());
@@ -647,7 +704,8 @@ async function loadUserChats() {
             rawChats.unshift(globalForum);
         } else if (isAdminUser) {
             const { data: createdForum, err: forumErr } = await supabase.from("chats").insert([{
-                user1_id: currentUser.id, user2_id: currentUser.id,
+                user1_id: currentUser.id,
+                user2_id: currentUser.id,
                 title: 'GSRA Official / Community Forum',
                 last_message: 'Willkommen im offiziellen Community-Forum!'
             }]).select().single();
@@ -670,7 +728,10 @@ async function loadUserChats() {
     }
 
     let uniqueMap = new Map();
-    for (const chat of accessibleChats) uniqueMap.set(chat.id, chat);
+    for (const chat of accessibleChats) {
+        if (!uniqueMap.has(chat.id)) uniqueMap.set(chat.id, chat);
+    }
+
     allChatsCache = Array.from(uniqueMap.values());
 
     for (const chat of allChatsCache) {
@@ -740,7 +801,8 @@ async function renderChatsList() {
         const otherUserName = otherUserId ? (userNamesCache[otherUserId] || "Fahrer") : "";
         
         const searchTarget = (chat.title ? chat.title + " " + otherUserName : otherUserName).toLowerCase();
-        if (!searchTarget.includes(searchTerm)) return false;
+        const matchesSearch = searchTarget.includes(searchTerm);
+        if (!matchesSearch) return false;
 
         if (currentFilter === 'unread') return chat.unread === true;
         if (currentFilter === 'favorites') return userFavorites.has(chat.id);
@@ -972,14 +1034,43 @@ async function appendSingleMessage(msg, isSystem = false) {
     });
 
     if (!isSystem && !isDeleted) {
-        const hoverControls = document.createElement("div");
-        hoverControls.className = "wa-msg-hover-controls";
+        const actionsDiv = document.createElement("div");
+        actionsDiv.className = "message-actions";
 
-        // Emoji-Button mit intelligenter Kollisionsprüfung für das Picker-Popup
-        const emojiHoverBtn = document.createElement("button");
-        emojiHoverBtn.className = "wa-msg-icon-btn";
-        emojiHoverBtn.title = "Reagieren";
-        emojiHoverBtn.innerHTML = '<i class="fa-regular fa-face-smile"></i>';
+        const quickEmojis = ["👍", "❤️", "😂", "😮"];
+        quickEmojis.forEach(emoji => {
+            const btn = document.createElement("button");
+            btn.className = "msg-action-btn";
+            btn.title = `Mit ${emoji} reagieren`;
+            btn.innerText = emoji;
+            btn.style.cssText = "font-size: 14px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; cursor: pointer; border-radius: 4px; transition: transform 0.2s;";
+            
+            btn.addEventListener("mouseover", () => btn.style.transform = "scale(1.2)");
+            btn.addEventListener("mouseout", () => btn.style.transform = "scale(1)");
+
+            btn.addEventListener("click", async (e) => {
+                e.stopPropagation();
+                const supabase = window.supabaseClient || window.supabase;
+                if (supabase) {
+                    let currentReactions = msg.reactions || {};
+                    // Toggle-Funktion: Wenn man selbst bereits mit genau diesem Emoji reagiert hat -> entfernen, sonst setzen
+                    if (currentReactions[currentUser.id] === emoji) {
+                        delete currentReactions[currentUser.id];
+                    } else {
+                        currentReactions[currentUser.id] = emoji;
+                    }
+                    await supabase.from("messages").update({ reactions: currentReactions }).eq("id", msg.id);
+                    await loadChatMessages(activeChatId);
+                    await loadUserChats();
+                }
+            });
+            actionsDiv.appendChild(btn);
+        });
+
+        const plusBtn = document.createElement("button");
+        plusBtn.className = "msg-action-btn";
+        plusBtn.title = "Weitere Emojis";
+        plusBtn.innerHTML = '<i class="fa-solid fa-plus"></i>';
 
         const pickerPopup = document.createElement("div");
         pickerPopup.className = "message-react-picker-popup";
@@ -992,60 +1083,34 @@ async function appendSingleMessage(msg, isSystem = false) {
         const grid = document.createElement("div");
         grid.className = "message-react-picker-grid";
 
-        // Umfassende Emoji-Liste mit deutschen Schlüsselwörtern zur echten Filterung
-        const emojiDatabase = [
-            { emoji: "😀", name: "grinsen lachen lächeln glücklich" },
-            { emoji: "😃", name: "grinsen freude glücklich" },
-            { emoji: "😄", name: "lachen lächeln freude" },
-            { emoji: "😁", name: "strahlen lachen" },
-            { emoji: "😅", name: "schweiss lachen erleichterung" },
-            { emoji: "😂", name: "tränen lachen rofl lachend" },
-            { emoji: "🤣", name: "wegschmeißen lachen kichern" },
-            { emoji: "😊", name: "lächeln verlegen glücklich" },
-            { emoji: "😇", name: "heilig engel" },
-            { emoji: "😉", name: "zwinkern" },
-            { emoji: "😍", name: "verliebt herzen augen" },
-            { emoji: "🥰", name: "liebe lächeln herzen" },
-            { emoji: "😘", name: "kuss küssen" },
-            { emoji: "😋", name: "lecker mjam" },
-            { emoji: "😎", name: "cool sonnenbrille" },
-            { emoji: "🥳", name: "party feiern geburtstag" },
-            { emoji: "🤔", name: "nachdenken überlegen" },
-            { emoji: "👍", name: "daumen hoch gutlike" },
-            { emoji: "👎", name: "daumen runter schlecht" },
-            { emoji: "👏", name: "applaus klatschen" },
-            { emoji: "🙏", name: "danke bitte beten" },
-            { emoji: "💪", name: "muskel stärke stark" },
-            { emoji: "🔥", name: "feuer heiß" },
-            { emoji: "⭐", name: "stern" },
-            { emoji: "❤️", name: "herz liebe rot" },
-            { emoji: "💙", name: "blaues herz" },
-            { emoji: "💚", name: "grünes herz" },
-            { emoji: "🎉", name: "konfetti party" },
-            { emoji: "😮", name: "erstaunt oho" },
-            { emoji: "😢", name: "weinen traurig träne" },
-            { emoji: "😭", name: "heulen weinen extrem" },
-            { emoji: "😡", name: "wütend sauer böse" }
+        const allAvailableEmojis = [
+            "😀","😃","😄","😁","😆","😅","😂","🤣","😊","😇","🙂","🙃","😉","😌","😍","🥰","😘","😗","😙","😚",
+            "😋","😛","😝","😜","🤪","🤨","🧐","🤓","😎","🤩","🥳","😏","😒","😞","😔","😕","🙁","☹️","😣",
+            "😖","😫","😩","🥺","😢","😭","😤","😠","😡","🤬","🤯","🥵","🥶",
+            "😱","😨","😰","😥","😢","😓","🤗","🤔","🤭","🤫",
+            "🤥","😶","😐","😑","😬","🙄","😯","😦","😧","😮",
+            "😲","😴","🤤","😪","😵","🤐","🥴","🤢","🤮",
+            "🤧","😷","🤒","🤕","🤑","🤠","😈","👿","👹","👺",
+            "👍","👎","👏","🙌","👐","🤲","🤝","pray","🙏","muscle","💪","fire","🔥","⭐","✨","❤️","🧡","💛","💚","💙","💜","🖤","🤍","🤎"
         ];
 
         const renderEmojiGrid = (filter = "") => {
             grid.innerHTML = "";
-            const query = filter.toLowerCase().trim();
-            emojiDatabase.forEach(item => {
-                if (query && !item.name.includes(query) && !item.emoji.includes(query)) return;
+            const uniqueList = Array.from(new Set(allAvailableEmojis));
+            uniqueList.forEach(em => {
+                if (filter && !em.includes(filter)) return;
                 const span = document.createElement("span");
-                span.innerText = item.emoji;
-                span.title = item.name.split(' ')[0];
+                span.innerText = em;
                 span.addEventListener("click", async (e) => {
                     e.stopPropagation();
                     pickerPopup.style.display = "none";
                     const supabase = window.supabaseClient || window.supabase;
                     if (supabase) {
                         let currentReactions = msg.reactions || {};
-                        if (currentReactions[currentUser.id] === item.emoji) {
+                        if (currentReactions[currentUser.id] === em) {
                             delete currentReactions[currentUser.id];
                         } else {
-                            currentReactions[currentUser.id] = item.emoji;
+                            currentReactions[currentUser.id] = em;
                         }
                         await supabase.from("messages").update({ reactions: currentReactions }).eq("id", msg.id);
                         await loadChatMessages(activeChatId);
@@ -1054,28 +1119,23 @@ async function appendSingleMessage(msg, isSystem = false) {
                 });
                 grid.appendChild(span);
             });
-            if (grid.children.length === 0) {
-                grid.innerHTML = `<span style="grid-column: span 6; font-size: 11px; text-align: center; color: var(--text-muted); padding: 8px;">Kein Emoji gefunden</span>`;
-            }
         };
 
         renderEmojiGrid();
-        searchInput.addEventListener("input", (e) => renderEmojiGrid(e.target.value));
+        searchInput.addEventListener("input", (e) => renderEmojiGrid(e.target.value.trim()));
 
         pickerPopup.appendChild(searchInput);
         pickerPopup.appendChild(grid);
 
-        emojiHoverBtn.addEventListener("click", (e) => {
+        plusBtn.addEventListener("click", (e) => {
             e.stopPropagation();
             const isOpen = pickerPopup.style.display === "flex";
-            document.querySelectorAll(".message-react-picker-popup, .wa-msg-dropdown").forEach(p => p.style.display = "none");
-            document.querySelectorAll(".wa-msg-dropdown").forEach(d => d.classList.remove("show"));
+            document.querySelectorAll(".message-react-picker-popup").forEach(p => p.style.display = "none");
             
             if (!isOpen) {
-                const rect = bubble.getBoundingClientRect();
-                const containerRect = chatMessages.getBoundingClientRect();
-                // Intelligente Kollisionsprüfung: Wenn Nachricht zu weit oben am Header liegt -> nach unten öffnen
-                if (rect.top - containerRect.top < 220) {
+                const bubbleRect = bubble.getBoundingClientRect();
+                const chatContainerRect = chatMessages.getBoundingClientRect();
+                if (bubbleRect.top - chatContainerRect.top < 220) {
                     pickerPopup.className = "message-react-picker-popup popup-below";
                 } else {
                     pickerPopup.className = "message-react-picker-popup popup-above";
@@ -1087,31 +1147,17 @@ async function appendSingleMessage(msg, isSystem = false) {
             }
         });
 
-        emojiHoverBtn.appendChild(pickerPopup);
-        hoverControls.appendChild(emojiHoverBtn);
+        document.addEventListener("click", () => { pickerPopup.style.display = "none"; });
 
-        // Dropdown-Pfeil für vertikales Menü mit Kollisionsprüfung (nach oben/unten)
-        const menuBtn = document.createElement("button");
-        menuBtn.className = "wa-msg-icon-btn";
-        menuBtn.title = "Mehr Optionen";
-        menuBtn.innerHTML = '<i class="fa-solid fa-chevron-down"></i>';
+        actionsDiv.appendChild(plusBtn);
+        actionsDiv.appendChild(pickerPopup);
 
-        const dropdownMenu = document.createElement("div");
-        dropdownMenu.className = "wa-msg-dropdown";
-
-        const addDropdownItem = (iconClass, label, onClick, isDanger = false) => {
-            const item = document.createElement("button");
-            item.className = `wa-dropdown-item ${isDanger ? 'delete-action' : ''}`;
-            item.innerHTML = `<i class="${iconClass}" style="width: 16px;"></i> ${label}`;
-            item.addEventListener("click", (e) => {
-                e.stopPropagation();
-                dropdownMenu.classList.remove("show");
-                onClick();
-            });
-            dropdownMenu.appendChild(item);
-        };
-
-        addDropdownItem("fa-solid fa-reply", "Antworten", () => {
+        const replyBtn = document.createElement("button");
+        replyBtn.className = "msg-action-btn";
+        replyBtn.title = "Antworten";
+        replyBtn.innerHTML = '<i class="fa-solid fa-reply"></i>';
+        replyBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
             replyingToId = msg.id;
             if (replyPreviewBanner && replyBannerAuthor && replyBannerText) {
                 replyBannerAuthor.innerText = `Antwort an ${senderName}`;
@@ -1120,14 +1166,26 @@ async function appendSingleMessage(msg, isSystem = false) {
             }
             if (messageInput) messageInput.focus();
         });
+        actionsDiv.appendChild(replyBtn);
 
-        addDropdownItem("fa-solid fa-copy", "Kopieren", () => {
+        const copyBtn = document.createElement("button");
+        copyBtn.className = "msg-action-btn";
+        copyBtn.title = "Text kopieren";
+        copyBtn.innerHTML = '<i class="fa-solid fa-copy"></i>';
+        copyBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
             navigator.clipboard.writeText(msg.text || "").then(() => alert("Nachricht in die Zwischenablage kopiert!"));
         });
+        actionsDiv.appendChild(copyBtn);
 
         if (isOwn) {
             if (msg.text && !msg.text.includes("hat den Chat") && !msg.text.includes("hat das Forum")) {
-                addDropdownItem("fa-solid fa-pen", "Bearbeiten", () => {
+                const editBtn = document.createElement("button");
+                editBtn.className = "msg-action-btn";
+                editBtn.title = "Bearbeiten";
+                editBtn.innerHTML = '<i class="fa-solid fa-pen"></i>';
+                editBtn.addEventListener("click", (e) => {
+                    e.stopPropagation();
                     editingMessageId = msg.id;
                     if (messageInput) {
                         messageInput.value = msg.text;
@@ -1140,9 +1198,15 @@ async function appendSingleMessage(msg, isSystem = false) {
                         editPreviewBanner.style.display = "flex";
                     }
                 });
+                actionsDiv.appendChild(editBtn);
             }
 
-            addDropdownItem("fa-solid fa-trash", "Löschen", () => {
+            const deleteMsgBtn = document.createElement("button");
+            deleteMsgBtn.className = "msg-action-btn delete-btn";
+            deleteMsgBtn.title = "Auswählen / Mehrere löschen";
+            deleteMsgBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
+            deleteMsgBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
                 isMultiSelectMode = true;
                 document.body.classList.add("multi-select-active");
                 selectedMessageIds.clear();
@@ -1154,38 +1218,11 @@ async function appendSingleMessage(msg, isSystem = false) {
                 document.querySelectorAll(".message-bubble.message-own").forEach(b => b.classList.add("selection-mode"));
                 bubble.classList.add("selected-bubble");
                 selectionCb.innerHTML = '<i class="fa-solid fa-check"></i>';
-            }, true);
+            });
+            actionsDiv.appendChild(deleteMsgBtn);
         }
 
-        menuBtn.addEventListener("click", (e) => {
-            e.stopPropagation();
-            const isOpen = dropdownMenu.classList.contains("show");
-            document.querySelectorAll(".wa-msg-dropdown").forEach(d => d.classList.remove("show"));
-            document.querySelectorAll(".message-react-picker-popup").forEach(p => p.style.display = "none");
-
-            if (!isOpen) {
-                const rect = bubble.getBoundingClientRect();
-                const containerRect = chatMessages.getBoundingClientRect();
-                // Kollisionsprüfung für das Dropdown-Menü
-                if (rect.top - containerRect.top < 180) {
-                    dropdownMenu.style.top = "calc(100% + 4px)";
-                    dropdownMenu.style.bottom = "auto";
-                } else {
-                    dropdownMenu.style.bottom = "calc(100% + 4px)";
-                    dropdownMenu.style.top = "auto";
-                }
-                dropdownMenu.classList.add("show");
-            } else {
-                dropdownMenu.classList.remove("show");
-            }
-        });
-
-        document.addEventListener("click", () => { dropdownMenu.classList.remove("show"); document.querySelectorAll(".message-react-picker-popup").forEach(p => p.style.display = "none"); });
-
-        menuBtn.appendChild(dropdownMenu);
-        hoverControls.appendChild(menuBtn);
-
-        bubble.appendChild(hoverControls);
+        bubble.appendChild(actionsDiv);
     }
 
     const authorDiv = document.createElement("div");
@@ -1299,47 +1336,53 @@ async function appendSingleMessage(msg, isSystem = false) {
         bubble.appendChild(textDiv);
     }
 
-    // Reaktionen nebeneinander in gemeinsamer Blase unten
+    // Reaktionen unten angehängt (ohne Counter in 1-zu-1-Chats, mit gerundetem Counter / Tsd. in Gruppen/Formelsicht)
     if (!isDeleted && msg.reactions && typeof msg.reactions === 'object' && Object.keys(msg.reactions).length > 0) {
         const reactionsDiv = document.createElement("div");
         reactionsDiv.className = "message-reactions-display";
         
         const counts = {};
+        const emojisByCount = {};
         Object.entries(msg.reactions).forEach(([userId, emoji]) => {
             counts[emoji] = (counts[emoji] || 0) + 1;
         });
 
+        // Maximal 4 Smileys anzeigen wie auf dem Formel 1 Beispielbild
         const sortedEmojis = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 4);
 
         sortedEmojis.forEach(([emoji, count]) => {
-            const itemSpan = document.createElement("span");
-            itemSpan.className = "reaction-pill-item";
-            itemSpan.innerText = emoji;
-            reactionsDiv.appendChild(itemSpan);
-        });
+            const pill = document.createElement("span");
+            const hasUserReacted = msg.reactions[currentUser.id] === emoji;
+            pill.className = `reaction-pill ${hasUserReacted ? 'user-reacted' : ''}`;
+            
+            const totalReactionsCount = Object.keys(msg.reactions).length;
+            const isGroupOrForum = activeChatId === officialForumChatId || allChatsCache.find(c => c.id === activeChatId)?.user1_id === allChatsCache.find(c => c.id === activeChatId)?.user2_id;
 
-        const totalReactionsCount = Object.keys(msg.reactions).length;
-        const countSpan = document.createElement("span");
-        countSpan.style.cssText = "font-size: 12px; font-weight: bold; color: #fff; margin-left: 3px;";
-        countSpan.innerText = formatCount(totalReactionsCount);
-        reactionsDiv.appendChild(countSpan);
-
-        reactionsDiv.addEventListener("click", async (e) => {
-            e.stopPropagation();
-            const supabase = window.supabaseClient || window.supabase;
-            if (supabase) {
-                let currentReactions = msg.reactions || {};
-                if (currentReactions[currentUser.id]) {
-                    delete currentReactions[currentUser.id];
-                } else {
-                    currentReactions[currentUser.id] = sortedEmojis[0][0];
-                }
-                await supabase.from("messages").update({ reactions: currentReactions }).eq("id", msg.id);
-                await loadChatMessages(activeChatId);
-                await loadUserChats();
+            let countDisplay = "";
+            if (isGroupOrForum && totalReactionsCount > 1) {
+                countDisplay = ` <span style="font-size: 11px; opacity: 0.9;">${formatCount(totalReactionsCount)}</span>`;
             }
-        });
 
+            pill.innerHTML = `${emoji}${countDisplay}`;
+            
+            pill.addEventListener("click", async (e) => {
+                e.stopPropagation();
+                const supabase = window.supabaseClient || window.supabase;
+                if (supabase) {
+                    let currentReactions = msg.reactions || {};
+                    if (currentReactions[currentUser.id] === emoji) {
+                        delete currentReactions[currentUser.id];
+                    } else {
+                        currentReactions[currentUser.id] = emoji;
+                    }
+                    await supabase.from("messages").update({ reactions: currentReactions }).eq("id", msg.id);
+                    await loadChatMessages(activeChatId);
+                    await loadUserChats();
+                }
+            });
+
+            reactionsDiv.appendChild(pill);
+        });
         bubble.appendChild(reactionsDiv);
     }
 
