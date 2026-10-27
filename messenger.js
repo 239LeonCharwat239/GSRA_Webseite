@@ -36,7 +36,6 @@ function sanitizeQuoteText(text) {
     return text.replace(/\s+/g, ' ').trim();
 }
 
-// Hilfsfunktion zum Runden großer Zahlen (z.B. 27900 -> "27,9 Tsd.")
 function formatCount(num) {
     if (num >= 1000000) {
         return (num / 1000000).toFixed(1).replace('.', ',') + " Mio.";
@@ -143,7 +142,7 @@ if (!multiDeleteBar && chatForm) {
                     image_url: null,
                     reply_to: null,
                     is_edited: false,
-                    reactions: {} // Reaktionen beim Löschen komplett entfernen
+                    reactions: {}
                 }).eq("id", msgId);
             }
 
@@ -168,9 +167,7 @@ function exitMultiSelectMode() {
 
 function updateMultiDeleteCount() {
     const countSpan = document.getElementById("multiDeleteCount");
-    if (countSpan) {
-        countSpan.innerText = `${selectedMessageIds.size} ausgewählt`;
-    }
+    if (countSpan) countSpan.innerText = `${selectedMessageIds.size} ausgewählt`;
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -204,9 +201,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     if (chatSearchInput) {
-        chatSearchInput.addEventListener("input", () => {
-            renderChatsList();
-        });
+        chatSearchInput.addEventListener("input", () => renderChatsList());
     }
 
     if (cancelReplyBtn) {
@@ -231,15 +226,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     if (newChatPlusBtn && newForumModal) {
-        newChatPlusBtn.addEventListener("click", () => {
-            newForumModal.style.display = "flex";
-        });
+        newChatPlusBtn.addEventListener("click", () => newForumModal.style.display = "flex");
     }
 
     if (closeForumModal && newForumModal) {
-        closeForumModal.addEventListener("click", () => {
-            newForumModal.style.display = "none";
-        });
+        closeForumModal.addEventListener("click", () => newForumModal.style.display = "none");
     }
 
     if (newForumForm) {
@@ -294,7 +285,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         const [u1, u2] = [currentUser.id, foundProfiles.id].sort();
-        let existingChat = allChatsCache.find(c => c.user1_id !== c.user2_id && ((c.user1_id === u1 && c.user2_id === u2)));
+        let existingChat = allChatsCache.find(c => c.user1_id !== c.user2_id && (c.user1_id === u1 && c.user2_id === u2));
 
         if (!existingChat) {
             const { data: fetched } = await supabase
@@ -386,16 +377,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
 
             const sysMsg = `${currentUsername} hat ${targetUser.username} zum Forum hinzugefügt.`;
-
-            await supabase.from("chats").update({
-                last_message: sysMsg
-            }).eq("id", activeChatId);
-
-            await supabase.from("messages").insert([{
-                chat_id: activeChatId,
-                sender_id: currentUser.id,
-                text: sysMsg
-            }]);
+            await supabase.from("chats").update({ last_message: sysMsg }).eq("id", activeChatId);
+            await supabase.from("messages").insert([{ chat_id: activeChatId, sender_id: currentUser.id, text: sysMsg }]);
 
             await loadUserChats();
             alert(`Mitglied ${targetUser.username} wurde erfolgreich hinzugefügt!`);
@@ -417,6 +400,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         const picker = emojiPickerWrapper.querySelector("emoji-picker");
         if (picker) {
+            // Deutsches Attribut für die eingebaute Web-Component falls unterstützt
+            picker.setAttribute('locale', 'de');
             picker.addEventListener("emoji-click", (event) => {
                 if (messageInput) {
                     messageInput.value += event.detail.unicode;
@@ -465,13 +450,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (closeImageModal && imageModal) {
         closeImageModal.addEventListener("click", () => {
             imageModal.style.display = "none";
-            if (modalVideoFull) { modalVideoFull.style.display = "none"; }
+            if (modalVideoFull) modalVideoFull.style.display = "none";
             if (modalImageFull) modalImageFull.style.display = "none";
         });
         imageModal.addEventListener("click", (e) => {
             if (e.target === imageModal) {
                 imageModal.style.display = "none";
-                if (modalVideoFull) { modalVideoFull.style.display = "none"; }
+                if (modalVideoFull) modalVideoFull.style.display = "none";
                 if (modalImageFull) modalImageFull.style.display = "none";
             }
         });
@@ -482,11 +467,7 @@ async function checkUserAdminStatus() {
     const supabase = window.supabaseClient || window.supabase;
     if (!supabase || !currentUser?.id) return;
     try {
-        const { data } = await supabase
-            .from("profiles")
-            .select("role")
-            .eq("id", currentUser.id)
-            .maybeSingle();
+        const { data } = await supabase.from("profiles").select("role").eq("id", currentUser.id).maybeSingle();
         isAdminUser = data?.role === 'admin';
     } catch (e) {
         isAdminUser = false;
@@ -497,14 +478,8 @@ async function loadFavorites() {
     const supabase = window.supabaseClient || window.supabase;
     if (!supabase || !currentUser?.id) return;
     try {
-        const { data } = await supabase
-            .from("chat_favorites")
-            .select("chat_id")
-            .eq("user_id", currentUser.id);
-
-        if (data) {
-            userFavorites = new Set(data.map(f => f.chat_id));
-        }
+        const { data } = await supabase.from("chat_favorites").select("chat_id").eq("user_id", currentUser.id);
+        if (data) userFavorites = new Set(data.map(f => f.chat_id));
     } catch (e) {
         userFavorites = new Set();
     }
@@ -535,12 +510,7 @@ async function fetchUserName(userId) {
     if (!supabase || !userId) return `Fahrer`;
     
     try {
-        const { data } = await supabase
-            .from("profiles")
-            .select("username, full_name")
-            .eq("id", userId)
-            .maybeSingle();
-
+        const { data } = await supabase.from("profiles").select("username, full_name").eq("id", userId).maybeSingle();
         const name = data?.username || data?.full_name || `Fahrer`;
         userNamesCache[userId] = name;
         return name;
@@ -563,34 +533,18 @@ async function checkUrlParameters() {
         const [u1, u2] = [currentUser.id, targetId].sort();
         let existingChat = null;
 
-        const { data: fetched } = await supabase
-            .from("chats")
-            .select("*")
-            .eq("user1_id", u1)
-            .eq("user2_id", u2)
-            .maybeSingle();
+        const { data: fetched } = await supabase.from("chats").select("*").eq("user1_id", u1).eq("user2_id", u2).maybeSingle();
 
         if (fetched && fetched.user1_id !== fetched.user2_id) {
             existingChat = fetched;
         } else {
             const sysMsg = itemTitle ? `Anfrage zu: ${itemTitle}` : `${currentUsername} hat den Chat eröffnet.`;
-            const { data: newChat, error } = await supabase
-                .from("chats")
-                .insert([{
-                    user1_id: u1,
-                    user2_id: u2,
-                    title: null,
-                    last_message: sysMsg
-                }])
-                .select()
-                .single();
+            const { data: newChat, error } = await supabase.from("chats").insert([{
+                user1_id: u1, user2_id: u2, title: null, last_message: sysMsg
+            }]).select().single();
 
             if (!error && newChat) {
-                await supabase.from("messages").insert([{
-                    chat_id: newChat.id,
-                    sender_id: currentUser.id,
-                    text: sysMsg
-                }]);
+                await supabase.from("messages").insert([{ chat_id: newChat.id, sender_id: currentUser.id, text: sysMsg }]);
                 existingChat = newChat;
             }
         }
@@ -610,9 +564,7 @@ function setupGlobalMessageListener() {
     const supabase = window.supabaseClient || window.supabase;
     if (!supabase || !currentUser?.id) return;
 
-    if (globalListenerChannel) {
-        supabase.removeChannel(globalListenerChannel);
-    }
+    if (globalListenerChannel) supabase.removeChannel(globalListenerChannel);
 
     globalListenerChannel = supabase
         .channel('global_messages_channel')
@@ -622,7 +574,6 @@ function setupGlobalMessageListener() {
             if (targetChat) {
                 targetChat.last_msg_time = msg.created_at || new Date().toISOString();
                 
-                // Exakte WhatsApp-Vorschau für Reaktionen in der Sidebar
                 if (msg.reactions && Object.keys(msg.reactions).length > 0) {
                     const lastUserId = Object.keys(msg.reactions).pop();
                     const lastEmoji = msg.reactions[lastUserId];
@@ -633,9 +584,7 @@ function setupGlobalMessageListener() {
                 }
 
                 if (msg.sender_id !== currentUser.id) {
-                    if (targetChat.id !== activeChatId || document.hidden) {
-                        targetChat.unread = true;
-                    }
+                    if (targetChat.id !== activeChatId || document.hidden) targetChat.unread = true;
                 }
                 allChatsCache.sort((a, b) => new Date(b.last_msg_time || b.created_at || 0) - new Date(a.last_msg_time || a.created_at || 0));
                 updateGlobalUnreadState();
@@ -653,11 +602,8 @@ function updateGlobalUnreadState() {
 
     const navBtn = document.getElementById("messengerNavBtn") || document.querySelector('a[href="messenger.html"]');
     if (navBtn) {
-        if (hasUnread) {
-            navBtn.classList.add("nav-unread-glow");
-        } else {
-            navBtn.classList.remove("nav-unread-glow");
-        }
+        if (hasUnread) navBtn.classList.add("nav-unread-glow");
+        else navBtn.classList.remove("nav-unread-glow");
     }
 }
 
@@ -671,9 +617,7 @@ function markChatAsRead(chatId) {
     if (!currentUser?.id || !chatId) return;
     localStorage.setItem(`gsra_last_read_${currentUser.id}_${chatId}`, new Date().toISOString());
     const chatObj = allChatsCache.find(c => c.id === chatId);
-    if (chatObj) {
-        chatObj.unread = false;
-    }
+    if (chatObj) chatObj.unread = false;
     updateGlobalUnreadState();
 }
 
@@ -683,11 +627,11 @@ async function loadUserChats() {
 
     let rawChats = [];
     try {
-        const { data: chatsAsUser1 } = await supabase.from("chats").select("*").eq("user1_id", currentUser.id);
-        const { data: chatsAsUser2 } = await supabase.from("chats").select("*").eq("user2_id", currentUser.id);
-        const { data: groupChats } = await supabase.from("chats").select("*").not("title", "is", null);
+        const { data: u1 } = await supabase.from("chats").select("*").eq("user1_id", currentUser.id);
+        const { data: u2 } = await supabase.from("chats").select("*").eq("user2_id", currentUser.id);
+        const { data: groups } = await supabase.from("chats").select("*").not("title", "is", null);
 
-        const combined = [...(chatsAsUser1 || []), ...(chatsAsUser2 || []), ...(groupChats || [])];
+        const combined = [...(u1 || []), ...(u2 || []), ...(groups || [])];
         const map = new Map();
         combined.forEach(c => map.set(c.id, c));
         rawChats = Array.from(map.values());
@@ -704,8 +648,7 @@ async function loadUserChats() {
             rawChats.unshift(globalForum);
         } else if (isAdminUser) {
             const { data: createdForum, err: forumErr } = await supabase.from("chats").insert([{
-                user1_id: currentUser.id,
-                user2_id: currentUser.id,
+                user1_id: currentUser.id, user2_id: currentUser.id,
                 title: 'GSRA Official / Community Forum',
                 last_message: 'Willkommen im offiziellen Community-Forum!'
             }]).select().single();
@@ -728,10 +671,7 @@ async function loadUserChats() {
     }
 
     let uniqueMap = new Map();
-    for (const chat of accessibleChats) {
-        if (!uniqueMap.has(chat.id)) uniqueMap.set(chat.id, chat);
-    }
-
+    for (const chat of accessibleChats) uniqueMap.set(chat.id, chat);
     allChatsCache = Array.from(uniqueMap.values());
 
     for (const chat of allChatsCache) {
@@ -801,8 +741,7 @@ async function renderChatsList() {
         const otherUserName = otherUserId ? (userNamesCache[otherUserId] || "Fahrer") : "";
         
         const searchTarget = (chat.title ? chat.title + " " + otherUserName : otherUserName).toLowerCase();
-        const matchesSearch = searchTarget.includes(searchTerm);
-        if (!matchesSearch) return false;
+        if (!searchTarget.includes(searchTerm)) return false;
 
         if (currentFilter === 'unread') return chat.unread === true;
         if (currentFilter === 'favorites') return userFavorites.has(chat.id);
@@ -1053,7 +992,6 @@ async function appendSingleMessage(msg, isSystem = false) {
                 const supabase = window.supabaseClient || window.supabase;
                 if (supabase) {
                     let currentReactions = msg.reactions || {};
-                    // Toggle-Funktion: Wenn man selbst bereits mit genau diesem Emoji reagiert hat -> entfernen, sonst setzen
                     if (currentReactions[currentUser.id] === emoji) {
                         delete currentReactions[currentUser.id];
                     } else {
@@ -1078,11 +1016,12 @@ async function appendSingleMessage(msg, isSystem = false) {
 
         const searchInput = document.createElement("input");
         searchInput.type = "text";
-        searchInput.placeholder = "Emoji suchen...";
+        searchInput.placeholder = "Emoji suchen..."; // Auf Deutsch umgestellt
         
         const grid = document.createElement("div");
         grid.className = "message-react-picker-grid";
 
+        // Saubere reine Unicode-Emojis ohne Text-Shortcuts (kein "pray" oder "muscle")
         const allAvailableEmojis = [
             "😀","😃","😄","😁","😆","😅","😂","🤣","😊","😇","🙂","🙃","😉","😌","😍","🥰","😘","😗","😙","😚",
             "😋","😛","😝","😜","🤪","🤨","🧐","🤓","😎","🤩","🥳","😏","😒","😞","😔","😕","🙁","☹️","😣",
@@ -1091,7 +1030,7 @@ async function appendSingleMessage(msg, isSystem = false) {
             "🤥","😶","😐","😑","😬","🙄","😯","😦","😧","😮",
             "😲","😴","🤤","😪","😵","🤐","🥴","🤢","🤮",
             "🤧","😷","🤒","🤕","🤑","🤠","😈","👿","👹","👺",
-            "👍","👎","👏","🙌","👐","🤲","🤝","pray","🙏","muscle","💪","fire","🔥","⭐","✨","❤️","🧡","💛","💚","💙","💜","🖤","🤍","🤎"
+            "👍","👎","👏","🙌","👐","🤲","🤝","🙏","💪","🔥","⭐","✨","❤️","🧡","💛","💚","💙","💜","🖤","🤍","🤎"
         ];
 
         const renderEmojiGrid = (filter = "") => {
@@ -1336,53 +1275,51 @@ async function appendSingleMessage(msg, isSystem = false) {
         bubble.appendChild(textDiv);
     }
 
-    // Reaktionen unten angehängt (ohne Counter in 1-zu-1-Chats, mit gerundetem Counter / Tsd. in Gruppen/Formelsicht)
+    // GEÄNDERT: Reaktionen in einer einzigen gemeinsamen Blase NEBENEINANDER (wie in WhatsApp & F1 Channel)
     if (!isDeleted && msg.reactions && typeof msg.reactions === 'object' && Object.keys(msg.reactions).length > 0) {
         const reactionsDiv = document.createElement("div");
         reactionsDiv.className = "message-reactions-display";
         
         const counts = {};
-        const emojisByCount = {};
         Object.entries(msg.reactions).forEach(([userId, emoji]) => {
             counts[emoji] = (counts[emoji] || 0) + 1;
         });
 
-        // Maximal 4 Smileys anzeigen wie auf dem Formel 1 Beispielbild
+        // Maximal 4 häufigste Emojis nebeneinander anzeigen
         const sortedEmojis = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 4);
 
         sortedEmojis.forEach(([emoji, count]) => {
-            const pill = document.createElement("span");
+            const itemSpan = document.createElement("span");
             const hasUserReacted = msg.reactions[currentUser.id] === emoji;
-            pill.className = `reaction-pill ${hasUserReacted ? 'user-reacted' : ''}`;
-            
-            const totalReactionsCount = Object.keys(msg.reactions).length;
-            const isGroupOrForum = activeChatId === officialForumChatId || allChatsCache.find(c => c.id === activeChatId)?.user1_id === allChatsCache.find(c => c.id === activeChatId)?.user2_id;
-
-            let countDisplay = "";
-            if (isGroupOrForum && totalReactionsCount > 1) {
-                countDisplay = ` <span style="font-size: 11px; opacity: 0.9;">${formatCount(totalReactionsCount)}</span>`;
-            }
-
-            pill.innerHTML = `${emoji}${countDisplay}`;
-            
-            pill.addEventListener("click", async (e) => {
-                e.stopPropagation();
-                const supabase = window.supabaseClient || window.supabase;
-                if (supabase) {
-                    let currentReactions = msg.reactions || {};
-                    if (currentReactions[currentUser.id] === emoji) {
-                        delete currentReactions[currentUser.id];
-                    } else {
-                        currentReactions[currentUser.id] = emoji;
-                    }
-                    await supabase.from("messages").update({ reactions: currentReactions }).eq("id", msg.id);
-                    await loadChatMessages(activeChatId);
-                    await loadUserChats();
-                }
-            });
-
-            reactionsDiv.appendChild(pill);
+            itemSpan.className = `reaction-pill-item ${hasUserReacted ? 'user-reacted-pill' : ''}`;
+            itemSpan.innerText = emoji;
+            reactionsDiv.appendChild(itemSpan);
         });
+
+        // Gesamtzahl der Reaktionen dahinter anzeigen (mit Tsd./Mio. Rundung für viele User)
+        const totalReactionsCount = Object.keys(msg.reactions).length;
+        const countSpan = document.createElement("span");
+        countSpan.style.cssText = "font-size: 12px; font-weight: bold; color: #fff; margin-left: 2px;";
+        countSpan.innerText = formatCount(totalReactionsCount);
+        reactionsDiv.appendChild(countSpan);
+
+        reactionsDiv.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            const supabase = window.supabaseClient || window.supabase;
+            if (supabase) {
+                // Klick auf die Reaktionsleiste toggelt die eigene Reaktion (z.B. letzter Emoji oder Standard)
+                let currentReactions = msg.reactions || {};
+                if (currentReactions[currentUser.id]) {
+                    delete currentReactions[currentUser.id];
+                } else {
+                    currentReactions[currentUser.id] = sortedEmojis[0][0];
+                }
+                await supabase.from("messages").update({ reactions: currentReactions }).eq("id", msg.id);
+                await loadChatMessages(activeChatId);
+                await loadUserChats();
+            }
+        });
+
         bubble.appendChild(reactionsDiv);
     }
 
