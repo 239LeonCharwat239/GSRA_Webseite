@@ -36,6 +36,7 @@ function sanitizeQuoteText(text) {
     return text.replace(/\s+/g, ' ').trim();
 }
 
+// Hilfsfunktion zum Runden großer Zahlen (z.B. 27900 -> "27,9 Tsd.")
 function formatCount(num) {
     if (num >= 1000000) {
         return (num / 1000000).toFixed(1).replace('.', ',') + " Mio.";
@@ -142,7 +143,7 @@ if (!multiDeleteBar && chatForm) {
                     image_url: null,
                     reply_to: null,
                     is_edited: false,
-                    reactions: {}
+                    reactions: {} // Reaktionen beim Löschen komplett entfernen
                 }).eq("id", msgId);
             }
 
@@ -621,6 +622,7 @@ function setupGlobalMessageListener() {
             if (targetChat) {
                 targetChat.last_msg_time = msg.created_at || new Date().toISOString();
                 
+                // Exakte WhatsApp-Vorschau für Reaktionen in der Sidebar
                 if (msg.reactions && Object.keys(msg.reactions).length > 0) {
                     const lastUserId = Object.keys(msg.reactions).pop();
                     const lastEmoji = msg.reactions[lastUserId];
@@ -1035,11 +1037,40 @@ async function appendSingleMessage(msg, isSystem = false) {
         const actionsDiv = document.createElement("div");
         actionsDiv.className = "message-actions";
 
-        // 1. Emoji-Smiley-Button (Reagieren)
-        const emojiBtn = document.createElement("button");
-        emojiBtn.className = "msg-action-btn";
-        emojiBtn.title = "Reagieren";
-        emojiBtn.innerHTML = '<i class="fa-regular fa-face-smile"></i>';
+        const quickEmojis = ["👍", "❤️", "😂", "😮"];
+        quickEmojis.forEach(emoji => {
+            const btn = document.createElement("button");
+            btn.className = "msg-action-btn";
+            btn.title = `Mit ${emoji} reagieren`;
+            btn.innerText = emoji;
+            btn.style.cssText = "font-size: 14px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; cursor: pointer; border-radius: 4px; transition: transform 0.2s;";
+            
+            btn.addEventListener("mouseover", () => btn.style.transform = "scale(1.2)");
+            btn.addEventListener("mouseout", () => btn.style.transform = "scale(1)");
+
+            btn.addEventListener("click", async (e) => {
+                e.stopPropagation();
+                const supabase = window.supabaseClient || window.supabase;
+                if (supabase) {
+                    let currentReactions = msg.reactions || {};
+                    // Toggle-Funktion: Wenn man selbst bereits mit genau diesem Emoji reagiert hat -> entfernen, sonst setzen
+                    if (currentReactions[currentUser.id] === emoji) {
+                        delete currentReactions[currentUser.id];
+                    } else {
+                        currentReactions[currentUser.id] = emoji;
+                    }
+                    await supabase.from("messages").update({ reactions: currentReactions }).eq("id", msg.id);
+                    await loadChatMessages(activeChatId);
+                    await loadUserChats();
+                }
+            });
+            actionsDiv.appendChild(btn);
+        });
+
+        const plusBtn = document.createElement("button");
+        plusBtn.className = "msg-action-btn";
+        plusBtn.title = "Weitere Emojis";
+        plusBtn.innerHTML = '<i class="fa-solid fa-plus"></i>';
 
         const pickerPopup = document.createElement("div");
         pickerPopup.className = "message-react-picker-popup";
@@ -1052,59 +1083,34 @@ async function appendSingleMessage(msg, isSystem = false) {
         const grid = document.createElement("div");
         grid.className = "message-react-picker-grid";
 
-        const emojiDatabase = [
-            { emoji: "😀", name: "grinsen lachen lächeln glücklich" },
-            { emoji: "😃", name: "grinsen freude glücklich" },
-            { emoji: "😄", name: "lachen lächeln freude" },
-            { emoji: "😁", name: "strahlen lachen" },
-            { emoji: "😅", name: "schweiss lachen erleichterung" },
-            { emoji: "😂", name: "tränen lachen rofl lachend" },
-            { emoji: "🤣", name: "wegschmeißen lachen kichern" },
-            { emoji: "😊", name: "lächeln verlegen glücklich" },
-            { emoji: "😇", name: "heilig engel" },
-            { emoji: "😉", name: "zwinkern" },
-            { emoji: "😍", name: "verliebt herzen augen" },
-            { emoji: "🥰", name: "liebe lächeln herzen" },
-            { emoji: "😘", name: "kuss küssen" },
-            { emoji: "😋", name: "lecker mjam" },
-            { emoji: "😎", name: "cool sonnenbrille" },
-            { emoji: "🥳", name: "party feiern geburtstag" },
-            { emoji: "🤔", name: "nachdenken überlegen" },
-            { emoji: "👍", name: "daumen hoch gutlike" },
-            { emoji: "👎", name: "daumen runter schlecht" },
-            { emoji: "👏", name: "applaus klatschen" },
-            { emoji: "🙏", name: "danke bitte beten" },
-            { emoji: "💪", name: "muskel stärke stark" },
-            { emoji: "🔥", name: "feuer heiß" },
-            { emoji: "⭐", name: "stern" },
-            { emoji: "❤️", name: "herz liebe rot" },
-            { emoji: "💙", name: "blaues herz" },
-            { emoji: "💚", name: "grünes herz" },
-            { emoji: "🎉", name: "konfetti party" },
-            { emoji: "😮", name: "erstaunt oho" },
-            { emoji: "😢", name: "weinen traurig träne" },
-            { emoji: "😭", name: "heulen weinen extrem" },
-            { emoji: "😡", name: "wütend sauer böse" }
+        const allAvailableEmojis = [
+            "😀","😃","😄","😁","😆","😅","😂","🤣","😊","😇","🙂","🙃","😉","😌","😍","🥰","😘","😗","😙","😚",
+            "😋","😛","😝","😜","🤪","🤨","🧐","🤓","😎","🤩","🥳","😏","😒","😞","😔","😕","🙁","☹️","😣",
+            "😖","😫","😩","🥺","😢","😭","😤","😠","😡","🤬","🤯","🥵","🥶",
+            "😱","😨","😰","😥","😢","😓","🤗","🤔","🤭","🤫",
+            "🤥","😶","😐","😑","😬","🙄","😯","😦","😧","😮",
+            "😲","😴","🤤","😪","😵","🤐","🥴","🤢","🤮",
+            "🤧","😷","🤒","🤕","🤑","🤠","😈","👿","👹","👺",
+            "👍","👎","👏","🙌","👐","🤲","🤝","pray","🙏","muscle","💪","fire","🔥","⭐","✨","❤️","🧡","💛","💚","💙","💜","🖤","🤍","🤎"
         ];
 
         const renderEmojiGrid = (filter = "") => {
             grid.innerHTML = "";
-            const query = filter.toLowerCase().trim();
-            emojiDatabase.forEach(item => {
-                if (query && !item.name.includes(query) && !item.emoji.includes(query)) return;
+            const uniqueList = Array.from(new Set(allAvailableEmojis));
+            uniqueList.forEach(em => {
+                if (filter && !em.includes(filter)) return;
                 const span = document.createElement("span");
-                span.innerText = item.emoji;
-                span.title = item.name.split(' ')[0];
+                span.innerText = em;
                 span.addEventListener("click", async (e) => {
                     e.stopPropagation();
                     pickerPopup.style.display = "none";
                     const supabase = window.supabaseClient || window.supabase;
                     if (supabase) {
                         let currentReactions = msg.reactions || {};
-                        if (currentReactions[currentUser.id] === item.emoji) {
+                        if (currentReactions[currentUser.id] === em) {
                             delete currentReactions[currentUser.id];
                         } else {
-                            currentReactions[currentUser.id] = item.emoji;
+                            currentReactions[currentUser.id] = em;
                         }
                         await supabase.from("messages").update({ reactions: currentReactions }).eq("id", msg.id);
                         await loadChatMessages(activeChatId);
@@ -1113,27 +1119,23 @@ async function appendSingleMessage(msg, isSystem = false) {
                 });
                 grid.appendChild(span);
             });
-            if (grid.children.length === 0) {
-                grid.innerHTML = `<span style="grid-column: span 6; font-size: 11px; text-align: center; color: var(--text-muted); padding: 8px;">Kein Emoji gefunden</span>`;
-            }
         };
 
         renderEmojiGrid();
-        searchInput.addEventListener("input", (e) => renderEmojiGrid(e.target.value));
+        searchInput.addEventListener("input", (e) => renderEmojiGrid(e.target.value.trim()));
 
         pickerPopup.appendChild(searchInput);
         pickerPopup.appendChild(grid);
 
-        emojiBtn.addEventListener("click", (e) => {
+        plusBtn.addEventListener("click", (e) => {
             e.stopPropagation();
             const isOpen = pickerPopup.style.display === "flex";
-            document.querySelectorAll(".message-react-picker-popup, .wa-msg-dropdown").forEach(p => p.style.display = "none");
-            document.querySelectorAll(".wa-msg-dropdown").forEach(d => d.classList.remove("show"));
+            document.querySelectorAll(".message-react-picker-popup").forEach(p => p.style.display = "none");
             
             if (!isOpen) {
-                const rect = bubble.getBoundingClientRect();
-                const containerRect = chatMessages.getBoundingClientRect();
-                if (rect.top - containerRect.top < 220) {
+                const bubbleRect = bubble.getBoundingClientRect();
+                const chatContainerRect = chatMessages.getBoundingClientRect();
+                if (bubbleRect.top - chatContainerRect.top < 220) {
                     pickerPopup.className = "message-react-picker-popup popup-below";
                 } else {
                     pickerPopup.className = "message-react-picker-popup popup-above";
@@ -1145,31 +1147,17 @@ async function appendSingleMessage(msg, isSystem = false) {
             }
         });
 
-        emojiBtn.appendChild(pickerPopup);
-        actionsDiv.appendChild(emojiBtn);
+        document.addEventListener("click", () => { pickerPopup.style.display = "none"; });
 
-        // 2. Pfeil-nach-unten-Button für die Multifunktionsleiste (Dropdown)
-        const menuBtn = document.createElement("button");
-        menuBtn.className = "msg-action-btn";
-        menuBtn.title = "Mehr Optionen";
-        menuBtn.innerHTML = '<i class="fa-solid fa-chevron-down"></i>';
+        actionsDiv.appendChild(plusBtn);
+        actionsDiv.appendChild(pickerPopup);
 
-        const dropdownMenu = document.createElement("div");
-        dropdownMenu.className = "wa-msg-dropdown";
-
-        const addDropdownItem = (iconClass, label, onClick, isDanger = false) => {
-            const item = document.createElement("button");
-            item.className = `wa-dropdown-item ${isDanger ? 'delete-action' : ''}`;
-            item.innerHTML = `<i class="${iconClass}" style="width: 16px;"></i> ${label}`;
-            item.addEventListener("click", (e) => {
-                e.stopPropagation();
-                dropdownMenu.classList.remove("show");
-                onClick();
-            });
-            dropdownMenu.appendChild(item);
-        };
-
-        addDropdownItem("fa-solid fa-reply", "Antworten", () => {
+        const replyBtn = document.createElement("button");
+        replyBtn.className = "msg-action-btn";
+        replyBtn.title = "Antworten";
+        replyBtn.innerHTML = '<i class="fa-solid fa-reply"></i>';
+        replyBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
             replyingToId = msg.id;
             if (replyPreviewBanner && replyBannerAuthor && replyBannerText) {
                 replyBannerAuthor.innerText = `Antwort an ${senderName}`;
@@ -1178,14 +1166,26 @@ async function appendSingleMessage(msg, isSystem = false) {
             }
             if (messageInput) messageInput.focus();
         });
+        actionsDiv.appendChild(replyBtn);
 
-        addDropdownItem("fa-solid fa-copy", "Kopieren", () => {
+        const copyBtn = document.createElement("button");
+        copyBtn.className = "msg-action-btn";
+        copyBtn.title = "Text kopieren";
+        copyBtn.innerHTML = '<i class="fa-solid fa-copy"></i>';
+        copyBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
             navigator.clipboard.writeText(msg.text || "").then(() => alert("Nachricht in die Zwischenablage kopiert!"));
         });
+        actionsDiv.appendChild(copyBtn);
 
         if (isOwn) {
             if (msg.text && !msg.text.includes("hat den Chat") && !msg.text.includes("hat das Forum")) {
-                addDropdownItem("fa-solid fa-pen", "Bearbeiten", () => {
+                const editBtn = document.createElement("button");
+                editBtn.className = "msg-action-btn";
+                editBtn.title = "Bearbeiten";
+                editBtn.innerHTML = '<i class="fa-solid fa-pen"></i>';
+                editBtn.addEventListener("click", (e) => {
+                    e.stopPropagation();
                     editingMessageId = msg.id;
                     if (messageInput) {
                         messageInput.value = msg.text;
@@ -1198,9 +1198,15 @@ async function appendSingleMessage(msg, isSystem = false) {
                         editPreviewBanner.style.display = "flex";
                     }
                 });
+                actionsDiv.appendChild(editBtn);
             }
 
-            addDropdownItem("fa-solid fa-trash", "Löschen", () => {
+            const deleteMsgBtn = document.createElement("button");
+            deleteMsgBtn.className = "msg-action-btn delete-btn";
+            deleteMsgBtn.title = "Auswählen / Mehrere löschen";
+            deleteMsgBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
+            deleteMsgBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
                 isMultiSelectMode = true;
                 document.body.classList.add("multi-select-active");
                 selectedMessageIds.clear();
@@ -1212,38 +1218,9 @@ async function appendSingleMessage(msg, isSystem = false) {
                 document.querySelectorAll(".message-bubble.message-own").forEach(b => b.classList.add("selection-mode"));
                 bubble.classList.add("selected-bubble");
                 selectionCb.innerHTML = '<i class="fa-solid fa-check"></i>';
-            }, true);
+            });
+            actionsDiv.appendChild(deleteMsgBtn);
         }
-
-        menuBtn.addEventListener("click", (e) => {
-            e.stopPropagation();
-            const isOpen = dropdownMenu.classList.contains("show");
-            document.querySelectorAll(".wa-msg-dropdown").forEach(d => d.classList.remove("show"));
-            document.querySelectorAll(".message-react-picker-popup").forEach(p => p.style.display = "none");
-
-            if (!isOpen) {
-                const rect = bubble.getBoundingClientRect();
-                const containerRect = chatMessages.getBoundingClientRect();
-                if (rect.top - containerRect.top < 180) {
-                    dropdownMenu.style.top = "calc(100% + 4px)";
-                    dropdownMenu.style.bottom = "auto";
-                } else {
-                    dropdownMenu.style.bottom = "calc(100% + 4px)";
-                    dropdownMenu.style.top = "auto";
-                }
-                dropdownMenu.classList.add("show");
-            } else {
-                dropdownMenu.classList.remove("show");
-            }
-        });
-
-        document.addEventListener("click", () => { 
-            dropdownMenu.classList.remove("show"); 
-            document.querySelectorAll(".message-react-picker-popup").forEach(p => p.style.display = "none"); 
-        });
-
-        menuBtn.appendChild(dropdownMenu);
-        actionsDiv.appendChild(menuBtn);
 
         bubble.appendChild(actionsDiv);
     }
@@ -1359,15 +1336,18 @@ async function appendSingleMessage(msg, isSystem = false) {
         bubble.appendChild(textDiv);
     }
 
+    // Reaktionen unten angehängt (ohne Counter in 1-zu-1-Chats, mit gerundetem Counter / Tsd. in Gruppen/Formelsicht)
     if (!isDeleted && msg.reactions && typeof msg.reactions === 'object' && Object.keys(msg.reactions).length > 0) {
         const reactionsDiv = document.createElement("div");
         reactionsDiv.className = "message-reactions-display";
         
         const counts = {};
+        const emojisByCount = {};
         Object.entries(msg.reactions).forEach(([userId, emoji]) => {
             counts[emoji] = (counts[emoji] || 0) + 1;
         });
 
+        // Maximal 4 Smileys anzeigen wie auf dem Formel 1 Beispielbild
         const sortedEmojis = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 4);
 
         sortedEmojis.forEach(([emoji, count]) => {
