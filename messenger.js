@@ -368,7 +368,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             // Mitglieder dürfen nur zu einem Forum / einer Gruppe (title gesetzt) hinzugefügt werden
             const activeChatObj = allChatsCache.find(c => c.id === activeChatId);
-            if (!activeChatObj || activeChatObj.title === null || activeChatObj.title === undefined) {
+            if (!activeChatObj || activeChatObj.title === null || activeChatObj.title === undefined || activeChatObj.user1_id !== activeChatObj.user2_id) {
                 alert("Mitglieder können nur zu einem Forum / einer Gruppe hinzugefügt werden.");
                 return;
             }
@@ -692,7 +692,7 @@ async function updateChatLastMessageInfo(chat, supabase) {
     // Neueste Bearbeitung einer Nachricht (nur Vorschau in der Sidebar, nicht im Chat)
     const { data: editedMsgs } = await supabase
         .from("messages")
-        .select("sender_id, text, is_edited, edited_at")
+        .select("sender_id, text, is_edited, edited_at, edit_count")
         .eq("chat_id", chat.id)
         .not("edited_at", "is", null)
         .order("edited_at", { ascending: false })
@@ -713,7 +713,9 @@ async function updateChatLastMessageInfo(chat, supabase) {
         const isSelf = String(latestEdit.sender_id) === String(currentUser.id);
         const editorName = isSelf ? "Du" : await fetchUserName(latestEdit.sender_id);
         const verb = isSelf ? "hast" : "hat";
-        chat.last_message = `${editorName} ${verb} eine Nachricht bearbeitet`;
+        chat.last_message = (Number(latestEdit.edit_count) > 1)
+            ? `${editorName} ${verb} die Nachricht erneut bearbeitet`
+            : `${editorName} ${verb} eine Nachricht bearbeitet`;
     } else if (reactionTime > msgTime) {
         const isSelf = String(latestReaction.last_reaction_user) === String(currentUser.id);
         const reactorName = isSelf ? "Du" : await fetchUserName(latestReaction.last_reaction_user);
@@ -762,7 +764,7 @@ async function loadUserChats() {
         const { data: chatsAsUser2 } = await supabase.from("chats").select("*").eq("user2_id", currentUser.id);
         const { data: groupChats } = await supabase.from("chats").select("*").not("title", "is", null);
 
-        const combined = [...(chatsAsUser1 || []), ...(chatsAsUser2 || []), ...(groupChats || [])];
+        const combined = [...(chatsAsUser1 || []), ...(chatsAsUser2 || []), ...(groupChats || []).filter(c => c.user1_id === c.user2_id)];
         const map = new Map();
         combined.forEach(c => map.set(c.id, c));
         rawChats = Array.from(map.values());
@@ -798,7 +800,7 @@ async function loadUserChats() {
     for (const chat of rawChats) {
         const isOfficial = (chat.id === officialForumChatId || (chat.title && chat.title.includes('Official')));
         const isDirect = (chat.user1_id !== chat.user2_id);
-        const isGroup = (chat.title !== null); // Ein Forum/Gruppe ist immer über den Titel definiert!
+        const isGroup = (chat.title !== null && chat.user1_id === chat.user2_id); // Forum/Gruppe = Titel gesetzt UND user1_id === user2_id; umbenannte Direktchats bleiben Chats
         if (isOfficial || isDirect || isGroup) accessibleChats.push(chat);
     }
 
@@ -850,7 +852,7 @@ async function renderChatsList() {
 
     let filtered = allChatsCache.filter(chat => {
         const isOfficial = (chat.id === officialForumChatId || (chat.title && chat.title.includes('Official')));
-        const isGroup = (chat.title !== null && !isOfficial);
+        const isGroup = (chat.title !== null && chat.user1_id === chat.user2_id && !isOfficial);
         const otherUserId = (chat.user1_id !== chat.user2_id) ? (chat.user1_id === currentUser.id ? chat.user2_id : chat.user1_id) : null;
         const otherUserName = otherUserId ? (userNamesCache[otherUserId] || "Fahrer") : "";
         
@@ -874,7 +876,7 @@ async function renderChatsList() {
 
     for (const chat of filtered) {
         const isOfficial = (chat.id === officialForumChatId || (chat.title && chat.title.includes('Official')));
-        const isGroup = (chat.title !== null && !isOfficial);
+        const isGroup = (chat.title !== null && chat.user1_id === chat.user2_id && !isOfficial);
         const isForumOrGroup = isOfficial || isGroup;
 
         let otherUserName = "Fahrer";
@@ -1477,7 +1479,7 @@ async function appendSingleMessage(msg, isSystem = false) {
     if (!isDeleted && msg.is_edited) {
         const editedSpan = document.createElement("span");
         editedSpan.style.cssText = "font-size: 10px; opacity: 0.6; font-style: italic; line-height: 1;";
-        editedSpan.innerText = "bearbeitet";
+        editedSpan.innerText = (Number(msg.edit_count) > 1) ? "erneut bearbeitet" : "bearbeitet";
         footerDiv.appendChild(editedSpan);
     }
 
@@ -1545,7 +1547,7 @@ if (editChatTitleBtn) {
         if (newTitle !== null && newTitle.trim() !== "") {
             const trimmedTitle = newTitle.trim();
             const chatObj = allChatsCache.find(c => c.id === activeChatId);
-            const isForum = (chatObj && chatObj.title !== null);
+            const isForum = (chatObj && chatObj.title !== null && chatObj.user1_id === chatObj.user2_id);
             const articleText = isForum ? "das Forum" : "den Chat";
 
             await supabase.from("chats").update({ title: trimmedTitle }).eq("id", activeChatId);

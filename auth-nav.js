@@ -46,11 +46,11 @@ const initAuthNav = async () => {
 
             const { data: groupChats } = await client
                 .from("chats")
-                .select("id")
+                .select("id, user1_id, user2_id")
                 .not("title", "is", null);
 
             const map = new Map();
-            [...(userChats || []), ...(groupChats || [])].forEach(c => map.set(c.id, c));
+            [...(userChats || []), ...(groupChats || []).filter(c => c.user1_id === c.user2_id)].forEach(c => map.set(c.id, c));
             const allIds = Array.from(map.keys());
 
             if (allIds.length === 0) return;
