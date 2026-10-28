@@ -1381,17 +1381,17 @@ body.multi-select-active .message-actions {
     color: var(--gsra-yellow);
 }
 
-/* WhatsApp-Reaktionsleiste (Quick Bar) - verkleinert, schlanker & perfekt zentriert */
+/* WhatsApp-Reaktionsleiste (Quick Bar) - ultralegant, perfekt zentriert mit fester Ausrichtung */
 .wa-quick-reaction-bar {
     position: absolute;
     background: #15161a;
     border: 1px solid var(--border-subtle);
     border-radius: 20px;
-    padding: 2px 6px;
+    padding: 3px 6px;
     display: none;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 4px;
     z-index: 70;
     box-shadow: 0 8px 25px rgba(0,0,0,0.8);
     white-space: nowrap;
@@ -1427,15 +1427,19 @@ body.multi-select-active .message-actions {
 
 .wa-quick-reaction-bar span {
     font-size: 18px;
+    width: 24px;
+    height: 24px;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    transition: transform 0.2s ease;
+    border-radius: 50%;
+    transition: transform 0.2s ease, background 0.2s ease;
 }
 
 .wa-quick-reaction-bar span:hover {
-    transform: scale(1.25);
+    transform: scale(1.15);
+    background: rgba(255, 255, 255, 0.08);
 }
 
 /* Erweitertes Emoji-Such-Popup mit Hover-Brücke */
