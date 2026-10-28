@@ -1427,7 +1427,6 @@ async function appendSingleMessage(msg, isSystem = false) {
             counts[emoji] = (counts[emoji] || 0) + 1;
         });
 
-        // Nach Häufigkeit sortieren und auf maximal 4 Emojis begrenzen
         const sortedEmojis = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 4);
 
         const pill = document.createElement("div");
