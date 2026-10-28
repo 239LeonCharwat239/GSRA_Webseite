@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Messenger Logik (Vollständig & Korrigiert)
+   GSRA - Messenger Logik (Vollständig & Final)
 ========================================= */
 
 let currentUser = null;
@@ -386,7 +386,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             const sysMsg = `${currentUsername} hat ${targetUser.username} zum Forum hinzugefügt.`;
 
-            // WICHTIG: user2_id wird NICHT verändert, damit das Forum ein Forum bleibt (user1_id === user2_id)!
+            // Forum bleibt absolut stabil als Forum (kein Umwandeln in 1-zu-1-Chat)
             await supabase.from("chats").update({
                 last_message: sysMsg
             }).eq("id", activeChatId);
@@ -759,7 +759,7 @@ async function loadUserChats() {
     for (const chat of rawChats) {
         const isOfficial = (chat.id === officialForumChatId || (chat.title && chat.title.includes('Official')));
         const isDirect = (chat.user1_id !== chat.user2_id);
-        const isGroup = (chat.title !== null); // Ein Forum/Gruppe ist immer über den Titel definiert!
+        const isGroup = (chat.title !== null); 
         if (isOfficial || isDirect || isGroup) accessibleChats.push(chat);
     }
 
