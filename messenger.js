@@ -386,7 +386,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             const sysMsg = `${currentUsername} hat ${targetUser.username} zum Forum hinzugefügt.`;
 
+            // Behebt Problem 3: Aktualisiert user2_id auf den hinzugefügten Nutzer, damit RLS-Berechtigungen (Reagieren/Schreiben) für ihn freigeschaltet sind!
             await supabase.from("chats").update({
+                user2_id: targetUser.id,
                 last_message: sysMsg
             }).eq("id", activeChatId);
 
@@ -636,11 +638,14 @@ function setupGlobalMessageListener() {
                         targetChat.last_msg_time = latestMsg.created_at;
                     }
                     if (latestMsg.reactions && Object.keys(latestMsg.reactions).length > 0) {
-                        // Korrigierte Auswahl: Priorisiert deine eigene Reaktion, falls du reagiert hast (behebt das alphabetische JSONB-Sortierproblem)
-                        const reactorId = latestMsg.reactions[currentUser.id] ? currentUser.id : Object.keys(latestMsg.reactions)[0];
+                        // Behebt Problem 1 & 2: Nimmt exakt den letzten Reagierenden und wendet die korrekte deutsche Grammatik an ("Du hast" vs "[Name] hat")
+                        const allReactorIds = Object.keys(latestMsg.reactions);
+                        const reactorId = allReactorIds[allReactorIds.length - 1];
+                        const isSelf = String(reactorId) === String(currentUser.id);
+                        const reactorName = isSelf ? "Du" : await fetchUserName(reactorId);
+                        const verb = isSelf ? "hast" : "hat";
                         const lastEmoji = latestMsg.reactions[reactorId];
-                        const reactorName = (String(reactorId) === String(currentUser.id)) ? "Du" : await fetchUserName(reactorId);
-                        targetChat.last_message = `${reactorName} hat mit ${lastEmoji} reagiert`;
+                        targetChat.last_message = `${reactorName} ${verb} mit ${lastEmoji} reagiert`;
                     } else {
                         targetChat.last_message = latestMsg.text || "[Medien]";
                     }
@@ -769,10 +774,13 @@ async function loadUserChats() {
         if (latestMsg) {
             chat.last_msg_time = latestMsg.created_at;
             if (latestMsg.reactions && Object.keys(latestMsg.reactions).length > 0) {
-                const reactorId = latestMsg.reactions[currentUser.id] ? currentUser.id : Object.keys(latestMsg.reactions)[0];
+                const allReactorIds = Object.keys(latestMsg.reactions);
+                const reactorId = allReactorIds[allReactorIds.length - 1];
+                const isSelf = String(reactorId) === String(currentUser.id);
+                const reactorName = isSelf ? "Du" : await fetchUserName(reactorId);
+                const verb = isSelf ? "hast" : "hat";
                 const lastEmoji = latestMsg.reactions[reactorId];
-                const reactorName = (String(reactorId) === String(currentUser.id)) ? "Du" : await fetchUserName(reactorId);
-                chat.last_message = `${reactorName} hat mit ${lastEmoji} reagiert`;
+                chat.last_message = `${reactorName} ${verb} mit ${lastEmoji} reagiert`;
             } else {
                 chat.last_message = latestMsg.text || "[Medien]";
             }
