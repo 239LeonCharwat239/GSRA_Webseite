@@ -1074,7 +1074,7 @@ async function appendSingleMessage(msg, isSystem = false) {
         });
 
         const plusSpan = document.createElement("span");
-        plusSpan.innerHTML = '<i class="fa-solid fa-plus" style="font-size: 14px;"></i>';
+        plusSpan.innerHTML = '<i class="fa-solid fa-plus" style="font-size: 12px;"></i>';
         plusSpan.title = "Weitere Emojis";
 
         const pickerPopup = document.createElement("div");
