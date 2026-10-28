@@ -617,26 +617,45 @@ function setupGlobalMessageListener() {
     globalListenerChannel = supabase
         .channel(`global_messages_channel_${Math.random()}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, async (payload) => {
-            const msg = payload.new;
+            const eventType = payload.eventType; // 'INSERT', 'UPDATE', 'DELETE'
+            const msg = payload.new || payload.old;
+            if (!msg || !msg.chat_id) return;
+
             const targetChat = allChatsCache.find(c => c.id === msg.chat_id);
             if (targetChat) {
-                targetChat.last_msg_time = msg.created_at || new Date().toISOString();
-                
-                if (msg.reactions && Object.keys(msg.reactions).length > 0) {
-                    const lastUserId = Object.keys(msg.reactions).pop();
-                    const lastEmoji = msg.reactions[lastUserId];
-                    const reactorName = (String(lastUserId) === String(currentUser.id)) ? "Du" : await fetchUserName(lastUserId);
-                    targetChat.last_message = `${reactorName} hat mit ${lastEmoji} reagiert`;
-                } else {
-                    targetChat.last_message = msg.text || "[Medien]";
+                const { data: latestMsg } = await supabase
+                    .from("messages")
+                    .select("created_at, sender_id, text, reactions")
+                    .eq("chat_id", targetChat.id)
+                    .order("created_at", { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                if (latestMsg) {
+                    if (eventType === 'INSERT') {
+                        targetChat.last_msg_time = latestMsg.created_at;
+                    }
+                    if (latestMsg.reactions && Object.keys(latestMsg.reactions).length > 0) {
+                        const lastUserId = Object.keys(latestMsg.reactions).pop();
+                        const lastEmoji = latestMsg.reactions[lastUserId];
+                        const reactorName = (String(lastUserId) === String(currentUser.id)) ? "Du" : await fetchUserName(lastUserId);
+                        targetChat.last_message = `${reactorName} hat mit ${lastEmoji} reagiert`;
+                    } else {
+                        targetChat.last_message = latestMsg.text || "[Medien]";
+                    }
                 }
 
-                if (msg.sender_id !== currentUser.id) {
+                if (eventType === 'INSERT' && msg.sender_id !== currentUser.id) {
                     if (targetChat.id !== activeChatId || document.hidden) {
                         targetChat.unread = true;
                     }
                 }
-                allChatsCache.sort((a, b) => new Date(b.last_msg_time || b.created_at || 0) - new Date(a.last_msg_time || a.created_at || 0));
+
+                // WICHTIG: Nur bei echten neuen Nachrichten (INSERT) wird neu sortiert. Reaktionen (UPDATE) verändern die Position in der Sidebar nicht!
+                if (eventType === 'INSERT') {
+                    allChatsCache.sort((a, b) => new Date(b.last_msg_time || b.created_at || 0) - new Date(a.last_msg_time || a.created_at || 0));
+                }
+
                 updateGlobalUnreadState();
                 renderChatsList();
             } else {
@@ -1040,7 +1059,6 @@ async function appendSingleMessage(msg, isSystem = false) {
         const actionsDiv = document.createElement("div");
         actionsDiv.className = "message-actions";
 
-        // 1. Emoji-Smiley Button
         const emojiBtn = document.createElement("button");
         emojiBtn.className = "msg-action-btn";
         emojiBtn.title = "Mit Emoji reagieren";
@@ -1177,7 +1195,6 @@ async function appendSingleMessage(msg, isSystem = false) {
         actionsDiv.appendChild(quickBar);
         actionsDiv.appendChild(pickerPopup);
 
-        // 2. Pfeil-nach-unten Button (Dropdown)
         const arrowBtn = document.createElement("button");
         arrowBtn.className = "msg-action-btn";
         arrowBtn.title = "Mehr Optionen";
@@ -1415,9 +1432,6 @@ async function appendSingleMessage(msg, isSystem = false) {
     bubble.appendChild(footerDiv);
     wrapperDiv.appendChild(bubble);
 
-    /* =========================================================
-       GEMEINSAME REAKTIONSBLASE (UNTER DER NACHRICHT, MAX. 4 EMOJIS)
-       ========================================================= */
     if (!isDeleted && msg.reactions && typeof msg.reactions === 'object' && Object.keys(msg.reactions).length > 0) {
         const reactionsContainer = document.createElement("div");
         reactionsContainer.className = `message-reactions-container ${isOwn ? 'align-right' : 'align-left'}`;
