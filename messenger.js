@@ -636,9 +636,10 @@ function setupGlobalMessageListener() {
                         targetChat.last_msg_time = latestMsg.created_at;
                     }
                     if (latestMsg.reactions && Object.keys(latestMsg.reactions).length > 0) {
-                        const lastUserId = Object.keys(latestMsg.reactions).pop();
-                        const lastEmoji = latestMsg.reactions[lastUserId];
-                        const reactorName = (String(lastUserId) === String(currentUser.id)) ? "Du" : await fetchUserName(lastUserId);
+                        // Korrigierte Auswahl: Priorisiert deine eigene Reaktion, falls du reagiert hast (behebt das alphabetische JSONB-Sortierproblem)
+                        const reactorId = latestMsg.reactions[currentUser.id] ? currentUser.id : Object.keys(latestMsg.reactions)[0];
+                        const lastEmoji = latestMsg.reactions[reactorId];
+                        const reactorName = (String(reactorId) === String(currentUser.id)) ? "Du" : await fetchUserName(reactorId);
                         targetChat.last_message = `${reactorName} hat mit ${lastEmoji} reagiert`;
                     } else {
                         targetChat.last_message = latestMsg.text || "[Medien]";
@@ -651,7 +652,6 @@ function setupGlobalMessageListener() {
                     }
                 }
 
-                // WICHTIG: Nur bei echten neuen Nachrichten (INSERT) wird neu sortiert. Reaktionen (UPDATE) verändern die Position in der Sidebar nicht!
                 if (eventType === 'INSERT') {
                     allChatsCache.sort((a, b) => new Date(b.last_msg_time || b.created_at || 0) - new Date(a.last_msg_time || a.created_at || 0));
                 }
@@ -769,9 +769,9 @@ async function loadUserChats() {
         if (latestMsg) {
             chat.last_msg_time = latestMsg.created_at;
             if (latestMsg.reactions && Object.keys(latestMsg.reactions).length > 0) {
-                const lastUserId = Object.keys(latestMsg.reactions).pop();
-                const lastEmoji = latestMsg.reactions[lastUserId];
-                const reactorName = (String(lastUserId) === String(currentUser.id)) ? "Du" : await fetchUserName(lastUserId);
+                const reactorId = latestMsg.reactions[currentUser.id] ? currentUser.id : Object.keys(latestMsg.reactions)[0];
+                const lastEmoji = latestMsg.reactions[reactorId];
+                const reactorName = (String(reactorId) === String(currentUser.id)) ? "Du" : await fetchUserName(reactorId);
                 chat.last_message = `${reactorName} hat mit ${lastEmoji} reagiert`;
             } else {
                 chat.last_message = latestMsg.text || "[Medien]";
