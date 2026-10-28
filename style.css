@@ -1381,7 +1381,7 @@ body.multi-select-active .message-actions {
     color: var(--gsra-yellow);
 }
 
-/* WhatsApp-Reaktionsleiste (Quick Bar) */
+/* WhatsApp-Reaktionsleiste (Quick Bar) - ultralegant, perfekt zentriert mit fester Ausrichtung */
 .wa-quick-reaction-bar {
     position: absolute;
     background: #15161a;
@@ -1442,7 +1442,7 @@ body.multi-select-active .message-actions {
     background: rgba(255, 255, 255, 0.08);
 }
 
-/* Erweitertes Emoji-Such-Popup */
+/* Erweitertes Emoji-Such-Popup mit Hover-Brücke */
 .message-react-picker-popup {
     position: absolute;
     background: #15161a;
@@ -1455,7 +1455,7 @@ body.multi-select-active .message-actions {
     z-index: 80;
     box-shadow: 0 10px 30px rgba(0,0,0,0.9);
     width: 220px;
-    max-height: 190px;
+    max-height: 180px;
 }
 
 .message-react-picker-popup.popup-above {
@@ -1504,7 +1504,6 @@ body.multi-select-active .message-actions {
     gap: 4px;
     overflow-y: auto;
     max-height: 120px;
-    scrollbar-gutter: stable;
 }
 
 .message-react-picker-grid span {
@@ -1520,67 +1519,47 @@ body.multi-select-active .message-actions {
     background: rgba(255, 204, 0, 0.2);
 }
 
-/* =========================================
-   GEMEINSAME WHATSAPP-REAKTIONSBLASE (FIXIERT)
-========================================= */
+/* Eigene Reaktions-Bubble unter der Nachrichten-Bubble (WhatsApp-Stil) */
 .message-reactions-container {
     display: flex;
     flex-direction: column;
-    margin-top: -12px;
-    margin-bottom: 6px;
-    z-index: 5;
-    position: relative;
+    margin-top: 3px;
+    margin-bottom: 4px;
 }
 
 .message-reactions-container.align-right {
     align-items: flex-end;
-    margin-right: 12px;
 }
 
 .message-reactions-container.align-left {
     align-items: flex-start;
-    margin-left: 12px;
 }
 
-.whatsapp-reaction-pill {
+.reaction-bubble-wrapper {
     background: #15161a;
     border: 1px solid var(--border-subtle);
-    border-radius: 16px;
-    padding: 3px 8px;
+    border-radius: 12px;
+    padding: 2px 8px;
     font-size: 13px;
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
     cursor: pointer;
     color: #fff;
     box-shadow: 0 3px 10px rgba(0,0,0,0.6);
     transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
 }
 
-.whatsapp-reaction-pill.user-reacted {
+.reaction-bubble-wrapper.user-reacted {
     background: rgba(0, 85, 255, 0.25) !important;
     border-color: var(--gsra-yellow) !important;
     box-shadow: var(--blue-glow);
 }
 
-.whatsapp-reaction-pill:hover {
+.reaction-bubble-wrapper:hover {
     background: rgba(255, 204, 0, 0.15);
     border-color: var(--gsra-yellow);
     transform: translateY(-1px);
-}
-
-.wa-pill-emoji {
-    font-size: 15px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.wa-pill-count {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-muted);
-    margin-left: 2px;
 }
 
 /* Zitat-Block kompakt */
