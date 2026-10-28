@@ -386,9 +386,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             const sysMsg = `${currentUsername} hat ${targetUser.username} zum Forum hinzugefügt.`;
 
-            // Behebt Problem 3: Aktualisiert user2_id auf den hinzugefügten Nutzer, damit RLS-Berechtigungen (Reagieren/Schreiben) für ihn freigeschaltet sind!
+            // WICHTIG: user2_id wird NICHT verändert, damit das Forum ein Forum bleibt (user1_id === user2_id)!
             await supabase.from("chats").update({
-                user2_id: targetUser.id,
                 last_message: sysMsg
             }).eq("id", activeChatId);
 
@@ -619,37 +618,13 @@ function setupGlobalMessageListener() {
     globalListenerChannel = supabase
         .channel(`global_messages_channel_${Math.random()}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, async (payload) => {
-            const eventType = payload.eventType; // 'INSERT', 'UPDATE', 'DELETE'
+            const eventType = payload.eventType; 
             const msg = payload.new || payload.old;
             if (!msg || !msg.chat_id) return;
 
             const targetChat = allChatsCache.find(c => c.id === msg.chat_id);
             if (targetChat) {
-                const { data: latestMsg } = await supabase
-                    .from("messages")
-                    .select("created_at, sender_id, text, reactions")
-                    .eq("chat_id", targetChat.id)
-                    .order("created_at", { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
-
-                if (latestMsg) {
-                    if (eventType === 'INSERT') {
-                        targetChat.last_msg_time = latestMsg.created_at;
-                    }
-                    if (latestMsg.reactions && Object.keys(latestMsg.reactions).length > 0) {
-                        // Behebt Problem 1 & 2: Nimmt exakt den letzten Reagierenden und wendet die korrekte deutsche Grammatik an ("Du hast" vs "[Name] hat")
-                        const allReactorIds = Object.keys(latestMsg.reactions);
-                        const reactorId = allReactorIds[allReactorIds.length - 1];
-                        const isSelf = String(reactorId) === String(currentUser.id);
-                        const reactorName = isSelf ? "Du" : await fetchUserName(reactorId);
-                        const verb = isSelf ? "hast" : "hat";
-                        const lastEmoji = latestMsg.reactions[reactorId];
-                        targetChat.last_message = `${reactorName} ${verb} mit ${lastEmoji} reagiert`;
-                    } else {
-                        targetChat.last_message = latestMsg.text || "[Medien]";
-                    }
-                }
+                await updateChatLastMessageInfo(targetChat, supabase);
 
                 if (eventType === 'INSERT' && msg.sender_id !== currentUser.id) {
                     if (targetChat.id !== activeChatId || document.hidden) {
@@ -668,6 +643,44 @@ function setupGlobalMessageListener() {
             }
         })
         .subscribe();
+}
+
+async function updateChatLastMessageInfo(chat, supabase) {
+    const { data: recentMsgs } = await supabase
+        .from("messages")
+        .select("created_at, sender_id, text, reactions")
+        .eq("chat_id", chat.id)
+        .order("created_at", { ascending: false })
+        .limit(6);
+
+    if (!recentMsgs || recentMsgs.length === 0) {
+        chat.last_msg_time = chat.created_at;
+        chat.last_message = "Keine Nachrichten";
+        return;
+    }
+
+    let latestReactedMsg = null;
+    for (const m of recentMsgs) {
+        if (m.reactions && Object.keys(m.reactions).length > 0) {
+            latestReactedMsg = m;
+            break;
+        }
+    }
+
+    const latestMsg = recentMsgs[0];
+    chat.last_msg_time = latestMsg.created_at;
+
+    if (latestReactedMsg) {
+        const allReactorIds = Object.keys(latestReactedMsg.reactions);
+        const reactorId = allReactorIds[allReactorIds.length - 1];
+        const isSelf = String(reactorId) === String(currentUser.id);
+        const reactorName = isSelf ? "Du" : await fetchUserName(reactorId);
+        const verb = isSelf ? "hast" : "hat";
+        const lastEmoji = latestReactedMsg.reactions[reactorId];
+        chat.last_message = `${reactorName} ${verb} mit ${lastEmoji} reagiert`;
+    } else {
+        chat.last_message = latestMsg.text || "[Medien]";
+    }
 }
 
 function updateGlobalUnreadState() {
@@ -746,7 +759,7 @@ async function loadUserChats() {
     for (const chat of rawChats) {
         const isOfficial = (chat.id === officialForumChatId || (chat.title && chat.title.includes('Official')));
         const isDirect = (chat.user1_id !== chat.user2_id);
-        const isGroup = (chat.user1_id === chat.user2_id);
+        const isGroup = (chat.title !== null); // Ein Forum/Gruppe ist immer über den Titel definiert!
         if (isOfficial || isDirect || isGroup) accessibleChats.push(chat);
     }
 
@@ -763,31 +776,7 @@ async function loadUserChats() {
             await fetchUserName(otherUserId);
         }
 
-        const { data: latestMsg } = await supabase
-            .from("messages")
-            .select("created_at, sender_id, text, reactions")
-            .eq("chat_id", chat.id)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-        if (latestMsg) {
-            chat.last_msg_time = latestMsg.created_at;
-            if (latestMsg.reactions && Object.keys(latestMsg.reactions).length > 0) {
-                const allReactorIds = Object.keys(latestMsg.reactions);
-                const reactorId = allReactorIds[allReactorIds.length - 1];
-                const isSelf = String(reactorId) === String(currentUser.id);
-                const reactorName = isSelf ? "Du" : await fetchUserName(reactorId);
-                const verb = isSelf ? "hast" : "hat";
-                const lastEmoji = latestMsg.reactions[reactorId];
-                chat.last_message = `${reactorName} ${verb} mit ${lastEmoji} reagiert`;
-            } else {
-                chat.last_message = latestMsg.text || "[Medien]";
-            }
-        } else {
-            chat.last_msg_time = chat.created_at;
-            chat.last_message = "Keine Nachrichten";
-        }
+        await updateChatLastMessageInfo(chat, supabase);
 
         if (chat.id === activeChatId) {
             chat.unread = false;
@@ -822,7 +811,7 @@ async function renderChatsList() {
 
     let filtered = allChatsCache.filter(chat => {
         const isOfficial = (chat.id === officialForumChatId || (chat.title && chat.title.includes('Official')));
-        const isGroup = (chat.title !== null && chat.user1_id === chat.user2_id && !isOfficial);
+        const isGroup = (chat.title !== null && !isOfficial);
         const otherUserId = (chat.user1_id !== chat.user2_id) ? (chat.user1_id === currentUser.id ? chat.user2_id : chat.user1_id) : null;
         const otherUserName = otherUserId ? (userNamesCache[otherUserId] || "Fahrer") : "";
         
@@ -846,7 +835,7 @@ async function renderChatsList() {
 
     for (const chat of filtered) {
         const isOfficial = (chat.id === officialForumChatId || (chat.title && chat.title.includes('Official')));
-        const isGroup = (chat.title !== null && chat.user1_id === chat.user2_id && !isOfficial);
+        const isGroup = (chat.title !== null && !isOfficial);
         const isForumOrGroup = isOfficial || isGroup;
 
         let otherUserName = "Fahrer";
@@ -1508,7 +1497,7 @@ if (editChatTitleBtn) {
         if (newTitle !== null && newTitle.trim() !== "") {
             const trimmedTitle = newTitle.trim();
             const chatObj = allChatsCache.find(c => c.id === activeChatId);
-            const isForum = (chatObj && chatObj.user1_id === chatObj.user2_id);
+            const isForum = (chatObj && chatObj.title !== null);
             const articleText = isForum ? "das Forum" : "den Chat";
 
             await supabase.from("chats").update({ title: trimmedTitle }).eq("id", activeChatId);
