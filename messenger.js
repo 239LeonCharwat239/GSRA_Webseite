@@ -1,5 +1,5 @@
 /* =========================================
-   GSRA - Messenger Logik (Vollständig & Final)
+   GSRA - Messenger Logik (Vollständig & Korrigiert)
 ========================================= */
 
 let currentUser = null;
@@ -365,6 +365,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (addMemberBtn) {
         addMemberBtn.addEventListener("click", async () => {
             if (!currentUser?.id || !activeChatId) return;
+
+            // Mitglieder dürfen nur zu einem Forum / einer Gruppe (title gesetzt) hinzugefügt werden
+            const activeChatObj = allChatsCache.find(c => c.id === activeChatId);
+            if (!activeChatObj || activeChatObj.title === null || activeChatObj.title === undefined) {
+                alert("Mitglieder können nur zu einem Forum / einer Gruppe hinzugefügt werden.");
+                return;
+            }
+
             const memberName = prompt("Gib den Benutzernamen des hinzuzufügenden Mitglieds ein:");
             if (!memberName) return;
 
@@ -386,10 +394,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             const sysMsg = `${currentUsername} hat ${targetUser.username} zum Forum hinzugefügt.`;
 
-            // Forum bleibt absolut stabil als Forum (kein Umwandeln in 1-zu-1-Chat)
+            // WICHTIG: user2_id wird NICHT verändert, damit das Forum ein Forum bleibt (user1_id === user2_id)!
+            // Es wird ausschließlich last_message geschrieben (niemals user1_id / user2_id) und nur bei Chats mit Titel (= Forum)
             await supabase.from("chats").update({
                 last_message: sysMsg
-            }).eq("id", activeChatId);
+            }).eq("id", activeChatId).not("title", "is", null);
 
             await supabase.from("messages").insert([{
                 chat_id: activeChatId,
@@ -648,10 +657,10 @@ function setupGlobalMessageListener() {
 async function updateChatLastMessageInfo(chat, supabase) {
     const { data: recentMsgs } = await supabase
         .from("messages")
-        .select("created_at, sender_id, text, reactions")
+        .select("created_at, sender_id, text")
         .eq("chat_id", chat.id)
         .order("created_at", { ascending: false })
-        .limit(6);
+        .limit(1);
 
     if (!recentMsgs || recentMsgs.length === 0) {
         chat.last_msg_time = chat.created_at;
@@ -659,27 +668,33 @@ async function updateChatLastMessageInfo(chat, supabase) {
         return;
     }
 
-    let latestReactedMsg = null;
-    for (const m of recentMsgs) {
-        if (m.reactions && Object.keys(m.reactions).length > 0) {
-            latestReactedMsg = m;
-            break;
-        }
-    }
-
     const latestMsg = recentMsgs[0];
     chat.last_msg_time = latestMsg.created_at;
+    chat.last_message = latestMsg.text || "[Medien]";
 
-    if (latestReactedMsg) {
-        const allReactorIds = Object.keys(latestReactedMsg.reactions);
-        const reactorId = allReactorIds[allReactorIds.length - 1];
-        const isSelf = String(reactorId) === String(currentUser.id);
-        const reactorName = isSelf ? "Du" : await fetchUserName(reactorId);
+    // Neueste Reaktion im Chat ermitteln (auch auf ältere Nachrichten) - unabhängig von der Position der Nachricht
+    const { data: reactedMsgs } = await supabase
+        .from("messages")
+        .select("reactions, last_reaction_user, last_reaction_emoji, last_reaction_at")
+        .eq("chat_id", chat.id)
+        .not("last_reaction_at", "is", null)
+        .order("last_reaction_at", { ascending: false })
+        .limit(5);
+
+    // Nur gültige Reaktionen berücksichtigen (Reaktion existiert noch, Nachricht nicht gelöscht)
+    const latestReaction = (reactedMsgs || []).find(r =>
+        r.last_reaction_user &&
+        r.last_reaction_emoji &&
+        r.reactions &&
+        String(r.reactions[r.last_reaction_user]) === String(r.last_reaction_emoji)
+    );
+
+    // Die Reaktion wird nur angezeigt, wenn sie neuer ist als die letzte Nachricht
+    if (latestReaction && new Date(latestReaction.last_reaction_at) > new Date(latestMsg.created_at)) {
+        const isSelf = String(latestReaction.last_reaction_user) === String(currentUser.id);
+        const reactorName = isSelf ? "Du" : await fetchUserName(latestReaction.last_reaction_user);
         const verb = isSelf ? "hast" : "hat";
-        const lastEmoji = latestReactedMsg.reactions[reactorId];
-        chat.last_message = `${reactorName} ${verb} mit ${lastEmoji} reagiert`;
-    } else {
-        chat.last_message = latestMsg.text || "[Medien]";
+        chat.last_message = `${reactorName} ${verb} mit ${latestReaction.last_reaction_emoji} reagiert`;
     }
 }
 
@@ -759,7 +774,7 @@ async function loadUserChats() {
     for (const chat of rawChats) {
         const isOfficial = (chat.id === officialForumChatId || (chat.title && chat.title.includes('Official')));
         const isDirect = (chat.user1_id !== chat.user2_id);
-        const isGroup = (chat.title !== null); 
+        const isGroup = (chat.title !== null); // Ein Forum/Gruppe ist immer über den Titel definiert!
         if (isOfficial || isDirect || isGroup) accessibleChats.push(chat);
     }
 
@@ -1009,6 +1024,49 @@ async function formatSystemMessage(text, senderId) {
     return text;
 }
 
+async function toggleReaction(msg, emoji) {
+    const supabase = window.supabaseClient || window.supabase;
+    if (!supabase || !currentUser?.id || !msg?.id) return;
+
+    // Aktuellen Stand frisch laden, damit Reaktionen anderer Nutzer nicht überschrieben werden
+    const { data: fresh } = await supabase.from("messages").select("*").eq("id", msg.id).maybeSingle();
+    const currentReactions = { ...((fresh && fresh.reactions) || msg.reactions || {}) };
+
+    let removed = false;
+    if (currentReactions[currentUser.id] === emoji) {
+        delete currentReactions[currentUser.id];
+        removed = true;
+    } else {
+        currentReactions[currentUser.id] = emoji;
+    }
+
+    const payload = { reactions: currentReactions };
+    if (!removed) {
+        payload.last_reaction_user = currentUser.id;
+        payload.last_reaction_emoji = emoji;
+        payload.last_reaction_at = new Date().toISOString();
+    } else if (fresh && String(fresh.last_reaction_user) === String(currentUser.id)) {
+        payload.last_reaction_user = null;
+        payload.last_reaction_emoji = null;
+        payload.last_reaction_at = null;
+    }
+
+    let { data: updated, error } = await supabase.from("messages").update(payload).eq("id", msg.id).select("id");
+    if (error) {
+        // Fallback, falls die Zusatzspalten (reactions_setup.sql) noch nicht existieren
+        ({ data: updated, error } = await supabase.from("messages").update({ reactions: currentReactions }).eq("id", msg.id).select("id"));
+    }
+
+    if (error || !updated || updated.length === 0) {
+        console.error("Reaktion konnte nicht gespeichert werden:", error);
+        alert("Die Reaktion konnte nicht gespeichert werden (fehlende Berechtigung). Bitte die Policies aus reactions_setup.sql in Supabase ausführen.");
+        return;
+    }
+
+    await loadChatMessages(activeChatId);
+    await loadUserChats();
+}
+
 async function appendSingleMessage(msg, isSystem = false) {
     if (!chatMessages) return;
     const placeholder = chatMessages.querySelector(".chat-placeholder");
@@ -1072,18 +1130,7 @@ async function appendSingleMessage(msg, isSystem = false) {
             span.addEventListener("click", async (e) => {
                 e.stopPropagation();
                 quickBar.style.display = "none";
-                const supabase = window.supabaseClient || window.supabase;
-                if (supabase) {
-                    let currentReactions = msg.reactions || {};
-                    if (currentReactions[currentUser.id] === em) {
-                        delete currentReactions[currentUser.id];
-                    } else {
-                        currentReactions[currentUser.id] = em;
-                    }
-                    await supabase.from("messages").update({ reactions: currentReactions }).eq("id", msg.id);
-                    await loadChatMessages(activeChatId);
-                    await loadUserChats();
-                }
+                await toggleReaction(msg, em);
             });
             quickBar.appendChild(span);
         });
@@ -1122,18 +1169,7 @@ async function appendSingleMessage(msg, isSystem = false) {
                 span.addEventListener("click", async (e) => {
                     e.stopPropagation();
                     pickerPopup.style.display = "none";
-                    const supabase = window.supabaseClient || window.supabase;
-                    if (supabase) {
-                        let currentReactions = msg.reactions || {};
-                        if (currentReactions[currentUser.id] === em) {
-                            delete currentReactions[currentUser.id];
-                        } else {
-                            currentReactions[currentUser.id] = em;
-                        }
-                        await supabase.from("messages").update({ reactions: currentReactions }).eq("id", msg.id);
-                        await loadChatMessages(activeChatId);
-                        await loadUserChats();
-                    }
+                    await toggleReaction(msg, em);
                 });
                 grid.appendChild(span);
             });
@@ -1460,21 +1496,9 @@ async function appendSingleMessage(msg, isSystem = false) {
 
         pill.addEventListener("click", async (e) => {
             e.stopPropagation();
-            const supabase = window.supabaseClient || window.supabase;
-            if (supabase) {
-                let currentReactions = msg.reactions || {};
-                const myCurrentEmoji = currentReactions[currentUser.id];
-                const targetEmoji = myCurrentEmoji || sortedEmojis[0][0];
-
-                if (myCurrentEmoji === targetEmoji) {
-                    delete currentReactions[currentUser.id];
-                } else {
-                    currentReactions[currentUser.id] = targetEmoji;
-                }
-                await supabase.from("messages").update({ reactions: currentReactions }).eq("id", msg.id);
-                await loadChatMessages(activeChatId);
-                await loadUserChats();
-            }
+            const myCurrentEmoji = (msg.reactions || {})[currentUser.id];
+            const targetEmoji = myCurrentEmoji || sortedEmojis[0][0];
+            await toggleReaction(msg, targetEmoji);
         });
 
         reactionsContainer.appendChild(pill);
