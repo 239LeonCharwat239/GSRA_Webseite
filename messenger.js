@@ -1132,7 +1132,6 @@ async function appendSingleMessage(msg, isSystem = false) {
 
         plusSpan.addEventListener("click", (e) => {
             e.stopPropagation();
-            // Schnell-Leiste geöffnet lassen, damit der Hover-Kontext erhalten bleibt
             const isOpen = pickerPopup.style.display === "flex";
             document.querySelectorAll(".message-react-picker-popup").forEach(p => p.style.display = "none");
             
@@ -1416,7 +1415,9 @@ async function appendSingleMessage(msg, isSystem = false) {
     bubble.appendChild(footerDiv);
     wrapperDiv.appendChild(bubble);
 
-    // Getrennte Reaktions-Bubble unterhalb der Nachrichten-Bubble im WhatsApp-Stil
+    /* =========================================================
+       GEMEINSAME REAKTIONSBLASE (UNTER DER NACHRICHT, MAX. 4 EMOJIS)
+       ========================================================= */
     if (!isDeleted && msg.reactions && typeof msg.reactions === 'object' && Object.keys(msg.reactions).length > 0) {
         const reactionsContainer = document.createElement("div");
         reactionsContainer.className = `message-reactions-container ${isOwn ? 'align-right' : 'align-left'}`;
@@ -1426,41 +1427,47 @@ async function appendSingleMessage(msg, isSystem = false) {
             counts[emoji] = (counts[emoji] || 0) + 1;
         });
 
+        // Nach Häufigkeit sortieren und auf maximal 4 Emojis begrenzen
         const sortedEmojis = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 4);
 
-        sortedEmojis.forEach(([emoji, count]) => {
-            const reactionBubble = document.createElement("div");
-            const hasUserReacted = msg.reactions[currentUser.id] === emoji;
-            reactionBubble.className = `reaction-bubble-wrapper ${hasUserReacted ? 'user-reacted' : ''}`;
-            
-            const totalReactionsCount = Object.keys(msg.reactions).length;
-            const isGroupOrForum = activeChatId === officialForumChatId || allChatsCache.find(c => c.id === activeChatId)?.user1_id === allChatsCache.find(c => c.id === activeChatId)?.user2_id;
+        const pill = document.createElement("div");
+        const hasUserReacted = Object.keys(msg.reactions).some(u => String(u) === String(currentUser?.id));
+        pill.className = `whatsapp-reaction-pill ${hasUserReacted ? 'user-reacted' : ''}`;
 
-            let countDisplay = "";
-            if (isGroupOrForum && totalReactionsCount > 1) {
-                countDisplay = ` <span style="font-size: 11px; opacity: 0.9;">${formatCount(totalReactionsCount)}</span>`;
-            }
-
-            reactionBubble.innerHTML = `${emoji}${countDisplay}`;
-            
-            reactionBubble.addEventListener("click", async (e) => {
-                e.stopPropagation();
-                const supabase = window.supabaseClient || window.supabase;
-                if (supabase) {
-                    let currentReactions = msg.reactions || {};
-                    if (currentReactions[currentUser.id] === emoji) {
-                        delete currentReactions[currentUser.id];
-                    } else {
-                        currentReactions[currentUser.id] = emoji;
-                    }
-                    await supabase.from("messages").update({ reactions: currentReactions }).eq("id", msg.id);
-                    await loadChatMessages(activeChatId);
-                    await loadUserChats();
-                }
-            });
-
-            reactionsContainer.appendChild(reactionBubble);
+        let emojisHtml = "";
+        sortedEmojis.forEach(([emoji]) => {
+            emojisHtml += `<span class="wa-pill-emoji">${emoji}</span>`;
         });
+        pill.innerHTML = emojisHtml;
+
+        const totalReactionsCount = Object.keys(msg.reactions).length;
+        if (totalReactionsCount > 1) {
+            const countSpan = document.createElement("span");
+            countSpan.className = "wa-pill-count";
+            countSpan.innerText = formatCount(totalReactionsCount);
+            pill.appendChild(countSpan);
+        }
+
+        pill.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            const supabase = window.supabaseClient || window.supabase;
+            if (supabase) {
+                let currentReactions = msg.reactions || {};
+                const myCurrentEmoji = currentReactions[currentUser.id];
+                const targetEmoji = myCurrentEmoji || sortedEmojis[0][0];
+
+                if (myCurrentEmoji === targetEmoji) {
+                    delete currentReactions[currentUser.id];
+                } else {
+                    currentReactions[currentUser.id] = targetEmoji;
+                }
+                await supabase.from("messages").update({ reactions: currentReactions }).eq("id", msg.id);
+                await loadChatMessages(activeChatId);
+                await loadUserChats();
+            }
+        });
+
+        reactionsContainer.appendChild(pill);
         wrapperDiv.appendChild(reactionsContainer);
     }
 

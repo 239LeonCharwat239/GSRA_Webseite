@@ -1381,7 +1381,7 @@ body.multi-select-active .message-actions {
     color: var(--gsra-yellow);
 }
 
-/* WhatsApp-Reaktionsleiste (Quick Bar) - ultralegant, perfekt zentriert mit fester Ausrichtung */
+/* WhatsApp-Reaktionsleiste (Quick Bar) */
 .wa-quick-reaction-bar {
     position: absolute;
     background: #15161a;
@@ -1442,7 +1442,7 @@ body.multi-select-active .message-actions {
     background: rgba(255, 255, 255, 0.08);
 }
 
-/* Erweitertes Emoji-Such-Popup mit Hover-Brücke */
+/* Erweitertes Emoji-Such-Popup */
 .message-react-picker-popup {
     position: absolute;
     background: #15161a;
@@ -1519,12 +1519,16 @@ body.multi-select-active .message-actions {
     background: rgba(255, 204, 0, 0.2);
 }
 
-/* Eigene Reaktions-Bubble unter der Nachrichten-Bubble (WhatsApp-Stil) */
+/* =========================================
+   GEMEINSAME REAKTIONSBLASE (UNTER DER NACHRICHT)
+========================================= */
 .message-reactions-container {
     display: flex;
     flex-direction: column;
     margin-top: 3px;
     margin-bottom: 4px;
+    z-index: 5;
+    position: relative;
 }
 
 .message-reactions-container.align-right {
@@ -1535,31 +1539,45 @@ body.multi-select-active .message-actions {
     align-items: flex-start;
 }
 
-.reaction-bubble-wrapper {
+.whatsapp-reaction-pill {
     background: #15161a;
     border: 1px solid var(--border-subtle);
-    border-radius: 12px;
-    padding: 2px 8px;
+    border-radius: 16px;
+    padding: 3px 8px;
     font-size: 13px;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     cursor: pointer;
     color: #fff;
     box-shadow: 0 3px 10px rgba(0,0,0,0.6);
     transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
 }
 
-.reaction-bubble-wrapper.user-reacted {
+.whatsapp-reaction-pill.user-reacted {
     background: rgba(0, 85, 255, 0.25) !important;
     border-color: var(--gsra-yellow) !important;
     box-shadow: var(--blue-glow);
 }
 
-.reaction-bubble-wrapper:hover {
+.whatsapp-reaction-pill:hover {
     background: rgba(255, 204, 0, 0.15);
     border-color: var(--gsra-yellow);
     transform: translateY(-1px);
+}
+
+.wa-pill-emoji {
+    font-size: 15px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.wa-pill-count {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-left: 2px;
 }
 
 /* Zitat-Block kompakt */
