@@ -1442,7 +1442,7 @@ body.multi-select-active .message-actions {
     background: rgba(255, 255, 255, 0.08);
 }
 
-/* Erweitertes Emoji-Such-Popup mit Hover-Brücke */
+/* Erweitertes Emoji-Such-Popup mit Hover-Brücke und fixierter Scrollbar-Gutter (verhindert Layout-Springen) */
 .message-react-picker-popup {
     position: absolute;
     background: #15161a;
@@ -1455,7 +1455,7 @@ body.multi-select-active .message-actions {
     z-index: 80;
     box-shadow: 0 10px 30px rgba(0,0,0,0.9);
     width: 220px;
-    max-height: 180px;
+    max-height: 190px;
 }
 
 .message-react-picker-popup.popup-above {
@@ -1504,6 +1504,7 @@ body.multi-select-active .message-actions {
     gap: 4px;
     overflow-y: auto;
     max-height: 120px;
+    scrollbar-gutter: stable; /* Verhindert das Layout-Springen beim Erscheinen der Scrollbar */
 }
 
 .message-react-picker-grid span {

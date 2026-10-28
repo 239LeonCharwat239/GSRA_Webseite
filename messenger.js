@@ -1132,7 +1132,6 @@ async function appendSingleMessage(msg, isSystem = false) {
 
         plusSpan.addEventListener("click", (e) => {
             e.stopPropagation();
-            // Schnell-Leiste geöffnet lassen, damit der Hover-Kontext erhalten bleibt
             const isOpen = pickerPopup.style.display === "flex";
             document.querySelectorAll(".message-react-picker-popup").forEach(p => p.style.display = "none");
             
@@ -1416,7 +1415,6 @@ async function appendSingleMessage(msg, isSystem = false) {
     bubble.appendChild(footerDiv);
     wrapperDiv.appendChild(bubble);
 
-    // Getrennte Reaktions-Bubble unterhalb der Nachrichten-Bubble im WhatsApp-Stil
     if (!isDeleted && msg.reactions && typeof msg.reactions === 'object' && Object.keys(msg.reactions).length > 0) {
         const reactionsContainer = document.createElement("div");
         reactionsContainer.className = `message-reactions-container ${isOwn ? 'align-right' : 'align-left'}`;
