@@ -1132,14 +1132,14 @@ async function appendSingleMessage(msg, isSystem = false) {
 
         plusSpan.addEventListener("click", (e) => {
             e.stopPropagation();
-            quickBar.style.display = "none";
+            // Schnell-Leiste geöffnet lassen, damit der Hover-Kontext erhalten bleibt
             const isOpen = pickerPopup.style.display === "flex";
             document.querySelectorAll(".message-react-picker-popup").forEach(p => p.style.display = "none");
             
             if (!isOpen) {
                 const bubbleRect = bubble.getBoundingClientRect();
                 const chatContainerRect = chatMessages.getBoundingClientRect();
-                if (bubbleRect.top - chatContainerRect.top < 220) {
+                if (bubbleRect.top - chatContainerRect.top < 200) {
                     pickerPopup.className = "message-react-picker-popup popup-below";
                 } else {
                     pickerPopup.className = "message-react-picker-popup popup-above";
