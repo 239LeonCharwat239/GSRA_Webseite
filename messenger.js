@@ -689,8 +689,32 @@ async function updateChatLastMessageInfo(chat, supabase) {
         String(r.reactions[r.last_reaction_user]) === String(r.last_reaction_emoji)
     );
 
-    // Die Reaktion wird nur angezeigt, wenn sie neuer ist als die letzte Nachricht
-    if (latestReaction && new Date(latestReaction.last_reaction_at) > new Date(latestMsg.created_at)) {
+    // Neueste Bearbeitung einer Nachricht (nur Vorschau in der Sidebar, nicht im Chat)
+    const { data: editedMsgs } = await supabase
+        .from("messages")
+        .select("sender_id, text, is_edited, edited_at")
+        .eq("chat_id", chat.id)
+        .not("edited_at", "is", null)
+        .order("edited_at", { ascending: false })
+        .limit(5);
+
+    const latestEdit = (editedMsgs || []).find(m =>
+        m.is_edited === true &&
+        m.text !== "Du hast diese Nachricht gelöscht" &&
+        m.text !== "Diese Nachricht wurde gelöscht"
+    );
+
+    const msgTime = new Date(latestMsg.created_at).getTime();
+    const reactionTime = latestReaction ? new Date(latestReaction.last_reaction_at).getTime() : 0;
+    const editTime = latestEdit ? new Date(latestEdit.edited_at).getTime() : 0;
+
+    // Das jüngste Ereignis (Nachricht, Reaktion oder Bearbeitung) bestimmt die Vorschau
+    if (editTime > msgTime && editTime >= reactionTime) {
+        const isSelf = String(latestEdit.sender_id) === String(currentUser.id);
+        const editorName = isSelf ? "Du" : await fetchUserName(latestEdit.sender_id);
+        const verb = isSelf ? "hast" : "hat";
+        chat.last_message = `${editorName} ${verb} eine Nachricht bearbeitet`;
+    } else if (reactionTime > msgTime) {
         const isSelf = String(latestReaction.last_reaction_user) === String(currentUser.id);
         const reactorName = isSelf ? "Du" : await fetchUserName(latestReaction.last_reaction_user);
         const verb = isSelf ? "hast" : "hat";
