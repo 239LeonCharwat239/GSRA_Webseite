@@ -24,6 +24,9 @@ let messagesCacheMap = new Map();
 let viewerItems = [];
 let viewerIndex = 0;
 
+let selectedMediaFiles = [];
+let mediaPickedAt = 0;
+
 // Persönliche Willkommensnachricht im offiziellen Forum: Sie wird nur im Browser des jeweiligen Mitglieds
 // erzeugt (nicht in der Datenbank gespeichert) und ist deshalb ausschließlich für dieses Mitglied sichtbar.
 const WELCOME_MESSAGE_ID = "gsra-welcome";
@@ -476,31 +479,46 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     if (imageUploadInput) {
-        imageUploadInput.addEventListener("change", () => {
-            const files = Array.from(imageUploadInput.files);
-            if (files.length > 0) {
-                const MAX_FILE_SIZE = 200 * 1024 * 1024;
-                for (const file of files) {
-                    if (file.size > MAX_FILE_SIZE) {
-                        alert("Dein Medium konnte nicht hochgeladen werden, da die Datei das Dateigrößenlimit überschreitet.");
-                        imageUploadInput.value = "";
-                        if (imagePreviewContainer) imagePreviewContainer.style.display = "none";
-                        return;
-                    }
-                }
-                if (previewThumbsList) previewThumbsList.innerHTML = "";
-                files.forEach(file => {
-                    const isVid = file.type.startsWith('video/');
-                    const elem = isVid ? document.createElement("video") : document.createElement("img");
-                    elem.src = URL.createObjectURL(file);
-                    elem.style.cssText = "width: 40px; height: 40px; object-fit: cover; border-radius: 4px; border: 1px solid var(--gsra-blue);";
-                    if (previewThumbsList) previewThumbsList.appendChild(elem);
-                });
-                if (imagePreviewName) imagePreviewName.textContent = `${files.length} Datei(en) ausgewählt`;
-                if (imagePreviewContainer) imagePreviewContainer.style.display = "flex";
-            }
+        imageUploadInput.addEventListener("change", () => addMediaFiles(Array.from(imageUploadInput.files)));
+    }
+
+    // Schutz vor versehentlichem Senden: Klicks mit gedrückter Strg-/Umschalt-Taste (z. B. Mehrfachauswahl, wenn sich der
+    // Dateidialog vorzeitig schließt und der nächste Klick auf "Senden" landet) und Klicks direkt nach der Dateiauswahl senden nicht
+    if (sendBtn) {
+        sendBtn.addEventListener("click", (e) => {
+            if (e.ctrlKey || e.metaKey || e.shiftKey || Date.now() - mediaPickedAt < 1000) e.preventDefault();
         });
     }
+
+    // Fotos & Videos per Drag & Drop in den geöffneten Chat ziehen
+    const isFileDrag = (e) => Array.from(e.dataTransfer?.types || []).includes("Files");
+    if (waChatActivePane) {
+        let dragHideTimer = null;
+        waChatActivePane.addEventListener("dragover", (e) => {
+            if (!isFileDrag(e) || (messageInput && messageInput.disabled)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "copy";
+            waChatActivePane.classList.add("drag-active");
+            clearTimeout(dragHideTimer);
+            dragHideTimer = setTimeout(() => waChatActivePane.classList.remove("drag-active"), 250);
+        });
+        waChatActivePane.addEventListener("drop", (e) => {
+            if (!isFileDrag(e)) return;
+            e.preventDefault();
+            clearTimeout(dragHideTimer);
+            waChatActivePane.classList.remove("drag-active");
+            if (!(messageInput && messageInput.disabled)) addMediaFiles(Array.from(e.dataTransfer.files));
+        });
+    }
+    // Neben dem Chat abgelegte Dateien nicht im Browser öffnen
+    window.addEventListener("dragover", (e) => {
+        if (!isFileDrag(e)) return;
+        e.preventDefault();
+        if (!waChatActivePane || !waChatActivePane.contains(e.target) || (messageInput && messageInput.disabled)) e.dataTransfer.dropEffect = "none";
+    });
+    window.addEventListener("drop", (e) => {
+        if (isFileDrag(e)) e.preventDefault();
+    });
 
     if (removeImageBtn) {
         removeImageBtn.addEventListener("click", () => {
@@ -536,6 +554,13 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const deltaX = e.changedTouches[0].clientX - touchStartX;
                 touchStartX = null;
                 if (Math.abs(deltaX) > 50) showViewerItem(viewerIndex + (deltaX < 0 ? 1 : -1));
+            });
+        }
+
+        // Bild-im-Bild-Fenster geschlossen, während der Betrachter zu ist: Video stoppen (kein unsichtbarer Ton)
+        if (modalVideoFull) {
+            modalVideoFull.addEventListener("leavepictureinpicture", () => {
+                if (imageModal.style.display !== "flex") stopViewerVideo();
             });
         }
     }
@@ -588,17 +613,25 @@ function showViewerItem(index) {
     viewerIndex = index;
     const url = viewerItems[index];
     const isVideo = isVideoUrl(url);
+    const inPictureInPicture = modalVideoFull && document.pictureInPictureElement === modalVideoFull;
 
     if (modalVideoFull) {
-        modalVideoFull.pause();
-        if (isVideo) {
-            modalVideoFull.src = url;
-            modalVideoFull.style.display = "block";
-            modalVideoFull.play().catch(() => {});
+        if (inPictureInPicture && (!isVideo || modalVideoFull.src === url)) {
+            // Bild-im-Bild läuft weiter: Fotos werden normal angezeigt, dasselbe Video kehrt in den Betrachter zurück
+            if (isVideo) document.exitPictureInPicture().catch(() => {});
+            modalVideoFull.style.display = isVideo ? "block" : "none";
         } else {
-            modalVideoFull.removeAttribute("src");
-            modalVideoFull.load();
-            modalVideoFull.style.display = "none";
+            if (inPictureInPicture) document.exitPictureInPicture().catch(() => {});
+            modalVideoFull.pause();
+            if (isVideo) {
+                modalVideoFull.src = url;
+                modalVideoFull.style.display = "block";
+                modalVideoFull.play().catch(() => {});
+            } else {
+                modalVideoFull.removeAttribute("src");
+                modalVideoFull.load();
+                modalVideoFull.style.display = "none";
+            }
         }
     }
     if (modalImageFull) {
@@ -633,13 +666,84 @@ function closeMediaViewer() {
     if (!imageModal) return;
     imageModal.style.display = "none";
     document.body.style.overflow = "";
-    if (modalVideoFull) {
-        modalVideoFull.pause();
-        modalVideoFull.removeAttribute("src");
-        modalVideoFull.load();
-        modalVideoFull.style.display = "none";
-    }
+    // Läuft das Video im Bild-im-Bild-Fenster, spielt es nach dem Schließen weiter (man kann nebenbei chatten)
+    if (modalVideoFull && document.pictureInPictureElement !== modalVideoFull) stopViewerVideo();
     if (modalImageFull) modalImageFull.style.display = "none";
+}
+
+function stopViewerVideo() {
+    modalVideoFull.pause();
+    modalVideoFull.removeAttribute("src");
+    modalVideoFull.load();
+    modalVideoFull.style.display = "none";
+}
+
+// Fügt Fotos/Videos der aktuellen Auswahl hinzu (Dateiauswahl oder Drag & Drop) – bereits gewählte Dateien bleiben erhalten
+function addMediaFiles(newFiles) {
+    if (!imageUploadInput) return;
+    const MAX_FILE_SIZE = 200 * 1024 * 1024;
+    // Die bisherige Auswahl zählt nur, solange ihre Vorschau sichtbar ist (Senden und Entfernen blenden sie aus)
+    if (!imagePreviewContainer || imagePreviewContainer.style.display !== "flex") selectedMediaFiles = [];
+    const media = newFiles.filter(f => f.type.startsWith("image/") || f.type.startsWith("video/"));
+
+    if (newFiles.length > 0 && media.length === 0) {
+        alert("Es können nur Fotos und Videos gesendet werden.");
+    } else if (media.some(f => f.size > MAX_FILE_SIZE)) {
+        alert("Dein Medium konnte nicht hochgeladen werden, da die Datei das Dateigrößenlimit überschreitet.");
+    } else if (media.length > 0) {
+        const fileKey = (f) => `${f.name}_${f.size}_${f.lastModified}`;
+        const known = new Set(selectedMediaFiles.map(fileKey));
+        selectedMediaFiles = [...selectedMediaFiles, ...media.filter(f => !known.has(fileKey(f)))];
+        mediaPickedAt = Date.now();
+    }
+
+    // Das Eingabefeld enthält immer die gesamte Auswahl (wird beim Senden ausgelesen)
+    const transfer = new DataTransfer();
+    selectedMediaFiles.forEach(f => transfer.items.add(f));
+    imageUploadInput.files = transfer.files;
+
+    if (selectedMediaFiles.length === 0) {
+        if (imagePreviewContainer) imagePreviewContainer.style.display = "none";
+        return;
+    }
+    if (previewThumbsList) {
+        previewThumbsList.innerHTML = "";
+        selectedMediaFiles.forEach(file => {
+            const elem = file.type.startsWith("video/") ? document.createElement("video") : document.createElement("img");
+            elem.src = URL.createObjectURL(file);
+            elem.style.cssText = "width: 40px; height: 40px; object-fit: cover; border-radius: 4px; border: 1px solid var(--gsra-blue);";
+            previewThumbsList.appendChild(elem);
+        });
+    }
+    if (imagePreviewName) imagePreviewName.textContent = `${selectedMediaFiles.length} Datei(en) ausgewählt`;
+    if (imagePreviewContainer) imagePreviewContainer.style.display = "flex";
+}
+
+// Öffnet ein Nachrichten-Popup (Reaktionen, Emoji-Auswahl, Menü) dort, wo im sichtbaren Chatbereich Platz ist.
+// Passt es nirgends ganz hin, schrumpft der scrollbare Teil – so wird nichts abgeschnitten und der Chat verschiebt sich nicht.
+function placeMessagePopup(popup, anchor, baseClass, dirPrefix, preferBelow = false, scrollArea = null) {
+    const area = chatMessages.getBoundingClientRect();
+    const anchorRect = anchor.getBoundingClientRect();
+    const spaceAbove = anchorRect.top - area.top - 6;
+    const spaceBelow = area.bottom - anchorRect.bottom - 6;
+
+    if (scrollArea) scrollArea.style.maxHeight = "";
+    popup.className = `${baseClass} ${dirPrefix}-below`;
+    popup.style.visibility = "hidden";
+    popup.style.display = "flex";
+    const height = popup.offsetHeight;
+
+    let below;
+    if ((preferBelow ? spaceBelow : spaceAbove) >= height) below = preferBelow;
+    else if ((preferBelow ? spaceAbove : spaceBelow) >= height) below = !preferBelow;
+    else below = spaceBelow > spaceAbove;
+
+    popup.className = `${baseClass} ${dirPrefix}-${below ? "below" : "above"}`;
+    const space = below ? spaceBelow : spaceAbove;
+    if (scrollArea && height > space) {
+        scrollArea.style.maxHeight = `${Math.max(60, scrollArea.offsetHeight - (height - space))}px`;
+    }
+    popup.style.visibility = "";
 }
 
 async function checkUserAdminStatus() {
@@ -1434,14 +1538,8 @@ async function appendSingleMessage(msg, isSystem = false) {
             document.querySelectorAll(".message-react-picker-popup").forEach(p => p.style.display = "none");
             
             if (!isOpen) {
-                const bubbleRect = bubble.getBoundingClientRect();
-                const chatContainerRect = chatMessages.getBoundingClientRect();
-                if (bubbleRect.top - chatContainerRect.top < 200) {
-                    pickerPopup.className = "message-react-picker-popup popup-below";
-                } else {
-                    pickerPopup.className = "message-react-picker-popup popup-above";
-                }
-                pickerPopup.style.display = "flex";
+                // Möglichst auf derselben Seite wie die Schnellleiste öffnen, damit die Auswahl sie ersetzt
+                placeMessagePopup(pickerPopup, actionsDiv, "message-react-picker-popup", "popup", quickBar.classList.contains("bar-below"), grid);
                 searchInput.focus();
             } else {
                 pickerPopup.style.display = "none";
@@ -1458,14 +1556,7 @@ async function appendSingleMessage(msg, isSystem = false) {
             document.querySelectorAll(".message-react-picker-popup").forEach(p => p.style.display = "none");
             
             if (!isOpen) {
-                const bubbleRect = bubble.getBoundingClientRect();
-                const chatContainerRect = chatMessages.getBoundingClientRect();
-                if (bubbleRect.top - chatContainerRect.top < 150) {
-                    quickBar.className = "wa-quick-reaction-bar bar-below";
-                } else {
-                    quickBar.className = "wa-quick-reaction-bar bar-above";
-                }
-                quickBar.style.display = "flex";
+                placeMessagePopup(quickBar, actionsDiv, "wa-quick-reaction-bar", "bar");
             } else {
                 quickBar.style.display = "none";
             }
@@ -1559,14 +1650,7 @@ async function appendSingleMessage(msg, isSystem = false) {
             document.querySelectorAll(".message-react-picker-popup").forEach(p => p.style.display = "none");
 
             if (!isOpen) {
-                const bubbleRect = bubble.getBoundingClientRect();
-                const chatContainerRect = chatMessages.getBoundingClientRect();
-                if (bubbleRect.top - chatContainerRect.top < 160) {
-                    dropdownMenu.className = "wa-msg-dropdown dropdown-below";
-                } else {
-                    dropdownMenu.className = "wa-msg-dropdown dropdown-above";
-                }
-                dropdownMenu.style.display = "flex";
+                placeMessagePopup(dropdownMenu, actionsDiv, "wa-msg-dropdown", "dropdown");
             } else {
                 dropdownMenu.style.display = "none";
             }

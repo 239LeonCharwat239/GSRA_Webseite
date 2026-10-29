@@ -1643,8 +1643,7 @@ body.multi-select-active .message-actions {
     gap: 6px;
     z-index: 80;
     box-shadow: 0 10px 30px rgba(0,0,0,0.9);
-    width: 220px;
-    max-height: 180px;
+    width: 264px;
 }
 
 .message-react-picker-popup.popup-above {
@@ -1689,10 +1688,37 @@ body.multi-select-active .message-actions {
 
 .message-react-picker-grid {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(7, 1fr);
     gap: 4px;
     overflow-y: auto;
-    max-height: 120px;
+    max-height: 168px;
+}
+
+/* Einheitliche, dunkle Scrollleisten im Messenger (statt der hellen Standard-Leiste) */
+.message-react-picker-grid,
+.chat-messages,
+.chat-sidebar-list {
+    scrollbar-width: thin;
+    scrollbar-color: #3a3d46 transparent;
+}
+
+.message-react-picker-grid::-webkit-scrollbar,
+.chat-messages::-webkit-scrollbar,
+.chat-sidebar-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.message-react-picker-grid::-webkit-scrollbar-thumb,
+.chat-messages::-webkit-scrollbar-thumb,
+.chat-sidebar-list::-webkit-scrollbar-thumb {
+    background: #3a3d46;
+    border-radius: 3px;
+}
+
+.message-react-picker-grid::-webkit-scrollbar-track,
+.chat-messages::-webkit-scrollbar-track,
+.chat-sidebar-list::-webkit-scrollbar-track {
+    background: transparent;
 }
 
 .message-react-picker-grid span {
@@ -1967,6 +1993,40 @@ body.multi-select-active .message-actions {
     font-weight: 600;
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
     z-index: 1;
+}
+
+/* =========================================
+   DRAG & DROP: FOTOS & VIDEOS IN DEN CHAT ZIEHEN
+========================================= */
+.wa-drop-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    margin: 12px;
+    border: 2px dashed var(--gsra-blue);
+    border-radius: 12px;
+    background: rgba(11, 12, 16, 0.88);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    pointer-events: none;
+    z-index: 30;
+}
+
+.wa-drop-overlay i {
+    font-size: 42px;
+    color: var(--gsra-blue);
+}
+
+.wa-active-pane.drag-active .wa-drop-overlay {
+    display: flex;
 }
 
 /* =========================================
