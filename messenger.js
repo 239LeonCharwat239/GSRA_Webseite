@@ -26,6 +26,11 @@ let viewerIndex = 0;
 
 let selectedMediaFiles = [];
 let mediaPickedAt = 0;
+let chatMediaItems = [];
+let viewerThumbObserver = null;
+
+// Emoji-Auswahl auf Deutsch (Suche, Kategorien)
+const EMOJI_DATA_SOURCE_DE = "https://cdn.jsdelivr.net/npm/emoji-picker-element-data@1/de/cldr/data.json";
 
 // Persönliche Willkommensnachricht im offiziellen Forum: Sie wird nur im Browser des jeweiligen Mitglieds
 // erzeugt (nicht in der Datenbank gespeichert) und ist deshalb ausschließlich für dieses Mitglied sichtbar.
@@ -80,6 +85,122 @@ function formatDuration(seconds) {
     return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
 }
 
+// Eigene Dialoge im GSRA-Design statt der Browser-Fenster (alert, confirm, prompt).
+// Ergebnis: eingegebener Text bzw. true – beim Abbrechen null (mit Eingabefeld) bzw. false.
+function showDialog({ icon = "fa-circle-info", title = "", message = "", input = null, confirmText = "OK", cancelText = "", danger = false }) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement("div");
+        overlay.className = "gsra-dialog-overlay";
+        overlay.innerHTML = `
+            <div class="gsra-dialog${danger ? " danger" : ""}" role="dialog" aria-modal="true">
+                <button type="button" class="gsra-dialog-close" title="Schließen"><i class="fa-solid fa-xmark"></i></button>
+                <div class="gsra-dialog-icon"><i class="fa-solid ${icon}"></i></div>
+                <h3 class="gsra-dialog-title"></h3>
+                <p class="gsra-dialog-message"></p>
+                ${input ? '<input type="text" class="gsra-dialog-input" autocomplete="off">' : ""}
+                <div class="gsra-dialog-actions">
+                    ${cancelText ? '<button type="button" class="gsra-dialog-btn secondary"></button>' : ""}
+                    <button type="button" class="gsra-dialog-btn primary"></button>
+                </div>
+            </div>`;
+        overlay.querySelector(".gsra-dialog-title").textContent = title;
+        const messageEl = overlay.querySelector(".gsra-dialog-message");
+        if (message) messageEl.textContent = message;
+        else messageEl.remove();
+
+        const inputEl = overlay.querySelector(".gsra-dialog-input");
+        if (inputEl) {
+            inputEl.placeholder = input.placeholder || "";
+            inputEl.value = input.value || "";
+            inputEl.maxLength = input.maxLength || 60;
+            inputEl.readOnly = Boolean(input.readOnly);
+        }
+        const confirmBtn = overlay.querySelector(".gsra-dialog-btn.primary");
+        confirmBtn.textContent = confirmText;
+        const cancelBtn = overlay.querySelector(".gsra-dialog-btn.secondary");
+        if (cancelBtn) cancelBtn.textContent = cancelText;
+
+        const cancelResult = (input && !input.readOnly) ? null : false;
+        const close = (result) => {
+            document.removeEventListener("keydown", onKey, true);
+            overlay.remove();
+            resolve(result);
+        };
+        const submit = () => {
+            if (inputEl && !input.readOnly) {
+                const value = inputEl.value.trim();
+                if (!value) {
+                    inputEl.classList.add("invalid");
+                    inputEl.focus();
+                    return;
+                }
+                close(value);
+            } else {
+                close(true);
+            }
+        };
+        const onKey = (e) => {
+            if (e.isComposing) return;
+            if (e.key === "Escape" || e.key === "Enter") {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.key === "Escape") close(cancelResult);
+                else submit();
+            }
+        };
+
+        confirmBtn.addEventListener("click", submit);
+        if (cancelBtn) cancelBtn.addEventListener("click", () => close(cancelResult));
+        overlay.querySelector(".gsra-dialog-close").addEventListener("click", () => close(cancelResult));
+        overlay.addEventListener("mousedown", (e) => {
+            if (e.target === overlay) close(cancelResult);
+        });
+        if (inputEl) inputEl.addEventListener("input", () => inputEl.classList.remove("invalid"));
+        document.addEventListener("keydown", onKey, true);
+
+        document.body.appendChild(overlay);
+        if (inputEl) {
+            inputEl.focus();
+            inputEl.select();
+        } else {
+            confirmBtn.focus();
+        }
+    });
+}
+
+// Kurze Hinweise unten rechts (gleiches Design wie im Marktplatz)
+function showToast(message, type = "info") {
+    let container = document.getElementById("toastContainer");
+    if (!container) {
+        container = document.createElement("div");
+        container.id = "toastContainer";
+        document.body.appendChild(container);
+    }
+
+    const toast = document.createElement("div");
+    toast.className = `toast toast-${type}`;
+
+    let icon = '<i class="fa-solid fa-circle-info text-blue"></i>';
+    if (type === "success") icon = '<i class="fa-solid fa-circle-check" style="color: #00ff88;"></i>';
+    if (type === "error") icon = '<i class="fa-solid fa-circle-exclamation" style="color: #ff4d4d;"></i>';
+
+    toast.innerHTML = `${icon} <span>${escapeHtml(message)}</span>`;
+    container.appendChild(toast);
+
+    setTimeout(() => {
+        toast.style.opacity = "0";
+        toast.style.transform = "translateX(110%)";
+        toast.style.transition = "all 0.35s ease";
+        setTimeout(() => toast.remove(), 350);
+    }, 3500);
+}
+
+// Das offizielle Forum darf nie umbenannt oder gelöscht werden – auch nicht, falls es doppelt (mit anderer ID) existiert
+function isOfficialForum(chatId) {
+    const chat = allChatsCache.find(c => c.id === chatId);
+    return chatId === officialForumChatId || Boolean(chat && chat.title === "GSRA Official / Community Forum");
+}
+
 const chatsList = document.getElementById("chatsList");
 const chatTitleText = document.getElementById("chatTitleText");
 const chatMessages = document.getElementById("chatMessages");
@@ -118,10 +239,6 @@ const tileAddFriend = document.getElementById("tileAddFriend");
 const tileForum = document.getElementById("tileForum");
 const addFriendBtn = document.getElementById("addFriendBtn");
 const newChatPlusBtn = document.getElementById("newChatPlusBtn");
-const newForumModal = document.getElementById("newForumModal");
-const closeForumModal = document.getElementById("closeForumModal");
-const newForumForm = document.getElementById("newForumForm");
-const forumNameInput = document.getElementById("forumNameInput");
 
 const replyPreviewBanner = document.getElementById("replyPreviewBanner");
 const replyBannerAuthor = document.getElementById("replyBannerAuthor");
@@ -173,7 +290,15 @@ if (!multiDeleteBar && chatForm) {
 
     document.getElementById("executeMultiDeleteBtn").addEventListener("click", async () => {
         if (selectedMessageIds.size === 0) return;
-        if (confirm(`Möchtest du ${selectedMessageIds.size} ausgewählte Nachricht(en) wirklich löschen?`)) {
+        const confirmed = await showDialog({
+            icon: "fa-trash",
+            title: "Nachrichten löschen?",
+            message: `Möchtest du ${selectedMessageIds.size} ausgewählte Nachricht(en) wirklich löschen?`,
+            confirmText: "Löschen",
+            cancelText: "Abbrechen",
+            danger: true
+        });
+        if (confirmed) {
             const supabase = window.supabaseClient || window.supabase;
             if (!supabase) return;
 
@@ -271,22 +396,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    if (newChatPlusBtn && newForumModal) {
-        newChatPlusBtn.addEventListener("click", () => {
-            newForumModal.style.display = "flex";
-        });
-    }
-
-    if (closeForumModal && newForumModal) {
-        closeForumModal.addEventListener("click", () => {
-            newForumModal.style.display = "none";
-        });
-    }
-
-    if (newForumForm) {
-        newForumForm.addEventListener("submit", async (e) => {
-            e.preventDefault();
-            const forumName = forumNameInput.value.trim();
+    if (newChatPlusBtn) {
+        newChatPlusBtn.addEventListener("click", async () => {
+            const forumName = await showDialog({
+                icon: "fa-users",
+                title: "Neues Forum / Gruppe erstellen",
+                message: "Gib deiner Gruppe einen Namen. Mitglieder fügst du danach über das Personen-Symbol im Chat hinzu.",
+                input: { placeholder: "z. B. GT3 Setup Talk", maxLength: 50 },
+                confirmText: "Gruppe erstellen",
+                cancelText: "Abbrechen"
+            });
             if (!forumName || !supabase || !currentUser?.id) return;
 
             const sysMsg = `${currentUsername} hat das Forum erstellt.`;
@@ -304,18 +423,24 @@ document.addEventListener("DOMContentLoaded", async () => {
                     text: sysMsg
                 }]);
 
-                newForumModal.style.display = "none";
-                forumNameInput.value = "";
                 await loadUserChats();
+                showToast(`Die Gruppe „${forumName}“ wurde erstellt.`, "success");
             } else {
-                alert("Fehler beim Erstellen: " + (error?.message || "Unbekannter Fehler"));
+                showToast("Fehler beim Erstellen: " + (error?.message || "Unbekannter Fehler"), "error");
             }
         });
     }
 
     const handleAddFriend = async () => {
         if (!currentUser?.id) return;
-        const friendName = prompt("Gib den Benutzernamen (Username) deines Freundes ein:");
+        const friendName = await showDialog({
+            icon: "fa-user-plus",
+            title: "Kontakt hinzufügen",
+            message: "Gib den Benutzernamen deines Freundes ein, um einen Chat zu starten.",
+            input: { placeholder: "Benutzername" },
+            confirmText: "Chat starten",
+            cancelText: "Abbrechen"
+        });
         if (!friendName) return;
 
         const { data: foundProfiles, error } = await supabase
@@ -325,12 +450,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             .maybeSingle();
 
         if (error || !foundProfiles) {
-            alert("Nutzer nicht gefunden.");
+            showToast("Nutzer nicht gefunden.", "error");
             return;
         }
 
         if (foundProfiles.id === currentUser.id) {
-            alert("Du kannst dich nicht selbst hinzufügen.");
+            showToast("Du kannst dich nicht selbst hinzufügen.", "error");
             return;
         }
 
@@ -385,9 +510,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (addFriendBtn) addFriendBtn.addEventListener("click", handleAddFriend);
 
     if (tileInvite) {
-        tileInvite.addEventListener("click", () => {
+        tileInvite.addEventListener("click", async () => {
             const inviteLink = window.location.origin + "/messenger.html";
-            prompt("Kopiere diesen Link, um einen Freund einzuladen:", inviteLink);
+            const copyLink = await showDialog({
+                icon: "fa-user-group",
+                title: "Freund einladen",
+                message: "Teile diesen Link, damit dein Freund dem GSRA Messenger beitreten kann:",
+                input: { value: inviteLink, readOnly: true, maxLength: 300 },
+                confirmText: "Link kopieren",
+                cancelText: "Schließen"
+            });
+            if (copyLink) {
+                navigator.clipboard.writeText(inviteLink).then(
+                    () => showToast("Link in die Zwischenablage kopiert.", "success"),
+                    () => showToast("Kopieren nicht möglich – bitte den Link markieren und kopieren.", "error")
+                );
+            }
         });
     }
 
@@ -411,11 +549,18 @@ document.addEventListener("DOMContentLoaded", async () => {
             // Mitglieder dürfen nur zu einem Forum / einer Gruppe (title gesetzt) hinzugefügt werden
             const activeChatObj = allChatsCache.find(c => c.id === activeChatId);
             if (!activeChatObj || activeChatObj.title === null || activeChatObj.title === undefined || activeChatObj.user1_id !== activeChatObj.user2_id) {
-                alert("Mitglieder können nur zu einem Forum / einer Gruppe hinzugefügt werden.");
+                showToast("Mitglieder können nur zu einem Forum / einer Gruppe hinzugefügt werden.", "error");
                 return;
             }
 
-            const memberName = prompt("Gib den Benutzernamen des hinzuzufügenden Mitglieds ein:");
+            const memberName = await showDialog({
+                icon: "fa-user-plus",
+                title: "Mitglied hinzufügen",
+                message: `Gib den Benutzernamen des Mitglieds ein, das du zu „${activeChatObj.title}“ hinzufügen möchtest.`,
+                input: { placeholder: "Benutzername" },
+                confirmText: "Hinzufügen",
+                cancelText: "Abbrechen"
+            });
             if (!memberName) return;
 
             const { data: targetUser } = await supabase
@@ -425,12 +570,12 @@ document.addEventListener("DOMContentLoaded", async () => {
                 .maybeSingle();
 
             if (!targetUser) {
-                alert("Nutzer nicht gefunden.");
+                showToast("Nutzer nicht gefunden.", "error");
                 return;
             }
 
             if (targetUser.id === currentUser.id) {
-                alert("Du kannst dich nicht selbst hinzufügen.");
+                showToast("Du kannst dich nicht selbst hinzufügen.", "error");
                 return;
             }
 
@@ -449,7 +594,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             }]);
 
             await loadUserChats();
-            alert(`Mitglied ${targetUser.username} wurde erfolgreich hinzugefügt!`);
+            showToast(`${targetUser.username} wurde zur Gruppe hinzugefügt.`, "success");
         });
     }
 
@@ -566,39 +711,49 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 });
 
-// Medien-Betrachter im WhatsApp-Stil: blättert durch alle Fotos & Videos der angeklickten Nachricht
-function openMediaViewer(urls, startIndex, senderName, dateObj) {
+// Medien-Betrachter im WhatsApp-Stil: blättert durch alle Fotos & Videos des Chats.
+// Die Medien der angeklickten Nachricht sind hervorgehoben, alle anderen ausgegraut.
+function openMediaViewer(items, startIndex) {
     if (!imageModal) return;
-    viewerItems = urls;
-
-    if (viewerSenderName) viewerSenderName.innerText = senderName;
-    if (viewerSenderTime) {
-        const dateStr = dateObj.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
-        const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        viewerSenderTime.innerText = `${dateStr} um ${timeStr}`;
-    }
+    viewerItems = items;
 
     if (viewerThumbs) {
         viewerThumbs.innerHTML = "";
-        viewerThumbs.style.display = urls.length > 1 ? "flex" : "none";
-        urls.forEach((url, idx) => {
+        viewerThumbs.style.display = items.length > 1 ? "flex" : "none";
+
+        // Miniaturen erst laden, wenn sie in der Leiste sichtbar werden (ein Chat kann hunderte Medien enthalten)
+        if (viewerThumbObserver) viewerThumbObserver.disconnect();
+        viewerThumbObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (!entry.isIntersecting) return;
+                const media = entry.target.firstElementChild;
+                if (media && media.dataset.src) {
+                    media.src = media.dataset.src;
+                    delete media.dataset.src;
+                }
+                viewerThumbObserver.unobserve(entry.target);
+            });
+        }, { root: viewerThumbs, rootMargin: "0px 300px" });
+
+        items.forEach((item, idx) => {
             const thumb = document.createElement("div");
             thumb.className = "wa-viewer-thumb";
-            if (isVideoUrl(url)) {
+            if (isVideoUrl(item.url)) {
                 const vid = document.createElement("video");
-                vid.src = `${url}#t=0.1`;
+                vid.dataset.src = `${item.url}#t=0.1`;
                 vid.preload = "metadata";
                 vid.muted = true;
                 thumb.appendChild(vid);
                 thumb.insertAdjacentHTML("beforeend", '<i class="fa-solid fa-play"></i>');
             } else {
                 const img = document.createElement("img");
-                img.src = url;
+                img.dataset.src = item.url;
                 img.alt = `Medium ${idx + 1}`;
                 thumb.appendChild(img);
             }
             thumb.addEventListener("click", () => showViewerItem(idx));
             viewerThumbs.appendChild(thumb);
+            viewerThumbObserver.observe(thumb);
         });
     }
 
@@ -611,8 +766,17 @@ function openMediaViewer(urls, startIndex, senderName, dateObj) {
 function showViewerItem(index) {
     if (index < 0 || index >= viewerItems.length) return;
     viewerIndex = index;
-    const url = viewerItems[index];
+    const item = viewerItems[index];
+    const url = item.url;
     const isVideo = isVideoUrl(url);
+
+    // Absender und Zeitpunkt der Nachricht, zu der das aktuelle Medium gehört
+    if (viewerSenderName) viewerSenderName.innerText = item.sender;
+    if (viewerSenderTime) {
+        const dateStr = item.date.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+        const timeStr = item.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        viewerSenderTime.innerText = `${dateStr} um ${timeStr}`;
+    }
     const inPictureInPicture = modalVideoFull && document.pictureInPictureElement === modalVideoFull;
 
     if (modalVideoFull) {
@@ -643,7 +807,7 @@ function showViewerItem(index) {
         }
     }
 
-    if (viewerCounter) viewerCounter.innerText = viewerItems.length > 1 ? `${index + 1} / ${viewerItems.length}` : "";
+    if (viewerCounter) viewerCounter.innerText = item.albumSize > 1 ? `${item.albumIndex + 1} von ${item.albumSize}` : "";
     if (viewerPrevBtn) viewerPrevBtn.style.visibility = index > 0 ? "visible" : "hidden";
     if (viewerNextBtn) viewerNextBtn.style.visibility = index < viewerItems.length - 1 ? "visible" : "hidden";
 
@@ -654,7 +818,10 @@ function showViewerItem(index) {
     }
 
     if (viewerThumbs) {
-        Array.from(viewerThumbs.children).forEach((thumb, i) => thumb.classList.toggle("active", i === index));
+        Array.from(viewerThumbs.children).forEach((thumb, i) => {
+            thumb.classList.toggle("active", i === index);
+            thumb.classList.toggle("other-album", viewerItems[i].msgId !== item.msgId);
+        });
         const activeThumb = viewerThumbs.children[index];
         if (activeThumb) {
             viewerThumbs.scrollLeft = activeThumb.offsetLeft - (viewerThumbs.clientWidth - activeThumb.offsetWidth) / 2;
@@ -687,9 +854,9 @@ function addMediaFiles(newFiles) {
     const media = newFiles.filter(f => f.type.startsWith("image/") || f.type.startsWith("video/"));
 
     if (newFiles.length > 0 && media.length === 0) {
-        alert("Es können nur Fotos und Videos gesendet werden.");
+        showToast("Es können nur Fotos und Videos gesendet werden.", "error");
     } else if (media.some(f => f.size > MAX_FILE_SIZE)) {
-        alert("Dein Medium konnte nicht hochgeladen werden, da die Datei das Dateigrößenlimit überschreitet.");
+        showToast("Dein Medium konnte nicht hochgeladen werden, da die Datei das Dateigrößenlimit überschreitet.", "error");
     } else if (media.length > 0) {
         const fileKey = (f) => `${f.name}_${f.size}_${f.lastModified}`;
         const known = new Set(selectedMediaFiles.map(fileKey));
@@ -719,15 +886,30 @@ function addMediaFiles(newFiles) {
     if (imagePreviewContainer) imagePreviewContainer.style.display = "flex";
 }
 
+// Große Emoji-Auswahl für Reaktionen – dieselbe Komponente wie beim Schreiben (deutsch, alle Emojis, Kategorien, Suche)
+function createReactionEmojiPicker(msg, popup) {
+    const picker = document.createElement("emoji-picker");
+    picker.className = "dark gsra-reaction-picker";
+    picker.setAttribute("locale", "de");
+    picker.setAttribute("data-source", EMOJI_DATA_SOURCE_DE);
+    if (window.gsraEmojiI18n) picker.i18n = window.gsraEmojiI18n;
+    picker.addEventListener("emoji-click", async (event) => {
+        popup.style.display = "none";
+        popup.replaceChildren();
+        await toggleReaction(msg, event.detail.unicode);
+    });
+    return picker;
+}
+
 // Öffnet ein Nachrichten-Popup (Reaktionen, Emoji-Auswahl, Menü) dort, wo im sichtbaren Chatbereich Platz ist.
-// Passt es nirgends ganz hin, schrumpft der scrollbare Teil – so wird nichts abgeschnitten und der Chat verschiebt sich nicht.
-function placeMessagePopup(popup, anchor, baseClass, dirPrefix, preferBelow = false, scrollArea = null) {
+// Passt es nirgends ganz hin, wird es niedriger – so wird nichts abgeschnitten und der Chat verschiebt sich nicht.
+function placeMessagePopup(popup, anchor, baseClass, dirPrefix, preferBelow = false, resizable = null) {
     const area = chatMessages.getBoundingClientRect();
     const anchorRect = anchor.getBoundingClientRect();
     const spaceAbove = anchorRect.top - area.top - 6;
     const spaceBelow = area.bottom - anchorRect.bottom - 6;
 
-    if (scrollArea) scrollArea.style.maxHeight = "";
+    if (resizable) resizable.style.height = "";
     popup.className = `${baseClass} ${dirPrefix}-below`;
     popup.style.visibility = "hidden";
     popup.style.display = "flex";
@@ -740,8 +922,8 @@ function placeMessagePopup(popup, anchor, baseClass, dirPrefix, preferBelow = fa
 
     popup.className = `${baseClass} ${dirPrefix}-${below ? "below" : "above"}`;
     const space = below ? spaceBelow : spaceAbove;
-    if (scrollArea && height > space) {
-        scrollArea.style.maxHeight = `${Math.max(60, scrollArea.offsetHeight - (height - space))}px`;
+    if (resizable && height > space) {
+        resizable.style.height = `${Math.max(200, resizable.offsetHeight - (height - space))}px`;
     }
     popup.style.visibility = "";
 }
@@ -1039,14 +1221,24 @@ async function loadUserChats() {
         console.error("Fehler beim Laden der Chats:", err);
     }
 
-    let forumChat = rawChats.find(c => c.title === 'GSRA Official / Community Forum' || (c.title && c.title.includes('Official')));
-    
+    // Offizielles Forum eindeutig bestimmen: Gibt es (versehentlich) mehrere, gilt immer das älteste – für alle Mitglieder gleich
+    const officialCandidates = rawChats
+        .filter(c => c.title === 'GSRA Official / Community Forum')
+        .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
+    let forumChat = officialCandidates[0] || rawChats.find(c => c.title && c.title.includes('Official'));
+
     if (!forumChat) {
-        const { data: globalForum } = await supabase.from("chats").select("*").eq("title", 'GSRA Official / Community Forum').maybeSingle();
-        if (globalForum) {
-            forumChat = globalForum;
-            rawChats.unshift(globalForum);
-        } else if (isAdminUser) {
+        const { data: globalForums, error: forumLookupError } = await supabase
+            .from("chats")
+            .select("*")
+            .eq("title", 'GSRA Official / Community Forum')
+            .order("created_at", { ascending: true })
+            .limit(1);
+        if (globalForums && globalForums.length > 0) {
+            forumChat = globalForums[0];
+            rawChats.unshift(forumChat);
+        } else if (isAdminUser && !forumLookupError) {
+            // Nur anlegen, wenn sicher keins existiert – nicht bei einem Ladefehler (sonst entstehen doppelte Foren)
             const { data: createdForum, err: forumErr } = await supabase.from("chats").insert([{
                 user1_id: currentUser.id,
                 user2_id: currentUser.id,
@@ -1065,6 +1257,8 @@ async function loadUserChats() {
 
     let accessibleChats = [];
     for (const chat of rawChats) {
+        // Doppelte offizielle Foren ausblenden – angezeigt wird nur das eine offizielle Forum
+        if (chat.title === 'GSRA Official / Community Forum' && officialForumChatId && chat.id !== officialForumChatId) continue;
         const isOfficial = (chat.id === officialForumChatId || (chat.title && chat.title.includes('Official')));
         const isDirect = (chat.user1_id !== chat.user2_id);
         const isGroup = (chat.title !== null && chat.user1_id === chat.user2_id); // Forum/Gruppe = Titel gesetzt UND user1_id === user2_id; umbenannte Direktchats bleiben Chats
@@ -1210,6 +1404,9 @@ function openForumChat(forumChat = null) {
     if (blockUserBtn) blockUserBtn.style.display = "none";
 
     const isOfficialAnnouncement = (chatId === officialForumChatId);
+    // Das offizielle Forum kann weder umbenannt noch gelöscht werden – die Knöpfe erscheinen dort gar nicht erst
+    if (editChatTitleBtn) editChatTitleBtn.style.display = isOfficialAnnouncement ? "none" : "";
+    if (deleteChatBtn) deleteChatBtn.style.display = isOfficialAnnouncement ? "none" : "";
     if (isOfficialAnnouncement && !isAdminUser) {
         if (messageInput) { messageInput.disabled = true; messageInput.placeholder = "Nur Administratoren können im offiziellen Forum schreiben."; }
         if (sendBtn) sendBtn.disabled = true;
@@ -1234,6 +1431,8 @@ async function openChat(chatId, recipientName, chatTitle = null) {
     if (chatActions) chatActions.style.display = "flex";
     if (addMemberBtn) addMemberBtn.style.display = "none";
     if (blockUserBtn) blockUserBtn.style.display = "block";
+    if (editChatTitleBtn) editChatTitleBtn.style.display = "";
+    if (deleteChatBtn) deleteChatBtn.style.display = "";
 
     if (messageInput) { messageInput.disabled = false; messageInput.placeholder = "Gib eine Nachricht ein..."; }
     if (imageUploadInput) imageUploadInput.disabled = false;
@@ -1322,6 +1521,7 @@ function appendWelcomeMessage(msg) {
 
 async function renderMessages(messages, chatId = activeChatId) {
     if (!chatMessages) return;
+    chatMediaItems = [];
     messages = withWelcomeMessage(messages, chatId);
     if (messages.length === 0) {
         chatMessages.innerHTML = `<p class="chat-placeholder" style="text-align: center; color: var(--text-muted); margin: auto;">Schreibe die erste Nachricht...</p>`;
@@ -1406,7 +1606,7 @@ async function toggleReaction(msg, emoji) {
 
     if (error || !updated || updated.length === 0) {
         console.error("Reaktion konnte nicht gespeichert werden:", error);
-        alert("Die Reaktion konnte nicht gespeichert werden (fehlende Berechtigung). Bitte die Policies aus reactions_setup.sql in Supabase ausführen.");
+        showToast("Die Reaktion konnte nicht gespeichert werden (fehlende Berechtigung). Bitte die Policies aus reactions_setup.sql in Supabase ausführen.", "error");
         return;
     }
 
@@ -1494,53 +1694,20 @@ async function appendSingleMessage(msg, isSystem = false) {
         pickerPopup.className = "message-react-picker-popup";
         pickerPopup.addEventListener("click", (e) => e.stopPropagation());
 
-        const searchInput = document.createElement("input");
-        searchInput.type = "text";
-        searchInput.id = `emojiSearch_${msg.id}`;
-        searchInput.name = "emojiSearchInput";
-        searchInput.placeholder = "Emoji suchen...";
-        
-        const grid = document.createElement("div");
-        grid.className = "message-react-picker-grid";
-
-        const allAvailableEmojis = [
-            "👍","❤️","😂","😮","😢","🙏","🔥","⭐","✨","😀","😃","😄","😁","😆","😅","🤣","😊","😇","🙂","🙃","😉","😌","😍","🥰","😘","😗","😙","😚",
-            "😋","😛","😝","😜","🤪","🤨","🧐","🤓","😎","🤩","🥳","😏","😒","😞","😔","😕","🙁","☹️","😣",
-            "😖","😫","😩","🥺","😭","😤","😠","😡","🤬","🤯","😱","😨","😰","😥","😓","🤗","🤔","🤭","🤫",
-            "👏","🙌","👐","🤲","🤝","💪"
-        ];
-
-        const renderEmojiGrid = (filter = "") => {
-            grid.innerHTML = "";
-            const uniqueList = Array.from(new Set(allAvailableEmojis));
-            uniqueList.forEach(em => {
-                if (filter && !em.includes(filter)) return;
-                const span = document.createElement("span");
-                span.innerText = em;
-                span.addEventListener("click", async (e) => {
-                    e.stopPropagation();
-                    pickerPopup.style.display = "none";
-                    await toggleReaction(msg, em);
-                });
-                grid.appendChild(span);
-            });
-        };
-
-        renderEmojiGrid();
-        searchInput.addEventListener("input", (e) => renderEmojiGrid(e.target.value.trim()));
-
-        pickerPopup.appendChild(searchInput);
-        pickerPopup.appendChild(grid);
-
         plusSpan.addEventListener("click", (e) => {
             e.stopPropagation();
             const isOpen = pickerPopup.style.display === "flex";
-            document.querySelectorAll(".message-react-picker-popup").forEach(p => p.style.display = "none");
-            
+            document.querySelectorAll(".message-react-picker-popup").forEach(p => {
+                p.style.display = "none";
+                p.replaceChildren();
+            });
+
             if (!isOpen) {
-                // Möglichst auf derselben Seite wie die Schnellleiste öffnen, damit die Auswahl sie ersetzt
-                placeMessagePopup(pickerPopup, actionsDiv, "message-react-picker-popup", "popup", quickBar.classList.contains("bar-below"), grid);
-                searchInput.focus();
+                // Große Emoji-Auswahl (alle Emojis, Kategorien, deutsche Suche); möglichst auf der Seite der Schnellleiste
+                const picker = createReactionEmojiPicker(msg, pickerPopup);
+                pickerPopup.appendChild(picker);
+                placeMessagePopup(pickerPopup, actionsDiv, "message-react-picker-popup", "popup", quickBar.classList.contains("bar-below"), picker);
+                setTimeout(() => picker.shadowRoot?.querySelector("input")?.focus(), 50);
             } else {
                 pickerPopup.style.display = "none";
             }
@@ -1595,7 +1762,7 @@ async function appendSingleMessage(msg, isSystem = false) {
         copyOption.addEventListener("click", (e) => {
             e.stopPropagation();
             dropdownMenu.style.display = "none";
-            navigator.clipboard.writeText(msg.text || "").then(() => alert("Nachricht in die Zwischenablage kopiert!"));
+            navigator.clipboard.writeText(msg.text || "").then(() => showToast("Nachricht in die Zwischenablage kopiert.", "success"));
         });
         dropdownMenu.appendChild(copyOption);
 
@@ -1660,6 +1827,7 @@ async function appendSingleMessage(msg, isSystem = false) {
             dropdownMenu.style.display = "none";
             quickBar.style.display = "none";
             pickerPopup.style.display = "none";
+            pickerPopup.replaceChildren();
         });
 
         actionsDiv.appendChild(arrowBtn);
@@ -1705,6 +1873,11 @@ async function appendSingleMessage(msg, isSystem = false) {
         // WhatsApp-Rahmen: Medien füllen die Blase bis auf einen dünnen Rand
         bubble.classList.add("has-media");
         if (!msg.text || msg.text === "[Medien]") bubble.classList.add("media-only");
+
+        // Alle Medien des Chats chronologisch sammeln – der Betrachter blättert durch den ganzen Chat
+        const mediaList = chatMediaItems;
+        const albumStart = mediaList.length;
+        urls.forEach((url, albumIndex) => mediaList.push({ url, msgId: msg.id, sender: senderName, date: dateObj, albumIndex, albumSize: urls.length }));
 
         for (let i = 0; i < displayCount; i++) {
             const cleanUrl = urls[i];
@@ -1757,7 +1930,7 @@ async function appendSingleMessage(msg, isSystem = false) {
             tile.addEventListener("click", (e) => {
                 if (isMultiSelectMode) return;
                 e.stopPropagation();
-                openMediaViewer(urls, i, senderName, dateObj);
+                openMediaViewer(mediaList, albumStart + i);
             });
             gridContainer.appendChild(tile);
         }
@@ -1846,16 +2019,23 @@ async function appendSingleMessage(msg, isSystem = false) {
 if (editChatTitleBtn) {
     editChatTitleBtn.addEventListener("click", async () => {
         const supabase = window.supabaseClient || window.supabase;
-        if (!activeChatId || activeChatId === officialForumChatId) {
-            alert("Das offizielle Forum kann nicht umbenannt werden.");
+        if (!activeChatId || isOfficialForum(activeChatId)) {
+            showToast("Das offizielle Forum kann nicht umbenannt werden.", "error");
             return;
         }
 
-        const newTitle = prompt("Gib einen neuen Namen ein:");
-        if (newTitle !== null && newTitle.trim() !== "") {
+        const chatObj = allChatsCache.find(c => c.id === activeChatId);
+        const isForum = (chatObj && chatObj.title !== null && chatObj.user1_id === chatObj.user2_id);
+        const newTitle = await showDialog({
+            icon: "fa-pen",
+            title: isForum ? "Gruppe umbenennen" : "Chat umbenennen",
+            message: "Gib einen neuen Namen ein:",
+            input: { placeholder: "Neuer Name", value: (chatObj && chatObj.title) || "", maxLength: 50 },
+            confirmText: "Speichern",
+            cancelText: "Abbrechen"
+        });
+        if (newTitle) {
             const trimmedTitle = newTitle.trim();
-            const chatObj = allChatsCache.find(c => c.id === activeChatId);
-            const isForum = (chatObj && chatObj.title !== null && chatObj.user1_id === chatObj.user2_id);
             const articleText = isForum ? "das Forum" : "den Chat";
 
             await supabase.from("chats").update({ title: trimmedTitle }).eq("id", activeChatId);
@@ -1865,7 +2045,7 @@ if (editChatTitleBtn) {
             await supabase.from("chats").update({ last_message: sysMsg }).eq("id", activeChatId);
 
             loadUserChats();
-            alert("Aktualisiert!");
+            showToast("Der Name wurde aktualisiert.", "success");
         }
     });
 }
@@ -1873,12 +2053,20 @@ if (editChatTitleBtn) {
 if (deleteChatBtn) {
     deleteChatBtn.addEventListener("click", async () => {
         const supabase = window.supabaseClient || window.supabase;
-        if (!activeChatId || activeChatId === officialForumChatId) {
-            alert("Das offizielle Forum kann nicht gelöscht werden.");
+        if (!activeChatId || isOfficialForum(activeChatId)) {
+            showToast("Das offizielle Forum kann nicht gelöscht werden.", "error");
             return;
         }
 
-        if (confirm("Möchtest du dieses Forum / diesen Chat wirklich löschen?")) {
+        const confirmed = await showDialog({
+            icon: "fa-trash",
+            title: "Chat löschen?",
+            message: "Möchtest du dieses Forum / diesen Chat wirklich löschen? Alle Nachrichten gehen dabei verloren.",
+            confirmText: "Löschen",
+            cancelText: "Abbrechen",
+            danger: true
+        });
+        if (confirmed) {
             await supabase.from("messages").delete().eq("chat_id", activeChatId);
             try { await supabase.from("chat_favorites").delete().eq("chat_id", activeChatId); } catch(e){}
             await supabase.from("chats").delete().eq("id", activeChatId);
@@ -1888,7 +2076,7 @@ if (deleteChatBtn) {
             if (waChatActivePane) waChatActivePane.style.display = "none";
 
             await loadUserChats();
-            alert("Gelöscht.");
+            showToast("Der Chat wurde gelöscht.", "success");
         }
     });
 }
@@ -1896,9 +2084,17 @@ if (deleteChatBtn) {
 if (blockUserBtn) {
     blockUserBtn.addEventListener("click", async () => {
         const supabase = window.supabaseClient || window.supabase;
-        if (!activeChatId || activeChatId === officialForumChatId) return;
+        if (!activeChatId || isOfficialForum(activeChatId)) return;
 
-        if (confirm("Möchtest du diesen Nutzer blockieren und den Chat entfernen?")) {
+        const confirmed = await showDialog({
+            icon: "fa-ban",
+            title: "Nutzer blockieren?",
+            message: "Möchtest du diesen Nutzer blockieren und den Chat entfernen?",
+            confirmText: "Blockieren",
+            cancelText: "Abbrechen",
+            danger: true
+        });
+        if (confirmed) {
             await supabase.from("messages").delete().eq("chat_id", activeChatId);
             try { await supabase.from("chat_favorites").delete().eq("chat_id", activeChatId); } catch(e){}
             await supabase.from("chats").delete().eq("id", activeChatId);
@@ -1908,7 +2104,7 @@ if (blockUserBtn) {
             if (waChatActivePane) waChatActivePane.style.display = "none";
 
             await loadUserChats();
-            alert("Nutzer blockiert.");
+            showToast("Der Nutzer wurde blockiert.", "success");
         }
     });
 }
@@ -1925,14 +2121,14 @@ if (chatForm) {
         const MAX_FILE_SIZE = 200 * 1024 * 1024;
         for (const file of files) {
             if (file.size > MAX_FILE_SIZE) {
-                alert("Dein Medium konnte nicht hochgeladen werden, da die Datei das Dateigrößenlimit überschreitet.");
+                showToast("Dein Medium konnte nicht hochgeladen werden, da die Datei das Dateigrößenlimit überschreitet.", "error");
                 return;
             }
         }
 
         const isOfficialAnnouncement = (activeChatId === officialForumChatId);
         if (isOfficialAnnouncement && !isAdminUser) {
-            alert("Nur Administratoren können im offiziellen Forum schreiben.");
+            showToast("Nur Administratoren können im offiziellen Forum schreiben.", "error");
             return;
         }
 
@@ -1994,7 +2190,7 @@ if (chatForm) {
             loadUserChats();
         } catch (err) {
             console.error("Fehler beim Senden:", err);
-            alert("Fehler beim Verarbeiten der Nachricht. Bitte versuche es erneut.");
+            showToast("Fehler beim Verarbeiten der Nachricht. Bitte versuche es erneut.", "error");
         } finally {
             if (sendBtn) {
                 sendBtn.disabled = false;

@@ -7,6 +7,12 @@
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@1/index.js"></script>
+    <!-- Emoji-Auswahl auf Deutsch ("Suchen", Kategorien) – gilt auch für die Reaktions-Auswahl -->
+    <script type="module">
+        import de from "https://cdn.jsdelivr.net/npm/emoji-picker-element@1/i18n/de.js";
+        window.gsraEmojiI18n = de;
+        document.querySelectorAll("emoji-picker").forEach(picker => { picker.i18n = de; });
+    </script>
 </head>
 <body>
 
@@ -104,7 +110,7 @@
                     </div>
 
                     <div id="emojiPickerWrapper" class="emoji-picker-container">
-                        <emoji-picker class="dark"></emoji-picker>
+                        <emoji-picker class="dark" locale="de" data-source="https://cdn.jsdelivr.net/npm/emoji-picker-element-data@1/de/cldr/data.json"></emoji-picker>
                     </div>
 
                     <!-- Antwort-Vorschau Banner -->
@@ -148,20 +154,6 @@
             </div>
         </div>
     </main>
-
-    <div id="newForumModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.85); z-index: 5000; justify-content: center; align-items: center; padding: 20px;">
-        <div style="background: var(--bg-card); border: 1px solid var(--border-subtle); border-top: 4px solid var(--gsra-blue); border-radius: 10px; width: 100%; max-width: 450px; padding: 25px; position: relative;">
-            <button id="closeForumModal" type="button" style="position: absolute; top: 15px; right: 20px; background: none; border: none; color: var(--text-muted); font-size: 22px; cursor: pointer;"><i class="fa-solid fa-xmark"></i></button>
-            <h3 style="color: #fff; margin-bottom: 15px; font-size: 20px;">Neues Forum / Gruppe erstellen</h3>
-            <form id="newForumForm" style="display: flex; flex-direction: column; gap: 15px;">
-                <label for="forumNameInput" style="display: block; font-size: 12px; color: var(--text-muted);">
-                    Name der Gruppe / des Forums
-                    <input type="text" id="forumNameInput" placeholder="z.B. GT3 Setup Talk" required style="width: 100%; margin-top: 5px; padding: 10px; background: #0b0c10; border: 1px solid var(--border-subtle); color: #fff; border-radius: 6px; outline: none;">
-                </label>
-                <button type="submit" class="login-btn" style="width: 100%; margin-top: 10px;">Gruppe erstellen</button>
-            </form>
-        </div>
-    </div>
 
     <!-- MEDIEN-BETRACHTER (WHATSAPP-STIL): Kopfzeile, Vor/Zurück, Miniaturleiste -->
     <div id="imageModal" class="wa-viewer" style="display: none;">

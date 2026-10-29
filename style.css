@@ -361,8 +361,8 @@ nav a.nav-unread-glow::after {
     cursor: pointer;
     background: #0d0e12;
     border: 2px solid transparent;
-    opacity: 0.55;
-    transition: opacity 0.2s ease, border-color 0.2s ease;
+    opacity: 0.8;
+    transition: opacity 0.2s ease, border-color 0.2s ease, filter 0.2s ease;
 }
 
 /* Miniaturleiste zentrieren, solange sie nicht überläuft */
@@ -401,6 +401,17 @@ nav a.nav-unread-glow::after {
 .wa-viewer-thumb.active {
     opacity: 1;
     border-color: var(--gsra-yellow);
+}
+
+/* Medien aus anderen Nachrichten des Chats: ausgegraut (wie bei WhatsApp), aber anklickbar */
+.wa-viewer-thumb.other-album {
+    opacity: 0.25;
+    filter: grayscale(0.7);
+}
+
+.wa-viewer-thumb.other-album:hover {
+    opacity: 0.6;
+    filter: none;
 }
 
 @media (max-width: 600px) {
@@ -1631,19 +1642,26 @@ body.multi-select-active .message-actions {
     background: rgba(255, 255, 255, 0.08);
 }
 
-/* Erweitertes Emoji-Such-Popup */
+/* Große Emoji-Auswahl für Reaktionen (gleiche Komponente wie beim Schreiben) */
 .message-react-picker-popup {
     position: absolute;
     background: #15161a;
     border: 1px solid var(--border-subtle);
-    border-radius: 8px;
-    padding: 8px;
+    border-radius: 10px;
+    padding: 6px;
     display: none;
     flex-direction: column;
-    gap: 6px;
     z-index: 80;
     box-shadow: 0 10px 30px rgba(0,0,0,0.9);
-    width: 264px;
+}
+
+.gsra-reaction-picker {
+    width: 336px;
+    height: 330px;
+    --border-size: 0;
+    --num-columns: 8;
+    --emoji-size: 1.35rem;
+    --emoji-padding: 0.35rem;
 }
 
 .message-react-picker-popup.popup-above {
@@ -1676,62 +1694,42 @@ body.multi-select-active .message-actions {
     background: transparent;
 }
 
-.message-react-picker-popup input {
-    background: #0b0c10;
-    border: 1px solid var(--border-subtle);
-    color: #fff;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    outline: none;
-}
-
-.message-react-picker-grid {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 4px;
-    overflow-y: auto;
-    max-height: 168px;
+/* Emoji-Auswahl im GSRA-Design (beim Schreiben und für Reaktionen) */
+emoji-picker {
+    --background: #15161a;
+    --border-color: rgba(255, 255, 255, 0.08);
+    --indicator-color: var(--gsra-blue);
+    --input-border-color: rgba(255, 255, 255, 0.12);
+    --input-font-color: #ffffff;
+    --input-placeholder-color: #8a8f9c;
+    --outline-color: var(--gsra-blue);
+    --category-font-color: #a0a5b1;
+    --button-active-background: rgba(0, 85, 255, 0.35);
+    --button-hover-background: rgba(255, 255, 255, 0.08);
+    scrollbar-color: #3a3d46 transparent;
 }
 
 /* Einheitliche, dunkle Scrollleisten im Messenger (statt der hellen Standard-Leiste) */
-.message-react-picker-grid,
 .chat-messages,
 .chat-sidebar-list {
     scrollbar-width: thin;
     scrollbar-color: #3a3d46 transparent;
 }
 
-.message-react-picker-grid::-webkit-scrollbar,
 .chat-messages::-webkit-scrollbar,
 .chat-sidebar-list::-webkit-scrollbar {
     width: 6px;
 }
 
-.message-react-picker-grid::-webkit-scrollbar-thumb,
 .chat-messages::-webkit-scrollbar-thumb,
 .chat-sidebar-list::-webkit-scrollbar-thumb {
     background: #3a3d46;
     border-radius: 3px;
 }
 
-.message-react-picker-grid::-webkit-scrollbar-track,
 .chat-messages::-webkit-scrollbar-track,
 .chat-sidebar-list::-webkit-scrollbar-track {
     background: transparent;
-}
-
-.message-react-picker-grid span {
-    font-size: 16px;
-    cursor: pointer;
-    text-align: center;
-    padding: 2px;
-    border-radius: 4px;
-    transition: background 0.2s ease;
-}
-
-.message-react-picker-grid span:hover {
-    background: rgba(255, 204, 0, 0.2);
 }
 
 /* =========================================
@@ -2027,6 +2025,185 @@ body.multi-select-active .message-actions {
 
 .wa-active-pane.drag-active .wa-drop-overlay {
     display: flex;
+}
+
+/* =========================================
+   EIGENE DIALOGE (STATT DER BROWSER-FENSTER)
+========================================= */
+.gsra-dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(5, 6, 9, 0.72);
+    backdrop-filter: blur(4px);
+    animation: gsraDialogFade 0.18s ease;
+}
+
+.gsra-dialog {
+    position: relative;
+    width: 100%;
+    max-width: 420px;
+    background: linear-gradient(180deg, #1b1d23 0%, #15161a 100%);
+    border: 1px solid var(--border-subtle);
+    border-top: 4px solid var(--gsra-blue);
+    border-radius: 14px;
+    padding: 28px 26px 22px;
+    text-align: center;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.75), var(--blue-glow);
+    animation: gsraDialogPop 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.gsra-dialog.danger {
+    border-top-color: #ff4d4d;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.75), 0 0 15px rgba(255, 77, 77, 0.35);
+}
+
+.gsra-dialog-close {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 18px;
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+.gsra-dialog-close:hover {
+    color: #fff;
+}
+
+.gsra-dialog-icon {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 14px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    color: var(--gsra-blue);
+    background: rgba(0, 85, 255, 0.12);
+    border: 1px solid rgba(0, 85, 255, 0.35);
+}
+
+.gsra-dialog.danger .gsra-dialog-icon {
+    color: #ff4d4d;
+    background: rgba(255, 77, 77, 0.12);
+    border-color: rgba(255, 77, 77, 0.35);
+}
+
+.gsra-dialog-title {
+    color: #fff;
+    font-size: 19px;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.gsra-dialog-message {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-muted);
+    max-width: none;
+    margin: 0 0 18px;
+}
+
+.gsra-dialog-input {
+    width: 100%;
+    padding: 12px 14px;
+    margin-bottom: 18px;
+    background: #0b0c10;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.gsra-dialog-input:focus {
+    border-color: var(--gsra-blue);
+    box-shadow: 0 0 0 3px rgba(0, 85, 255, 0.2);
+}
+
+.gsra-dialog-input.invalid {
+    border-color: #ff4d4d;
+    box-shadow: 0 0 0 3px rgba(255, 77, 77, 0.2);
+}
+
+.gsra-dialog-input[readonly] {
+    color: var(--gsra-yellow);
+}
+
+.gsra-dialog-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.gsra-dialog-btn {
+    flex: 1;
+    padding: 11px 16px;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.gsra-dialog-btn.primary {
+    background: var(--gsra-yellow);
+    color: #000;
+    border: 2px solid var(--gsra-yellow);
+}
+
+.gsra-dialog-btn.primary:hover {
+    background: transparent;
+    color: var(--gsra-yellow);
+    box-shadow: var(--yellow-glow);
+}
+
+.gsra-dialog-btn.secondary {
+    background: transparent;
+    color: #fff;
+    border: 1px solid var(--border-subtle);
+}
+
+.gsra-dialog-btn.secondary:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.gsra-dialog.danger .gsra-dialog-btn.primary {
+    background: #ff4d4d;
+    border-color: #ff4d4d;
+    color: #fff;
+}
+
+.gsra-dialog.danger .gsra-dialog-btn.primary:hover {
+    background: transparent;
+    color: #ff4d4d;
+    box-shadow: 0 0 12px rgba(255, 77, 77, 0.5);
+}
+
+@keyframes gsraDialogFade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes gsraDialogPop {
+    from { opacity: 0; transform: translateY(10px) scale(0.96); }
+    to { opacity: 1; transform: none; }
 }
 
 /* =========================================
