@@ -201,6 +201,18 @@ function isOfficialForum(chatId) {
     return chatId === officialForumChatId || Boolean(chat && chat.title === "GSRA Official / Community Forum");
 }
 
+// Eigener Name für Direktchats: nur für dich sichtbar und nur im Browser gespeichert. In der Datenbank kennzeichnet
+// ein Titel Foren/Gruppen, und Chats mit Titel sind für alle lesbar – ein Direktchat mit Titel wäre nicht mehr privat.
+function getChatAlias(chatId) {
+    if (!currentUser?.id || !chatId) return null;
+    return localStorage.getItem(`gsra_chat_name_${currentUser.id}_${chatId}`);
+}
+
+function setChatAlias(chatId, name) {
+    if (!currentUser?.id || !chatId) return;
+    localStorage.setItem(`gsra_chat_name_${currentUser.id}_${chatId}`, name);
+}
+
 const chatsList = document.getElementById("chatsList");
 const chatTitleText = document.getElementById("chatTitleText");
 const chatMessages = document.getElementById("chatMessages");
@@ -1322,7 +1334,7 @@ async function renderChatsList() {
         const otherUserId = (chat.user1_id !== chat.user2_id) ? (chat.user1_id === currentUser.id ? chat.user2_id : chat.user1_id) : null;
         const otherUserName = otherUserId ? (userNamesCache[otherUserId] || "Fahrer") : "";
         
-        const searchTarget = (chat.title ? chat.title + " " + otherUserName : otherUserName).toLowerCase();
+        const searchTarget = [chat.title, getChatAlias(chat.id), otherUserName].filter(Boolean).join(" ").toLowerCase();
         const matchesSearch = searchTarget.includes(searchTerm);
         if (!matchesSearch) return false;
 
@@ -1358,7 +1370,8 @@ async function renderChatsList() {
 
         item.className = `wa-chat-item ${isSelected ? 'active' : ''} ${isUnread ? 'unread' : ''}`;
         
-        let displayTitle = isOfficial ? "GSRA Official / Community Forum" : (isGroup ? chat.title : (chat.title ? `${chat.title} (${otherUserName})` : `Chat mit ${otherUserName}`));
+        const customName = isForumOrGroup ? null : (getChatAlias(chat.id) || chat.title);
+        let displayTitle = isOfficial ? "GSRA Official / Community Forum" : (isGroup ? chat.title : (customName ? `${customName} (${otherUserName})` : `Chat mit ${otherUserName}`));
         const lastMsg = escapeHtml(chat.last_message || 'Keine Nachrichten');
 
         item.innerHTML = `
@@ -1425,7 +1438,8 @@ async function openChat(chatId, recipientName, chatTitle = null) {
     activeChatId = chatId;
     markChatAsRead(chatId);
 
-    const displayName = chatTitle ? `${chatTitle} (${recipientName})` : `Chat mit ${recipientName}`;
+    const customName = getChatAlias(chatId) || chatTitle;
+    const displayName = customName ? `${customName} (${recipientName})` : `Chat mit ${recipientName}`;
     if (chatTitleText) chatTitleText.innerText = displayName;
     
     if (chatActions) chatActions.style.display = "flex";
@@ -2025,16 +2039,24 @@ if (editChatTitleBtn) {
         }
 
         const chatObj = allChatsCache.find(c => c.id === activeChatId);
-        const isForum = (chatObj && chatObj.title !== null && chatObj.user1_id === chatObj.user2_id);
+        const isForum = Boolean(chatObj && chatObj.user1_id === chatObj.user2_id);
         const newTitle = await showDialog({
             icon: "fa-pen",
             title: isForum ? "Gruppe umbenennen" : "Chat umbenennen",
-            message: "Gib einen neuen Namen ein:",
-            input: { placeholder: "Neuer Name", value: (chatObj && chatObj.title) || "", maxLength: 50 },
+            message: isForum ? "Gib einen neuen Namen ein:" : "Gib einen eigenen Namen für diesen Chat ein. Er ist nur für dich sichtbar.",
+            input: { placeholder: "Neuer Name", value: (isForum ? null : getChatAlias(activeChatId)) || (chatObj && chatObj.title) || "", maxLength: 50 },
             confirmText: "Speichern",
             cancelText: "Abbrechen"
         });
-        if (newTitle) {
+
+        // Direktchats: nur eigener Anzeigename – die Datenbank (Titel = Forum/Gruppe) bleibt unverändert
+        if (newTitle && !isForum) {
+            setChatAlias(activeChatId, newTitle.trim());
+            const otherUserId = chatObj ? (chatObj.user1_id === currentUser.id ? chatObj.user2_id : chatObj.user1_id) : null;
+            if (chatTitleText) chatTitleText.innerText = `${newTitle.trim()} (${userNamesCache[otherUserId] || "Fahrer"})`;
+            renderChatsList();
+            showToast("Der Name wurde geändert – er ist nur für dich sichtbar.", "success");
+        } else if (newTitle) {
             const trimmedTitle = newTitle.trim();
             const articleText = isForum ? "das Forum" : "den Chat";
 
