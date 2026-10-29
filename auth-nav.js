@@ -35,9 +35,9 @@ const initAuthNav = async () => {
         }
     };
 
-    const checkLiveUnreadMessages = async (userId) => {
+    const checkLiveUnreadMessages = async (userId, registeredAt) => {
         if (!userId) return;
-        
+
         try {
             const { data: userChats } = await client
                 .from("chats")
@@ -46,7 +46,7 @@ const initAuthNav = async () => {
 
             const { data: groupChats } = await client
                 .from("chats")
-                .select("id, user1_id, user2_id")
+                .select("id, user1_id, user2_id, title")
                 .not("title", "is", null);
 
             const map = new Map();
@@ -74,6 +74,13 @@ const initAuthNav = async () => {
                 }
             }
 
+            // Persönliche Willkommensnachricht im offiziellen Forum gilt als ungelesen, bis das Forum nach der Registrierung geöffnet wurde
+            const officialForum = (groupChats || []).find(c => c.title === 'GSRA Official / Community Forum' || (c.title && c.title.includes('Official')));
+            if (!hasUnread && officialForum && registeredAt) {
+                const forumLastRead = localStorage.getItem(`gsra_last_read_${userId}_${officialForum.id}`);
+                if (!forumLastRead || new Date(forumLastRead) < new Date(registeredAt)) hasUnread = true;
+            }
+
             localStorage.setItem('gsra_has_unread', hasUnread ? 'true' : 'false');
             
             const messengerNavBtn = document.getElementById("messengerNavBtn") || document.querySelector('a[href="messenger.html"]');
@@ -93,13 +100,13 @@ const initAuthNav = async () => {
     updateUI(session);
 
     if (session?.user?.id) {
-        checkLiveUnreadMessages(session.user.id);
+        checkLiveUnreadMessages(session.user.id, session.user.created_at);
 
         client
             .channel('global_nav_unread_channel')
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
                 if (payload.new && payload.new.sender_id !== session.user.id) {
-                    checkLiveUnreadMessages(session.user.id);
+                    checkLiveUnreadMessages(session.user.id, session.user.created_at);
                 }
             })
             .subscribe();
@@ -108,7 +115,7 @@ const initAuthNav = async () => {
     client.auth.onAuthStateChange((_event, session) => {
         updateUI(session);
         if (session?.user?.id) {
-            checkLiveUnreadMessages(session.user.id);
+            checkLiveUnreadMessages(session.user.id, session.user.created_at);
         }
     });
 

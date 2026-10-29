@@ -157,10 +157,29 @@
         </div>
     </div>
 
-    <div id="imageModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.92); z-index: 9999; justify-content: center; align-items: center; padding: 20px;">
-        <button id="closeImageModal" type="button" style="position: absolute; top: 20px; right: 30px; background: none; border: none; color: #fff; font-size: 32px; cursor: pointer;"><i class="fa-solid fa-xmark"></i></button>
-        <img id="modalImageFull" src="" alt="Großansicht" style="max-width: 90vw; max-height: 88vh; object-fit: contain; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.95); border: 1px solid var(--border-subtle); display: none;">
-        <video id="modalVideoFull" src="" controls style="max-width: 92vw; max-height: 90vh; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.95); border: 1px solid var(--border-subtle); display: none; outline: none;"></video>
+    <!-- MEDIEN-BETRACHTER (WHATSAPP-STIL): Kopfzeile, Vor/Zurück, Miniaturleiste -->
+    <div id="imageModal" class="wa-viewer" style="display: none;">
+        <div class="wa-viewer-topbar">
+            <div class="wa-viewer-sender">
+                <div class="wa-avatar wa-viewer-avatar"><i class="fa-solid fa-user"></i></div>
+                <div class="wa-viewer-meta">
+                    <span id="viewerSenderName" class="wa-viewer-name"></span>
+                    <span id="viewerSenderTime" class="wa-viewer-time"></span>
+                </div>
+            </div>
+            <div class="wa-viewer-actions">
+                <span id="viewerCounter" class="wa-viewer-counter"></span>
+                <a id="viewerDownloadBtn" class="wa-viewer-btn" href="#" target="_blank" rel="noopener" title="Herunterladen"><i class="fa-solid fa-download"></i></a>
+                <button id="closeImageModal" type="button" class="wa-viewer-btn" title="Schließen (Esc)"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+        </div>
+        <div id="viewerStage" class="wa-viewer-stage">
+            <button id="viewerPrevBtn" type="button" class="wa-viewer-nav wa-viewer-prev" title="Vorheriges (←)"><i class="fa-solid fa-chevron-left"></i></button>
+            <img id="modalImageFull" src="" alt="Großansicht" style="display: none;">
+            <video id="modalVideoFull" src="" controls playsinline style="display: none;"></video>
+            <button id="viewerNextBtn" type="button" class="wa-viewer-nav wa-viewer-next" title="Nächstes (→)"><i class="fa-solid fa-chevron-right"></i></button>
+        </div>
+        <div id="viewerThumbs" class="wa-viewer-thumbs"></div>
     </div>
 
     <section class="social-section">

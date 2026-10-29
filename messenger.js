@@ -21,6 +21,28 @@ let isMultiSelectMode = false;
 let selectedMessageIds = new Set();
 let messagesCacheMap = new Map();
 
+let viewerItems = [];
+let viewerIndex = 0;
+
+// Persönliche Willkommensnachricht im offiziellen Forum: Sie wird nur im Browser des jeweiligen Mitglieds
+// erzeugt (nicht in der Datenbank gespeichert) und ist deshalb ausschließlich für dieses Mitglied sichtbar.
+const WELCOME_MESSAGE_ID = "gsra-welcome";
+const WELCOME_PREVIEW_TEXT = "Willkommen in der Global Simracing Alliance (GSRA)!";
+const WELCOME_MESSAGE_HTML = `
+    <div class="wa-welcome-title">Willkommen in der Global Simracing Alliance (GSRA)!</div>
+    <div class="wa-welcome-block">Hallo Simracer! Schön, dass du Teil der Global Simracing Alliance bist – der Plattform von Simracern für Simracer. Dieser offizielle Kanal dient als zentrale Anlaufstelle für wichtige Ankündigungen, Plattform-Updates, Reglement-Änderungen und Event-Benachrichtigungen rund um die GSRA.</div>
+    <div class="wa-welcome-block"><strong>Was dich erwartet:</strong></div>
+    <ul>
+        <li><strong>Marktplatz:</strong> Hardware-Equipment sicher kaufen und verkaufen.</li>
+        <li><strong>Setups &amp; Telemetrie:</strong> Fahrzeugeinstellungen für iRacing und Co. teilen und optimieren.</li>
+        <li><strong>Rennkalender:</strong> Alle offiziellen Events und Community-Rennen auf einen Blick.</li>
+        <li><strong>Messenger &amp; Foren:</strong> Direkter Austausch mit der Community.</li>
+    </ul>
+    <div class="wa-welcome-block"><strong>Hinweis:</strong> Dieser Kanal ist für offizielle Mitteilungen reserviert; für den normalen Austausch stehen dir deine privaten Chats und Foren zur Verfügung.</div>
+    <div>Wir wünschen dir maximale Pace und viel Spaß!</div>
+    <div>United by Speed. Driven Globally. Dein GSRA-Team.</div>
+`;
+
 function escapeHtml(str) {
     if (!str) return "";
     return String(str)
@@ -46,6 +68,15 @@ function formatCount(num) {
     return num.toString();
 }
 
+function isVideoUrl(url) {
+    return /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(url);
+}
+
+function formatDuration(seconds) {
+    const total = Math.round(seconds);
+    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
+
 const chatsList = document.getElementById("chatsList");
 const chatTitleText = document.getElementById("chatTitleText");
 const chatMessages = document.getElementById("chatMessages");
@@ -68,6 +99,14 @@ const imageModal = document.getElementById("imageModal");
 const modalImageFull = document.getElementById("modalImageFull");
 const modalVideoFull = document.getElementById("modalVideoFull");
 const closeImageModal = document.getElementById("closeImageModal");
+const viewerStage = document.getElementById("viewerStage");
+const viewerPrevBtn = document.getElementById("viewerPrevBtn");
+const viewerNextBtn = document.getElementById("viewerNextBtn");
+const viewerThumbs = document.getElementById("viewerThumbs");
+const viewerCounter = document.getElementById("viewerCounter");
+const viewerSenderName = document.getElementById("viewerSenderName");
+const viewerSenderTime = document.getElementById("viewerSenderTime");
+const viewerDownloadBtn = document.getElementById("viewerDownloadBtn");
 const waWelcomeScreen = document.getElementById("waWelcomeScreen");
 const waChatActivePane = document.getElementById("waChatActivePane");
 const chatSearchInput = document.getElementById("chatSearchInput");
@@ -472,20 +511,136 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     if (closeImageModal && imageModal) {
-        closeImageModal.addEventListener("click", () => {
-            imageModal.style.display = "none";
-            if (modalVideoFull) { modalVideoFull.style.display = "none"; }
-            if (modalImageFull) modalImageFull.style.display = "none";
-        });
+        closeImageModal.addEventListener("click", closeMediaViewer);
         imageModal.addEventListener("click", (e) => {
-            if (e.target === imageModal) {
-                imageModal.style.display = "none";
-                if (modalVideoFull) { modalVideoFull.style.display = "none"; }
-                if (modalImageFull) modalImageFull.style.display = "none";
-            }
+            if (e.target === imageModal || e.target === viewerStage) closeMediaViewer();
         });
+        if (viewerPrevBtn) viewerPrevBtn.addEventListener("click", () => showViewerItem(viewerIndex - 1));
+        if (viewerNextBtn) viewerNextBtn.addEventListener("click", () => showViewerItem(viewerIndex + 1));
+
+        // Tastatur: ← / → blättern, Esc schließt (im fokussierten Video bleiben die Pfeiltasten zum Spulen)
+        document.addEventListener("keydown", (e) => {
+            if (imageModal.style.display !== "flex") return;
+            if (e.key === "Escape") closeMediaViewer();
+            else if (e.target === modalVideoFull) return;
+            else if (e.key === "ArrowLeft") showViewerItem(viewerIndex - 1);
+            else if (e.key === "ArrowRight") showViewerItem(viewerIndex + 1);
+        });
+
+        // Wischen auf Touch-Geräten
+        let touchStartX = null;
+        if (viewerStage) {
+            viewerStage.addEventListener("touchstart", (e) => { touchStartX = e.touches[0].clientX; }, { passive: true });
+            viewerStage.addEventListener("touchend", (e) => {
+                if (touchStartX === null) return;
+                const deltaX = e.changedTouches[0].clientX - touchStartX;
+                touchStartX = null;
+                if (Math.abs(deltaX) > 50) showViewerItem(viewerIndex + (deltaX < 0 ? 1 : -1));
+            });
+        }
     }
 });
+
+// Medien-Betrachter im WhatsApp-Stil: blättert durch alle Fotos & Videos der angeklickten Nachricht
+function openMediaViewer(urls, startIndex, senderName, dateObj) {
+    if (!imageModal) return;
+    viewerItems = urls;
+
+    if (viewerSenderName) viewerSenderName.innerText = senderName;
+    if (viewerSenderTime) {
+        const dateStr = dateObj.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+        const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        viewerSenderTime.innerText = `${dateStr} um ${timeStr}`;
+    }
+
+    if (viewerThumbs) {
+        viewerThumbs.innerHTML = "";
+        viewerThumbs.style.display = urls.length > 1 ? "flex" : "none";
+        urls.forEach((url, idx) => {
+            const thumb = document.createElement("div");
+            thumb.className = "wa-viewer-thumb";
+            if (isVideoUrl(url)) {
+                const vid = document.createElement("video");
+                vid.src = `${url}#t=0.1`;
+                vid.preload = "metadata";
+                vid.muted = true;
+                thumb.appendChild(vid);
+                thumb.insertAdjacentHTML("beforeend", '<i class="fa-solid fa-play"></i>');
+            } else {
+                const img = document.createElement("img");
+                img.src = url;
+                img.alt = `Medium ${idx + 1}`;
+                thumb.appendChild(img);
+            }
+            thumb.addEventListener("click", () => showViewerItem(idx));
+            viewerThumbs.appendChild(thumb);
+        });
+    }
+
+    if (document.activeElement) document.activeElement.blur();
+    document.body.style.overflow = "hidden";
+    imageModal.style.display = "flex";
+    showViewerItem(startIndex);
+}
+
+function showViewerItem(index) {
+    if (index < 0 || index >= viewerItems.length) return;
+    viewerIndex = index;
+    const url = viewerItems[index];
+    const isVideo = isVideoUrl(url);
+
+    if (modalVideoFull) {
+        modalVideoFull.pause();
+        if (isVideo) {
+            modalVideoFull.src = url;
+            modalVideoFull.style.display = "block";
+            modalVideoFull.play().catch(() => {});
+        } else {
+            modalVideoFull.removeAttribute("src");
+            modalVideoFull.load();
+            modalVideoFull.style.display = "none";
+        }
+    }
+    if (modalImageFull) {
+        if (isVideo) {
+            modalImageFull.style.display = "none";
+        } else {
+            modalImageFull.src = url;
+            modalImageFull.style.display = "block";
+        }
+    }
+
+    if (viewerCounter) viewerCounter.innerText = viewerItems.length > 1 ? `${index + 1} / ${viewerItems.length}` : "";
+    if (viewerPrevBtn) viewerPrevBtn.style.visibility = index > 0 ? "visible" : "hidden";
+    if (viewerNextBtn) viewerNextBtn.style.visibility = index < viewerItems.length - 1 ? "visible" : "hidden";
+
+    if (viewerDownloadBtn) {
+        const isWebUrl = /^https?:\/\//i.test(url);
+        viewerDownloadBtn.style.display = isWebUrl ? "flex" : "none";
+        viewerDownloadBtn.href = isWebUrl ? `${url}${url.includes("?") ? "&" : "?"}download=` : "#";
+    }
+
+    if (viewerThumbs) {
+        Array.from(viewerThumbs.children).forEach((thumb, i) => thumb.classList.toggle("active", i === index));
+        const activeThumb = viewerThumbs.children[index];
+        if (activeThumb) {
+            viewerThumbs.scrollLeft = activeThumb.offsetLeft - (viewerThumbs.clientWidth - activeThumb.offsetWidth) / 2;
+        }
+    }
+}
+
+function closeMediaViewer() {
+    if (!imageModal) return;
+    imageModal.style.display = "none";
+    document.body.style.overflow = "";
+    if (modalVideoFull) {
+        modalVideoFull.pause();
+        modalVideoFull.removeAttribute("src");
+        modalVideoFull.load();
+        modalVideoFull.style.display = "none";
+    }
+    if (modalImageFull) modalImageFull.style.display = "none";
+}
 
 async function checkUserAdminStatus() {
     const supabase = window.supabaseClient || window.supabase;
@@ -662,9 +817,12 @@ async function updateChatLastMessageInfo(chat, supabase) {
         .order("created_at", { ascending: false })
         .limit(1);
 
+    // Persönliche Willkommensnachricht im offiziellen Forum (Zeitpunkt der Registrierung)
+    const welcomeTime = (chat.id === officialForumChatId && currentUser?.created_at) ? new Date(currentUser.created_at).getTime() : 0;
+
     if (!recentMsgs || recentMsgs.length === 0) {
-        chat.last_msg_time = chat.created_at;
-        chat.last_message = "Keine Nachrichten";
+        chat.last_msg_time = welcomeTime ? currentUser.created_at : chat.created_at;
+        chat.last_message = welcomeTime ? WELCOME_PREVIEW_TEXT : "Keine Nachrichten";
         return;
     }
 
@@ -721,6 +879,11 @@ async function updateChatLastMessageInfo(chat, supabase) {
         const reactorName = isSelf ? "Du" : await fetchUserName(latestReaction.last_reaction_user);
         const verb = isSelf ? "hast" : "hat";
         chat.last_message = `${reactorName} ${verb} mit ${latestReaction.last_reaction_emoji} reagiert`;
+    }
+
+    if (welcomeTime > Math.max(msgTime, reactionTime, editTime)) {
+        chat.last_msg_time = currentUser.created_at;
+        chat.last_message = WELCOME_PREVIEW_TEXT;
     }
 }
 
@@ -833,6 +996,11 @@ async function loadUserChats() {
                 .limit(1);
 
             chat.unread = Boolean(unreadMsgs && unreadMsgs.length > 0);
+
+            // Willkommensnachricht gilt als ungelesen, bis das offizielle Forum nach der Registrierung geöffnet wurde
+            if (chat.id === officialForumChatId && currentUser.created_at && lastRead < new Date(currentUser.created_at).getTime()) {
+                chat.unread = true;
+            }
         }
     }
 
@@ -990,7 +1158,7 @@ async function loadChatMessages(chatId) {
     messagesCacheMap.clear();
     if (messages) messages.forEach(m => messagesCacheMap.set(m.id, m));
 
-    await renderMessages(messages || []);
+    await renderMessages(messages || [], chatId);
 
     const channelName = `chat_${chatId}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     messageSubscription = supabase
@@ -1004,13 +1172,53 @@ async function loadChatMessages(chatId) {
             
             messagesCacheMap.clear();
             if (updatedMessages) updatedMessages.forEach(m => messagesCacheMap.set(m.id, m));
-            await renderMessages(updatedMessages || []);
+            await renderMessages(updatedMessages || [], chatId);
         })
         .subscribe();
 }
 
-async function renderMessages(messages) {
+// Stellt die persönliche Willkommensnachricht (Zeitpunkt = Registrierung) immer als oberste Nachricht ins offizielle Forum
+function withWelcomeMessage(messages, chatId) {
+    if (!chatId || chatId !== officialForumChatId || !currentUser?.created_at) return messages;
+    const welcomeMsg = {
+        id: WELCOME_MESSAGE_ID,
+        chat_id: chatId,
+        sender_id: null,
+        created_at: currentUser.created_at,
+        text: WELCOME_PREVIEW_TEXT,
+        is_welcome: true
+    };
+    return [welcomeMsg, ...messages];
+}
+
+function appendWelcomeMessage(msg) {
+    const placeholder = chatMessages.querySelector(".chat-placeholder");
+    if (placeholder) placeholder.remove();
+
+    const wrapperDiv = document.createElement("div");
+    wrapperDiv.style.cssText = "display: flex; flex-direction: column; width: 100%; position: relative; align-items: flex-start;";
+
+    const dateObj = new Date(msg.created_at);
+    const dateStr = dateObj.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+    const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const bubble = document.createElement("div");
+    bubble.id = `msg-${msg.id}`;
+    bubble.className = "message-bubble message-other wa-welcome-bubble";
+    bubble.innerHTML = `
+        <div class="msg-author">GSRA-Team <i class="fa-solid fa-circle-check text-blue" title="Offizielle Nachricht"></i></div>
+        ${WELCOME_MESSAGE_HTML}
+        <div class="message-footer"><span class="message-time">${dateStr}, ${timeStr}</span></div>
+    `;
+
+    wrapperDiv.appendChild(bubble);
+    chatMessages.appendChild(wrapperDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+async function renderMessages(messages, chatId = activeChatId) {
     if (!chatMessages) return;
+    messages = withWelcomeMessage(messages, chatId);
     if (messages.length === 0) {
         chatMessages.innerHTML = `<p class="chat-placeholder" style="text-align: center; color: var(--text-muted); margin: auto;">Schreibe die erste Nachricht...</p>`;
         return;
@@ -1025,6 +1233,15 @@ async function renderMessages(messages) {
             seenSystemTexts.add(formatted);
         }
         await appendSingleMessage(msg, isSystem);
+    }
+
+    // Erstes Öffnen des offiziellen Forums: zur Willkommensnachricht ganz oben springen statt ans Ende
+    if (chatId === officialForumChatId && currentUser?.id) {
+        const welcomeSeenKey = `gsra_welcome_seen_${currentUser.id}`;
+        if (!localStorage.getItem(welcomeSeenKey)) {
+            chatMessages.scrollTop = 0;
+            localStorage.setItem(welcomeSeenKey, "true");
+        }
     }
 }
 
@@ -1095,6 +1312,10 @@ async function toggleReaction(msg, emoji) {
 
 async function appendSingleMessage(msg, isSystem = false) {
     if (!chatMessages) return;
+    if (msg.is_welcome) {
+        appendWelcomeMessage(msg);
+        return;
+    }
     const placeholder = chatMessages.querySelector(".chat-placeholder");
     if (placeholder) placeholder.remove();
 
@@ -1393,72 +1614,75 @@ async function appendSingleMessage(msg, isSystem = false) {
 
     if (!isDeleted && msg.image_url) {
         const urls = msg.image_url.split(",").map(u => u.trim()).filter(Boolean);
-        const gridContainer = document.createElement("div");
-        gridContainer.className = "wa-media-grid";
-
         const displayCount = Math.min(urls.length, 4);
+        const gridContainer = document.createElement("div");
+        gridContainer.className = `wa-media-grid count-${displayCount}`;
+
+        // WhatsApp-Rahmen: Medien füllen die Blase bis auf einen dünnen Rand
+        bubble.classList.add("has-media");
+        if (!msg.text || msg.text === "[Medien]") bubble.classList.add("media-only");
+
         for (let i = 0; i < displayCount; i++) {
             const cleanUrl = urls[i];
-            const isVideo = /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(cleanUrl);
+            const isVideo = isVideoUrl(cleanUrl);
+            const hasMoreOverlay = (i === 3 && urls.length > 4);
+
+            // Fotos und Videos nutzen dieselbe einheitliche Kachel
+            const tile = document.createElement("div");
+            tile.className = `wa-media-item${isVideo ? " is-video" : ""}${hasMoreOverlay ? " has-more" : ""}`;
 
             if (isVideo) {
-                const videoWrap = document.createElement("div");
-                videoWrap.className = "wa-video-preview-wrapper";
-                
                 const videoElem = document.createElement("video");
-                videoElem.src = cleanUrl;
+                videoElem.src = `${cleanUrl}#t=0.1`;
                 videoElem.preload = "metadata";
+                videoElem.muted = true;
+                videoElem.playsInline = true;
+                tile.appendChild(videoElem);
 
-                const overlayDiv = document.createElement("div");
-                overlayDiv.className = "wa-video-play-overlay";
-                overlayDiv.innerHTML = '<i class="fa-solid fa-play"></i>';
+                if (!hasMoreOverlay) {
+                    const playIcon = document.createElement("div");
+                    playIcon.className = "wa-media-play";
+                    playIcon.innerHTML = '<i class="fa-solid fa-play"></i>';
+                    tile.appendChild(playIcon);
 
-                videoWrap.appendChild(videoElem);
-                videoWrap.appendChild(overlayDiv);
-
-                videoWrap.addEventListener("click", (e) => {
-                    e.stopPropagation();
-                    if (modalVideoFull && imageModal) {
-                        if (modalImageFull) modalImageFull.style.display = "none";
-                        modalVideoFull.src = cleanUrl;
-                        modalVideoFull.style.display = "block";
-                        imageModal.style.display = "flex";
-                        modalVideoFull.play();
-                    }
-                });
-                gridContainer.appendChild(videoWrap);
+                    const durationTag = document.createElement("div");
+                    durationTag.className = "wa-media-duration";
+                    durationTag.innerHTML = '<i class="fa-solid fa-video"></i>';
+                    videoElem.addEventListener("loadedmetadata", () => {
+                        if (isFinite(videoElem.duration)) {
+                            durationTag.innerHTML = `<i class="fa-solid fa-video"></i> ${formatDuration(videoElem.duration)}`;
+                        }
+                    });
+                    tile.appendChild(durationTag);
+                }
             } else {
-                const imgWrap = document.createElement("div");
-                imgWrap.className = "wa-media-item";
-
                 const img = document.createElement("img");
                 img.src = cleanUrl;
                 img.alt = "Bild";
-                img.addEventListener("click", (e) => {
-                    e.stopPropagation();
-                    if (modalImageFull && imageModal) {
-                        if (modalVideoFull) modalVideoFull.style.display = "none";
-                        modalImageFull.src = cleanUrl;
-                        modalImageFull.style.display = "block";
-                        imageModal.style.display = "flex";
-                    }
-                });
-                imgWrap.appendChild(img);
-
-                if (i === 3 && urls.length > 4) {
-                    const overlay = document.createElement("div");
-                    overlay.className = "wa-media-overlay";
-                    overlay.innerText = `+${urls.length - 4}`;
-                    imgWrap.appendChild(overlay);
-                }
-                gridContainer.appendChild(imgWrap);
+                tile.appendChild(img);
             }
+
+            // Ab 5 Medien: 4. Kachel geblurrt mit +Anzahl der weiteren Medien (inkl. des geblurrten)
+            if (hasMoreOverlay) {
+                const overlay = document.createElement("div");
+                overlay.className = "wa-media-overlay";
+                overlay.innerText = `+${urls.length - 3}`;
+                tile.appendChild(overlay);
+            }
+
+            tile.addEventListener("click", (e) => {
+                if (isMultiSelectMode) return;
+                e.stopPropagation();
+                openMediaViewer(urls, i, senderName, dateObj);
+            });
+            gridContainer.appendChild(tile);
         }
         bubble.appendChild(gridContainer);
     }
 
     if (msg.text && msg.text !== "[Medien]") {
         const textDiv = document.createElement("div");
+        textDiv.className = "message-text";
         if (isSystem) {
             textDiv.innerText = await formatSystemMessage(msg.text, msg.sender_id);
             textDiv.style.fontStyle = "italic";
