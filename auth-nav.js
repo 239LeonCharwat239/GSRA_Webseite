@@ -49,11 +49,19 @@ const initAuthNav = async () => {
                 .select("id, user1_id, user2_id, title")
                 .not("title", "is", null);
 
+            // Offizielles Forum suchen – fehlt es (z. B. nach dem Leeren der Tabelle), legt die Datenbank-Funktion es neu an,
+            // damit die Willkommensnachricht auf jeder Seite sofort als ungelesen leuchtet
+            let officialForum = (groupChats || []).find(c => c.title === 'GSRA Official / Community Forum' || (c.title && c.title.includes('Official')));
+            if (!officialForum && registeredAt) {
+                const { data: forumId, error: rpcError } = await client.rpc("ensure_official_forum");
+                if (!rpcError && forumId) officialForum = { id: forumId };
+            }
+
             const map = new Map();
             [...(userChats || []), ...(groupChats || []).filter(c => c.user1_id === c.user2_id)].forEach(c => map.set(c.id, c));
             const allIds = Array.from(map.keys());
 
-            if (allIds.length === 0) return;
+            if (allIds.length === 0 && !officialForum) return;
 
             let hasUnread = false;
             for (const cId of allIds) {
@@ -75,7 +83,6 @@ const initAuthNav = async () => {
             }
 
             // Persönliche Willkommensnachricht im offiziellen Forum gilt als ungelesen, bis das Forum nach der Registrierung geöffnet wurde
-            const officialForum = (groupChats || []).find(c => c.title === 'GSRA Official / Community Forum' || (c.title && c.title.includes('Official')));
             if (!hasUnread && officialForum && registeredAt) {
                 const forumLastRead = localStorage.getItem(`gsra_last_read_${userId}_${officialForum.id}`);
                 if (!forumLastRead || new Date(forumLastRead) < new Date(registeredAt)) hasUnread = true;

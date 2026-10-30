@@ -115,7 +115,7 @@ async function handleCreateEvent(e) {
             .insert([{ title, simulation, track, event_date, password }]);
 
         if (error) {
-            alert('Fehler beim Erstellen: ' + error.message);
+            showToast('Fehler beim Erstellen: ' + error.message, 'error');
         } else {
             document.getElementById('create-event-form').reset();
             await loadEvents();
@@ -128,7 +128,15 @@ async function handleCreateEvent(e) {
 }
 
 async function deleteEvent(id) {
-    if (!confirm('Möchtest du dieses Event wirklich löschen?')) return;
+    const confirmed = await showDialog({
+        icon: 'fa-trash',
+        title: 'Event löschen?',
+        message: 'Möchtest du dieses Event wirklich löschen?',
+        confirmText: 'Löschen',
+        cancelText: 'Abbrechen',
+        danger: true
+    });
+    if (!confirmed) return;
 
     const { error } = await supabaseClient
         .from('events')
@@ -136,7 +144,7 @@ async function deleteEvent(id) {
         .eq('id', id);
 
     if (error) {
-        alert('Fehler beim Löschen: ' + error.message);
+        showToast('Fehler beim Löschen: ' + error.message, 'error');
     } else {
         await loadEvents();
     }

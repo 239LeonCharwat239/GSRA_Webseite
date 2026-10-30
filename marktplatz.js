@@ -18,32 +18,6 @@ function escapeHtml(str) {
         .replace(/'/g, "&#039;");
 }
 
-function showToast(message, type = "info") {
-    let container = document.getElementById("toastContainer");
-    if (!container) {
-        container = document.createElement("div");
-        container.id = "toastContainer";
-        document.body.appendChild(container);
-    }
-
-    const toast = document.createElement("div");
-    toast.className = `toast toast-${type}`;
-
-    let icon = '<i class="fa-solid fa-circle-info text-blue"></i>';
-    if (type === "success") icon = '<i class="fa-solid fa-circle-check" style="color: #00ff88;"></i>';
-    if (type === "error") icon = '<i class="fa-solid fa-circle-exclamation" style="color: #ff4d4d;"></i>';
-
-    toast.innerHTML = `${icon} <span>${escapeHtml(message)}</span>`;
-    container.appendChild(toast);
-
-    setTimeout(() => {
-        toast.style.opacity = "0";
-        toast.style.transform = "translateX(110%)";
-        toast.style.transition = "all 0.35s ease";
-        setTimeout(() => toast.remove(), 350);
-    }, 3500);
-}
-
 const DEFAULT_PLACEHOLDER = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='250' viewBox='0 0 400 250'><rect width='100%' height='100%' fill='%231a1a1a'/><text x='50%' y='50%' fill='%23666666' font-size='16' text-anchor='middle' dy='.3em'>Kein Bild vorhanden</text></svg>";
 
 // DOM-Elemente
@@ -336,7 +310,15 @@ function openDetailModal(item) {
         if (modalDeleteBtn) {
             modalDeleteBtn.style.display = "inline-flex";
             modalDeleteBtn.onclick = async () => {
-                if (confirm("Möchtest du dieses Angebot wirklich löschen?")) {
+                const confirmed = await showDialog({
+                    icon: "fa-trash",
+                    title: "Angebot löschen?",
+                    message: "Möchtest du dieses Angebot wirklich löschen?",
+                    confirmText: "Löschen",
+                    cancelText: "Abbrechen",
+                    danger: true
+                });
+                if (confirmed) {
                     try {
                         const { error } = await supabase.from("marketplace").delete().eq("id", item.id);
                         if (error) throw error;

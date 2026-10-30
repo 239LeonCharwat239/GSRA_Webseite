@@ -22,8 +22,17 @@
     box-sizing: border-box;
 }
 
+/* Länderflaggen-Emojis auch unter Windows: Windows hat keine Flaggen-Emojis und zeigt sonst Buchstaben wie „DE“.
+   Die Schrift enthält nur Flaggen (unicode-range) und wird erst geladen, wenn eine Flagge angezeigt wird. */
+@font-face {
+    font-family: "Twemoji Country Flags";
+    unicode-range: U+1F1E6-1F1FF, U+1F3F4, U+E0062-E0063, U+E0065, U+E0067, U+E006C, U+E006E, U+E0073-E0074, U+E0077, U+E007F;
+    src: url("https://cdn.jsdelivr.net/npm/country-flag-emoji-polyfill@0.1.10/dist/TwemojiCountryFlags.woff2") format("woff2");
+    font-display: swap;
+}
+
 body {
-    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-family: "Twemoji Country Flags", 'Segoe UI', system-ui, -apple-system, sans-serif;
     line-height: 1.6;
     background-color: var(--bg-main);
     color: var(--text-muted);
@@ -1536,7 +1545,6 @@ body.multi-select-active .message-actions {
 
 .wa-msg-dropdown.dropdown-above {
     bottom: calc(100% + 2px);
-    padding-bottom: 12px;
 }
 .wa-msg-dropdown.dropdown-above::before {
     content: '';
@@ -1550,7 +1558,6 @@ body.multi-select-active .message-actions {
 
 .wa-msg-dropdown.dropdown-below {
     top: calc(100% + 2px);
-    padding-top: 12px;
 }
 .wa-msg-dropdown.dropdown-below::before {
     content: '';
@@ -1587,7 +1594,7 @@ body.multi-select-active .message-actions {
     background: #15161a;
     border: 1px solid var(--border-subtle);
     border-radius: 20px;
-    padding: 3px 6px;
+    padding: 2px 6px;
     display: none;
     align-items: center;
     justify-content: center;
@@ -1597,9 +1604,9 @@ body.multi-select-active .message-actions {
     white-space: nowrap;
 }
 
+/* Kein Zusatzabstand auf einer Seite (sonst sitzen die Emojis schief) – die unsichtbare Maus-Brücke übernimmt ::before */
 .wa-quick-reaction-bar.bar-above {
     bottom: calc(100% + 4px);
-    padding-bottom: 12px;
 }
 .wa-quick-reaction-bar.bar-above::before {
     content: '';
@@ -1613,7 +1620,6 @@ body.multi-select-active .message-actions {
 
 .wa-quick-reaction-bar.bar-below {
     top: calc(100% + 4px);
-    padding-top: 12px;
 }
 .wa-quick-reaction-bar.bar-below::before {
     content: '';
@@ -1627,6 +1633,7 @@ body.multi-select-active .message-actions {
 
 .wa-quick-reaction-bar span {
     font-size: 18px;
+    line-height: 1;
     width: 24px;
     height: 24px;
     cursor: pointer;
@@ -1667,7 +1674,6 @@ body.multi-select-active .message-actions {
 .message-react-picker-popup.popup-above {
     bottom: calc(100% + 2px);
     border-top: 3px solid var(--gsra-yellow);
-    padding-bottom: 12px;
 }
 .message-react-picker-popup.popup-above::before {
     content: '';
@@ -1682,7 +1688,6 @@ body.multi-select-active .message-actions {
 .message-react-picker-popup.popup-below {
     top: calc(100% + 2px);
     border-bottom: 3px solid var(--gsra-yellow);
-    padding-top: 12px;
 }
 .message-react-picker-popup.popup-below::before {
     content: '';
@@ -1706,6 +1711,7 @@ emoji-picker {
     --category-font-color: #a0a5b1;
     --button-active-background: rgba(0, 85, 255, 0.35);
     --button-hover-background: rgba(255, 255, 255, 0.08);
+    --emoji-font-family: "Twemoji Country Flags", "Twemoji Mozilla", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", "EmojiOne Color", "Android Emoji", sans-serif;
     scrollbar-color: #3a3d46 transparent;
 }
 

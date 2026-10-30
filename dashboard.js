@@ -78,10 +78,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                 });
 
                 if (upsertErr) {
-                    alert("Fehler beim Speichern des Profils.");
+                    showToast("Fehler beim Speichern des Profils.", "error");
                 } else {
-                    alert("Profil erfolgreich aktualisiert!");
-                    location.reload();
+                    showToast("Profil erfolgreich aktualisiert!", "success");
+                    setTimeout(() => location.reload(), 1200);
                 }
             });
         }
@@ -92,7 +92,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 e.preventDefault();
                 const targetId = friendUsernameInput.value.trim();
                 if (targetId === currentUser.id) {
-                    alert("Du kannst dir nicht selbst eine Anfrage senden.");
+                    showToast("Du kannst dir nicht selbst eine Anfrage senden.", "error");
                     return;
                 }
 
@@ -103,9 +103,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }]);
 
                 if (error) {
-                    alert("Fehler beim Senden der Anfrage (Existiert sie bereits?).");
+                    showToast("Fehler beim Senden der Anfrage (Existiert sie bereits?).", "error");
                 } else {
-                    alert("Freundschaftsanfrage gesendet!");
+                    showToast("Freundschaftsanfrage gesendet!", "success");
                     friendUsernameInput.value = "";
                     loadFriends();
                 }

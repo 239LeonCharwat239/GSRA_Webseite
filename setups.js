@@ -377,7 +377,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             e.preventDefault();
             
             if (!currentUser) {
-                alert('Bitte melde dich an, um Setups hochzuladen.');
+                showToast('Bitte melde dich an, um Setups hochzuladen.', 'error');
                 return;
             }
 
@@ -388,7 +388,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const file = fileInput.files[0];
 
             if (!car || !track || !file) {
-                alert('Bitte alle Felder ausfüllen!');
+                showToast('Bitte alle Felder ausfüllen!', 'error');
                 return;
             }
 
@@ -499,7 +499,7 @@ async function loadSetups() {
 
 async function voteSetup(setupId, type, currentVal) {
     if (!currentUser) {
-        alert("Bitte melde dich an, um abstimmen zu können.");
+        showToast("Bitte melde dich an, um abstimmen zu können.", "error");
         return;
     }
 
@@ -511,17 +511,25 @@ async function voteSetup(setupId, type, currentVal) {
         .eq('id', setupId);
 
     if (error) {
-        alert("Fehler beim Abstimmen: " + error.message);
+        showToast("Fehler beim Abstimmen: " + error.message, "error");
     } else {
         loadSetups();
     }
 }
 
 async function deleteSetup(setupId) {
-    if (confirm("Möchtest du dieses Setup wirklich löschen?")) {
+    const confirmed = await showDialog({
+        icon: "fa-trash",
+        title: "Setup löschen?",
+        message: "Möchtest du dieses Setup wirklich löschen?",
+        confirmText: "Löschen",
+        cancelText: "Abbrechen",
+        danger: true
+    });
+    if (confirmed) {
         const { error } = await supabase.from('setups').delete().eq('id', setupId);
         if (error) {
-            alert("Fehler beim Löschen: " + error.message);
+            showToast("Fehler beim Löschen: " + error.message, "error");
         } else {
             loadSetups();
         }

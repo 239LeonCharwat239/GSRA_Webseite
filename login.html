@@ -64,6 +64,7 @@
     </section>
 </main>
 
+<script src="ui-dialogs.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', async () => {
         const client = window.supabaseClient || window.supabase;
@@ -115,19 +116,24 @@
                 });
 
                 if (error) {
-                    alert('Registrierung fehlgeschlagen: ' + error.message);
+                    showToast('Registrierung fehlgeschlagen: ' + error.message, 'error');
                 } else if (data.session) {
-                    alert('Konto erfolgreich erstellt!');
-                    window.location.href = 'dashboard.html';
+                    showToast('Konto erfolgreich erstellt!', 'success');
+                    setTimeout(() => { window.location.href = 'dashboard.html'; }, 1200);
                 } else {
-                    alert('Konto erstellt! Bitte überprüfe deine E-Mails zur Bestätigung.');
+                    showDialog({
+                        icon: 'fa-envelope',
+                        title: 'Konto erstellt!',
+                        message: 'Bitte überprüfe deine E-Mails und bestätige deine Adresse. Danach kannst du dich hier anmelden.',
+                        confirmText: 'OK'
+                    });
                 }
             } else {
                 // Login
                 const { data, error } = await client.auth.signInWithPassword({ email, password });
 
                 if (error) {
-                    alert('Login fehlgeschlagen: ' + error.message);
+                    showToast('Login fehlgeschlagen: ' + error.message, 'error');
                 } else {
                     window.location.href = 'dashboard.html';
                 }
