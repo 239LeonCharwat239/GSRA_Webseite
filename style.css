@@ -832,7 +832,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
     position: fixed;
     bottom: 25px;
     right: 25px;
-    z-index: 3000;
+    z-index: 10001; /* auch über geöffneten Dialogen sichtbar */
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -1122,10 +1122,11 @@ p {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    position: relative;
 }
 
 .wa-sidebar-header {
-    padding: 15px 20px;
+    padding: 12px 16px;
     background: #202c33;
     display: flex;
     justify-content: space-between;
@@ -1354,7 +1355,7 @@ p {
 }
 
 .chat-header {
-    padding: 15px 20px;
+    padding: 10px 16px;
     background: #15161a;
     border-bottom: 1px solid var(--border-subtle);
     text-align: left;
@@ -1433,11 +1434,11 @@ body.multi-select-active .message-actions {
     animation: highlightPulse 1.5s ease-in-out;
 }
 
-/* Eigene Nachricht (rechts): Aktionsleiste links vom Kasten mit unsichtbarem Brücken-Padding */
+/* Eigene Nachricht (rechts): Aktionsleiste links vom Kasten mit unsichtbarem Brücken-Padding.
+   Zentriert ohne transform (Leiste ist 32px hoch) – sonst könnte die schwebende Emoji-Auswahl nicht über den Chat hinausragen. */
 .message-own .message-actions {
     position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
+    top: calc(50% - 16px);
     right: calc(100% + 4px);
     display: none;
     background: #15161a;
@@ -1453,8 +1454,7 @@ body.multi-select-active .message-actions {
 /* Fremde Nachricht (links): Aktionsleiste rechts vom Kasten mit Brücken-Padding */
 .message-other .message-actions {
     position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
+    top: calc(50% - 16px);
     left: calc(100% + 4px);
     display: none;
     background: #15161a;
@@ -1516,16 +1516,14 @@ body.multi-select-active .message-actions {
     color: #ff4d4d;
 }
 
-/* Ausrichtung für eigene vs. fremde Nachrichten (Dropdown, Quick-Bar, Picker) */
+/* Ausrichtung für eigene vs. fremde Nachrichten (Dropdown, Quick-Bar; die Emoji-Auswahl richtet messenger.js aus) */
 .message-own .wa-msg-dropdown,
-.message-own .wa-quick-reaction-bar,
-.message-own .message-react-picker-popup {
+.message-own .wa-quick-reaction-bar {
     right: 0;
 }
 
 .message-other .wa-msg-dropdown,
-.message-other .wa-quick-reaction-bar,
-.message-other .message-react-picker-popup {
+.message-other .wa-quick-reaction-bar {
     left: 0;
 }
 
@@ -1649,9 +1647,10 @@ body.multi-select-active .message-actions {
     background: rgba(255, 255, 255, 0.08);
 }
 
-/* Große Emoji-Auswahl für Reaktionen (gleiche Komponente wie beim Schreiben) */
+/* Große Emoji-Auswahl für Reaktionen (gleiche Komponente wie beim Schreiben).
+   Sie schwebt frei über der Seite (position: fixed), damit der Chatbereich sie nie abschneidet – Position setzt messenger.js. */
 .message-react-picker-popup {
-    position: absolute;
+    position: fixed;
     background: #15161a;
     border: 1px solid var(--border-subtle);
     border-radius: 10px;
@@ -1672,7 +1671,6 @@ body.multi-select-active .message-actions {
 }
 
 .message-react-picker-popup.popup-above {
-    bottom: calc(100% + 2px);
     border-top: 3px solid var(--gsra-yellow);
 }
 .message-react-picker-popup.popup-above::before {
@@ -1686,7 +1684,6 @@ body.multi-select-active .message-actions {
 }
 
 .message-react-picker-popup.popup-below {
-    top: calc(100% + 2px);
     border-bottom: 3px solid var(--gsra-yellow);
 }
 .message-react-picker-popup.popup-below::before {
@@ -2031,6 +2028,437 @@ emoji-picker {
 
 .wa-active-pane.drag-active .wa-drop-overlay {
     display: flex;
+}
+
+/* =========================================
+   MESSENGER IM WHATSAPP-STIL: MENÜ, NEUER CHAT, KOPFZEILE & GRUPPENINFO
+========================================= */
+.wa-header-icons {
+    display: flex;
+    gap: 6px;
+    position: relative;
+}
+
+/* Runde Symbol-Knöpfe (Neuer Chat, Menü, Zurück, Schließen) */
+.wa-icon-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 16px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.wa-icon-btn i {
+    transition: transform 0.2s ease;
+}
+
+.wa-icon-btn:hover,
+.wa-icon-btn.active {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--gsra-yellow);
+}
+
+.wa-icon-btn:hover i {
+    transform: scale(1.12);
+}
+
+/* Aufklappmenü (⋮-Menü, Aktionen bei Gruppenmitgliedern) */
+.wa-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 230px;
+    background: #15161a;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.9);
+    padding: 6px 0;
+    display: none;
+    flex-direction: column;
+    z-index: 100;
+}
+
+.wa-menu.open {
+    display: flex;
+    animation: gsraDialogFade 0.15s ease;
+}
+
+.wa-menu.open-up {
+    top: auto;
+    bottom: calc(100% - 6px);
+}
+
+.wa-menu button {
+    background: transparent;
+    border: none;
+    color: #fff;
+    padding: 10px 16px;
+    text-align: left;
+    font-family: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.wa-menu button i {
+    width: 16px;
+    text-align: center;
+    color: var(--text-muted);
+    transition: color 0.2s ease;
+}
+
+.wa-menu button:hover {
+    background: rgba(0, 85, 255, 0.25);
+    color: var(--gsra-yellow);
+}
+
+.wa-menu button:hover i {
+    color: var(--gsra-yellow);
+}
+
+.wa-menu button.danger,
+.wa-menu button.danger i {
+    color: #ff4d4d;
+}
+
+.wa-menu button.danger:hover {
+    background: rgba(255, 77, 77, 0.15);
+}
+
+/* „Neuer Chat“ schiebt sich wie bei WhatsApp über die Chatliste */
+.wa-side-panel {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #111b21;
+    display: flex;
+    flex-direction: column;
+    z-index: 20;
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition: transform 0.25s ease, visibility 0.25s;
+}
+
+.wa-side-panel.open {
+    transform: translateX(0);
+    visibility: visible;
+}
+
+.wa-side-panel-header {
+    padding: 12px 16px;
+    background: #202c33;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    color: #fff;
+    font-weight: bold;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.wa-section-title {
+    padding: 14px 18px 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--gsra-yellow);
+}
+
+.wa-avatar.accent {
+    background: var(--gsra-blue);
+    color: #fff;
+}
+
+.wa-person-note {
+    flex-shrink: 0;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--gsra-yellow);
+    background: rgba(255, 204, 0, 0.08);
+    border: 1px solid rgba(255, 204, 0, 0.45);
+    border-radius: 10px;
+    padding: 2px 8px;
+}
+
+.wa-empty-note {
+    padding: 15px 18px;
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+/* Kopfzeile des Chats: Symbol + Name + Zeile darunter, per Klick öffnet sich die Info */
+.chat-header-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+    margin: -4px 12px -4px -6px;
+    padding: 4px 6px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.chat-header-info:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.wa-avatar.chat-header-avatar {
+    width: 40px;
+    height: 40px;
+    font-size: 16px;
+}
+
+.chat-header-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.chat-header-title,
+.chat-header-subtitle {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.35;
+}
+
+.chat-header-title {
+    color: #fff;
+    font-size: 15px;
+}
+
+.chat-header-subtitle {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text-muted);
+}
+
+/* Knöpfe in der Chat-Kopfzeile: Hover-Effekte wie bei den übrigen GSRA-Knöpfen (Löschen, Bearbeiten, Login) */
+.chat-header-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 15px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.25s ease;
+}
+
+.chat-header-btn i {
+    transition: transform 0.25s ease;
+}
+
+.chat-header-btn:hover {
+    transform: translateY(-1px);
+}
+
+.chat-header-btn.btn-blue:hover {
+    background: rgba(0, 85, 255, 0.15);
+    border-color: var(--gsra-blue);
+    color: #fff;
+    box-shadow: var(--blue-glow);
+}
+
+.chat-header-btn.btn-blue:hover i {
+    transform: rotate(-15deg) scale(1.1);
+}
+
+.chat-header-btn.btn-yellow {
+    color: var(--gsra-yellow);
+}
+
+.chat-header-btn.btn-yellow:hover {
+    background: rgba(255, 204, 0, 0.12);
+    border-color: var(--gsra-yellow);
+    box-shadow: var(--yellow-glow);
+}
+
+.chat-header-btn.btn-yellow:hover i {
+    transform: scale(1.15);
+}
+
+.chat-header-btn.btn-danger {
+    color: #ff4d4d;
+}
+
+.chat-header-btn.btn-danger:hover {
+    background: #ff4d4d;
+    border-color: #ff4d4d;
+    color: #fff;
+    box-shadow: 0 0 10px rgba(255, 77, 77, 0.6);
+}
+
+.chat-header-btn.btn-danger:hover i {
+    transform: scale(1.2) rotate(-10deg);
+}
+
+/* Gruppen- / Kontaktinfo: schiebt sich von rechts über den Chat */
+.wa-info-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(380px, 100%);
+    background: #111b21;
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    z-index: 40;
+    transform: translateX(100%);
+    visibility: hidden;
+    transition: transform 0.25s ease, visibility 0.25s;
+}
+
+.wa-info-panel.open {
+    transform: translateX(0);
+    visibility: visible;
+}
+
+.wa-info-body {
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: 12px;
+    scrollbar-width: thin;
+    scrollbar-color: #3a3d46 transparent;
+}
+
+.wa-info-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 28px 20px 22px;
+    background: #15161a;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.wa-avatar.wa-info-avatar {
+    width: 96px;
+    height: 96px;
+    font-size: 38px;
+    margin-bottom: 14px;
+    box-shadow: var(--blue-glow);
+}
+
+.wa-info-name {
+    color: #fff;
+    font-size: 19px;
+    font-weight: 700;
+    word-break: break-word;
+}
+
+.wa-info-meta {
+    margin-top: 4px;
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.wa-info-section {
+    margin-top: 8px;
+    padding: 6px 0;
+    background: #15161a;
+    border-top: 1px solid var(--border-subtle);
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.wa-info-text {
+    padding: 8px 20px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-muted);
+}
+
+.wa-info-row {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: #fff;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-family: inherit;
+    font-size: 14px;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.wa-info-row i {
+    width: 20px;
+    text-align: center;
+    color: var(--text-muted);
+    transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.wa-info-row:hover {
+    background: rgba(0, 85, 255, 0.15);
+}
+
+.wa-info-row:hover i,
+.wa-info-row.favorited i {
+    color: var(--gsra-yellow);
+}
+
+.wa-info-row:hover i {
+    transform: scale(1.15);
+}
+
+.wa-info-row.danger,
+.wa-info-row.danger i {
+    color: #ff4d4d;
+}
+
+.wa-info-row.danger:hover {
+    background: rgba(255, 77, 77, 0.12);
+}
+
+.wa-info-row.danger:hover i {
+    transform: scale(1.2) rotate(-10deg);
+}
+
+/* Personenauswahl im Dialog (z. B. „Mitglied hinzufügen“) */
+.gsra-dialog.gsra-people-dialog {
+    max-width: 440px;
+    padding-bottom: 12px;
+}
+
+.gsra-people-list {
+    max-height: 300px;
+    overflow-y: auto;
+    margin: 0 -26px;
+    text-align: left;
+    border-top: 1px solid var(--border-subtle);
+    scrollbar-width: thin;
+    scrollbar-color: #3a3d46 transparent;
+}
+
+.wa-chat-item.wa-person-added {
+    opacity: 0.6;
+    cursor: default;
 }
 
 /* =========================================

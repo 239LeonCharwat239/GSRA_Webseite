@@ -29,6 +29,14 @@ let mediaPickedAt = 0;
 let chatMediaItems = [];
 let viewerThumbObserver = null;
 
+// Gruppen: Mitglieder des geöffneten Chats und deine Rolle darin ("admin" = Gruppenadmin, "member", null = kein Mitglied)
+let activeGroupMembers = [];
+let activeGroupRole = null;
+
+// Suche „Suchen oder neuen Chat beginnen“: gefundene GSRA-Mitglieder, mit denen du noch nicht chattest
+let peopleSearchResults = [];
+let peopleSearchTimer = null;
+
 // Emoji-Auswahl auf Deutsch (Suche, Kategorien)
 const EMOJI_DATA_SOURCE_DE = "https://cdn.jsdelivr.net/npm/emoji-picker-element-data@1/de/cldr/data.json";
 
@@ -139,8 +147,20 @@ const chatSearchInput = document.getElementById("chatSearchInput");
 const tileInvite = document.getElementById("tileInvite");
 const tileAddFriend = document.getElementById("tileAddFriend");
 const tileForum = document.getElementById("tileForum");
-const addFriendBtn = document.getElementById("addFriendBtn");
 const newChatPlusBtn = document.getElementById("newChatPlusBtn");
+const sidebarMenuBtn = document.getElementById("sidebarMenuBtn");
+const sidebarMenu = document.getElementById("sidebarMenu");
+const newChatPanel = document.getElementById("newChatPanel");
+const newChatSearchInput = document.getElementById("newChatSearchInput");
+const newChatList = document.getElementById("newChatList");
+const closeNewChatPanelBtn = document.getElementById("closeNewChatPanel");
+const chatHeaderInfo = document.getElementById("chatHeaderInfo");
+const chatHeaderAvatar = document.getElementById("chatHeaderAvatar");
+const chatSubtitleText = document.getElementById("chatSubtitleText");
+const chatInfoPanel = document.getElementById("chatInfoPanel");
+const chatInfoHeading = document.getElementById("chatInfoHeading");
+const chatInfoBody = document.getElementById("chatInfoBody");
+const closeChatInfoBtn = document.getElementById("closeChatInfoBtn");
 
 const replyPreviewBanner = document.getElementById("replyPreviewBanner");
 const replyBannerAuthor = document.getElementById("replyBannerAuthor");
@@ -274,6 +294,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (chatSearchInput) {
         chatSearchInput.addEventListener("input", () => {
             renderChatsList();
+            // Zusätzlich GSRA-Mitglieder suchen (kurz verzögert, damit nicht bei jedem Tastendruck gesucht wird)
+            clearTimeout(peopleSearchTimer);
+            peopleSearchTimer = setTimeout(updatePeopleSearch, 250);
         });
     }
 
@@ -298,138 +321,55 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    if (newChatPlusBtn) {
-        newChatPlusBtn.addEventListener("click", async () => {
-            const forumName = await showDialog({
-                icon: "fa-users",
-                title: "Neues Forum / Gruppe erstellen",
-                message: "Gib deiner Gruppe einen Namen. Mitglieder fügst du danach über das Personen-Symbol im Chat hinzu.",
-                input: { placeholder: "z. B. GT3 Setup Talk", maxLength: 50 },
-                confirmText: "Gruppe erstellen",
-                cancelText: "Abbrechen"
-            });
-            if (!forumName || !supabase || !currentUser?.id) return;
-
-            const sysMsg = `${currentUsername} hat das Forum erstellt.`;
-            const { data: createdGroup, error } = await supabase.from("chats").insert([{
-                user1_id: currentUser.id,
-                user2_id: currentUser.id,
-                title: forumName,
-                last_message: sysMsg
-            }]).select().single();
-
-            if (!error && createdGroup) {
-                await supabase.from("messages").insert([{
-                    chat_id: createdGroup.id,
-                    sender_id: currentUser.id,
-                    text: sysMsg
-                }]);
-
-                await loadUserChats();
-                showToast(`Die Gruppe „${forumName}“ wurde erstellt.`, "success");
-            } else {
-                showToast("Fehler beim Erstellen: " + (error?.message || "Unbekannter Fehler"), "error");
-            }
+    // „+“ öffnet wie bei WhatsApp „Neuer Chat“: Neue Gruppe, deine Kontakte und die Namenssuche über alle GSRA-Mitglieder
+    if (newChatPlusBtn) newChatPlusBtn.addEventListener("click", openNewChatPanel);
+    if (tileAddFriend) tileAddFriend.addEventListener("click", openNewChatPanel);
+    if (closeNewChatPanelBtn) closeNewChatPanelBtn.addEventListener("click", hideNewChatPanel);
+    if (newChatSearchInput) {
+        let newChatSearchTimer = null;
+        newChatSearchInput.addEventListener("input", () => {
+            clearTimeout(newChatSearchTimer);
+            newChatSearchTimer = setTimeout(renderNewChatPanel, 200);
+        });
+        newChatSearchInput.addEventListener("keydown", (e) => {
+            if (e.key === "Escape") hideNewChatPanel();
         });
     }
 
-    const handleAddFriend = async () => {
-        if (!currentUser?.id) return;
-        const friendName = await showDialog({
-            icon: "fa-user-plus",
-            title: "Kontakt hinzufügen",
-            message: "Gib den Benutzernamen deines Freundes ein, um einen Chat zu starten.",
-            input: { placeholder: "Benutzername" },
-            confirmText: "Chat starten",
-            cancelText: "Abbrechen"
+    if (tileInvite) tileInvite.addEventListener("click", inviteFriend);
+
+    // ⋮-Menü der Chatliste
+    if (sidebarMenuBtn && sidebarMenu) {
+        sidebarMenuBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const open = !sidebarMenu.classList.contains("open");
+            sidebarMenu.classList.toggle("open", open);
+            sidebarMenuBtn.classList.toggle("active", open);
         });
-        if (!friendName) return;
-
-        const { data: foundProfiles, error } = await supabase
-            .from("profiles")
-            .select("id, username")
-            .ilike("username", friendName.trim())
-            .maybeSingle();
-
-        if (error || !foundProfiles) {
-            showToast("Nutzer nicht gefunden.", "error");
-            return;
-        }
-
-        if (foundProfiles.id === currentUser.id) {
-            showToast("Du kannst dich nicht selbst hinzufügen.", "error");
-            return;
-        }
-
-        const [u1, u2] = [currentUser.id, foundProfiles.id].sort();
-        let existingChat = allChatsCache.find(c => c.user1_id !== c.user2_id && ((c.user1_id === u1 && c.user2_id === u2)));
-
-        if (!existingChat) {
-            const { data: fetched } = await supabase
-                .from("chats")
-                .select("*")
-                .eq("user1_id", u1)
-                .eq("user2_id", u2)
-                .maybeSingle();
-
-            if (fetched && fetched.user1_id !== fetched.user2_id) {
-                existingChat = fetched;
-            } else {
-                const sysMsg = `${currentUsername} hat den Chat eröffnet.`;
-                const { data: newChat, error: newErr } = await supabase
-                    .from("chats")
-                    .insert([{
-                        user1_id: u1,
-                        user2_id: u2,
-                        title: null,
-                        last_message: sysMsg
-                    }])
-                    .select()
-                    .single();
-
-                if (!newErr && newChat) {
-                    await supabase.from("messages").insert([{
-                        chat_id: newChat.id,
-                        sender_id: currentUser.id,
-                        text: sysMsg
-                    }]);
-                    existingChat = newChat;
-                }
+        sidebarMenu.addEventListener("click", (e) => {
+            const action = e.target.closest("button")?.dataset.action;
+            if (action === "new-group") createNewGroup();
+            else if (action === "favorites") document.querySelector('.wa-pill[data-filter="favorites"]')?.click();
+            else if (action === "read-all") {
+                allChatsCache.forEach(c => markChatAsRead(c.id));
+                renderChatsList();
+                showToast("Alle Chats wurden als gelesen markiert.", "success");
             }
-        }
-
-        if (existingChat) {
-            activeChatId = existingChat.id;
-            markChatAsRead(activeChatId);
-            if (waWelcomeScreen) waWelcomeScreen.style.display = "none";
-            if (waChatActivePane) waChatActivePane.style.display = "flex";
-            openChat(existingChat.id, foundProfiles.username, existingChat.title);
-            await loadUserChats();
-        }
-    };
-
-    if (tileAddFriend) tileAddFriend.addEventListener("click", handleAddFriend);
-    if (addFriendBtn) addFriendBtn.addEventListener("click", handleAddFriend);
-
-    if (tileInvite) {
-        tileInvite.addEventListener("click", async () => {
-            const inviteLink = window.location.origin + "/messenger.html";
-            const copyLink = await showDialog({
-                icon: "fa-user-group",
-                title: "Freund einladen",
-                message: "Teile diesen Link, damit dein Freund dem GSRA Messenger beitreten kann:",
-                input: { value: inviteLink, readOnly: true, maxLength: 300 },
-                confirmText: "Link kopieren",
-                cancelText: "Schließen"
-            });
-            if (copyLink) {
-                navigator.clipboard.writeText(inviteLink).then(
-                    () => showToast("Link in die Zwischenablage kopiert.", "success"),
-                    () => showToast("Kopieren nicht möglich – bitte den Link markieren und kopieren.", "error")
-                );
-            }
+            else if (action === "invite") inviteFriend();
+            else if (action === "logout") document.getElementById("logoutBtn")?.click();
         });
     }
+
+    // Offene Menüs schließen, sobald woanders hingeklickt wird
+    document.addEventListener("click", () => {
+        if (sidebarMenu) sidebarMenu.classList.remove("open");
+        if (sidebarMenuBtn) sidebarMenuBtn.classList.remove("active");
+        document.querySelectorAll(".wa-member-row .wa-menu.open").forEach(m => m.classList.remove("open"));
+    });
+
+    // Klick auf die Kopfzeile des Chats öffnet die Gruppen- bzw. Kontaktinfo
+    if (chatHeaderInfo) chatHeaderInfo.addEventListener("click", openChatInfo);
+    if (closeChatInfoBtn) closeChatInfoBtn.addEventListener("click", closeChatInfo);
 
     if (tileForum) {
         tileForum.addEventListener("click", () => {
@@ -445,7 +385,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     if (addMemberBtn) {
-        addMemberBtn.addEventListener("click", async () => {
+        addMemberBtn.addEventListener("click", () => {
             if (!currentUser?.id || !activeChatId) return;
 
             // Mitglieder dürfen nur zu einem Forum / einer Gruppe (title gesetzt) hinzugefügt werden
@@ -454,49 +394,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 showToast("Mitglieder können nur zu einem Forum / einer Gruppe hinzugefügt werden.", "error");
                 return;
             }
-
-            const memberName = await showDialog({
-                icon: "fa-user-plus",
-                title: "Mitglied hinzufügen",
-                message: `Gib den Benutzernamen des Mitglieds ein, das du zu „${activeChatObj.title}“ hinzufügen möchtest.`,
-                input: { placeholder: "Benutzername" },
-                confirmText: "Hinzufügen",
-                cancelText: "Abbrechen"
-            });
-            if (!memberName) return;
-
-            const { data: targetUser } = await supabase
-                .from("profiles")
-                .select("id, username")
-                .ilike("username", memberName.trim())
-                .maybeSingle();
-
-            if (!targetUser) {
-                showToast("Nutzer nicht gefunden.", "error");
-                return;
-            }
-
-            if (targetUser.id === currentUser.id) {
-                showToast("Du kannst dich nicht selbst hinzufügen.", "error");
-                return;
-            }
-
-            const sysMsg = `${currentUsername} hat ${targetUser.username} zum Forum hinzugefügt.`;
-
-            // WICHTIG: user2_id wird NICHT verändert, damit das Forum ein Forum bleibt (user1_id === user2_id)!
-            // Es wird ausschließlich last_message geschrieben (niemals user1_id / user2_id) und nur bei Chats mit Titel (= Forum)
-            await supabase.from("chats").update({
-                last_message: sysMsg
-            }).eq("id", activeChatId).not("title", "is", null);
-
-            await supabase.from("messages").insert([{
-                chat_id: activeChatId,
-                sender_id: currentUser.id,
-                text: sysMsg
-            }]);
-
-            await loadUserChats();
-            showToast(`${targetUser.username} wurde zur Gruppe hinzugefügt.`, "success");
+            openMemberPicker(activeChatObj);
         });
     }
 
@@ -803,32 +701,81 @@ function createReactionEmojiPicker(msg, popup) {
     return picker;
 }
 
-// Öffnet ein Nachrichten-Popup (Reaktionen, Emoji-Auswahl, Menü) dort, wo im sichtbaren Chatbereich Platz ist.
-// Passt es nirgends ganz hin, wird es niedriger – so wird nichts abgeschnitten und der Chat verschiebt sich nicht.
-function placeMessagePopup(popup, anchor, baseClass, dirPrefix, preferBelow = false, resizable = null) {
+// Öffnet ein kleines Nachrichten-Popup (Schnellleiste, Menü) dort, wo im sichtbaren Chatbereich Platz ist
+function placeMessagePopup(popup, anchor, baseClass, dirPrefix) {
     const area = chatMessages.getBoundingClientRect();
     const anchorRect = anchor.getBoundingClientRect();
     const spaceAbove = anchorRect.top - area.top - 6;
     const spaceBelow = area.bottom - anchorRect.bottom - 6;
 
-    if (resizable) resizable.style.height = "";
     popup.className = `${baseClass} ${dirPrefix}-below`;
     popup.style.visibility = "hidden";
     popup.style.display = "flex";
     const height = popup.offsetHeight;
 
     let below;
-    if ((preferBelow ? spaceBelow : spaceAbove) >= height) below = preferBelow;
-    else if ((preferBelow ? spaceAbove : spaceBelow) >= height) below = !preferBelow;
+    if (spaceAbove >= height) below = false;
+    else if (spaceBelow >= height) below = true;
     else below = spaceBelow > spaceAbove;
 
     popup.className = `${baseClass} ${dirPrefix}-${below ? "below" : "above"}`;
-    const space = below ? spaceBelow : spaceAbove;
-    if (resizable && height > space) {
-        resizable.style.height = `${Math.max(200, resizable.offsetHeight - (height - space))}px`;
-    }
     popup.style.visibility = "";
 }
+
+// Große Emoji-Auswahl für Reaktionen: schwebt frei über der Seite, damit der Chatbereich sie nie abschneidet.
+// Bevorzugt passt sie in den Chat (auf der Seite der Schnellleiste); sonst ragt sie wie bei WhatsApp über Kopfzeile oder
+// Eingabefeld hinaus. Nur wenn selbst das Browserfenster zu niedrig ist, wird sie kleiner.
+function placeReactionPicker(popup, anchor, preferBelow, picker) {
+    const area = chatMessages.getBoundingClientRect();
+    const anchorRect = anchor.getBoundingClientRect();
+    // Die feste Kopfzeile der Webseite (Logo & Navigation) liegt immer obenauf – bis dorthin darf die Auswahl reichen
+    const siteHeader = document.querySelector("header");
+    const windowTop = Math.max(0, siteHeader ? siteHeader.getBoundingClientRect().bottom : 0) + 8;
+    const windowBottom = window.innerHeight - 8;
+
+    picker.style.height = "";
+    popup.className = "message-react-picker-popup popup-below";
+    popup.style.visibility = "hidden";
+    popup.style.display = "flex";
+    const height = popup.offsetHeight;
+
+    const spaceBetween = (top, bottom, below) => (below ? bottom - anchorRect.bottom : anchorRect.top - top) - 2;
+    const sides = [preferBelow, !preferBelow];
+    let below = sides.find(side => spaceBetween(area.top + 6, area.bottom - 6, side) >= height);
+    if (below === undefined) below = sides.find(side => spaceBetween(windowTop, windowBottom, side) >= height);
+    if (below === undefined) {
+        below = spaceBetween(windowTop, windowBottom, true) > spaceBetween(windowTop, windowBottom, false);
+        const space = spaceBetween(windowTop, windowBottom, below);
+        picker.style.height = `${Math.max(150, picker.offsetHeight - (height - space))}px`;
+    }
+    popup.className = `message-react-picker-popup popup-${below ? "below" : "above"}`;
+
+    // Bündig mit der Aktionsleiste (eigene Nachrichten: rechte Kante, fremde: linke Kante), aber immer im Fenster
+    const width = popup.offsetWidth;
+    const left = anchor.closest(".message-own") ? anchorRect.right - width : anchorRect.left;
+    popup.style.left = `${Math.min(Math.max(8, left), document.documentElement.clientWidth - width - 8)}px`;
+    popup.style.top = `${below ? anchorRect.bottom + 2 : anchorRect.top - 2 - popup.offsetHeight}px`;
+    popup.style.visibility = "";
+}
+
+// Die schwebende Emoji-Auswahl gehört zu ihrer Nachricht: Scrollt der Chat, schließt sie; scrollt die Seite, wandert sie mit
+function closeReactionPickers() {
+    document.querySelectorAll(".message-react-picker-popup").forEach(p => {
+        p.style.display = "none";
+        p.replaceChildren();
+    });
+}
+
+if (chatMessages) chatMessages.addEventListener("scroll", closeReactionPickers);
+
+let lastPageScrollY = window.scrollY;
+window.addEventListener("scroll", () => {
+    const delta = window.scrollY - lastPageScrollY;
+    lastPageScrollY = window.scrollY;
+    document.querySelectorAll(".message-react-picker-popup").forEach(p => {
+        if (p.style.display === "flex") p.style.top = `${parseFloat(p.style.top) - delta}px`;
+    });
+});
 
 async function checkUserAdminStatus() {
     const supabase = window.supabaseClient || window.supabase;
@@ -954,6 +901,7 @@ async function checkUrlParameters() {
             if (waChatActivePane) waChatActivePane.style.display = "flex";
             openChat(existingChat.id, sellerName, existingChat.title);
             window.history.replaceState({}, document.title, window.location.pathname);
+            await loadUserChats(); // neuer Chat erscheint sofort in der Liste (und zählt in der Suche als Kontakt)
         }
     }
 }
@@ -1245,7 +1193,10 @@ async function renderChatsList() {
         return true;
     });
 
-    if (filtered.length === 0) {
+    // Während der Suche: gefundene GSRA-Mitglieder, mit denen du noch keinen Chat hast
+    const people = searchTerm.trim() ? peopleSearchResults.filter(p => p.username.toLowerCase().includes(searchTerm.trim())) : [];
+
+    if (filtered.length === 0 && people.length === 0) {
         chatsList.innerHTML = `<p style="padding: 15px; font-size: 13px; color: var(--text-muted);">Keine Chats gefunden.</p>`;
         isRendering = false;
         return;
@@ -1276,7 +1227,7 @@ async function renderChatsList() {
         const lastMsg = escapeHtml(chat.last_message || 'Keine Nachrichten');
 
         item.innerHTML = `
-            <div class="wa-avatar"><i class="fa-solid ${isForumOrGroup ? 'fa-bullhorn text-yellow' : 'fa-user'}"></i></div>
+            <div class="wa-avatar"><i class="fa-solid ${isOfficial ? 'fa-bullhorn text-yellow' : (isGroup ? 'fa-users' : 'fa-user')}"></i></div>
             <div class="wa-chat-info">
                 <div class="wa-chat-row">
                     <span class="wa-chat-name">${escapeHtml(displayTitle)}</span>
@@ -1302,8 +1253,268 @@ async function renderChatsList() {
         fragment.appendChild(item);
     }
 
+    if (people.length > 0) {
+        fragment.appendChild(createSectionTitle("Neuen Chat beginnen"));
+        people.forEach(person => {
+            const row = createPersonRow(person.username);
+            row.addEventListener("click", () => {
+                if (chatSearchInput) chatSearchInput.value = "";
+                peopleSearchResults = [];
+                openDirectChatWith(person);
+            });
+            fragment.appendChild(row);
+        });
+    }
+
     chatsList.appendChild(fragment);
     isRendering = false;
+}
+
+// Kontakte („Freundesliste“): alle Personen, mit denen du einen Direktchat hast – die Liste entsteht beim Chatten
+function getContacts() {
+    const contacts = new Map();
+    allChatsCache.forEach(c => {
+        if (c.user1_id === c.user2_id) return;
+        const id = c.user1_id === currentUser.id ? c.user2_id : c.user1_id;
+        contacts.set(id, { id, username: userNamesCache[id] || "Fahrer" });
+    });
+    return Array.from(contacts.values()).sort((a, b) => a.username.localeCompare(b.username, "de"));
+}
+
+// Sucht GSRA-Mitglieder nach Namen (Teil des Namens genügt, Groß-/Kleinschreibung egal)
+async function searchProfiles(term) {
+    const supabase = window.supabaseClient || window.supabase;
+    if (!supabase || !currentUser?.id || !term) return [];
+    const pattern = `%${term.replace(/[\\%_]/g, "\\$&")}%`;
+    const { data } = await supabase
+        .from("profiles")
+        .select("id, username")
+        .ilike("username", pattern)
+        .neq("id", currentUser.id)
+        .order("username", { ascending: true })
+        .limit(20);
+    const found = (data || []).filter(p => p.username);
+    found.forEach(p => { userNamesCache[p.id] = p.username; });
+    return found;
+}
+
+// Eine Zeile in Personenlisten: Symbol + Name, rechts optional ein Hinweis (z. B. „Gruppenadmin“)
+function createPersonRow(name, { icon = "fa-user", accent = false, note = "" } = {}) {
+    const row = document.createElement("div");
+    row.className = "wa-chat-item";
+    row.innerHTML = `
+        <div class="wa-avatar${accent ? " accent" : ""}"><i class="fa-solid ${icon}"></i></div>
+        <div class="wa-chat-info"><span class="wa-chat-name"></span></div>
+    `;
+    row.querySelector(".wa-chat-name").textContent = name;
+    if (note) {
+        const noteEl = document.createElement("span");
+        noteEl.className = "wa-person-note";
+        noteEl.textContent = note;
+        row.appendChild(noteEl);
+    }
+    return row;
+}
+
+function createSectionTitle(text) {
+    const title = document.createElement("div");
+    title.className = "wa-section-title";
+    title.textContent = text;
+    return title;
+}
+
+// Füllt eine Personenliste: passende Kontakte zuerst, darunter weitere GSRA-Mitglieder aus der Namenssuche.
+// excludeIds blendet Personen aus (z. B. wer schon Mitglied ist); onPick(person, row) läuft beim Anklicken.
+async function renderPeopleList(container, term, onPick, excludeIds = new Set()) {
+    const token = (container.peopleToken || 0) + 1;
+    container.peopleToken = token;
+    const needle = term.trim().toLowerCase();
+    const contacts = getContacts().filter(p => !excludeIds.has(p.id));
+    const contactIds = new Set(contacts.map(p => p.id));
+    const matchingContacts = contacts.filter(p => p.username.toLowerCase().includes(needle));
+    const others = needle ? (await searchProfiles(needle)).filter(p => !excludeIds.has(p.id) && !contactIds.has(p.id)) : [];
+    if (container.peopleToken !== token) return; // inzwischen wurde weitergetippt
+
+    const results = document.createElement("div");
+    results.className = "wa-people-results";
+    const addSection = (title, list) => {
+        if (list.length === 0) return;
+        results.appendChild(createSectionTitle(title));
+        list.forEach(person => {
+            const row = createPersonRow(person.username);
+            row.addEventListener("click", () => onPick(person, row));
+            results.appendChild(row);
+        });
+    };
+    addSection("Deine Kontakte", matchingContacts);
+    addSection("Weitere GSRA-Mitglieder", others);
+    if (!results.hasChildNodes()) {
+        const note = document.createElement("p");
+        note.className = "wa-empty-note";
+        note.textContent = needle ? "Niemand mit diesem Namen gefunden." : "Noch keine Kontakte – suche oben nach dem Namen eines GSRA-Mitglieds.";
+        results.appendChild(note);
+    }
+    container.querySelectorAll(".wa-people-results").forEach(el => el.remove());
+    container.appendChild(results);
+}
+
+// „Neuer Chat“ wie bei WhatsApp (ohne Communities): Neue Gruppe, Freund einladen, Kontakte und Namenssuche
+function openNewChatPanel() {
+    if (!newChatPanel) return;
+    if (newChatSearchInput) newChatSearchInput.value = "";
+    renderNewChatPanel();
+    newChatPanel.classList.add("open");
+    setTimeout(() => newChatSearchInput?.focus(), 250);
+}
+
+function hideNewChatPanel() {
+    if (newChatPanel) newChatPanel.classList.remove("open");
+}
+
+function renderNewChatPanel() {
+    if (!newChatList) return;
+    const term = newChatSearchInput ? newChatSearchInput.value : "";
+    newChatList.querySelectorAll(".wa-new-chat-action").forEach(el => el.remove());
+    if (!term.trim()) {
+        const groupRow = createPersonRow("Neue Gruppe", { icon: "fa-users", accent: true });
+        groupRow.addEventListener("click", () => createNewGroup());
+        const inviteRow = createPersonRow("Freund einladen", { icon: "fa-user-group", accent: true });
+        inviteRow.addEventListener("click", () => inviteFriend());
+        [groupRow, inviteRow].forEach(row => row.classList.add("wa-new-chat-action"));
+        newChatList.prepend(groupRow, inviteRow);
+    }
+    renderPeopleList(newChatList, term, (person) => {
+        hideNewChatPanel();
+        openDirectChatWith(person);
+    });
+}
+
+// Hauptsuche „Suchen oder neuen Chat beginnen“: findet zusätzlich GSRA-Mitglieder ohne bestehenden Chat
+async function updatePeopleSearch() {
+    const term = chatSearchInput ? chatSearchInput.value.trim() : "";
+    const found = term ? await searchProfiles(term) : [];
+    if (!chatSearchInput || chatSearchInput.value.trim() !== term) return; // inzwischen wurde weitergetippt
+    const contactIds = new Set(getContacts().map(p => p.id));
+    peopleSearchResults = found.filter(p => !contactIds.has(p.id));
+    renderChatsList();
+}
+
+// Öffnet den Direktchat mit einer Person. Gibt es schon einen, wird dieser geöffnet – nie zwei Chats mit derselben Person.
+async function openDirectChatWith(person) {
+    const supabase = window.supabaseClient || window.supabase;
+    if (!supabase || !currentUser?.id || !person?.id) return;
+    if (person.id === currentUser.id) {
+        showToast("Du kannst keinen Chat mit dir selbst beginnen.", "error");
+        return;
+    }
+
+    const [u1, u2] = [currentUser.id, person.id].sort();
+    let existingChat = allChatsCache.find(c => c.user1_id !== c.user2_id && [c.user1_id, c.user2_id].sort().join() === `${u1},${u2}`);
+
+    if (!existingChat) {
+        const { data: fetched } = await supabase
+            .from("chats")
+            .select("*")
+            .eq("user1_id", u1)
+            .eq("user2_id", u2)
+            .maybeSingle();
+
+        if (fetched && fetched.user1_id !== fetched.user2_id) {
+            existingChat = fetched;
+        } else {
+            const sysMsg = `${currentUsername} hat den Chat eröffnet.`;
+            const { data: newChat, error: newErr } = await supabase
+                .from("chats")
+                .insert([{
+                    user1_id: u1,
+                    user2_id: u2,
+                    title: null,
+                    last_message: sysMsg
+                }])
+                .select()
+                .single();
+
+            if (!newErr && newChat) {
+                await supabase.from("messages").insert([{
+                    chat_id: newChat.id,
+                    sender_id: currentUser.id,
+                    text: sysMsg
+                }]);
+                existingChat = newChat;
+            }
+        }
+    }
+
+    if (!existingChat) {
+        showToast("Der Chat konnte nicht gestartet werden.", "error");
+        return;
+    }
+    activeChatId = existingChat.id;
+    markChatAsRead(activeChatId);
+    if (waWelcomeScreen) waWelcomeScreen.style.display = "none";
+    if (waChatActivePane) waChatActivePane.style.display = "flex";
+    openChat(existingChat.id, person.username, existingChat.title);
+    await loadUserChats();
+}
+
+// Neue Gruppe / neues Forum: Namen eingeben – danach öffnet sie sich und du kannst gleich Mitglieder hinzufügen
+async function createNewGroup() {
+    const supabase = window.supabaseClient || window.supabase;
+    const forumName = await showDialog({
+        icon: "fa-users",
+        title: "Neues Forum / Gruppe erstellen",
+        message: "Gib deiner Gruppe einen Namen. Danach kannst du direkt Mitglieder hinzufügen.",
+        input: { placeholder: "z. B. GT3 Setup Talk", maxLength: 50 },
+        confirmText: "Gruppe erstellen",
+        cancelText: "Abbrechen"
+    });
+    if (!forumName || !supabase || !currentUser?.id) return;
+
+    const sysMsg = `${currentUsername} hat das Forum erstellt.`;
+    const { data: createdGroup, error } = await supabase.from("chats").insert([{
+        user1_id: currentUser.id,
+        user2_id: currentUser.id,
+        title: forumName,
+        last_message: sysMsg
+    }]).select().single();
+
+    if (error || !createdGroup) {
+        showToast("Fehler beim Erstellen: " + (error?.message || "Unbekannter Fehler"), "error");
+        return;
+    }
+    await supabase.from("messages").insert([{
+        chat_id: createdGroup.id,
+        sender_id: currentUser.id,
+        text: sysMsg
+    }]);
+    await loadUserChats();
+    showToast(`Die Gruppe „${forumName}“ wurde erstellt.`, "success");
+
+    hideNewChatPanel();
+    if (waWelcomeScreen) waWelcomeScreen.style.display = "none";
+    if (waChatActivePane) waChatActivePane.style.display = "flex";
+    const groupChat = allChatsCache.find(c => c.id === createdGroup.id) || createdGroup;
+    openForumChat(groupChat);
+    openMemberPicker(groupChat);
+}
+
+// „Freund einladen“: Link zum GSRA Messenger zum Kopieren
+async function inviteFriend() {
+    const inviteLink = window.location.origin + "/messenger.html";
+    const copyLink = await showDialog({
+        icon: "fa-user-group",
+        title: "Freund einladen",
+        message: "Teile diesen Link, damit dein Freund dem GSRA Messenger beitreten kann:",
+        input: { value: inviteLink, readOnly: true, maxLength: 300 },
+        confirmText: "Link kopieren",
+        cancelText: "Schließen"
+    });
+    if (copyLink) {
+        navigator.clipboard.writeText(inviteLink).then(
+            () => showToast("Link in die Zwischenablage kopiert.", "success"),
+            () => showToast("Kopieren nicht möglich – bitte den Link markieren und kopieren.", "error")
+        );
+    }
 }
 
 function openForumChat(forumChat = null) {
@@ -1311,16 +1522,28 @@ function openForumChat(forumChat = null) {
     if (!chatId) return;
     activeChatId = chatId;
     markChatAsRead(chatId);
-
-    if (chatTitleText) chatTitleText.innerText = forumChat?.title || "GSRA Official / Community Forum";
-    if (chatActions) chatActions.style.display = "flex";
-    if (addMemberBtn) addMemberBtn.style.display = (chatId === officialForumChatId) ? "none" : "block";
-    if (blockUserBtn) blockUserBtn.style.display = "none";
+    closeChatInfo();
 
     const isOfficialAnnouncement = (chatId === officialForumChatId);
-    // Das offizielle Forum kann weder umbenannt noch gelöscht werden – die Knöpfe erscheinen dort gar nicht erst
-    if (editChatTitleBtn) editChatTitleBtn.style.display = isOfficialAnnouncement ? "none" : "";
-    if (deleteChatBtn) deleteChatBtn.style.display = isOfficialAnnouncement ? "none" : "";
+    const chatObj = forumChat || allChatsCache.find(c => c.id === chatId);
+    const isFounder = Boolean(chatObj && chatObj.user1_id === currentUser.id);
+    setChatHeader(
+        isOfficialAnnouncement ? "fa-bullhorn text-yellow" : "fa-users",
+        forumChat?.title || "GSRA Official / Community Forum",
+        isOfficialAnnouncement ? "Offizielle Ankündigungen des GSRA-Teams" : "Klicke hier für die Gruppeninfo"
+    );
+    if (chatActions) chatActions.style.display = "flex";
+    if (blockUserBtn) blockUserBtn.style.display = "none";
+
+    // Das offizielle Forum kann weder umbenannt noch gelöscht werden – die Knöpfe erscheinen dort gar nicht erst.
+    // In Gruppen entscheidet die Rolle: Gruppenadmins fügen hinzu und benennen um, löschen darf nur der Gründer.
+    const showAdminButtons = !isOfficialAnnouncement && isFounder;
+    if (addMemberBtn) addMemberBtn.style.display = showAdminButtons ? "" : "none";
+    if (editChatTitleBtn) editChatTitleBtn.style.display = showAdminButtons ? "" : "none";
+    if (deleteChatBtn) deleteChatBtn.style.display = showAdminButtons ? "" : "none";
+    activeGroupMembers = [];
+    activeGroupRole = isFounder ? "admin" : null;
+    if (!isOfficialAnnouncement && chatObj) refreshGroupMembers(chatObj);
     if (isOfficialAnnouncement && !isAdminUser) {
         if (messageInput) { messageInput.disabled = true; messageInput.placeholder = "Nur Administratoren können im offiziellen Forum schreiben."; }
         if (sendBtn) sendBtn.disabled = true;
@@ -1341,11 +1564,14 @@ async function openChat(chatId, recipientName, chatTitle = null) {
 
     const customName = getChatAlias(chatId) || chatTitle;
     const displayName = customName ? `${customName} (${recipientName})` : `Chat mit ${recipientName}`;
-    if (chatTitleText) chatTitleText.innerText = displayName;
-    
+    closeChatInfo();
+    setChatHeader("fa-user", displayName, "Klicke hier für die Kontaktinfo");
+    activeGroupMembers = [];
+    activeGroupRole = null;
+
     if (chatActions) chatActions.style.display = "flex";
     if (addMemberBtn) addMemberBtn.style.display = "none";
-    if (blockUserBtn) blockUserBtn.style.display = "block";
+    if (blockUserBtn) blockUserBtn.style.display = "";
     if (editChatTitleBtn) editChatTitleBtn.style.display = "";
     if (deleteChatBtn) deleteChatBtn.style.display = "";
 
@@ -1356,6 +1582,347 @@ async function openChat(chatId, recipientName, chatTitle = null) {
 
     loadChatMessages(chatId);
     renderChatsList();
+}
+
+// Kopfzeile des Chats im WhatsApp-Stil: Symbol, Name und eine Zeile darunter
+function setChatHeader(iconClass, title, subtitle) {
+    if (chatHeaderAvatar) chatHeaderAvatar.innerHTML = `<i class="fa-solid ${iconClass}"></i>`;
+    if (chatTitleText) chatTitleText.innerText = title;
+    if (chatSubtitleText) chatSubtitleText.innerText = subtitle;
+}
+
+// Mitglieder einer Gruppe mit Rolle ("admin" = Gruppenadmin). Der Gründer ist immer Gruppenadmin – auch solange
+// die Mitgliederliste (Tabelle chat_members) in der Datenbank noch nicht eingerichtet ist.
+async function loadGroupMembers(chat) {
+    const supabase = window.supabaseClient || window.supabase;
+    let members = [];
+    if (supabase) {
+        const { data, error } = await supabase.from("chat_members").select("user_id, role").eq("chat_id", chat.id);
+        if (!error && data) members = data.map(m => ({ user_id: m.user_id, role: m.role }));
+    }
+    if (!members.some(m => m.user_id === chat.user1_id)) members.push({ user_id: chat.user1_id, role: "admin" });
+
+    const unknownIds = members.map(m => m.user_id).filter(id => !userNamesCache[id]);
+    if (supabase && unknownIds.length > 0) {
+        const { data: profiles } = await supabase.from("profiles").select("id, username, full_name").in("id", unknownIds);
+        (profiles || []).forEach(p => { userNamesCache[p.id] = p.username || p.full_name || "Fahrer"; });
+    }
+    members.forEach(m => { m.username = userNamesCache[m.user_id] || "Fahrer"; });
+
+    // Reihenfolge wie bei WhatsApp: du zuerst, dann die Gruppenadmins, dann alle anderen alphabetisch
+    const rank = (m) => (m.user_id === currentUser.id ? 0 : (m.role === "admin" ? 1 : 2));
+    return members.sort((a, b) => rank(a) - rank(b) || a.username.localeCompare(b.username, "de"));
+}
+
+// Lädt die Mitglieder der geöffneten Gruppe und zeigt die Knöpfe passend zur Rolle
+async function refreshGroupMembers(chat) {
+    const members = await loadGroupMembers(chat);
+    if (activeChatId !== chat.id) return; // inzwischen wurde ein anderer Chat geöffnet
+    activeGroupMembers = members;
+    const me = members.find(m => m.user_id === currentUser.id);
+    activeGroupRole = chat.user1_id === currentUser.id ? "admin" : (me ? me.role : null);
+
+    const isAdmin = activeGroupRole === "admin";
+    if (addMemberBtn) addMemberBtn.style.display = isAdmin ? "" : "none";
+    if (editChatTitleBtn) editChatTitleBtn.style.display = isAdmin ? "" : "none";
+    if (chatSubtitleText) chatSubtitleText.innerText = members.map(m => (m.user_id === currentUser.id ? "Du" : m.username)).join(", ");
+    if (chatInfoPanel && chatInfoPanel.classList.contains("open")) renderChatInfo();
+}
+
+// Gruppen- bzw. Kontaktinfo (WhatsApp-Stil): öffnet sich per Klick auf die Kopfzeile des Chats
+function openChatInfo() {
+    if (!chatInfoPanel || !activeChatId) return;
+    renderChatInfo();
+    chatInfoPanel.classList.add("open");
+}
+
+function closeChatInfo() {
+    if (chatInfoPanel) chatInfoPanel.classList.remove("open");
+}
+
+function createInfoSection() {
+    const section = document.createElement("div");
+    section.className = "wa-info-section";
+    return section;
+}
+
+function createInfoRow(iconClass, text, onClick, extraClass = "") {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = `wa-info-row ${extraClass}`.trim();
+    row.innerHTML = `<i class="${iconClass}"></i><span></span>`;
+    row.querySelector("span").textContent = text;
+    row.addEventListener("click", onClick);
+    return row;
+}
+
+function renderChatInfo() {
+    const chat = allChatsCache.find(c => c.id === activeChatId);
+    if (!chat || !chatInfoBody) return;
+    const isOfficial = isOfficialForum(chat.id);
+    const isDirect = chat.user1_id !== chat.user2_id;
+    const isGroup = !isOfficial && !isDirect;
+    const isAdmin = isGroup && activeGroupRole === "admin";
+    const otherUserId = isDirect ? (chat.user1_id === currentUser.id ? chat.user2_id : chat.user1_id) : null;
+    const otherName = otherUserId ? (userNamesCache[otherUserId] || "Fahrer") : "";
+    const alias = isDirect ? getChatAlias(chat.id) : null;
+    const memberCount = `${activeGroupMembers.length} ${activeGroupMembers.length === 1 ? "Mitglied" : "Mitglieder"}`;
+
+    if (chatInfoHeading) chatInfoHeading.innerText = isDirect ? "Kontaktinfo" : (isOfficial ? "Kanalinfo" : "Gruppeninfo");
+    chatInfoBody.replaceChildren();
+
+    // Kopfbereich: großes Symbol, Name und Art des Chats
+    const hero = document.createElement("div");
+    hero.className = "wa-info-hero";
+    hero.innerHTML = `
+        <div class="wa-avatar wa-info-avatar"><i class="fa-solid ${isOfficial ? "fa-bullhorn text-yellow" : (isDirect ? "fa-user" : "fa-users")}"></i></div>
+        <div class="wa-info-name"></div>
+        <div class="wa-info-meta"></div>
+    `;
+    hero.querySelector(".wa-info-name").textContent = isDirect ? (alias || otherName) : (isOfficial ? "GSRA Official / Community Forum" : chat.title);
+    hero.querySelector(".wa-info-meta").textContent = isOfficial
+        ? "Offizieller Kanal · alle GSRA-Mitglieder"
+        : (isDirect ? (alias ? `~ ${otherName}` : "GSRA-Mitglied") : `Gruppe · ${memberCount}`);
+    chatInfoBody.appendChild(hero);
+
+    if (isOfficial) {
+        const about = createInfoSection();
+        const text = document.createElement("p");
+        text.className = "wa-info-text";
+        text.textContent = "Hier veröffentlicht das GSRA-Team Ankündigungen, Plattform-Updates, Reglement-Änderungen und Event-Infos. Schreiben können nur Administratoren – für den Austausch nutzt du deine Chats und Gruppen.";
+        about.appendChild(text);
+        chatInfoBody.appendChild(about);
+    }
+
+    const general = createInfoSection();
+    const isFav = userFavorites.has(chat.id);
+    general.appendChild(createInfoRow("fa-solid fa-star", isFav ? "Aus Favoriten entfernen" : "Zu Favoriten hinzufügen", async () => {
+        await toggleFavorite(chat.id);
+        renderChatInfo();
+    }, isFav ? "favorited" : ""));
+    if (isDirect) general.appendChild(createInfoRow("fa-solid fa-pen", "Chat umbenennen (nur für dich sichtbar)", () => editChatTitleBtn?.click()));
+    if (isAdmin) general.appendChild(createInfoRow("fa-solid fa-pen", "Gruppennamen ändern", () => editChatTitleBtn?.click()));
+    chatInfoBody.appendChild(general);
+
+    if (isGroup) {
+        const membersSection = createInfoSection();
+        membersSection.appendChild(createSectionTitle(memberCount));
+        if (isAdmin) {
+            const addRow = createPersonRow("Mitglied hinzufügen", { icon: "fa-user-plus", accent: true });
+            addRow.addEventListener("click", () => openMemberPicker(chat));
+            membersSection.appendChild(addRow);
+        }
+        activeGroupMembers.forEach(member => membersSection.appendChild(createMemberRow(chat, member, isAdmin)));
+        chatInfoBody.appendChild(membersSection);
+    }
+
+    const dangerSection = createInfoSection();
+    if (isDirect) {
+        dangerSection.appendChild(createInfoRow("fa-solid fa-ban", `${otherName} blockieren`, () => blockUserBtn?.click(), "danger"));
+        dangerSection.appendChild(createInfoRow("fa-solid fa-trash", "Chat löschen", () => deleteChatBtn?.click(), "danger"));
+    } else if (isGroup && chat.user1_id === currentUser.id) {
+        dangerSection.appendChild(createInfoRow("fa-solid fa-trash", "Gruppe löschen", () => deleteChatBtn?.click(), "danger"));
+    } else if (isGroup && activeGroupRole) {
+        dangerSection.appendChild(createInfoRow("fa-solid fa-right-from-bracket", "Gruppe verlassen", () => leaveGroup(chat), "danger"));
+    }
+    if (dangerSection.hasChildNodes()) chatInfoBody.appendChild(dangerSection);
+}
+
+// Mitglied in der Gruppeninfo. Klick öffnet ein Menü: Nachricht schreiben; Gruppenadmins können zusätzlich Admins
+// ernennen/entfernen und Mitglieder entfernen (der Gründer bleibt immer Gruppenadmin und Mitglied).
+function createMemberRow(chat, member, iAmAdmin) {
+    const isMe = member.user_id === currentUser.id;
+    const row = createPersonRow(isMe ? "Du" : member.username, { note: member.role === "admin" ? "Gruppenadmin" : "" });
+    row.classList.add("wa-member-row");
+    if (isMe) {
+        row.style.cursor = "default";
+        return row;
+    }
+
+    const menu = document.createElement("div");
+    menu.className = "wa-menu";
+    const addMenuItem = (iconClass, text, handler, danger = false) => {
+        const item = document.createElement("button");
+        item.type = "button";
+        if (danger) item.className = "danger";
+        item.innerHTML = `<i class="fa-solid ${iconClass}"></i><span></span>`;
+        item.querySelector("span").textContent = text;
+        item.addEventListener("click", (e) => {
+            e.stopPropagation();
+            menu.classList.remove("open");
+            handler();
+        });
+        menu.appendChild(item);
+    };
+    addMenuItem("fa-comment", `Nachricht an ${member.username}`, () => {
+        closeChatInfo();
+        openDirectChatWith({ id: member.user_id, username: member.username });
+    });
+    if (iAmAdmin && member.user_id !== chat.user1_id) {
+        if (member.role === "admin") addMenuItem("fa-user-shield", "Als Gruppenadmin entfernen", () => setGroupRole(chat, member, "member"));
+        else addMenuItem("fa-user-shield", "Zum Gruppenadmin ernennen", () => setGroupRole(chat, member, "admin"));
+        addMenuItem("fa-user-minus", `${member.username} entfernen`, () => removeGroupMember(chat, member), true);
+    }
+    row.appendChild(menu);
+
+    row.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const wasOpen = menu.classList.contains("open");
+        document.querySelectorAll(".wa-member-row .wa-menu.open").forEach(m => m.classList.remove("open"));
+        if (wasOpen) return;
+        menu.classList.remove("open-up");
+        menu.classList.add("open");
+        // Passt das Menü unten nicht mehr in die Info, klappt es nach oben auf
+        if (chatInfoBody && menu.getBoundingClientRect().bottom > chatInfoBody.getBoundingClientRect().bottom) menu.classList.add("open-up");
+    });
+    return row;
+}
+
+// Auswahlfenster für Personen im GSRA-Dialogdesign: Suche über alle GSRA-Mitglieder, Kontakte zuerst
+function showPeoplePicker({ icon, title, message, excludeIds, onPick }) {
+    const overlay = document.createElement("div");
+    overlay.className = "gsra-dialog-overlay";
+    overlay.innerHTML = `
+        <div class="gsra-dialog gsra-people-dialog" role="dialog" aria-modal="true">
+            <button type="button" class="gsra-dialog-close" title="Schließen"><i class="fa-solid fa-xmark"></i></button>
+            <div class="gsra-dialog-icon"><i class="fa-solid ${icon}"></i></div>
+            <h3 class="gsra-dialog-title"></h3>
+            <p class="gsra-dialog-message"></p>
+            <input type="text" class="gsra-dialog-input" placeholder="Namen suchen" autocomplete="off" maxlength="60">
+            <div class="gsra-people-list"></div>
+        </div>`;
+    overlay.querySelector(".gsra-dialog-title").textContent = title;
+    overlay.querySelector(".gsra-dialog-message").textContent = message;
+    const input = overlay.querySelector(".gsra-dialog-input");
+    const list = overlay.querySelector(".gsra-people-list");
+
+    const close = () => {
+        document.removeEventListener("keydown", onKey, true);
+        overlay.remove();
+    };
+    const onKey = (e) => {
+        if (e.key !== "Escape") return;
+        e.preventDefault();
+        e.stopPropagation();
+        close();
+    };
+    let searchTimer = null;
+    const refresh = () => renderPeopleList(list, input.value, onPick, excludeIds);
+    input.addEventListener("input", () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(refresh, 200);
+    });
+    overlay.querySelector(".gsra-dialog-close").addEventListener("click", close);
+    overlay.addEventListener("mousedown", (e) => {
+        if (e.target === overlay) close();
+    });
+    document.addEventListener("keydown", onKey, true);
+    document.body.appendChild(overlay);
+    refresh();
+    input.focus();
+}
+
+// „Mitglied hinzufügen“: Personen suchen und per Klick hinzufügen – das Fenster bleibt offen, so gehen auch mehrere
+function openMemberPicker(chat) {
+    const excludeIds = new Set([currentUser.id, chat.user1_id, ...activeGroupMembers.map(m => m.user_id)]);
+    showPeoplePicker({
+        icon: "fa-user-plus",
+        title: "Mitglied hinzufügen",
+        message: `Wen möchtest du zu „${chat.title}“ hinzufügen?`,
+        excludeIds,
+        onPick: async (person, row) => {
+            if (row.classList.contains("wa-person-added")) return;
+            if (await addGroupMember(chat, person)) {
+                excludeIds.add(person.id);
+                row.classList.add("wa-person-added");
+                const note = document.createElement("span");
+                note.className = "wa-person-note";
+                note.textContent = "Hinzugefügt";
+                row.appendChild(note);
+            }
+        }
+    });
+}
+
+// Mitgliederverwaltung über Datenbank-Funktionen: Sie prüfen die Rolle und schreiben die Systemnachricht in den Chat.
+// Fehlen die Funktionen noch (SQL nicht eingespielt), gibt es statt der technischen Meldung einen klaren Hinweis.
+function memberErrorText(error) {
+    return /could not find the function|schema cache/i.test(error?.message || "")
+        ? "Die Mitgliederverwaltung ist in der Datenbank noch nicht eingerichtet."
+        : error?.message;
+}
+
+async function addGroupMember(chat, person) {
+    const supabase = window.supabaseClient || window.supabase;
+    if (!supabase) return false;
+    const { error } = await supabase.rpc("add_group_member", { _chat_id: chat.id, _user_id: person.id });
+    if (error) {
+        showToast(`${person.username} konnte nicht hinzugefügt werden: ${memberErrorText(error)}`, "error");
+        return false;
+    }
+    showToast(`${person.username} wurde zur Gruppe hinzugefügt.`, "success");
+    await refreshGroupMembers(chat);
+    if (activeChatId === chat.id) loadChatMessages(chat.id);
+    return true;
+}
+
+async function removeGroupMember(chat, member) {
+    const supabase = window.supabaseClient || window.supabase;
+    if (!supabase) return;
+    const confirmed = await showDialog({
+        icon: "fa-user-minus",
+        title: "Mitglied entfernen?",
+        message: `Möchtest du ${member.username} aus „${chat.title}“ entfernen?`,
+        confirmText: "Entfernen",
+        cancelText: "Abbrechen",
+        danger: true
+    });
+    if (!confirmed) return;
+    const { error } = await supabase.rpc("remove_group_member", { _chat_id: chat.id, _user_id: member.user_id });
+    if (error) {
+        showToast(`${member.username} konnte nicht entfernt werden: ${memberErrorText(error)}`, "error");
+        return;
+    }
+    showToast(`${member.username} wurde aus der Gruppe entfernt.`, "success");
+    await refreshGroupMembers(chat);
+    if (activeChatId === chat.id) loadChatMessages(chat.id);
+}
+
+async function setGroupRole(chat, member, role) {
+    const supabase = window.supabaseClient || window.supabase;
+    if (!supabase) return;
+    const { error } = await supabase.rpc("set_group_member_role", { _chat_id: chat.id, _user_id: member.user_id, _role: role });
+    if (error) {
+        showToast(`Die Rolle konnte nicht geändert werden: ${memberErrorText(error)}`, "error");
+        return;
+    }
+    showToast(role === "admin" ? `${member.username} ist jetzt Gruppenadmin.` : `${member.username} ist kein Gruppenadmin mehr.`, "success");
+    await refreshGroupMembers(chat);
+}
+
+async function leaveGroup(chat) {
+    const supabase = window.supabaseClient || window.supabase;
+    if (!supabase) return;
+    const confirmed = await showDialog({
+        icon: "fa-right-from-bracket",
+        title: "Gruppe verlassen?",
+        message: `Möchtest du „${chat.title}“ wirklich verlassen? Du siehst die Gruppe danach nicht mehr, bis dich ein Gruppenadmin wieder hinzufügt.`,
+        confirmText: "Verlassen",
+        cancelText: "Abbrechen",
+        danger: true
+    });
+    if (!confirmed) return;
+    const { error } = await supabase.rpc("remove_group_member", { _chat_id: chat.id, _user_id: currentUser.id });
+    if (error) {
+        showToast(`Du konntest die Gruppe nicht verlassen: ${memberErrorText(error)}`, "error");
+        return;
+    }
+    closeChatInfo();
+    activeChatId = null;
+    if (waWelcomeScreen) waWelcomeScreen.style.display = "flex";
+    if (waChatActivePane) waChatActivePane.style.display = "none";
+    await loadUserChats();
+    showToast(`Du hast „${chat.title}“ verlassen.`, "success");
 }
 
 async function loadChatMessages(chatId) {
@@ -1445,7 +2012,7 @@ async function renderMessages(messages, chatId = activeChatId) {
     chatMessages.innerHTML = "";
     const seenSystemTexts = new Set();
     for (const msg of messages) {
-        const isSystem = msg.text && (msg.text.includes("hat den Chat") || msg.text.includes("hat das Forum") || msg.text.includes("zum Forum hinzugefügt") || msg.text.includes("umbenannt"));
+        const isSystem = msg.text && (msg.text.includes("hat den Chat") || msg.text.includes("hat das Forum") || msg.text.includes("zum Forum hinzugefügt") || msg.text.includes("umbenannt") || msg.text.includes("aus der Gruppe entfernt") || msg.text.includes("hat die Gruppe verlassen"));
         if (isSystem && !msg.image_url && !msg.reply_to) {
             const formatted = await formatSystemMessage(msg.text, msg.sender_id);
             if (seenSystemTexts.has(formatted)) continue;
@@ -1472,7 +2039,17 @@ async function formatSystemMessage(text, senderId) {
     if (text.includes("zum Forum hinzugefügt")) {
         const match = text.match(/^(.+?)\s+hat\s+(.+?)\s+zum Forum hinzugefügt/i);
         const target = match && match[2] ? match[2] : "jemanden";
-        return isOwnAction ? `Du hast ${target} zum Forum hinzugefügt.` : `Du wurdest von ${actorName} zum Forum hinzugefügt.`;
+        if (isOwnAction) return `Du hast ${target} zum Forum hinzugefügt.`;
+        return target === currentUsername ? `Du wurdest von ${actorName} zum Forum hinzugefügt.` : `${actorName} hat ${target} zum Forum hinzugefügt.`;
+    }
+    if (text.includes("aus der Gruppe entfernt")) {
+        const match = text.match(/^(.+?)\s+hat\s+(.+?)\s+aus der Gruppe entfernt/i);
+        const target = match && match[2] ? match[2] : "jemanden";
+        if (isOwnAction) return `Du hast ${target} aus der Gruppe entfernt.`;
+        return target === currentUsername ? `${actorName} hat dich aus der Gruppe entfernt.` : `${actorName} hat ${target} aus der Gruppe entfernt.`;
+    }
+    if (text.includes("hat die Gruppe verlassen")) {
+        return isOwnAction ? "Du hast die Gruppe verlassen." : `${actorName} hat die Gruppe verlassen.`;
     }
     if (text.includes("hat den Chat eröffnet")) {
         return isOwnAction ? "Du hast den Chat eröffnet." : `${actorName} hat den Chat mit dir eröffnet.`;
@@ -1612,19 +2189,14 @@ async function appendSingleMessage(msg, isSystem = false) {
         plusSpan.addEventListener("click", (e) => {
             e.stopPropagation();
             const isOpen = pickerPopup.style.display === "flex";
-            document.querySelectorAll(".message-react-picker-popup").forEach(p => {
-                p.style.display = "none";
-                p.replaceChildren();
-            });
+            closeReactionPickers();
 
             if (!isOpen) {
                 // Große Emoji-Auswahl (alle Emojis, Kategorien, deutsche Suche); möglichst auf der Seite der Schnellleiste
                 const picker = createReactionEmojiPicker(msg, pickerPopup);
                 pickerPopup.appendChild(picker);
-                placeMessagePopup(pickerPopup, actionsDiv, "message-react-picker-popup", "popup", quickBar.classList.contains("bar-below"), picker);
-                setTimeout(() => picker.shadowRoot?.querySelector("input")?.focus(), 50);
-            } else {
-                pickerPopup.style.display = "none";
+                placeReactionPicker(pickerPopup, actionsDiv, quickBar.classList.contains("bar-below"), picker);
+                setTimeout(() => picker.shadowRoot?.querySelector("input")?.focus({ preventScroll: true }), 50);
             }
         });
 
@@ -1956,17 +2528,26 @@ if (editChatTitleBtn) {
             const otherUserId = chatObj ? (chatObj.user1_id === currentUser.id ? chatObj.user2_id : chatObj.user1_id) : null;
             if (chatTitleText) chatTitleText.innerText = `${newTitle.trim()} (${userNamesCache[otherUserId] || "Fahrer"})`;
             renderChatsList();
+            if (chatInfoPanel && chatInfoPanel.classList.contains("open")) renderChatInfo();
             showToast("Der Name wurde geändert – er ist nur für dich sichtbar.", "success");
         } else if (newTitle) {
             const trimmedTitle = newTitle.trim();
             const articleText = isForum ? "das Forum" : "den Chat";
 
-            await supabase.from("chats").update({ title: trimmedTitle }).eq("id", activeChatId);
+            // Nur Gruppenadmins dürfen umbenennen – ohne Berechtigung ändert die Datenbank nichts, dann auch keine Systemnachricht
+            const { data: renamed, error: renameError } = await supabase.from("chats").update({ title: trimmedTitle }).eq("id", activeChatId).select("id");
+            if (renameError || !renamed || renamed.length === 0) {
+                showToast(renameError ? `Umbenennen nicht möglich: ${renameError.message}` : "Nur Gruppenadmins können die Gruppe umbenennen.", "error");
+                return;
+            }
 
             const sysMsg = `${currentUsername} hat ${articleText} in "${trimmedTitle}" umbenannt.`;
             await supabase.from("messages").insert([{ chat_id: activeChatId, sender_id: currentUser.id, text: sysMsg }]);
             await supabase.from("chats").update({ last_message: sysMsg }).eq("id", activeChatId);
 
+            if (chatObj) chatObj.title = trimmedTitle;
+            if (chatTitleText) chatTitleText.innerText = trimmedTitle;
+            if (chatInfoPanel && chatInfoPanel.classList.contains("open")) renderChatInfo();
             loadUserChats();
             showToast("Der Name wurde aktualisiert.", "success");
         }
@@ -1995,6 +2576,7 @@ if (deleteChatBtn) {
             await supabase.from("chats").delete().eq("id", activeChatId);
             
             activeChatId = null;
+            closeChatInfo();
             if (waWelcomeScreen) waWelcomeScreen.style.display = "flex";
             if (waChatActivePane) waChatActivePane.style.display = "none";
 
@@ -2023,6 +2605,7 @@ if (blockUserBtn) {
             await supabase.from("chats").delete().eq("id", activeChatId);
             
             activeChatId = null;
+            closeChatInfo();
             if (waWelcomeScreen) waWelcomeScreen.style.display = "flex";
             if (waChatActivePane) waChatActivePane.style.display = "none";
 

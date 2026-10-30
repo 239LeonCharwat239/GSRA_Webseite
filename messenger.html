@@ -49,15 +49,22 @@
             <div class="wa-sidebar">
                 <div class="wa-sidebar-header">
                     <span style="font-weight: bold; font-size: 18px; color: #fff;">Chats</span>
-                    <div style="display: flex; gap: 15px;">
-                        <button id="newChatPlusBtn" title="Neues Forum / Gruppe erstellen" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size: 16px;"><i class="fa-solid fa-plus"></i></button>
-                        <button id="addFriendBtn" title="Freund hinzufügen" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size: 16px;"><i class="fa-solid fa-user-plus"></i></button>
+                    <div class="wa-header-icons">
+                        <button id="newChatPlusBtn" class="wa-icon-btn" title="Neuer Chat"><i class="fa-solid fa-plus"></i></button>
+                        <button id="sidebarMenuBtn" class="wa-icon-btn" title="Menü"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+                        <div id="sidebarMenu" class="wa-menu">
+                            <button type="button" data-action="new-group"><i class="fa-solid fa-users"></i> Neue Gruppe</button>
+                            <button type="button" data-action="favorites"><i class="fa-solid fa-star"></i> Favoriten</button>
+                            <button type="button" data-action="read-all"><i class="fa-solid fa-check-double"></i> Alle als gelesen markieren</button>
+                            <button type="button" data-action="invite"><i class="fa-solid fa-user-group"></i> Freund einladen</button>
+                            <button type="button" data-action="logout"><i class="fa-solid fa-right-from-bracket"></i> Abmelden</button>
+                        </div>
                     </div>
                 </div>
 
                 <div class="wa-search-bar">
                     <i class="fa-solid fa-magnifying-glass" style="color: var(--text-muted); font-size: 13px;"></i>
-                    <input type="text" id="chatSearchInput" placeholder="Suche Chats oder Foren..." autocomplete="off">
+                    <input type="text" id="chatSearchInput" placeholder="Suchen oder neuen Chat beginnen" autocomplete="off">
                 </div>
 
                 <div class="wa-filter-pills">
@@ -69,6 +76,19 @@
 
                 <div class="chat-sidebar-list" id="chatsList">
                     <p style="padding: 15px; font-size: 13px; color: var(--text-muted);">Lade Chats...</p>
+                </div>
+
+                <!-- NEUER CHAT (WHATSAPP-STIL): Neue Gruppe, Kontakte und alle GSRA-Mitglieder per Namenssuche -->
+                <div id="newChatPanel" class="wa-side-panel">
+                    <div class="wa-side-panel-header">
+                        <button id="closeNewChatPanel" type="button" class="wa-icon-btn" title="Zurück"><i class="fa-solid fa-arrow-left"></i></button>
+                        <span>Neuer Chat</span>
+                    </div>
+                    <div class="wa-search-bar">
+                        <i class="fa-solid fa-magnifying-glass" style="color: var(--text-muted); font-size: 13px;"></i>
+                        <input type="text" id="newChatSearchInput" placeholder="Namen suchen" autocomplete="off">
+                    </div>
+                    <div class="chat-sidebar-list" id="newChatList"></div>
                 </div>
             </div>
 
@@ -96,12 +116,19 @@
 
                 <div id="waChatActivePane" class="wa-active-pane" style="display: none;">
                     <div class="chat-header" id="chatHeader" style="display: flex; justify-content: space-between; align-items: center;">
-                        <span id="chatTitleText">Wähle einen Chat aus</span>
-                        <div id="chatActions" style="display: flex; gap: 12px; align-items: center;">
-                            <button id="addMemberBtn" title="Mitglied hinzufügen" style="background:none; border:none; color:var(--gsra-yellow); cursor:pointer; font-size: 15px; display: none;"><i class="fa-solid fa-user-plus"></i></button>
-                            <button id="editChatTitleBtn" title="Chat-Thema umbenennen" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size: 15px;"><i class="fa-solid fa-pen"></i></button>
-                            <button id="deleteChatBtn" title="Chat / Forum löschen" style="background:none; border:none; color:#ff4d4d; cursor:pointer; font-size: 15px;"><i class="fa-solid fa-trash"></i></button>
-                            <button id="blockUserBtn" title="Nutzer blockieren" style="background:none; border:none; color:#ff4d4d; cursor:pointer; font-size: 15px;"><i class="fa-solid fa-ban"></i></button>
+                        <!-- Klick auf Symbol oder Namen öffnet die Gruppen- bzw. Kontaktinfo -->
+                        <div id="chatHeaderInfo" class="chat-header-info" title="Info anzeigen">
+                            <div id="chatHeaderAvatar" class="wa-avatar chat-header-avatar"><i class="fa-solid fa-user"></i></div>
+                            <div class="chat-header-text">
+                                <span id="chatTitleText" class="chat-header-title">Wähle einen Chat aus</span>
+                                <span id="chatSubtitleText" class="chat-header-subtitle"></span>
+                            </div>
+                        </div>
+                        <div id="chatActions" style="display: flex; gap: 8px; align-items: center;">
+                            <button id="addMemberBtn" class="chat-header-btn btn-yellow" title="Mitglied hinzufügen" style="display: none;"><i class="fa-solid fa-user-plus"></i></button>
+                            <button id="editChatTitleBtn" class="chat-header-btn btn-blue" title="Chat-Thema umbenennen"><i class="fa-solid fa-pen"></i></button>
+                            <button id="deleteChatBtn" class="chat-header-btn btn-danger" title="Chat / Forum löschen"><i class="fa-solid fa-trash"></i></button>
+                            <button id="blockUserBtn" class="chat-header-btn btn-danger" title="Nutzer blockieren"><i class="fa-solid fa-ban"></i></button>
                         </div>
                     </div>
 
@@ -151,6 +178,15 @@
                         <span>Fotos &amp; Videos hier ablegen</span>
                     </div>
                 </div>
+
+                <!-- GRUPPEN- / KONTAKTINFO (WHATSAPP-STIL): Mitglieder mit Rollen, Favorit, Umbenennen, Verlassen ... -->
+                <aside id="chatInfoPanel" class="wa-info-panel">
+                    <div class="wa-side-panel-header">
+                        <button id="closeChatInfoBtn" type="button" class="wa-icon-btn" title="Schließen"><i class="fa-solid fa-xmark"></i></button>
+                        <span id="chatInfoHeading">Gruppeninfo</span>
+                    </div>
+                    <div id="chatInfoBody" class="wa-info-body"></div>
+                </aside>
             </div>
         </div>
     </main>
