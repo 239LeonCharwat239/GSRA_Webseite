@@ -42,30 +42,41 @@
         <!-- DAS PROFIL WIRD ERST PER JS EINGEBLENDET, WENN DER USER EINGELOGGT IST -->
         <div id="userContent" style="display: none;">
             <h1 class="hero-title">Fahrer <span class="text-blue">Dashboard</span></h1>
-            <p style="margin-bottom: 20px;">Verwalte deine Profildaten, verknüpfte Konten und deine Aktivitäten.</p>
+            <p style="margin-bottom: 20px;">Verwalte dein Profil, dein Profilbild und deine GSRA-ID.</p>
 
             <div class="grid-2">
                 <!-- Profil Übersicht -->
                 <div class="card">
                     <h3><i class="fa-solid fa-user-gear text-blue"></i> Profil Informationen</h3>
-                    <div style="margin-top: 15px; display: flex; flex-direction: column; gap: 10px;">
-                        <p><strong>Benutzername:</strong> <span id="dashUsername">Lade...</span></p>
+                    <div class="dash-profile-head">
+                        <div class="dash-avatar" id="dashAvatar"><i class="fa-solid fa-user"></i></div>
+                        <div class="dash-profile-name">
+                            <span id="dashUsername">Lade...</span>
+                            <button type="button" class="gsra-id-chip" id="dashGsraId" title="GSRA-ID kopieren" style="display: none;"></button>
+                        </div>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 10px; text-align: left;">
                         <p><strong>E-Mail:</strong> <span id="dashEmail">Lade...</span></p>
                         <p><strong>Mitglied seit:</strong> <span id="dashCreated">Lade...</span></p>
+                        <p class="dash-hint"><i class="fa-solid fa-circle-info text-blue"></i> Mit deiner GSRA-ID finden dich Freunde im Messenger eindeutig – auch wenn es deinen Namen mehrmals gibt.</p>
                     </div>
                 </div>
 
-                <!-- Schnellzugriff -->
+                <!-- Profil bearbeiten -->
                 <div class="card">
-                    <h3><i class="fa-solid fa-gauge-high text-yellow"></i> Schnellzugriff</h3>
-                    <div style="margin-top: 15px; display: flex; flex-direction: column; gap: 10px;">
-                        <a href="messenger.html" class="login-btn" style="text-align: center; text-decoration: none;">
-                            <i class="fa-solid fa-comments"></i> Zum Messenger
-                        </a>
-                        <a href="marktplatz.html" class="login-btn" style="text-align: center; text-decoration: none; background: #222; border: 1px solid var(--border-subtle);">
-                            <i class="fa-solid fa-store"></i> Eigene Angebote verwalten
-                        </a>
-                    </div>
+                    <h3><i class="fa-solid fa-pen-to-square text-yellow"></i> Profil bearbeiten</h3>
+                    <form id="profileForm" class="dash-form">
+                        <label for="editUsername">Benutzername</label>
+                        <input type="text" id="editUsername" maxlength="40" required>
+                        <label for="editBio">Über mich <span>(optional, im Profil für andere sichtbar)</span></label>
+                        <textarea id="editBio" rows="3" maxlength="300" placeholder="z. B. Fahre GT3 in iRacing und ACC …"></textarea>
+                        <label>Profilbild</label>
+                        <label class="dash-file-picker" for="editAvatarFile">
+                            <i class="fa-solid fa-image"></i> <span id="editAvatarName">Bild auswählen (PNG, JPG, WebP oder GIF, max. 5 MB)</span>
+                            <input type="file" id="editAvatarFile" accept="image/png,image/jpeg,image/webp,image/gif">
+                        </label>
+                        <button type="submit" class="login-btn dash-save-btn"><i class="fa-solid fa-floppy-disk"></i> Profil speichern</button>
+                    </form>
                 </div>
             </div>
         </div>

@@ -10,7 +10,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     const dashUsername = document.getElementById("dashUsername");
     const dashEmail = document.getElementById("dashEmail");
     const dashCreated = document.getElementById("dashCreated");
-    const dashAvatarImg = document.getElementById("dashAvatarImg");
+    const dashAvatar = document.getElementById("dashAvatar");
+    const dashGsraId = document.getElementById("dashGsraId");
+    const editAvatarFile = document.getElementById("editAvatarFile");
+    const editAvatarName = document.getElementById("editAvatarName");
     const editUsername = document.getElementById("editUsername");
     const editBio = document.getElementById("editBio");
     const profileForm = document.getElementById("profileForm");
@@ -42,7 +45,41 @@ document.addEventListener("DOMContentLoaded", async () => {
         dashUsername.textContent = username;
         if (editUsername) editUsername.value = username;
         if (editBio && profile?.bio) editBio.value = profile.bio;
-        if (dashAvatarImg && profile?.avatar_url) dashAvatarImg.src = profile.avatar_url;
+        const showAvatar = (url) => {
+            if (!dashAvatar || !url) return;
+            const img = document.createElement("img");
+            img.src = url;
+            img.alt = "Profilbild";
+            dashAvatar.replaceChildren(img);
+        };
+        showAvatar(profile?.avatar_url);
+
+        // GSRA-ID: kurze, eindeutige Nummer – per Klick kopieren
+        if (dashGsraId && profile?.gsra_id) {
+            dashGsraId.innerHTML = `<i class="fa-solid fa-id-badge"></i> GSRA-ID #${profile.gsra_id} <i class="fa-regular fa-copy"></i>`;
+            dashGsraId.style.display = "";
+            dashGsraId.addEventListener("click", () => {
+                navigator.clipboard.writeText(String(profile.gsra_id)).then(
+                    () => showToast("GSRA-ID kopiert.", "success"),
+                    () => showToast("Kopieren nicht möglich.", "error")
+                );
+            });
+        }
+
+        // Ausgewähltes Profilbild sofort als Vorschau zeigen
+        if (editAvatarFile) {
+            editAvatarFile.addEventListener("change", () => {
+                const file = editAvatarFile.files[0];
+                if (!file) return;
+                if (file.size > 5 * 1024 * 1024) {
+                    showToast("Das Bild darf höchstens 5 MB groß sein.", "error");
+                    editAvatarFile.value = "";
+                    return;
+                }
+                if (editAvatarName) editAvatarName.textContent = file.name;
+                showAvatar(URL.createObjectURL(file));
+            });
+        }
 
         if (userContent) userContent.style.display = "block";
 
@@ -58,24 +95,27 @@ document.addEventListener("DOMContentLoaded", async () => {
 
                 if (avatarFile) {
                     const fileExt = avatarFile.name.split('.').pop();
-                    const fileName = `${currentUser.id}_${Date.now()}.${fileExt}`;
-                    
+                    // Eigener Ordner je Nutzer (avatars/<Nutzer-ID>/…) – nur dort darf man selbst hochladen
+                    const fileName = `${currentUser.id}/${Date.now()}.${fileExt}`;
+
                     // UPLOAD IN DEN NEUEN BUCKET: avatars
-                    const { error: uploadErr } = await client.storage.from("avatars").upload(fileName, avatarFile);
+                    const { error: uploadErr } = await client.storage.from("avatars").upload(fileName, avatarFile, { contentType: avatarFile.type });
                     if (!uploadErr) {
                         const { data: pubData } = client.storage.from("avatars").getPublicUrl(fileName);
                         avatarUrl = pubData.publicUrl;
                     } else {
                         console.error("Upload Fehler:", uploadErr.message);
+                        showToast("Das Profilbild konnte nicht hochgeladen werden: " + uploadErr.message, "error");
+                        return;
                     }
                 }
 
-                const { error: upsertErr } = await client.from("profiles").upsert({
-                    id: currentUser.id,
-                    username: newUsername,
-                    bio: newBio,
-                    avatar_url: avatarUrl
-                });
+                // Profil aktualisieren (Rolle und GSRA-ID schützt die Datenbank); fehlt es noch, wird es angelegt
+                const changes = { username: newUsername, bio: newBio, avatar_url: avatarUrl };
+                let { data: updatedRows, error: upsertErr } = await client.from("profiles").update(changes).eq("id", currentUser.id).select("id");
+                if (!upsertErr && (!updatedRows || updatedRows.length === 0)) {
+                    ({ error: upsertErr } = await client.from("profiles").upsert({ id: currentUser.id, ...changes }));
+                }
 
                 if (upsertErr) {
                     showToast("Fehler beim Speichern des Profils.", "error");

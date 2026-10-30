@@ -97,6 +97,25 @@
             }
         });
 
+        // Gesperrtes Konto: Hinweis mit Dauer (dauerhaft oder bis zu einem Datum)
+        const showBanNotice = (until) => {
+            const date = until && until !== 'dauerhaft' ? new Date(until) : null;
+            showDialog({
+                icon: 'fa-ban',
+                title: 'Dein Konto ist gesperrt',
+                message: date && !isNaN(date)
+                    ? `Dein Konto ist bis zum ${date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })} gesperrt. Danach kannst du dich wieder anmelden.`
+                    : (until === 'dauerhaft'
+                        ? 'Dein Konto wurde dauerhaft gesperrt. Bei Fragen wende dich an das GSRA-Team.'
+                        : 'Dein Konto ist derzeit gesperrt. Bei Fragen wende dich an das GSRA-Team.'),
+                confirmText: 'OK',
+                danger: true
+            });
+        };
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('registrieren')) toggleModeBtn.click();
+        if (params.has('gesperrt')) showBanNotice(params.get('gesperrt'));
+
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('email').value.trim();
@@ -133,8 +152,17 @@
                 const { data, error } = await client.auth.signInWithPassword({ email, password });
 
                 if (error) {
-                    showToast('Login fehlgeschlagen: ' + error.message, 'error');
+                    if (/banned/i.test(error.message)) showBanNotice(null);
+                    else showToast('Login fehlgeschlagen: ' + error.message, 'error');
                 } else {
+                    // Gesperrte Konten werden sofort wieder abgemeldet
+                    const { data: bans } = await client.from('user_bans').select('banned_until').eq('user_id', data.user.id).is('lifted_at', null);
+                    const activeBan = (bans || []).find(b => !b.banned_until || new Date(b.banned_until) > new Date());
+                    if (activeBan) {
+                        await client.auth.signOut();
+                        showBanNotice(activeBan.banned_until || 'dauerhaft');
+                        return;
+                    }
                     window.location.href = 'dashboard.html';
                 }
             }

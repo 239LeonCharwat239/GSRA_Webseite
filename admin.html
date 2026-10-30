@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GSRA - Moderation</title>
+    <meta name="robots" content="noindex">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Supabase SDK & Auth -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-client.js"></script>
+    <script src="auth-nav.js"></script>
+</head>
+<body>
+
+    <!-- HEADER -->
+    <header>
+        <div class="logo-slogan-container">
+            <a href="index.html" class="logo-link">
+                <img src="GSRA_Logo_ohne Hintergrund.png" alt="GSRA Logo" class="logo">
+            </a>
+            <div class="header-slogan">
+                <span class="text-blue">UNITED BY SPEED.</span>
+                <span class="text-yellow">DRIVEN GLOBALLY.</span>
+            </div>
+        </div>
+        <nav>
+            <a href="index.html">Home</a>
+            <a href="marktplatz.html">Marktplatz</a>
+            <a href="setups.html">Setups</a>
+            <a href="nachschlagewerk.html">Nachschlagewerk</a>
+            <a href="kalender.html">Rennkalender</a>
+            <a href="dashboard.html">Dashboard</a>
+            <a href="messenger.html">Messenger</a>
+            <a href="admin.html" class="active">Admin</a>
+            <a href="login.html" class="login-btn" id="loginNavBtn">Login</a>
+            <button id="logoutBtn" class="login-btn" style="display: none;">Logout</button>
+        </nav>
+    </header>
+
+    <main class="container">
+        <section class="hero-section" style="margin-bottom: 10px; padding: 20px 0;">
+            <h1 class="hero-title">GSRA <span class="text-blue">Moderation</span></h1>
+            <p class="hero-subtitle">Meldungen prüfen, verwarnen und sperren – nur für Administratoren.</p>
+        </section>
+
+        <!-- Zugangsprüfung: nur Administratoren sehen die Meldungen (zusätzlich schützt die Datenbank) -->
+        <div id="adminGate" class="card admin-gate"><i class="fa-solid fa-spinner fa-spin"></i> Zugang wird geprüft …</div>
+
+        <div id="adminContent" style="display: none;">
+            <div class="admin-tabs">
+                <button type="button" class="admin-tab active" data-tab="offen"><i class="fa-solid fa-inbox"></i> Offene Meldungen <span class="admin-count" id="countOpen">0</span></button>
+                <button type="button" class="admin-tab" data-tab="erledigt"><i class="fa-solid fa-check-double"></i> Erledigt</button>
+                <button type="button" class="admin-tab" data-tab="sperren"><i class="fa-solid fa-ban"></i> Gesperrte Konten <span class="admin-count" id="countBans">0</span></button>
+            </div>
+            <div id="adminList" class="admin-list"></div>
+        </div>
+    </main>
+
+    <script src="ui-dialogs.js"></script>
+    <script src="admin.js"></script>
+</body>
+</html>

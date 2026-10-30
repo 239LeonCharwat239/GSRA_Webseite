@@ -37,6 +37,18 @@ let activeGroupRole = null;
 let peopleSearchResults = [];
 let peopleSearchTimer = null;
 
+// Freunde, Blockierungen, „Für mich gelöscht“, Verwarnungen und Profile (Funktionen dazu in messenger-social.js).
+// socialReady ist true, sobald die Datenbank-Erweiterung dafür eingerichtet ist.
+let socialReady = false;
+let blockedUserIds = new Set();
+let friendshipRows = [];
+let hiddenMessageIds = new Set();
+let openWarnings = [];
+let profileCache = {};
+let publicGroupResults = [];
+const ADMIN_DELETED_TEXT = "Diese Nachricht wurde von einem Gruppenadmin gelöscht";
+const DELETED_TEXTS = ["Du hast diese Nachricht gelöscht", "Diese Nachricht wurde gelöscht", ADMIN_DELETED_TEXT];
+
 // Emoji-Auswahl auf Deutsch (Suche, Kategorien)
 const EMOJI_DATA_SOURCE_DE = "https://cdn.jsdelivr.net/npm/emoji-picker-element-data@1/de/cldr/data.json";
 
@@ -212,14 +224,23 @@ if (!multiDeleteBar && chatForm) {
 
     document.getElementById("executeMultiDeleteBtn").addEventListener("click", async () => {
         if (selectedMessageIds.size === 0) return;
-        const confirmed = await showDialog({
+        // Eigene Nachrichten: für alle oder nur für mich löschen (wie bei WhatsApp)
+        const choice = await showDialog({
             icon: "fa-trash",
             title: "Nachrichten löschen?",
-            message: `Möchtest du ${selectedMessageIds.size} ausgewählte Nachricht(en) wirklich löschen?`,
-            confirmText: "Löschen",
+            message: `Wie möchtest du ${selectedMessageIds.size} ausgewählte Nachricht(en) löschen?`,
+            choices: socialReady
+                ? [{ value: "all", text: "Für alle löschen", danger: true }, { value: "me", text: "Für mich löschen" }]
+                : [{ value: "all", text: "Löschen", danger: true }],
             cancelText: "Abbrechen",
             danger: true
         });
+        if (choice === "me") {
+            await hideMessagesForMe([...selectedMessageIds]);
+            exitMultiSelectMode();
+            return;
+        }
+        const confirmed = choice === "all";
         if (confirmed) {
             const supabase = window.supabaseClient || window.supabase;
             if (!supabase) return;
@@ -270,6 +291,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (!currentUser || !currentUser.id) {
         if (chatsList) chatsList.innerHTML = `<p style="padding: 15px; font-size: 13px; color: var(--text-muted);">Bitte logge dich ein.</p>`;
+        if (typeof showLoginRequired === "function") showLoginRequired();
         return;
     }
 
@@ -279,8 +301,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     await checkUserAdminStatus();
     await loadFavorites();
+    if (typeof loadSocialState === "function") await loadSocialState();
     await loadUserChats();
     await checkUrlParameters();
+    if (typeof initSocialFeatures === "function") initSocialFeatures();
 
     document.querySelectorAll(".wa-pill").forEach(pill => {
         pill.addEventListener("click", (e) => {
@@ -356,6 +380,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                 showToast("Alle Chats wurden als gelesen markiert.", "success");
             }
             else if (action === "invite") inviteFriend();
+            else if (action === "requests") openFriendRequestsPanel();
+            else if (action === "forums") openForumDirectory();
             else if (action === "logout") document.getElementById("logoutBtn")?.click();
         });
     }
@@ -834,12 +860,14 @@ async function fetchUserName(userId) {
     if (!supabase || !userId) return `Fahrer`;
     
     try {
+        // Ganzes Profil laden (Name, Profilbild, GSRA-ID …) – es wird für Profilansicht und Avatare zwischengespeichert
         const { data } = await supabase
             .from("profiles")
-            .select("username, full_name")
+            .select("*")
             .eq("id", userId)
             .maybeSingle();
 
+        if (data) profileCache[userId] = data;
         const name = data?.username || data?.full_name || `Fahrer`;
         userNamesCache[userId] = name;
         return name;
@@ -862,17 +890,29 @@ async function checkUrlParameters() {
         const [u1, u2] = [currentUser.id, targetId].sort();
         let existingChat = null;
 
-        const { data: fetched } = await supabase
+        // Über die Datenbank-Funktion: bestehender Chat wird wiederverwendet, Marktplatz-Anfragen gehen auch ohne Freundschaft
+        const sysMsg = itemTitle ? `Anfrage zu: ${itemTitle}` : `${currentUsername} hat den Chat eröffnet.`;
+        const started = await requestDirectChat(targetId, sysMsg);
+        if (started.chatId) existingChat = { id: started.chatId, title: null };
+        else if (!started.missing) {
+            showToast(started.error, "error");
+            window.history.replaceState({}, document.title, window.location.pathname);
+            openUserProfile(targetId);
+            return;
+        }
+
+        const { data: fetched } = existingChat ? { data: null } : await supabase
             .from("chats")
             .select("*")
             .eq("user1_id", u1)
             .eq("user2_id", u2)
             .maybeSingle();
 
-        if (fetched && fetched.user1_id !== fetched.user2_id) {
+        if (existingChat) {
+            // bereits über die Datenbank-Funktion geöffnet
+        } else if (fetched && fetched.user1_id !== fetched.user2_id) {
             existingChat = fetched;
         } else {
-            const sysMsg = itemTitle ? `Anfrage zu: ${itemTitle}` : `${currentUsername} hat den Chat eröffnet.`;
             const { data: newChat, error } = await supabase
                 .from("chats")
                 .insert([{
@@ -994,8 +1034,7 @@ async function updateChatLastMessageInfo(chat, supabase) {
 
     const latestEdit = (editedMsgs || []).find(m =>
         m.is_edited === true &&
-        m.text !== "Du hast diese Nachricht gelöscht" &&
-        m.text !== "Diese Nachricht wurde gelöscht"
+        !DELETED_TEXTS.includes(m.text)
     );
 
     const msgTime = new Date(latestMsg.created_at).getTime();
@@ -1024,7 +1063,9 @@ async function updateChatLastMessageInfo(chat, supabase) {
 }
 
 function updateGlobalUnreadState() {
-    const hasUnread = allChatsCache.some(c => c.unread === true);
+    // Leuchtet auch bei offenen Freundschaftsanfragen und unbestätigten Verwarnungen
+    const hasUnread = allChatsCache.some(c => c.unread === true) || openWarnings.length > 0
+        || friendshipRows.some(f => f.status === "pending" && f.friend_id === currentUser?.id);
     localStorage.setItem('gsra_has_unread', hasUnread ? 'true' : 'false');
 
     const navBtn = document.getElementById("messengerNavBtn") || document.querySelector('a[href="messenger.html"]');
@@ -1123,6 +1164,8 @@ async function loadUserChats() {
         const isOfficial = (chat.id === officialForumChatId || (chat.title && chat.title.includes('Official')));
         const isDirect = (chat.user1_id !== chat.user2_id);
         const isGroup = (chat.title !== null && chat.user1_id === chat.user2_id); // Forum/Gruppe = Titel gesetzt UND user1_id === user2_id; umbenannte Direktchats bleiben Chats
+        // Direktchats mit blockierten Personen sind für dich ausgeblendet
+        if (isDirect && blockedUserIds.has(chat.user1_id === currentUser.id ? chat.user2_id : chat.user1_id)) continue;
         if (isOfficial || isDirect || isGroup) accessibleChats.push(chat);
     }
 
@@ -1193,16 +1236,20 @@ async function renderChatsList() {
         return true;
     });
 
-    // Während der Suche: gefundene GSRA-Mitglieder, mit denen du noch keinen Chat hast
-    const people = searchTerm.trim() ? peopleSearchResults.filter(p => p.username.toLowerCase().includes(searchTerm.trim())) : [];
+    // Während der Suche: gefundene GSRA-Mitglieder ohne Chat (auch per GSRA-ID) und öffentliche Foren
+    const people = searchTerm.trim() ? peopleSearchResults : [];
+    const forums = searchTerm.trim() ? publicGroupResults : [];
+    const requestsRow = (!searchTerm.trim() && currentFilter === 'all' && typeof createFriendRequestsRow === "function") ? createFriendRequestsRow() : null;
 
-    if (filtered.length === 0 && people.length === 0) {
+    if (filtered.length === 0 && people.length === 0 && forums.length === 0 && !requestsRow) {
         chatsList.innerHTML = `<p style="padding: 15px; font-size: 13px; color: var(--text-muted);">Keine Chats gefunden.</p>`;
         isRendering = false;
+        if (typeof renderWelcomeInfo === "function") renderWelcomeInfo();
         return;
     }
 
     const fragment = document.createDocumentFragment();
+    if (requestsRow) fragment.appendChild(requestsRow);
 
     for (const chat of filtered) {
         const isOfficial = (chat.id === officialForumChatId || (chat.title && chat.title.includes('Official')));
@@ -1210,10 +1257,13 @@ async function renderChatsList() {
         const isForumOrGroup = isOfficial || isGroup;
 
         let otherUserName = "Fahrer";
+        let avatarUrl = isGroup ? chat.image_url : null;
         if (!isForumOrGroup && chat.user1_id !== chat.user2_id) {
             const otherUserId = chat.user1_id === currentUser.id ? chat.user2_id : chat.user1_id;
             otherUserName = userNamesCache[otherUserId] || "Fahrer";
+            avatarUrl = profileCache[otherUserId]?.avatar_url;
         }
+        if (isOfficial) avatarUrl = chat.image_url;
 
         const item = document.createElement("div");
         const isSelected = chat.id === activeChatId;
@@ -1227,7 +1277,7 @@ async function renderChatsList() {
         const lastMsg = escapeHtml(chat.last_message || 'Keine Nachrichten');
 
         item.innerHTML = `
-            <div class="wa-avatar"><i class="fa-solid ${isOfficial ? 'fa-bullhorn text-yellow' : (isGroup ? 'fa-users' : 'fa-user')}"></i></div>
+            <div class="wa-avatar">${avatarInner(avatarUrl, isOfficial ? 'fa-bullhorn text-yellow' : (isGroup ? 'fa-users' : 'fa-user'))}</div>
             <div class="wa-chat-info">
                 <div class="wa-chat-row">
                     <span class="wa-chat-name">${escapeHtml(displayTitle)}</span>
@@ -1253,25 +1303,45 @@ async function renderChatsList() {
         fragment.appendChild(item);
     }
 
+    if (forums.length > 0) {
+        fragment.appendChild(createSectionTitle("Öffentliche Foren"));
+        forums.forEach(group => {
+            const row = createPersonRow(group.title, { icon: "fa-users", avatarUrl: group.image_url, note: `${group.member_count} Mitgl.` });
+            row.addEventListener("click", () => openPublicGroupPreview(group));
+            fragment.appendChild(row);
+        });
+    }
+
+    // Personen öffnen ihr Profil – dort gibt es Freundschaftsanfrage, Nachricht, Melden und Blockieren
     if (people.length > 0) {
-        fragment.appendChild(createSectionTitle("Neuen Chat beginnen"));
+        fragment.appendChild(createSectionTitle("Personen"));
         people.forEach(person => {
-            const row = createPersonRow(person.username);
-            row.addEventListener("click", () => {
-                if (chatSearchInput) chatSearchInput.value = "";
-                peopleSearchResults = [];
-                openDirectChatWith(person);
-            });
+            const row = createPersonRow(person.username, { avatarUrl: person.avatar_url, note: person.gsra_id ? `#${person.gsra_id}` : "" });
+            row.addEventListener("click", () => openUserProfile(person.id));
             fragment.appendChild(row);
         });
     }
 
     chatsList.appendChild(fragment);
     isRendering = false;
+    if (typeof renderWelcomeInfo === "function") renderWelcomeInfo();
 }
 
-// Kontakte („Freundesliste“): alle Personen, mit denen du einen Direktchat hast – die Liste entsteht beim Chatten
+// Profil- bzw. Forenbild, sonst das passende Symbol
+function avatarInner(url, iconClass) {
+    return url ? `<img src="${escapeHtml(url)}" alt="" loading="lazy">` : `<i class="fa-solid ${iconClass}"></i>`;
+}
+
+// Kontakte: deine Freunde (angenommene Freundschaftsanfragen). Ohne Datenbank-Erweiterung wie bisher alle,
+// mit denen du einen Direktchat hast.
 function getContacts() {
+    if (socialReady) {
+        return friendshipRows
+            .filter(f => f.status === "accepted")
+            .map(f => (f.user_id === currentUser.id ? f.friend_id : f.user_id))
+            .map(id => ({ id, username: userNamesCache[id] || profileCache[id]?.username || "Fahrer" }))
+            .sort((a, b) => a.username.localeCompare(b.username, "de"));
+    }
     const contacts = new Map();
     allChatsCache.forEach(c => {
         if (c.user1_id === c.user2_id) return;
@@ -1281,29 +1351,32 @@ function getContacts() {
     return Array.from(contacts.values()).sort((a, b) => a.username.localeCompare(b.username, "de"));
 }
 
-// Sucht GSRA-Mitglieder nach Namen (Teil des Namens genügt, Groß-/Kleinschreibung egal)
+// Sucht GSRA-Mitglieder nach Namen (Teil des Namens genügt, Groß-/Kleinschreibung egal) – oder genau nach der GSRA-ID
+// (z. B. „100042“, „#100042“ oder „GSRA-ID 100042“), damit gleiche Namen kein Problem sind
 async function searchProfiles(term) {
     const supabase = window.supabaseClient || window.supabase;
     if (!supabase || !currentUser?.id || !term) return [];
-    const pattern = `%${term.replace(/[\\%_]/g, "\\$&")}%`;
-    const { data } = await supabase
-        .from("profiles")
-        .select("id, username")
-        .ilike("username", pattern)
+    const idMatch = term.trim().match(/^(?:#|gsra[\s-]*(?:id)?[\s:#-]*)?(\d{4,12})$/i);
+    let query = supabase.from("profiles").select("*");
+    query = idMatch ? query.eq("gsra_id", Number(idMatch[1])) : query.ilike("username", `%${term.replace(/[\\%_]/g, "\\$&")}%`);
+    const { data } = await query
         .neq("id", currentUser.id)
         .order("username", { ascending: true })
         .limit(20);
     const found = (data || []).filter(p => p.username);
-    found.forEach(p => { userNamesCache[p.id] = p.username; });
+    found.forEach(p => {
+        userNamesCache[p.id] = p.username;
+        profileCache[p.id] = p;
+    });
     return found;
 }
 
-// Eine Zeile in Personenlisten: Symbol + Name, rechts optional ein Hinweis (z. B. „Gruppenadmin“)
-function createPersonRow(name, { icon = "fa-user", accent = false, note = "" } = {}) {
+// Eine Zeile in Personenlisten: Bild bzw. Symbol + Name, rechts optional ein Hinweis (z. B. „Gruppenadmin“)
+function createPersonRow(name, { icon = "fa-user", accent = false, note = "", avatarUrl = null } = {}) {
     const row = document.createElement("div");
     row.className = "wa-chat-item";
     row.innerHTML = `
-        <div class="wa-avatar${accent ? " accent" : ""}"><i class="fa-solid ${icon}"></i></div>
+        <div class="wa-avatar${accent ? " accent" : ""}">${avatarInner(avatarUrl, icon)}</div>
         <div class="wa-chat-info"><span class="wa-chat-name"></span></div>
     `;
     row.querySelector(".wa-chat-name").textContent = name;
@@ -1323,35 +1396,38 @@ function createSectionTitle(text) {
     return title;
 }
 
-// Füllt eine Personenliste: passende Kontakte zuerst, darunter weitere GSRA-Mitglieder aus der Namenssuche.
-// excludeIds blendet Personen aus (z. B. wer schon Mitglied ist); onPick(person, row) läuft beim Anklicken.
-async function renderPeopleList(container, term, onPick, excludeIds = new Set()) {
+// Füllt eine Personenliste: passende Freunde zuerst, darunter weitere GSRA-Mitglieder aus der Namenssuche.
+// excludeIds blendet Personen aus (z. B. wer schon Mitglied ist); onPick(person, row) läuft beim Anklicken eines Freundes,
+// onPickOther bei allen anderen. friendsOnly: nur Freunde (z. B. beim Hinzufügen zu Gruppen).
+async function renderPeopleList(container, term, onPick, excludeIds = new Set(), { onPickOther = onPick, friendsOnly = false } = {}) {
     const token = (container.peopleToken || 0) + 1;
     container.peopleToken = token;
     const needle = term.trim().toLowerCase();
     const contacts = getContacts().filter(p => !excludeIds.has(p.id));
     const contactIds = new Set(contacts.map(p => p.id));
     const matchingContacts = contacts.filter(p => p.username.toLowerCase().includes(needle));
-    const others = needle ? (await searchProfiles(needle)).filter(p => !excludeIds.has(p.id) && !contactIds.has(p.id)) : [];
+    const others = (needle && !friendsOnly) ? (await searchProfiles(needle)).filter(p => !excludeIds.has(p.id) && !contactIds.has(p.id)) : [];
     if (container.peopleToken !== token) return; // inzwischen wurde weitergetippt
 
     const results = document.createElement("div");
     results.className = "wa-people-results";
-    const addSection = (title, list) => {
+    const addSection = (title, list, handler) => {
         if (list.length === 0) return;
         results.appendChild(createSectionTitle(title));
         list.forEach(person => {
-            const row = createPersonRow(person.username);
-            row.addEventListener("click", () => onPick(person, row));
+            const profile = profileCache[person.id];
+            const row = createPersonRow(person.username, { avatarUrl: profile?.avatar_url, note: !contactIds.has(person.id) && profile?.gsra_id ? `#${profile.gsra_id}` : "" });
+            row.addEventListener("click", () => handler(person, row));
             results.appendChild(row);
         });
     };
-    addSection("Deine Kontakte", matchingContacts);
-    addSection("Weitere GSRA-Mitglieder", others);
+    addSection(socialReady ? "Deine Freunde" : "Deine Kontakte", matchingContacts, onPick);
+    addSection("Weitere GSRA-Mitglieder", others, onPickOther);
     if (!results.hasChildNodes()) {
         const note = document.createElement("p");
         note.className = "wa-empty-note";
-        note.textContent = needle ? "Niemand mit diesem Namen gefunden." : "Noch keine Kontakte – suche oben nach dem Namen eines GSRA-Mitglieds.";
+        if (friendsOnly) note.textContent = needle ? "Kein Freund mit diesem Namen." : "Hinzufügen kannst du nur Freunde – sende zuerst eine Freundschaftsanfrage.";
+        else note.textContent = needle ? "Niemand mit diesem Namen oder dieser GSRA-ID gefunden." : "Noch keine Freunde – suche oben nach Namen oder GSRA-ID.";
         results.appendChild(note);
     }
     container.querySelectorAll(".wa-people-results").forEach(el => el.remove());
@@ -1378,24 +1454,40 @@ function renderNewChatPanel() {
     if (!term.trim()) {
         const groupRow = createPersonRow("Neue Gruppe", { icon: "fa-users", accent: true });
         groupRow.addEventListener("click", () => createNewGroup());
+        const actionRows = [groupRow];
+        if (socialReady) {
+            const incoming = friendshipRows.filter(f => f.status === "pending" && f.friend_id === currentUser.id).length;
+            const requestsRow = createPersonRow("Freundschaftsanfragen", { icon: "fa-user-clock", accent: true, note: incoming ? String(incoming) : "" });
+            requestsRow.addEventListener("click", () => openFriendRequestsPanel());
+            const forumsRow = createPersonRow("Öffentliche Foren entdecken", { icon: "fa-compass", accent: true });
+            forumsRow.addEventListener("click", () => openForumDirectory());
+            actionRows.push(requestsRow, forumsRow);
+        }
         const inviteRow = createPersonRow("Freund einladen", { icon: "fa-user-group", accent: true });
         inviteRow.addEventListener("click", () => inviteFriend());
-        [groupRow, inviteRow].forEach(row => row.classList.add("wa-new-chat-action"));
-        newChatList.prepend(groupRow, inviteRow);
+        actionRows.push(inviteRow);
+        actionRows.forEach(row => row.classList.add("wa-new-chat-action"));
+        newChatList.prepend(...actionRows);
     }
+    // Freunde: Chat öffnen; alle anderen: Profil (mit Freundschaftsanfrage)
     renderPeopleList(newChatList, term, (person) => {
         hideNewChatPanel();
         openDirectChatWith(person);
-    });
+    }, new Set(), { onPickOther: (person) => (socialReady ? openUserProfile(person.id) : (hideNewChatPanel(), openDirectChatWith(person))) });
 }
 
-// Hauptsuche „Suchen oder neuen Chat beginnen“: findet zusätzlich GSRA-Mitglieder ohne bestehenden Chat
+// Hauptsuche „Suchen oder neuen Chat beginnen“: findet zusätzlich GSRA-Mitglieder (auch per GSRA-ID), mit denen
+// du noch keinen Chat hast, und öffentliche Foren, in denen du noch nicht Mitglied bist
 async function updatePeopleSearch() {
     const term = chatSearchInput ? chatSearchInput.value.trim() : "";
-    const found = term ? await searchProfiles(term) : [];
+    const [found, groups] = await Promise.all([
+        term ? searchProfiles(term) : [],
+        term && socialReady ? searchPublicGroups(term) : []
+    ]);
     if (!chatSearchInput || chatSearchInput.value.trim() !== term) return; // inzwischen wurde weitergetippt
-    const contactIds = new Set(getContacts().map(p => p.id));
-    peopleSearchResults = found.filter(p => !contactIds.has(p.id));
+    const chatPartnerIds = new Set(allChatsCache.filter(c => c.user1_id !== c.user2_id).map(c => (c.user1_id === currentUser.id ? c.user2_id : c.user1_id)));
+    peopleSearchResults = found.filter(p => !chatPartnerIds.has(p.id));
+    publicGroupResults = groups.filter(g => !g.is_member);
     renderChatsList();
 }
 
@@ -1410,6 +1502,17 @@ async function openDirectChatWith(person) {
 
     const [u1, u2] = [currentUser.id, person.id].sort();
     let existingChat = allChatsCache.find(c => c.user1_id !== c.user2_id && [c.user1_id, c.user2_id].sort().join() === `${u1},${u2}`);
+
+    // Neue Chats über die Datenbank-Funktion: nur mit Freunden (bestehende Chats werden wiederverwendet)
+    if (!existingChat) {
+        const started = await requestDirectChat(person.id, null);
+        if (started.chatId) existingChat = { id: started.chatId, title: null };
+        else if (!started.missing) {
+            showToast(started.error, "error");
+            openUserProfile(person.id);
+            return;
+        }
+    }
 
     if (!existingChat) {
         const { data: fetched } = await supabase
@@ -1530,7 +1633,8 @@ function openForumChat(forumChat = null) {
     setChatHeader(
         isOfficialAnnouncement ? "fa-bullhorn text-yellow" : "fa-users",
         forumChat?.title || "GSRA Official / Community Forum",
-        isOfficialAnnouncement ? "Offizielle Ankündigungen des GSRA-Teams" : "Klicke hier für die Gruppeninfo"
+        isOfficialAnnouncement ? "Offizielle Ankündigungen des GSRA-Teams" : "Klicke hier für die Gruppeninfo",
+        chatObj?.image_url
     );
     if (chatActions) chatActions.style.display = "flex";
     if (blockUserBtn) blockUserBtn.style.display = "none";
@@ -1564,8 +1668,10 @@ async function openChat(chatId, recipientName, chatTitle = null) {
 
     const customName = getChatAlias(chatId) || chatTitle;
     const displayName = customName ? `${customName} (${recipientName})` : `Chat mit ${recipientName}`;
+    const chatObj = allChatsCache.find(c => c.id === chatId);
+    const otherUserId = chatObj ? (chatObj.user1_id === currentUser.id ? chatObj.user2_id : chatObj.user1_id) : null;
     closeChatInfo();
-    setChatHeader("fa-user", displayName, "Klicke hier für die Kontaktinfo");
+    setChatHeader("fa-user", displayName, "Klicke hier für die Kontaktinfo", otherUserId ? profileCache[otherUserId]?.avatar_url : null);
     activeGroupMembers = [];
     activeGroupRole = null;
 
@@ -1584,9 +1690,9 @@ async function openChat(chatId, recipientName, chatTitle = null) {
     renderChatsList();
 }
 
-// Kopfzeile des Chats im WhatsApp-Stil: Symbol, Name und eine Zeile darunter
-function setChatHeader(iconClass, title, subtitle) {
-    if (chatHeaderAvatar) chatHeaderAvatar.innerHTML = `<i class="fa-solid ${iconClass}"></i>`;
+// Kopfzeile des Chats im WhatsApp-Stil: Bild bzw. Symbol, Name und eine Zeile darunter
+function setChatHeader(iconClass, title, subtitle, avatarUrl = null) {
+    if (chatHeaderAvatar) chatHeaderAvatar.innerHTML = avatarInner(avatarUrl, iconClass);
     if (chatTitleText) chatTitleText.innerText = title;
     if (chatSubtitleText) chatSubtitleText.innerText = subtitle;
 }
@@ -1602,10 +1708,13 @@ async function loadGroupMembers(chat) {
     }
     if (!members.some(m => m.user_id === chat.user1_id)) members.push({ user_id: chat.user1_id, role: "admin" });
 
-    const unknownIds = members.map(m => m.user_id).filter(id => !userNamesCache[id]);
+    const unknownIds = members.map(m => m.user_id).filter(id => !profileCache[id]);
     if (supabase && unknownIds.length > 0) {
-        const { data: profiles } = await supabase.from("profiles").select("id, username, full_name").in("id", unknownIds);
-        (profiles || []).forEach(p => { userNamesCache[p.id] = p.username || p.full_name || "Fahrer"; });
+        const { data: profiles } = await supabase.from("profiles").select("*").in("id", unknownIds);
+        (profiles || []).forEach(p => {
+            profileCache[p.id] = p;
+            userNamesCache[p.id] = p.username || p.full_name || "Fahrer";
+        });
     }
     members.forEach(m => { m.username = userNamesCache[m.user_id] || "Fahrer"; });
 
@@ -1671,26 +1780,41 @@ function renderChatInfo() {
     if (chatInfoHeading) chatInfoHeading.innerText = isDirect ? "Kontaktinfo" : (isOfficial ? "Kanalinfo" : "Gruppeninfo");
     chatInfoBody.replaceChildren();
 
-    // Kopfbereich: großes Symbol, Name und Art des Chats
+    // Kopfbereich: großes Bild bzw. Symbol, Name und Art des Chats
+    const avatarUrl = isDirect ? profileCache[otherUserId]?.avatar_url : chat.image_url;
+    const otherGsraId = isDirect ? profileCache[otherUserId]?.gsra_id : null;
     const hero = document.createElement("div");
     hero.className = "wa-info-hero";
     hero.innerHTML = `
-        <div class="wa-avatar wa-info-avatar"><i class="fa-solid ${isOfficial ? "fa-bullhorn text-yellow" : (isDirect ? "fa-user" : "fa-users")}"></i></div>
+        <div class="wa-avatar wa-info-avatar">${avatarInner(avatarUrl, isOfficial ? "fa-bullhorn text-yellow" : (isDirect ? "fa-user" : "fa-users"))}</div>
         <div class="wa-info-name"></div>
         <div class="wa-info-meta"></div>
     `;
     hero.querySelector(".wa-info-name").textContent = isDirect ? (alias || otherName) : (isOfficial ? "GSRA Official / Community Forum" : chat.title);
     hero.querySelector(".wa-info-meta").textContent = isOfficial
         ? "Offizieller Kanal · alle GSRA-Mitglieder"
-        : (isDirect ? (alias ? `~ ${otherName}` : "GSRA-Mitglied") : `Gruppe · ${memberCount}`);
+        : (isDirect ? `${alias ? `~ ${otherName}` : "GSRA-Mitglied"}${otherGsraId ? ` · ID #${otherGsraId}` : ""}`
+            : `${chat.is_public ? "Öffentliches Forum" : "Private Gruppe"} · ${memberCount}`);
     chatInfoBody.appendChild(hero);
 
-    if (isOfficial) {
+    // Beschreibung (Gruppen & offizielles Forum) – Gruppenadmins bzw. beim Forum die Website-Admins können sie bearbeiten
+    const canEditProfile = isAdmin || (isOfficial && isAdminUser);
+    if (!isDirect) {
         const about = createInfoSection();
         const text = document.createElement("p");
         text.className = "wa-info-text";
-        text.textContent = "Hier veröffentlicht das GSRA-Team Ankündigungen, Plattform-Updates, Reglement-Änderungen und Event-Infos. Schreiben können nur Administratoren – für den Austausch nutzt du deine Chats und Gruppen.";
+        text.textContent = chat.description || (isOfficial
+            ? "Hier veröffentlicht das GSRA-Team Ankündigungen, Plattform-Updates, Reglement-Änderungen und Event-Infos. Schreiben können nur Administratoren – für den Austausch nutzt du deine Chats und Gruppen."
+            : "Noch keine Beschreibung.");
         about.appendChild(text);
+        if (canEditProfile && socialReady) {
+            about.appendChild(createInfoRow("fa-solid fa-align-left", "Beschreibung bearbeiten", () => editGroupDescription(chat)));
+            about.appendChild(createInfoRow("fa-solid fa-image", chat.image_url ? "Forenbild ändern" : "Forenbild hinzufügen", () => changeGroupImage(chat)));
+            if (isGroup) {
+                about.appendChild(createInfoRow(chat.is_public ? "fa-solid fa-lock" : "fa-solid fa-globe",
+                    chat.is_public ? "Wieder privat machen" : "Öffentlich machen (in der Suche auffindbar)", () => toggleGroupPublic(chat)));
+            }
+        }
         chatInfoBody.appendChild(about);
     }
 
@@ -1700,6 +1824,7 @@ function renderChatInfo() {
         await toggleFavorite(chat.id);
         renderChatInfo();
     }, isFav ? "favorited" : ""));
+    if (isDirect) general.appendChild(createInfoRow("fa-solid fa-id-card", `Profil von ${otherName} ansehen`, () => openUserProfile(otherUserId, { chatId: chat.id })));
     if (isDirect) general.appendChild(createInfoRow("fa-solid fa-pen", "Chat umbenennen (nur für dich sichtbar)", () => editChatTitleBtn?.click()));
     if (isAdmin) general.appendChild(createInfoRow("fa-solid fa-pen", "Gruppennamen ändern", () => editChatTitleBtn?.click()));
     chatInfoBody.appendChild(general);
@@ -1718,6 +1843,7 @@ function renderChatInfo() {
 
     const dangerSection = createInfoSection();
     if (isDirect) {
+        if (socialReady) dangerSection.appendChild(createInfoRow("fa-solid fa-flag", `${otherName} melden`, () => openReportDialog(otherUserId, { chatId: chat.id }), "danger"));
         dangerSection.appendChild(createInfoRow("fa-solid fa-ban", `${otherName} blockieren`, () => blockUserBtn?.click(), "danger"));
         dangerSection.appendChild(createInfoRow("fa-solid fa-trash", "Chat löschen", () => deleteChatBtn?.click(), "danger"));
     } else if (isGroup && chat.user1_id === currentUser.id) {
@@ -1732,7 +1858,7 @@ function renderChatInfo() {
 // ernennen/entfernen und Mitglieder entfernen (der Gründer bleibt immer Gruppenadmin und Mitglied).
 function createMemberRow(chat, member, iAmAdmin) {
     const isMe = member.user_id === currentUser.id;
-    const row = createPersonRow(isMe ? "Du" : member.username, { note: member.role === "admin" ? "Gruppenadmin" : "" });
+    const row = createPersonRow(isMe ? "Du" : member.username, { note: member.role === "admin" ? "Gruppenadmin" : "", avatarUrl: profileCache[member.user_id]?.avatar_url });
     row.classList.add("wa-member-row");
     if (isMe) {
         row.style.cursor = "default";
@@ -1754,6 +1880,7 @@ function createMemberRow(chat, member, iAmAdmin) {
         });
         menu.appendChild(item);
     };
+    addMenuItem("fa-id-card", "Profil ansehen", () => openUserProfile(member.user_id, { chatId: chat.id }));
     addMenuItem("fa-comment", `Nachricht an ${member.username}`, () => {
         closeChatInfo();
         openDirectChatWith({ id: member.user_id, username: member.username });
@@ -1779,7 +1906,7 @@ function createMemberRow(chat, member, iAmAdmin) {
 }
 
 // Auswahlfenster für Personen im GSRA-Dialogdesign: Suche über alle GSRA-Mitglieder, Kontakte zuerst
-function showPeoplePicker({ icon, title, message, excludeIds, onPick }) {
+function showPeoplePicker({ icon, title, message, excludeIds, onPick, friendsOnly = false }) {
     const overlay = document.createElement("div");
     overlay.className = "gsra-dialog-overlay";
     overlay.innerHTML = `
@@ -1807,7 +1934,7 @@ function showPeoplePicker({ icon, title, message, excludeIds, onPick }) {
         close();
     };
     let searchTimer = null;
-    const refresh = () => renderPeopleList(list, input.value, onPick, excludeIds);
+    const refresh = () => renderPeopleList(list, input.value, onPick, excludeIds, { friendsOnly });
     input.addEventListener("input", () => {
         clearTimeout(searchTimer);
         searchTimer = setTimeout(refresh, 200);
@@ -1828,8 +1955,9 @@ function openMemberPicker(chat) {
     showPeoplePicker({
         icon: "fa-user-plus",
         title: "Mitglied hinzufügen",
-        message: `Wen möchtest du zu „${chat.title}“ hinzufügen?`,
+        message: socialReady ? `Wen möchtest du zu „${chat.title}“ hinzufügen? Hinzufügen kannst du deine Freunde.` : `Wen möchtest du zu „${chat.title}“ hinzufügen?`,
         excludeIds,
+        friendsOnly: socialReady,
         onPick: async (person, row) => {
             if (row.classList.contains("wa-person-added")) return;
             if (await addGroupMember(chat, person)) {
@@ -2004,6 +2132,9 @@ function appendWelcomeMessage(msg) {
 async function renderMessages(messages, chatId = activeChatId) {
     if (!chatMessages) return;
     chatMediaItems = [];
+    // „Für mich gelöschte“ Nachrichten ausblenden; offene Verwarnungen bleiben oben im Chat angeheftet
+    messages = messages.filter(m => !hiddenMessageIds.has(String(m.id)));
+    if (typeof renderWarningBar === "function") renderWarningBar();
     messages = withWelcomeMessage(messages, chatId);
     if (messages.length === 0) {
         chatMessages.innerHTML = `<p class="chat-placeholder" style="text-align: center; color: var(--text-muted); margin: auto;">Schreibe die erste Nachricht...</p>`;
@@ -2012,7 +2143,7 @@ async function renderMessages(messages, chatId = activeChatId) {
     chatMessages.innerHTML = "";
     const seenSystemTexts = new Set();
     for (const msg of messages) {
-        const isSystem = msg.text && (msg.text.includes("hat den Chat") || msg.text.includes("hat das Forum") || msg.text.includes("zum Forum hinzugefügt") || msg.text.includes("umbenannt") || msg.text.includes("aus der Gruppe entfernt") || msg.text.includes("hat die Gruppe verlassen"));
+        const isSystem = msg.text && (msg.text.includes("hat den Chat") || msg.text.includes("hat das Forum") || msg.text.includes("zum Forum hinzugefügt") || msg.text.includes("umbenannt") || msg.text.includes("aus der Gruppe entfernt") || msg.text.includes("hat die Gruppe verlassen") || msg.text.includes("ist dem Forum beigetreten"));
         if (isSystem && !msg.image_url && !msg.reply_to) {
             const formatted = await formatSystemMessage(msg.text, msg.sender_id);
             if (seenSystemTexts.has(formatted)) continue;
@@ -2050,6 +2181,9 @@ async function formatSystemMessage(text, senderId) {
     }
     if (text.includes("hat die Gruppe verlassen")) {
         return isOwnAction ? "Du hast die Gruppe verlassen." : `${actorName} hat die Gruppe verlassen.`;
+    }
+    if (text.includes("ist dem Forum beigetreten")) {
+        return isOwnAction ? "Du bist dem Forum beigetreten." : `${actorName} ist dem Forum beigetreten.`;
     }
     if (text.includes("hat den Chat eröffnet")) {
         return isOwnAction ? "Du hast den Chat eröffnet." : `${actorName} hat den Chat mit dir eröffnet.`;
@@ -2128,7 +2262,7 @@ async function appendSingleMessage(msg, isSystem = false) {
     const dateObj = msg.created_at ? new Date(msg.created_at) : new Date();
     const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    const isDeleted = msg.text === "Du hast diese Nachricht gelöscht" || msg.text === "Diese Nachricht wurde gelöscht";
+    const isDeleted = DELETED_TEXTS.includes(msg.text);
     const isSystemOrDeletedMsg = isSystem || isDeleted;
 
     const selectionCb = document.createElement("div");
@@ -2294,6 +2428,26 @@ async function appendSingleMessage(msg, isSystem = false) {
                 selectionCb.innerHTML = '<i class="fa-solid fa-check"></i>';
             });
             dropdownMenu.appendChild(deleteOption);
+        } else if (socialReady && msg.sender_id) {
+            // Fremde Nachrichten: nur für mich löschen – Gruppenadmins dürfen sie in ihrer Gruppe für alle löschen
+            const addOption = (html, handler, danger = false) => {
+                const option = document.createElement("button");
+                if (danger) option.style.color = "#ff4d4d";
+                option.innerHTML = html;
+                option.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    dropdownMenu.style.display = "none";
+                    handler();
+                });
+                dropdownMenu.appendChild(option);
+            };
+            addOption('<i class="fa-solid fa-eye-slash"></i> Für mich löschen', () => confirmHideMessage(msg));
+            const activeChat = allChatsCache.find(c => c.id === activeChatId);
+            const inOwnGroup = activeChat && activeChat.user1_id === activeChat.user2_id && !isOfficialForum(activeChat.id);
+            if (inOwnGroup && activeGroupRole === "admin") {
+                addOption('<i class="fa-solid fa-trash"></i> Für alle löschen (Admin)', () => deleteMessageForAllAsAdmin(msg), true);
+            }
+            addOption('<i class="fa-solid fa-flag"></i> Melden', () => openReportDialog(msg.sender_id, { chatId: activeChatId, messageId: msg.id }), true);
         }
 
         arrowBtn.addEventListener("click", (e) => {
@@ -2325,6 +2479,16 @@ async function appendSingleMessage(msg, isSystem = false) {
     const authorDiv = document.createElement("div");
     authorDiv.className = "msg-author";
     authorDiv.innerText = senderName;
+    // Klick auf den Namen öffnet das Profil (Freundschaftsanfrage, Melden, Blockieren …)
+    if (!isOwn && !isSystem && msg.sender_id) {
+        authorDiv.classList.add("clickable");
+        authorDiv.title = "Profil ansehen";
+        authorDiv.addEventListener("click", (e) => {
+            if (isMultiSelectMode) return;
+            e.stopPropagation();
+            openUserProfile(msg.sender_id, { chatId: activeChatId, messageId: msg.id });
+        });
+    }
     bubble.appendChild(authorDiv);
 
     if (!isDeleted && msg.reply_to && messagesCacheMap.has(msg.reply_to)) {
@@ -2432,7 +2596,9 @@ async function appendSingleMessage(msg, isSystem = false) {
             textDiv.style.fontStyle = "italic";
             textDiv.style.opacity = "0.85";
         } else if (isDeleted) {
-            textDiv.innerText = msg.text;
+            // „Du hast …“ nur für den Absender; alle anderen sehen den neutralen Hinweis
+            textDiv.innerText = msg.text === ADMIN_DELETED_TEXT ? "Von einem Gruppenadmin gelöscht"
+                : (isOwn ? "Du hast diese Nachricht gelöscht" : "Diese Nachricht wurde gelöscht");
             textDiv.style.fontStyle = "italic";
             textDiv.style.opacity = "0.7";
         } else {
@@ -2590,6 +2756,14 @@ if (blockUserBtn) {
     blockUserBtn.addEventListener("click", async () => {
         const supabase = window.supabaseClient || window.supabase;
         if (!activeChatId || isOfficialForum(activeChatId)) return;
+
+        // Mit Datenbank-Erweiterung: richtig blockieren – der Chat wird nur für dich ausgeblendet und bleibt
+        // (z. B. als Verlauf für Meldungen) erhalten; von der Person kommen keine Nachrichten mehr an
+        const chatObj = allChatsCache.find(c => c.id === activeChatId);
+        if (socialReady && chatObj && chatObj.user1_id !== chatObj.user2_id) {
+            blockUserById(chatObj.user1_id === currentUser.id ? chatObj.user2_id : chatObj.user1_id);
+            return;
+        }
 
         const confirmed = await showDialog({
             icon: "fa-ban",

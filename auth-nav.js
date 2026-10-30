@@ -63,8 +63,13 @@ const initAuthNav = async () => {
 
             if (allIds.length === 0 && !officialForum) return;
 
-            let hasUnread = false;
-            for (const cId of allIds) {
+            // Offene Freundschaftsanfragen und unbestätigte Verwarnungen lassen den Messenger ebenfalls leuchten
+            const [{ data: openRequests }, { data: openWarnings }] = await Promise.all([
+                client.from("friendships").select("user_id").eq("friend_id", userId).eq("status", "pending").limit(1),
+                client.from("user_warnings").select("id").eq("user_id", userId).is("acknowledged_at", null).limit(1)
+            ]);
+            let hasUnread = Boolean(openRequests?.length || openWarnings?.length);
+            for (const cId of hasUnread ? [] : allIds) {
                 const lastRead = localStorage.getItem(`gsra_last_read_${userId}_${cId}`);
                 const lastReadTime = lastRead ? new Date(lastRead).toISOString() : new Date(0).toISOString();
 
@@ -103,8 +108,36 @@ const initAuthNav = async () => {
         }
     };
 
+    // Gesperrte Konten: sofort abmelden und auf der Login-Seite den Hinweis mit der Dauer zeigen
+    const checkBan = async (userId) => {
+        const { data, error } = await client.from("user_bans").select("banned_until, lifted_at").eq("user_id", userId).is("lifted_at", null);
+        if (error || !data) return false;
+        const activeBan = data.find(b => !b.banned_until || new Date(b.banned_until) > new Date());
+        if (!activeBan) return false;
+        await client.auth.signOut();
+        // Auf der Login-Seite nicht erneut umleiten (sonst Endlosschleife, falls das Abmelden einmal scheitert)
+        if (!window.location.pathname.endsWith("login.html")) {
+            window.location.href = `login.html?gesperrt=${encodeURIComponent(activeBan.banned_until || "dauerhaft")}`;
+        }
+        return true;
+    };
+
+    // Admins sehen in der Navigation zusätzlich den Admin-Bereich
+    const showAdminLink = async (userId) => {
+        const { data } = await client.from("profiles").select("role").eq("id", userId).maybeSingle();
+        const nav = document.querySelector("header nav");
+        if (data?.role !== "admin" || !nav || nav.querySelector('a[href="admin.html"]')) return;
+        const link = document.createElement("a");
+        link.href = "admin.html";
+        link.textContent = "Admin";
+        nav.insertBefore(link, loginNavBtn || logoutBtn || null);
+    };
+
     const { data: { session } } = await client.auth.getSession();
     updateUI(session);
+
+    if (session?.user?.id && await checkBan(session.user.id)) return;
+    if (session?.user?.id) showAdminLink(session.user.id);
 
     if (session?.user?.id) {
         checkLiveUnreadMessages(session.user.id, session.user.created_at);

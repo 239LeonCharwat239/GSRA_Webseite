@@ -54,6 +54,8 @@
                         <button id="sidebarMenuBtn" class="wa-icon-btn" title="Menü"><i class="fa-solid fa-ellipsis-vertical"></i></button>
                         <div id="sidebarMenu" class="wa-menu">
                             <button type="button" data-action="new-group"><i class="fa-solid fa-users"></i> Neue Gruppe</button>
+                            <button type="button" data-action="requests"><i class="fa-solid fa-user-clock"></i> Freundschaftsanfragen</button>
+                            <button type="button" data-action="forums"><i class="fa-solid fa-compass"></i> Öffentliche Foren</button>
                             <button type="button" data-action="favorites"><i class="fa-solid fa-star"></i> Favoriten</button>
                             <button type="button" data-action="read-all"><i class="fa-solid fa-check-double"></i> Alle als gelesen markieren</button>
                             <button type="button" data-action="invite"><i class="fa-solid fa-user-group"></i> Freund einladen</button>
@@ -90,26 +92,65 @@
                     </div>
                     <div class="chat-sidebar-list" id="newChatList"></div>
                 </div>
+
+                <!-- FREUNDSCHAFTSANFRAGEN: annehmen, ablehnen, eigene zurückziehen -->
+                <div id="friendRequestsPanel" class="wa-side-panel">
+                    <div class="wa-side-panel-header">
+                        <button id="closeFriendRequestsPanel" type="button" class="wa-icon-btn" title="Zurück"><i class="fa-solid fa-arrow-left"></i></button>
+                        <span>Freundschaftsanfragen</span>
+                    </div>
+                    <div class="chat-sidebar-list" id="friendRequestsList"></div>
+                </div>
             </div>
 
             <div class="wa-main-pane">
+                <!-- STARTSEITE DES MESSENGERS: Begrüßung, Überblick und Schnellaktionen -->
                 <div id="waWelcomeScreen" class="wa-welcome-screen">
-                    <div class="wa-welcome-icon"><i class="fa-solid fa-headset"></i></div>
-                    <h2>GSRA Web Messenger</h2>
-                    <p>Sende und empfange Nachrichten in Echtzeit mit anderen Simracern, verwalte deine Verkaufsanfragen und bleibe im GSRA-Hauptforum auf dem Laufenden.</p>
+                    <div class="wa-welcome-inner">
+                        <div class="wa-welcome-badge"><i class="fa-solid fa-comments"></i></div>
+                        <h2>GSRA <span class="text-blue">Messenger</span></h2>
+                        <p class="wa-welcome-greeting" id="welcomeGreeting">Dein Treffpunkt für Fahrer, Teams und die GSRA-Community.</p>
+                        <p class="wa-welcome-lead">Chatte mit deinen Freunden, organisiere dich in Gruppen und Foren und verpasse keine offizielle Ankündigung.</p>
 
-                    <div class="wa-quick-tiles">
-                        <div class="wa-quick-tile" id="tileInvite">
-                            <i class="fa-solid fa-user-group"></i>
-                            <span>Invite a Friend</span>
+                        <div id="welcomeWarning" class="wa-welcome-warning" style="display: none;"></div>
+                        <div id="welcomeStats" class="wa-welcome-stats"></div>
+
+                        <div class="wa-quick-tiles">
+                            <button type="button" class="wa-quick-tile" id="tileNewChat">
+                                <span class="wa-tile-icon"><i class="fa-solid fa-pen-to-square"></i></span>
+                                <span class="wa-tile-title">Neuer Chat</span>
+                                <span class="wa-tile-text">Schreibe deinen Freunden</span>
+                            </button>
+                            <button type="button" class="wa-quick-tile" id="tileNewGroup">
+                                <span class="wa-tile-icon"><i class="fa-solid fa-users"></i></span>
+                                <span class="wa-tile-title">Neue Gruppe</span>
+                                <span class="wa-tile-text">Privat oder öffentlich</span>
+                            </button>
+                            <button type="button" class="wa-quick-tile" id="tileFindForums">
+                                <span class="wa-tile-icon"><i class="fa-solid fa-compass"></i></span>
+                                <span class="wa-tile-title">Foren entdecken</span>
+                                <span class="wa-tile-text">Öffentliche Foren finden</span>
+                            </button>
+                            <button type="button" class="wa-quick-tile" id="tileAddFriend">
+                                <span class="wa-tile-icon"><i class="fa-solid fa-user-plus"></i></span>
+                                <span class="wa-tile-title">Freunde finden</span>
+                                <span class="wa-tile-text">Per Name oder GSRA-ID</span>
+                            </button>
+                            <button type="button" class="wa-quick-tile" id="tileForum">
+                                <span class="wa-tile-icon"><i class="fa-solid fa-bullhorn"></i></span>
+                                <span class="wa-tile-title">GSRA Forum</span>
+                                <span class="wa-tile-text">Offizielle Ankündigungen</span>
+                            </button>
+                            <button type="button" class="wa-quick-tile" id="tileInvite">
+                                <span class="wa-tile-icon"><i class="fa-solid fa-share-nodes"></i></span>
+                                <span class="wa-tile-title">Freund einladen</span>
+                                <span class="wa-tile-text">Link teilen</span>
+                            </button>
                         </div>
-                        <div class="wa-quick-tile" id="tileAddFriend">
-                            <i class="fa-solid fa-user-plus"></i>
-                            <span>Kontakt hinzufügen</span>
-                        </div>
-                        <div class="wa-quick-tile" id="tileForum">
-                            <i class="fa-solid fa-bullhorn"></i>
-                            <span>GSRA Forum</span>
+
+                        <div class="wa-welcome-footer">
+                            <span id="welcomeGsraId" style="display: none;"></span>
+                            <span><i class="fa-solid fa-lock"></i> Private Gruppen sieht nur, wer Mitglied ist.</span>
                         </div>
                     </div>
                 </div>
@@ -131,6 +172,9 @@
                             <button id="blockUserBtn" class="chat-header-btn btn-danger" title="Nutzer blockieren"><i class="fa-solid fa-ban"></i></button>
                         </div>
                     </div>
+
+                    <!-- Offizielle Verwarnung: fest oben angeheftet, bis sie bestätigt wurde -->
+                    <div id="pinnedWarningBar" class="wa-pinned-warning" style="display: none;"></div>
 
                     <div class="chat-messages" id="chatMessages">
                         <p class="chat-placeholder" style="text-align: center; color: var(--text-muted); margin: auto;">Schreibe die erste Nachricht...</p>
@@ -233,5 +277,6 @@
     <script src="auth-nav.js"></script>
     <script src="ui-dialogs.js"></script>
     <script src="messenger.js"></script>
+    <script src="messenger-social.js"></script>
 </body>
 </html>
