@@ -1,6 +1,6 @@
 /* =========================================
-   GSRA - Messenger: Online-Status & „Spielt gerade …“, Häkchen (gesendet/zugestellt/gelesen)
-   und „Als ungelesen markieren“
+   GSRA - Messenger: Online-Status & „Spielt gerade …“, Häkchen (gesendet/zugestellt/gelesen),
+   „Als ungelesen markieren“ und „Mehr lesen“ bei langen Nachrichten
    (ergänzt messenger.js – der gemeinsame Zustand steht dort)
 ========================================= */
 
@@ -311,6 +311,53 @@ function markMessageUnread(msg) {
     updateGlobalUnreadState();
     renderChatsList();
     showToast("Der Chat ist wieder als ungelesen markiert.", "success");
+}
+
+/* ---------- „Mehr lesen“ bei langen Nachrichten (wie bei WhatsApp) ---------- */
+
+// Zuerst höchstens 600 Zeichen bzw. 12 Zeilen, jeder Klick zeigt bis zu 1500 Zeichen bzw. 30 Zeilen mehr
+const READ_MORE_FIRST = { chars: 600, lines: 12 };
+const READ_MORE_STEP = { chars: 1500, lines: 30 };
+const readMoreShown = new Map(); // Nachrichten-ID → angezeigte Zeichen (bleibt beim Neuzeichnen des Chats erhalten)
+
+// Länge des nächsten Abschnitts – möglichst am Wortende geschnitten
+function readMoreCut(text, { chars, lines }) {
+    let end = Math.min(text.length, chars);
+    let breaks = 0;
+    for (let i = 0; i < end; i++) {
+        if (text[i] === "\n" && ++breaks >= lines) {
+            end = i;
+            break;
+        }
+    }
+    if (end >= text.length) return text.length;
+    const space = text.lastIndexOf(" ", end);
+    return Math.max(1, space > end - 60 && space > 0 ? space : end);
+}
+
+function setupReadMore(msg, textDiv, footerDiv) {
+    const text = msg.text || "";
+    const id = String(msg.id);
+    let shown = readMoreShown.get(id) || readMoreCut(text, READ_MORE_FIRST);
+    if (shown >= text.length) return;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "msg-read-more";
+    button.innerHTML = '<i class="fa-solid fa-angles-down"></i> Mehr lesen';
+    const render = () => {
+        const done = shown >= text.length;
+        textDiv.innerText = done ? text : `${text.slice(0, shown).trimEnd()} …`;
+        button.hidden = done;
+    };
+    button.addEventListener("click", (e) => {
+        if (isMultiSelectMode) return;
+        e.stopPropagation();
+        shown += readMoreCut(text.slice(shown), READ_MORE_STEP);
+        readMoreShown.set(id, shown);
+        render();
+    });
+    footerDiv.prepend(button);
+    render();
 }
 
 /* ---------- Start ---------- */

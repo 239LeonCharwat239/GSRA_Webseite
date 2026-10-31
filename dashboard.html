@@ -74,6 +74,7 @@
                     <form id="profileForm" class="dash-form">
                         <label for="editUsername">Benutzername</label>
                         <input type="text" id="editUsername" maxlength="40" required>
+                        <p class="dash-field-hint" id="usernameHint"><i class="fa-solid fa-clock-rotate-left"></i> <span>Du kannst deinen Benutzernamen einmal im Monat ändern.</span></p>
                         <label for="editBio">Über mich <span>(optional, im Profil für andere sichtbar)</span></label>
                         <textarea id="editBio" rows="3" maxlength="300" placeholder="z. B. Fahre GT3 in iRacing und ACC …"></textarea>
                         <label>Social Media <span>(optional, bis zu 8 Links – im Profil für andere sichtbar)</span></label>
@@ -82,6 +83,15 @@
                         <button type="submit" class="login-btn dash-save-btn"><i class="fa-solid fa-floppy-disk"></i> Profil speichern</button>
                     </form>
                 </div>
+            </div>
+
+            <!-- Konto löschen: Passwort bestätigen, dann endgültig löschen -->
+            <div class="card dash-danger-card">
+                <div>
+                    <h3><i class="fa-solid fa-user-xmark"></i> Konto löschen</h3>
+                    <p>Dein Konto und deine Daten werden endgültig gelöscht: Profil, Chats und Nachrichten, Freundschaften, Inserate und Setups. Gruppen, die du gegründet hast, gehen an ein anderes Mitglied über.</p>
+                </div>
+                <button type="button" id="deleteAccountBtn" class="dash-delete-btn"><i class="fa-solid fa-trash"></i> Konto löschen</button>
             </div>
         </div>
     </main>

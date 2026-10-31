@@ -150,6 +150,65 @@ const initAuthNav = async () => {
             nav.insertBefore(link, loginNavBtn || logoutBtn || null);
         }
         checkAdminNews();
+        // Neue Meldungen live (wie beim Messenger) – auf der Admin-Seite wird die Liste gleich aufgefrischt
+        client
+            .channel("gsra_admin_reports_channel")
+            .on("postgres_changes", { event: "INSERT", schema: "public", table: "reports" }, () => {
+                checkAdminNews();
+                document.dispatchEvent(new CustomEvent("gsra:new-report"));
+            })
+            .subscribe();
+    };
+
+    // Angenommene Freundschaftsanfrage: Hinweis im GSRA-Design – beim Öffnen einer Seite und live
+    const showFriendAccepted = async (friendId) => {
+        const { data: friend } = await client.from("profiles").select("username, avatar_url").eq("id", friendId).maybeSingle();
+        let stack = document.getElementById("gsraNotifyStack");
+        if (!stack) {
+            stack = document.createElement("div");
+            stack.id = "gsraNotifyStack";
+            stack.className = "gsra-notify-stack";
+            document.body.appendChild(stack);
+        }
+        const card = document.createElement("div");
+        card.className = "gsra-notify-card";
+        card.setAttribute("role", "status");
+        card.innerHTML = `
+            <div class="gsra-notify-avatar"><i class="fa-solid fa-user"></i></div>
+            <div class="gsra-notify-body">
+                <div class="gsra-notify-title"><i class="fa-solid fa-user-check"></i> Neue Freundschaft</div>
+                <div class="gsra-notify-text"><strong></strong> hat deine Freundschaftsanfrage angenommen.</div>
+                <a class="gsra-notify-action" href="messenger.html?friendId=${encodeURIComponent(friendId)}"><i class="fa-solid fa-comment"></i> Nachricht schreiben</a>
+            </div>
+            <button type="button" class="gsra-notify-close" title="Schließen"><i class="fa-solid fa-xmark"></i></button>
+            <div class="gsra-notify-progress"></div>`;
+        card.querySelector("strong").textContent = friend?.username || "Ein Fahrer";
+        if (friend?.avatar_url) {
+            const img = document.createElement("img");
+            img.src = friend.avatar_url;
+            img.alt = "";
+            card.querySelector(".gsra-notify-avatar").replaceChildren(img);
+        }
+        const remove = () => {
+            card.classList.add("leaving");
+            setTimeout(() => card.remove(), 300);
+        };
+        card.querySelector(".gsra-notify-close").addEventListener("click", remove);
+        stack.appendChild(card);
+        setTimeout(remove, 12000);
+        // Im Messenger erscheint der neue Freund sofort in der Liste
+        if (typeof refreshSocialState === "function" && typeof currentUser !== "undefined" && currentUser?.id) refreshSocialState();
+    };
+    const checkAcceptedRequests = async (userId) => {
+        const { data, error } = await client.from("friendships").select("friend_id").eq("user_id", userId).eq("status", "accepted");
+        if (error || !data) return;
+        const key = `gsra_known_friends_${userId}`;
+        const ids = data.map(f => f.friend_id);
+        let known = null;
+        try { known = JSON.parse(localStorage.getItem(key)); } catch (e) { known = null; }
+        localStorage.setItem(key, JSON.stringify(ids));
+        if (!Array.isArray(known)) return; // erster Besuch: nur merken – keine Hinweise für alte Freundschaften
+        ids.filter(id => !known.includes(id)).slice(0, 3).forEach(showFriendAccepted);
     };
 
     // Online-Status: Lebenszeichen jede Minute, solange eine GSRA-Seite offen ist (auch im Hintergrund, z. B. beim Zocken)
@@ -192,6 +251,14 @@ const initAuthNav = async () => {
                     checkLiveUnreadMessages(session.user.id, session.user.created_at);
                     markDelivered();
                 }
+            })
+            .subscribe();
+
+        checkAcceptedRequests(session.user.id);
+        client
+            .channel("gsra_friendships_channel")
+            .on("postgres_changes", { event: "*", schema: "public", table: "friendships", filter: `user_id=eq.${session.user.id}` }, (payload) => {
+                if (payload.new?.status === "accepted") checkAcceptedRequests(session.user.id);
             })
             .subscribe();
     }

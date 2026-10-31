@@ -44,6 +44,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         dashUsername.textContent = username;
         if (editUsername) editUsername.value = username;
         if (editBio && profile?.bio) editBio.value = profile.bio;
+
+        // Benutzername: einmal im Monat änderbar (die Datenbank prüft das zusätzlich)
+        const usernameHint = document.querySelector("#usernameHint span");
+        const nextNameChange = profile?.username_changed_at ? new Date(new Date(profile.username_changed_at).getTime() + 30 * 86400000) : null;
+        if (nextNameChange && nextNameChange > new Date() && profile?.role !== "admin") {
+            if (editUsername) editUsername.readOnly = true;
+            if (usernameHint) usernameHint.textContent = `Du hast deinen Namen kürzlich geändert – die nächste Änderung ist ab dem ${nextNameChange.toLocaleDateString("de-DE")} möglich.`;
+        }
         const showAvatar = (url) => {
             if (!dashAvatar) return;
             if (!url) {
@@ -223,6 +231,18 @@ document.addEventListener("DOMContentLoaded", async () => {
                     return;
                 }
 
+                // Neuer Benutzername: vorher bestätigen, weil die nächste Änderung erst in 30 Tagen möglich ist
+                if (newUsername !== username) {
+                    const confirmed = await showDialog({
+                        icon: "fa-signature",
+                        title: "Benutzernamen ändern?",
+                        message: `Dein neuer Name: „${newUsername}“\n\nDanach kannst du ihn erst in 30 Tagen wieder ändern.`,
+                        confirmText: "Namen ändern",
+                        cancelText: "Abbrechen"
+                    });
+                    if (!confirmed) return;
+                }
+
                 const changes = { username: newUsername, bio: newBio };
                 let upsertErr = await saveProfile({ ...changes, social_links: socialLinks });
                 // Social-Media-Links noch nicht in der Datenbank eingerichtet: Rest trotzdem speichern
@@ -232,11 +252,100 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }
 
                 if (upsertErr) {
-                    showToast("Fehler beim Speichern des Profils.", "error");
+                    // Verständliche Hinweise der Datenbank (z. B. Name nur einmal im Monat) direkt anzeigen
+                    showToast(/Benutzername/.test(upsertErr.message || "") ? upsertErr.message : "Fehler beim Speichern des Profils.", "error");
                 } else {
                     showToast("Profil erfolgreich aktualisiert!", "success");
                     setTimeout(() => location.reload(), 1200);
                 }
+            });
+        }
+
+        // Konto löschen: Passwort bestätigen, dann endgültig löschen (die Datenbank prüft, dass das Passwort gerade eben bestätigt wurde)
+        const deleteAccountBtn = document.getElementById("deleteAccountBtn");
+        if (deleteAccountBtn) {
+            deleteAccountBtn.addEventListener("click", () => {
+                const overlay = document.createElement("div");
+                overlay.className = "gsra-dialog-overlay";
+                overlay.innerHTML = `
+                    <div class="gsra-dialog danger" role="dialog" aria-modal="true">
+                        <button type="button" class="gsra-dialog-close" title="Schließen"><i class="fa-solid fa-xmark"></i></button>
+                        <div class="gsra-dialog-icon"><i class="fa-solid fa-user-xmark"></i></div>
+                        <h3 class="gsra-dialog-title">Konto endgültig löschen?</h3>
+                        <p class="gsra-dialog-message">Gelöscht werden dein Profil, deine Chats und Nachrichten, Freundschaften, Inserate und Setups. Gruppen, die du gegründet hast, gehen an ein anderes Mitglied über. Das lässt sich nicht rückgängig machen.\n\nBitte bestätige mit deinem Passwort:</p>
+                        <input type="password" class="gsra-dialog-input" autocomplete="current-password" placeholder="Dein Passwort">
+                        <p class="dash-dialog-error" hidden></p>
+                        <div class="gsra-dialog-actions">
+                            <button type="button" class="gsra-dialog-btn secondary">Abbrechen</button>
+                            <button type="button" class="gsra-dialog-btn primary">Endgültig löschen</button>
+                        </div>
+                    </div>`;
+                const input = overlay.querySelector("input");
+                const errorText = overlay.querySelector(".dash-dialog-error");
+                const confirmBtn = overlay.querySelector(".gsra-dialog-btn.primary");
+                const close = () => {
+                    document.removeEventListener("keydown", onKey, true);
+                    overlay.remove();
+                };
+                const onKey = (e) => {
+                    if (e.key === "Escape" && !confirmBtn.disabled) {
+                        e.preventDefault();
+                        close();
+                    } else if (e.key === "Enter" && e.target === input) {
+                        e.preventDefault();
+                        confirmBtn.click();
+                    }
+                };
+                const fail = (message) => {
+                    confirmBtn.disabled = false;
+                    confirmBtn.textContent = "Endgültig löschen";
+                    errorText.textContent = message;
+                    errorText.hidden = false;
+                };
+                confirmBtn.addEventListener("click", async () => {
+                    if (!input.value) {
+                        input.classList.add("invalid");
+                        input.focus();
+                        return;
+                    }
+                    confirmBtn.disabled = true;
+                    confirmBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Wird gelöscht …';
+                    errorText.hidden = true;
+                    const { error: authError } = await client.auth.signInWithPassword({ email: currentUser.email, password: input.value });
+                    if (authError) {
+                        input.classList.add("invalid");
+                        fail("Das Passwort ist nicht korrekt.");
+                        return;
+                    }
+                    const { error } = await client.rpc("delete_own_account");
+                    if (error) {
+                        fail(/could not find the function|schema cache/i.test(error.message || "")
+                            ? "Das Löschen von Konten ist in der Datenbank noch nicht eingerichtet."
+                            : `Das Konto konnte nicht gelöscht werden: ${error.message}`);
+                        return;
+                    }
+                    // Profilbild im eigenen Ordner entfernen (das Konto ist bereits gelöscht)
+                    const avatarPath = profile?.avatar_url && profile.avatar_url.split("/avatars/")[1];
+                    if (avatarPath && avatarPath.startsWith(`${currentUser.id}/`)) {
+                        await client.storage.from("avatars").remove([decodeURIComponent(avatarPath)]).catch(() => {});
+                    }
+                    close();
+                    await client.auth.signOut().catch(() => {});
+                    Object.keys(localStorage).filter(key => key.startsWith("gsra_")).forEach(key => localStorage.removeItem(key));
+                    await showDialog({
+                        icon: "fa-circle-check",
+                        title: "Dein Konto wurde gelöscht",
+                        message: "Schade, dass du gehst – du bist jederzeit wieder willkommen in der GSRA.",
+                        confirmText: "Zur Startseite"
+                    });
+                    window.location.href = "index.html";
+                });
+                input.addEventListener("input", () => input.classList.remove("invalid"));
+                overlay.querySelector(".gsra-dialog-btn.secondary").addEventListener("click", close);
+                overlay.querySelector(".gsra-dialog-close").addEventListener("click", close);
+                document.addEventListener("keydown", onKey, true);
+                document.body.appendChild(overlay);
+                input.focus();
             });
         }
 

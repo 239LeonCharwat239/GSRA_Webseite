@@ -574,10 +574,15 @@ function openReportDialog(userId, context = {}) {
                 <div class="gsra-report-label"><i class="fa-solid fa-link"></i> Worauf bezieht sich deine Meldung?</div>
                 <select class="gsra-report-chat" aria-label="Chat auswählen"></select>
                 <div class="gsra-report-modes">
-                    <button type="button" class="gsra-report-mode selected" data-mode="messages"><i class="fa-solid fa-list-check"></i> Nachrichten auswählen</button>
-                    <button type="button" class="gsra-report-mode" data-mode="chat"><i class="fa-solid fa-comments"></i> Ganzen Chat melden</button>
+                    <button type="button" class="gsra-report-mode selected" data-mode="messages"><i class="fa-solid fa-list-check"></i> Nachrichten</button>
+                    <button type="button" class="gsra-report-mode" data-mode="period"><i class="fa-solid fa-calendar-days"></i> Zeitraum</button>
+                    <button type="button" class="gsra-report-mode" data-mode="chat"><i class="fa-solid fa-comments"></i> Ganzer Chat</button>
                 </div>
                 <div class="gsra-report-messages"></div>
+                <div class="gsra-report-period" hidden>
+                    <label>Von <input type="datetime-local" class="gsra-report-from"></label>
+                    <label>Bis <input type="datetime-local" class="gsra-report-to"></label>
+                </div>
                 <p class="gsra-report-scope-hint"></p>
             </div>
             <textarea class="gsra-dialog-input" rows="3" maxlength="1000" placeholder="Was ist passiert? (optional)"></textarea>
@@ -626,16 +631,41 @@ function openReportDialog(userId, context = {}) {
     let mode = "messages";
     let scopeReady = false;
 
+    // Zeitraum (z. B. für große öffentliche Foren): höchstens 7 Tage, vorausgefüllt mit den letzten 24 Stunden
+    const periodBox = overlay.querySelector(".gsra-report-period");
+    const fromInput = overlay.querySelector(".gsra-report-from");
+    const toInput = overlay.querySelector(".gsra-report-to");
+    const toLocalInput = (date) => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    const now = new Date();
+    fromInput.value = toLocalInput(new Date(now.getTime() - 24 * 3600000));
+    toInput.value = toLocalInput(now);
+    fromInput.min = toInput.min = toLocalInput(new Date(now.getTime() - 180 * 86400000));
+    fromInput.max = toInput.max = toLocalInput(now);
+    [fromInput, toInput].forEach(input => input.addEventListener("input", () => periodBox.classList.remove("invalid")));
+    const periodError = () => {
+        const from = new Date(fromInput.value);
+        const to = new Date(toInput.value);
+        if (isNaN(from) || isNaN(to)) return "Bitte gib an, von wann bis wann es passiert ist.";
+        if (from >= to) return "„Von“ muss vor „bis“ liegen.";
+        if (to - from > 7 * 86400000) return "Ein Zeitraum darf höchstens 7 Tage umfassen.";
+        if (to > new Date(Date.now() + 5 * 60000)) return "Der Zeitraum darf nicht in der Zukunft liegen.";
+        if (from < new Date(Date.now() - 180 * 86400000)) return "Gemeldet werden können nur die letzten 180 Tage.";
+        return null;
+    };
+
     const syncScope = () => {
         const hasChat = Boolean(chatSelect.value);
         overlay.querySelector(".gsra-report-modes").hidden = !hasChat;
         messagesBox.hidden = !hasChat || mode !== "messages";
+        periodBox.hidden = !hasChat || mode !== "period";
         overlay.querySelectorAll(".gsra-report-mode").forEach(b => b.classList.toggle("selected", b.dataset.mode === mode));
         scopeHint.textContent = !hasChat
             ? "Ohne Chatbezug sieht das GSRA-Team nur deine Beschreibung – beschreibe die Situation dann bitte möglichst genau."
             : (mode === "chat"
                 ? "Das GSRA-Team sieht die letzten 150 Nachrichten dieses Chats – auch Nachrichten, die gelöscht wurden."
-                : "Das GSRA-Team sieht die markierten Nachrichten mit dem Verlauf davor und danach – auch Nachrichten, die gelöscht wurden.");
+                : mode === "period"
+                    ? "Das GSRA-Team sieht alle Nachrichten in diesem Zeitraum – auch gelöschte. Ideal für große, öffentliche Foren (höchstens 7 Tage)."
+                    : "Das GSRA-Team sieht die markierten Nachrichten mit dem Verlauf davor und danach – auch Nachrichten, die gelöscht wurden.");
     };
 
     const loadMessages = async () => {
@@ -719,11 +749,27 @@ function openReportDialog(userId, context = {}) {
             showToast("Bitte markiere mindestens eine Nachricht – oder melde den ganzen Chat.", "info");
             return;
         }
+        const byPeriod = Boolean(scopeReady && chatId && mode === "period");
+        if (byPeriod && periodError()) {
+            periodBox.classList.add("invalid");
+            showToast(periodError(), "error");
+            return;
+        }
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Wird gesendet …';
         const details = overlay.querySelector("textarea").value.trim() || null;
         let error = null;
-        if (scopeReady) {
+        if (byPeriod) {
+            ({ error } = await socialDb().rpc("submit_report", {
+                _reported: userId,
+                _reason: reason,
+                _details: details,
+                _chat_id: chatId,
+                _window_from: new Date(fromInput.value).toISOString(),
+                _window_to: new Date(toInput.value).toISOString()
+            }));
+            if (isMissingFunction(error)) error = { message: "Melden per Zeitraum ist in der Datenbank noch nicht eingerichtet." };
+        } else if (scopeReady) {
             ({ error } = await socialDb().rpc("submit_report", {
                 _reported: userId,
                 _reason: reason,
@@ -733,7 +779,7 @@ function openReportDialog(userId, context = {}) {
                 _whole_chat: Boolean(chatId && (mode === "chat" || messageIds.length === 0))
             }));
         }
-        if (!scopeReady || isMissingFunction(error)) {
+        if (!byPeriod && (!scopeReady || isMissingFunction(error))) {
             ({ error } = await socialDb().rpc("report_user", {
                 _reported: userId,
                 _reason: reason,

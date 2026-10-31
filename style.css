@@ -4960,3 +4960,340 @@ button.dash-avatar:hover,
 .wa-chat-item.active {
     box-shadow: inset 3px 0 0 var(--gsra-blue);
 }
+
+/* =========================================
+   „MEHR LESEN“ BEI LANGEN NACHRICHTEN
+========================================= */
+.message-footer .msg-read-more {
+    margin-right: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 0;
+    border: none;
+    background: none;
+    color: var(--gsra-yellow);
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.message-own .message-footer .msg-read-more {
+    color: #fff;
+}
+
+.message-footer .msg-read-more:hover {
+    text-decoration: underline;
+}
+
+.message-footer .msg-read-more[hidden] {
+    display: none;
+}
+
+/* =========================================
+   HINWEIS: FREUNDSCHAFTSANFRAGE ANGENOMMEN
+========================================= */
+.gsra-notify-stack {
+    position: fixed;
+    right: 25px;
+    bottom: 90px;
+    z-index: 10001;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: min(360px, calc(100vw - 32px));
+}
+
+.gsra-notify-card {
+    position: relative;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 14px 40px 16px 14px;
+    overflow: hidden;
+    border-radius: 14px;
+    border: 1px solid rgba(0, 210, 106, 0.35);
+    border-left: 4px solid #00d26a;
+    background: linear-gradient(135deg, #1b1d23 0%, #141a2b 100%);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), 0 0 18px rgba(0, 210, 106, 0.15);
+    animation: gsraNotifyIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.gsra-notify-card.leaving {
+    opacity: 0;
+    transform: translateX(110%);
+    transition: all 0.3s ease;
+}
+
+.gsra-notify-avatar {
+    width: 46px;
+    height: 46px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #2a3942;
+    color: #fff;
+    font-size: 18px;
+    border: 2px solid #00d26a;
+}
+
+.gsra-notify-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.gsra-notify-body {
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+}
+
+.gsra-notify-title {
+    margin-bottom: 3px;
+    color: #00d26a;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.gsra-notify-text {
+    color: #e6e8ec;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.gsra-notify-text strong {
+    color: #fff;
+}
+
+.gsra-notify-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: var(--gsra-blue);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+    transition: background 0.2s ease;
+}
+
+.gsra-notify-action:hover {
+    background: #1a66ff;
+}
+
+.gsra-notify-close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.gsra-notify-close:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.gsra-notify-progress {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 3px;
+    width: 100%;
+    background: #00d26a;
+    transform-origin: left;
+    animation: gsraNotifyProgress 12s linear forwards;
+}
+
+@keyframes gsraNotifyIn {
+    from { opacity: 0; transform: translateX(60px) scale(0.96); }
+    to { opacity: 1; transform: none; }
+}
+
+@keyframes gsraNotifyProgress {
+    from { transform: scaleX(1); }
+    to { transform: scaleX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .gsra-notify-card,
+    .gsra-notify-progress {
+        animation: none;
+    }
+}
+
+/* =========================================
+   MELDEN PER ZEITRAUM & ADMIN-ANSICHT
+========================================= */
+.gsra-report-modes {
+    flex-wrap: wrap;
+}
+
+.gsra-report-period {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+    background: #0b0c10;
+    transition: box-shadow 0.2s ease;
+}
+
+.gsra-report-period[hidden] {
+    display: none;
+}
+
+.gsra-report-period.invalid {
+    border-color: #ff4d4d;
+    box-shadow: 0 0 0 2px rgba(255, 77, 77, 0.3);
+}
+
+.gsra-report-period label {
+    flex: 1 1 180px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.gsra-report-period input {
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+    background: #15161a;
+    color: #fff;
+    font-family: inherit;
+    font-size: 13px;
+    color-scheme: dark;
+}
+
+.admin-window-tools {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.admin-window-tools label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+
+.admin-window-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.admin-window-more {
+    align-self: flex-start;
+    border-color: var(--border-subtle);
+    color: #d6d9e0;
+}
+
+.admin-window-more[hidden] {
+    display: none;
+}
+
+/* =========================================
+   DASHBOARD: NAME EINMAL IM MONAT, KONTO LÖSCHEN, FESTES „ÜBER MICH“
+========================================= */
+.dash-form #editBio {
+    resize: none;
+}
+
+.dash-form input[readonly] {
+    color: var(--text-muted);
+    cursor: not-allowed;
+}
+
+.dash-field-hint {
+    display: flex;
+    gap: 6px;
+    align-items: flex-start;
+    margin: -4px 0 8px;
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.dash-field-hint i {
+    margin-top: 2px;
+    color: var(--gsra-yellow);
+}
+
+.dash-danger-card {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 30px;
+    text-align: left;
+    border-top: 4px solid #ff4d4d;
+}
+
+.dash-danger-card h3 i {
+    color: #ff4d4d;
+}
+
+.dash-danger-card p {
+    max-width: 720px;
+    font-size: 13px;
+}
+
+.dash-delete-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border-radius: 8px;
+    border: 1px solid #ff4d4d;
+    background: transparent;
+    color: #ff4d4d;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.dash-delete-btn:hover {
+    background: #ff4d4d;
+    color: #fff;
+    box-shadow: 0 0 15px rgba(255, 77, 77, 0.4);
+}
+
+.dash-dialog-error {
+    margin: -10px 0 14px;
+    color: #ff6b6b;
+    font-size: 13px;
+    text-align: left;
+}
+
+.dash-dialog-error[hidden] {
+    display: none;
+}

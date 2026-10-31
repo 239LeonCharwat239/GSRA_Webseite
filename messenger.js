@@ -2630,6 +2630,7 @@ async function appendSingleMessage(msg, isSystem = false) {
     const isVoice = Boolean(!isDeleted && msg.audio_url && typeof renderVoiceMessage === "function");
     if (isVoice) renderVoiceMessage(bubble, msg);
 
+    let longTextDiv = null;
     if (msg.text && msg.text !== "[Medien]" && !isVoice) {
         const textDiv = document.createElement("div");
         textDiv.className = "message-text";
@@ -2645,12 +2646,15 @@ async function appendSingleMessage(msg, isSystem = false) {
             textDiv.style.opacity = "0.7";
         } else {
             textDiv.innerText = msg.text;
+            longTextDiv = textDiv;
         }
         bubble.appendChild(textDiv);
     }
 
     const footerDiv = document.createElement("div");
     footerDiv.className = "message-footer";
+    // Lange Nachrichten gekürzt mit „Mehr lesen“ (links in der Fußzeile, getrennt von „bearbeitet“ und Uhrzeit)
+    if (longTextDiv && typeof setupReadMore === "function") setupReadMore(msg, longTextDiv, footerDiv);
 
     if (!isDeleted && msg.is_edited) {
         const editedSpan = document.createElement("span");

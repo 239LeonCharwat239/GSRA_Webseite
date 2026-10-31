@@ -96,6 +96,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const DELETED_TEXTS = ["Du hast diese Nachricht gelöscht", "Diese Nachricht wurde gelöscht", "Diese Nachricht wurde von einem Gruppenadmin gelöscht"];
 
     function contextHtml(report) {
+        if (report.scope === "zeitraum") return windowHtml(report);
         const messages = Array.isArray(report.context) ? report.context : [];
         if (messages.length === 0) {
             return `<div class="admin-context empty"><i class="fa-solid fa-comment-slash"></i> Kein Gesprächsverlauf – die Person wurde ${report.chat_id ? "ohne Nachrichten im Chat" : "ohne Chatbezug (z. B. aus dem Profil)"} gemeldet.</div>`;
@@ -151,6 +152,66 @@ document.addEventListener("DOMContentLoaded", async () => {
             </div>`;
     }
 
+    // Gemeldeter Zeitraum (z. B. in großen Foren): Die Nachrichten werden nicht kopiert, sondern bei der Prüfung
+    // direkt geladen – seitenweise, inklusive gelöschter Nachrichten mit Originalinhalt
+    function windowHtml(report) {
+        return `
+            <div class="admin-context admin-window">
+                <div class="admin-context-title"><i class="fa-solid fa-calendar-days"></i> Gemeldeter Zeitraum
+                    <span class="admin-context-range">${escapeHtml(`${formatDate(report.window_from)} – ${formatDate(report.window_to)}`)}</span>
+                </div>
+                <div class="admin-window-tools">
+                    <label><input type="checkbox" class="admin-window-only"> Nur Nachrichten der gemeldeten Person</label>
+                    <span class="admin-window-count"></span>
+                </div>
+                <div class="admin-window-list"></div>
+                <button type="button" class="admin-btn dismiss admin-window-more"><i class="fa-solid fa-comments"></i> Nachrichten im Zeitraum anzeigen</button>
+            </div>`;
+    }
+
+    function setupWindowView(card, report) {
+        const box = card.querySelector(".admin-window");
+        if (!box) return;
+        const messageList = box.querySelector(".admin-window-list");
+        const more = box.querySelector(".admin-window-more");
+        const only = box.querySelector(".admin-window-only");
+        const count = box.querySelector(".admin-window-count");
+        const PAGE = 100;
+        let after = null;
+        let total = 0;
+        let loading = false;
+        const load = async (reset) => {
+            if (loading) return;
+            loading = true;
+            if (reset) {
+                after = null;
+                total = 0;
+                messageList.replaceChildren();
+            }
+            more.hidden = false;
+            more.disabled = true;
+            more.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Lade …';
+            const { data, error } = await client.rpc("admin_report_window", { _report_id: report.id, _after: after, _limit: PAGE, _only_reported: only.checked });
+            loading = false;
+            more.disabled = false;
+            if (error) {
+                more.innerHTML = '<i class="fa-solid fa-rotate"></i> Erneut versuchen';
+                showToast(error.message, "error");
+                return;
+            }
+            const rows = data || [];
+            messageList.insertAdjacentHTML("beforeend", rows.map(m => messageHtml(m, report)).join(""));
+            total += rows.length;
+            if (rows.length) after = rows[rows.length - 1].created_at;
+            count.textContent = `${total} ${total === 1 ? "Nachricht" : "Nachrichten"} geladen`;
+            more.innerHTML = `<i class="fa-solid fa-angles-down"></i> Weitere ${PAGE} Nachrichten laden`;
+            more.hidden = rows.length < PAGE;
+            if (total === 0) messageList.innerHTML = '<div class="admin-context empty"><i class="fa-solid fa-comment-slash"></i> In diesem Zeitraum gibt es keine Nachrichten.</div>';
+        };
+        more.addEventListener("click", () => load(false));
+        only.addEventListener("change", () => load(true));
+    }
+
     const STATUS_LABELS = { offen: "Offen", verwarnt: "Verwarnt", gesperrt: "Gesperrt", verworfen: "Verworfen" };
 
     async function updateCounts() {
@@ -185,21 +246,22 @@ document.addEventListener("DOMContentLoaded", async () => {
             client.from("user_warnings").select("user_id, created_at").in("user_id", reportedIds),
             client.from("user_bans").select("*").in("user_id", reportedIds),
             client.from("reports").select("id, reported_id").in("reported_id", reportedIds),
-            client.from("chats").select("id, title, user1_id, user2_id").in("id", reports.map(r => r.chat_id).filter(Boolean))
+            client.from("chats").select("id, title, user1_id, user2_id").in("id", reports.map(r => r.chat_id || r.window_chat_id).filter(Boolean))
         ]);
         const history = { warnings: warnings || [], bans: bans || [], reports: otherReports || [] };
 
         list.replaceChildren(...reports.map(report => {
-            const chat = (chats || []).find(c => c.id === report.chat_id);
-            const where = !report.chat_id ? "aus dem Profil"
-                : (chat ? (chat.user1_id === chat.user2_id ? `in der Gruppe „${chat.title}“` : "im Direktchat") : "in einem Chat");
+            const chatRef = report.chat_id || report.window_chat_id;
+            const chat = (chats || []).find(c => c.id === chatRef);
+            const where = !chatRef ? "aus dem Profil"
+                : (chat ? (chat.user1_id === chat.user2_id ? `in der Gruppe „${chat.title}“` : "im Direktchat") : "in einem inzwischen gelöschten Chat");
             const card = document.createElement("article");
             card.className = `admin-report status-${report.status}`;
             card.innerHTML = `
-                <header class="admin-report-head">
+                <div class="admin-report-head">
                     ${personHtml(report.reported_id, "Gemeldete Person")}
                     <span class="admin-status ${report.status}">${STATUS_LABELS[report.status] || report.status}</span>
-                </header>
+                </div>
                 ${historyHtml(report.reported_id, history, report.id)}
                 <div class="admin-meta">
                     <span><i class="fa-solid fa-flag"></i> <strong>${escapeHtml(report.reason)}</strong></span>
@@ -211,6 +273,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 ${contextHtml(report)}
                 <footer class="admin-actions"></footer>`;
 
+            if (report.scope === "zeitraum") setupWindowView(card, report);
             const actions = card.querySelector(".admin-actions");
             if (report.status === "offen") {
                 const addAction = (cls, html, handler) => {
@@ -248,10 +311,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             const card = document.createElement("article");
             card.className = "admin-report status-gesperrt";
             card.innerHTML = `
-                <header class="admin-report-head">
+                <div class="admin-report-head">
                     ${personHtml(ban.user_id, "Gesperrtes Konto")}
                     <span class="admin-status gesperrt">${ban.banned_until ? `bis ${formatDate(ban.banned_until, false)}` : "dauerhaft"}</span>
-                </header>
+                </div>
                 <div class="admin-meta">
                     ${ban.reason ? `<span><i class="fa-solid fa-flag"></i> <strong>${escapeHtml(ban.reason)}</strong></span>` : ""}
                     <span><i class="fa-solid fa-user-shield"></i> gesperrt von ${escapeHtml(ban.created_by ? nameOf(ban.created_by) : "–")}</span>
@@ -337,6 +400,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (!confirmed) return;
         runAction(client.rpc("admin_lift_ban", { _user: ban.user_id }), `Die Sperre von ${name} wurde aufgehoben.`);
     }
+
+    // Neue Meldung live eingegangen (siehe auth-nav.js): Liste bzw. Zähler auffrischen
+    document.addEventListener("gsra:new-report", () => {
+        showToast("Eine neue Meldung ist eingegangen.", "info");
+        if (currentTab === "offen") render();
+        else updateCounts();
+    });
 
     render();
 });
