@@ -1,5 +1,36 @@
 let currentUser = null;
 let isAdmin = false;
+let loadedSetups = [];
+let myVotes = {};
+
+function escapeHtml(str) {
+    if (!str) return "";
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+// Download nur über echte https-Links
+function safeDownloadUrl(url) {
+    try {
+        const parsed = new URL(String(url || ""));
+        return parsed.protocol === "https:" ? parsed.href : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+// Dateinamen im Speicher nur aus einfachen Zeichen (Umlaute und Sonderzeichen werden ersetzt)
+function storageName(text) {
+    return String(text || "")
+        .normalize("NFKD").replace(/\p{M}/gu, "")
+        .replace(/[^A-Za-z0-9.-]+/g, "_")
+        .replace(/^_+|_+$/g, "")
+        .slice(0, 60) || "setup";
+}
 
 // VOLLSTÄNDIGE IRACING FAHRZEUGLISTE (ALPHABETISCH)
 const IRACING_CARS = [
@@ -392,10 +423,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
 
+            if (file.size > 5 * 1024 * 1024) {
+                showToast('Die Setup-Datei ist zu groß (höchstens 5 MB).', 'error');
+                return;
+            }
+
             statusText.style.color = '#ffcc00';
             statusText.textContent = 'Upload läuft...';
 
-            const filePath = `${sim.replaceAll(' ', '_')}_${car.replaceAll(' ', '_')}_${track.replaceAll(' ', '_')}_${Date.now()}.sto`;
+            // Eigener Ordner pro Person (Pflicht im Speicher)
+            const filePath = `${currentUser.id}/${storageName(sim)}_${storageName(car)}_${storageName(track)}_${Date.now()}.sto`;
 
             const { error: storageError } = await supabase.storage
                 .from('setups')
@@ -447,6 +484,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    // Abstimmen und Löschen über die Knöpfe in der Liste
+    const setupList = document.getElementById('setupList');
+    if (setupList) {
+        setupList.addEventListener('click', (e) => {
+            const voteBtn = e.target.closest('button[data-vote]');
+            if (voteBtn) {
+                if (!voteBtn.disabled) voteSetup(voteBtn.dataset.id, voteBtn.dataset.vote);
+                return;
+            }
+            const deleteBtn = e.target.closest('button[data-delete]');
+            if (deleteBtn) deleteSetup(deleteBtn.dataset.delete);
+        });
+    }
+
     loadSetups();
 });
 
@@ -454,9 +505,10 @@ async function loadSetups() {
     const list = document.getElementById('setupList');
     if (!list) return;
 
-    const { data, error } = await supabase
-        .from('setups')
-        .select('*');
+    const [{ data, error }] = await Promise.all([
+        supabase.from('setups').select('*'),
+        loadMyVotes()
+    ]);
 
     if (error || !data) {
         list.innerHTML = '<li style="color: #ff4d4d; text-align: center; padding: 15px;">Setups konnten nicht geladen werden.</li>';
@@ -469,46 +521,79 @@ async function loadSetups() {
     }
 
     data.sort((a, b) => ((b.likes || 0) - (b.dislikes || 0)) - ((a.likes || 0) - (a.dislikes || 0)));
+    loadedSetups = data;
 
     list.innerHTML = data.map(item => {
         const isOwner = currentUser && currentUser.id === item.uploader_id;
         const canDelete = isOwner || isAdmin;
         const simName = item.simulation || 'iRacing';
-        const likes = item.likes || 0;
-        const dislikes = item.dislikes || 0;
+        const likes = Number(item.likes) || 0;
+        const dislikes = Number(item.dislikes) || 0;
+        const id = escapeHtml(item.id);
+        const myVote = myVotes[item.id] || 0;
+        const voteAttrs = (vote) => isOwner
+            ? ' disabled title="Eigene Setups kannst du nicht bewerten."'
+            : myVote === vote ? ' title="Deine Stimme – nochmal klicken zum Zurücknehmen"' : '';
+        const downloadUrl = safeDownloadUrl(item.file_url);
 
         return `
-            <li data-search="${simName} ${item.car_model} ${item.track_name} ${item.file_name}" style="padding: 12px 16px; background: rgba(0,0,0,0.3); margin-bottom: 8px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--border-subtle);">
+            <li data-search="${escapeHtml(`${simName} ${item.car_model} ${item.track_name} ${item.file_name}`)}" style="padding: 12px 16px; background: rgba(0,0,0,0.3); margin-bottom: 8px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--border-subtle);">
                 <div>
-                    <span style="font-size: 11px; background: var(--gsra-blue); color: #fff; padding: 2px 6px; border-radius: 3px; font-weight: bold;">${simName}</span>
-                    <strong style="color: var(--gsra-yellow); font-size: 15px; margin-left: 6px;">${item.car_model}</strong> – <span style="color: #fff; font-size: 15px;">${item.track_name}</span>
-                    <br><small style="color: var(--text-muted); font-size: 12px;">${item.file_name}</small>
+                    <span style="font-size: 11px; background: var(--gsra-blue); color: #fff; padding: 2px 6px; border-radius: 3px; font-weight: bold;">${escapeHtml(simName)}</span>
+                    <strong style="color: var(--gsra-yellow); font-size: 15px; margin-left: 6px;">${escapeHtml(item.car_model)}</strong> – <span style="color: #fff; font-size: 15px;">${escapeHtml(item.track_name)}</span>
+                    <br><small style="color: var(--text-muted); font-size: 12px;">${escapeHtml(item.file_name)}</small>
                 </div>
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <div style="display: flex; align-items: center; gap: 4px;">
-                        <button onclick="voteSetup('${item.id}', 'like', ${likes})" class="vote-btn like-btn"><i class="fa-solid fa-thumbs-up"></i> ${likes}</button>
-                        <button onclick="voteSetup('${item.id}', 'dislike', ${dislikes})" class="vote-btn dislike-btn"><i class="fa-solid fa-thumbs-down"></i> ${dislikes}</button>
+                        <button data-vote="like" data-id="${id}" class="vote-btn like-btn${myVote === 1 ? ' voted' : ''}"${voteAttrs(1)}><i class="fa-solid fa-thumbs-up"></i> ${likes}</button>
+                        <button data-vote="dislike" data-id="${id}" class="vote-btn dislike-btn${myVote === -1 ? ' voted' : ''}"${voteAttrs(-1)}><i class="fa-solid fa-thumbs-down"></i> ${dislikes}</button>
                     </div>
-                    <a href="${item.file_url}" download class="login-btn" style="padding: 6px 12px; font-size: 12px; text-decoration: none;">Download</a>
-                    ${canDelete ? `<button onclick="deleteSetup('${item.id}')" class="btn-delete"><i class="fa-solid fa-trash-can"></i></button>` : ''}
+                    ${downloadUrl
+                        ? `<a href="${escapeHtml(downloadUrl)}" download class="login-btn" style="padding: 6px 12px; font-size: 12px; text-decoration: none;">Download</a>`
+                        : `<span class="login-btn" title="Kein sicherer Download-Link" style="padding: 6px 12px; font-size: 12px; opacity: 0.4; cursor: not-allowed;">Download</span>`}
+                    ${canDelete ? `<button data-delete="${id}" class="btn-delete"><i class="fa-solid fa-trash-can"></i></button>` : ''}
                 </div>
             </li>
         `;
     }).join('');
 }
 
-async function voteSetup(setupId, type, currentVal) {
+// Eigene Stimmen laden (jede Person sieht nur ihre eigenen)
+async function loadMyVotes() {
+    myVotes = {};
+    if (!currentUser) return;
+
+    const { data, error } = await supabase
+        .from('setup_votes')
+        .select('setup_id, vote')
+        .eq('user_id', currentUser.id);
+
+    if (error || !data) return;
+    data.forEach(v => { myVotes[v.setup_id] = v.vote; });
+}
+
+async function voteSetup(setupId, type) {
     if (!currentUser) {
         showToast("Bitte melde dich an, um abstimmen zu können.", "error");
         return;
     }
 
-    const updateField = type === 'like' ? { likes: currentVal + 1 } : { dislikes: currentVal + 1 };
+    // Eine Stimme pro Person: dieselbe Stimme nochmal nimmt sie zurück, die andere wechselt sie
+    const wanted = type === 'like' ? 1 : -1;
+    const nextVote = myVotes[setupId] === wanted ? 0 : wanted;
 
-    const { error } = await supabase
-        .from('setups')
-        .update(updateField)
-        .eq('id', setupId);
+    let { error } = await supabase.rpc('vote_setup', { _setup_id: String(setupId), _vote: nextVote });
+
+    if (error && /could not find the function|schema cache/i.test(error.message || "")) {
+        // Datenbank-Funktion noch nicht eingerichtet: bisheriger Weg
+        const field = type === 'like' ? 'likes' : 'dislikes';
+        const setup = loadedSetups.find(s => String(s.id) === String(setupId));
+        const result = await supabase
+            .from('setups')
+            .update({ [field]: ((setup && Number(setup[field])) || 0) + 1 })
+            .eq('id', setupId);
+        error = result.error;
+    }
 
     if (error) {
         showToast("Fehler beim Abstimmen: " + error.message, "error");

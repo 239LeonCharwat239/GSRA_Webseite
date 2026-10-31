@@ -20,6 +20,10 @@ function escapeHtml(str) {
 
 const DEFAULT_PLACEHOLDER = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='250' viewBox='0 0 400 250'><rect width='100%' height='100%' fill='%231a1a1a'/><text x='50%' y='50%' fill='%23666666' font-size='16' text-anchor='middle' dy='.3em'>Kein Bild vorhanden</text></svg>";
 
+// Gleiche Grenzen wie im Speicher: JPG, PNG oder WebP, höchstens 8 MB pro Bild
+const IMAGE_TYPES = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+const MAX_IMAGE_SIZE = 8 * 1024 * 1024;
+
 // DOM-Elemente
 const marketplaceGrid = document.getElementById("marketplaceGrid");
 const filterCategory = document.getElementById("filterCategory");
@@ -384,7 +388,7 @@ function openCreateOrEditModal(itemToEdit = null) {
 
         if (existingImagesContainer) existingImagesContainer.style.display = "none";
         document.getElementById("itemImages").required = true;
-        if (uploadLabel) uploadLabel.innerText = "Produktbilder (Maximal 10 Bilder auswählen)*";
+        if (uploadLabel) uploadLabel.innerText = "Produktbilder (maximal 10 Bilder, JPG/PNG/WebP bis 8 MB)*";
     }
 
     itemCreateModal.style.display = "flex";
@@ -461,6 +465,12 @@ if (createItemForm) {
             return;
         }
 
+        const invalidFile = files.find(file => !IMAGE_TYPES[file.type] || file.size > MAX_IMAGE_SIZE);
+        if (invalidFile) {
+            showToast(`„${invalidFile.name}“ passt nicht: erlaubt sind JPG, PNG oder WebP bis 8 MB.`, "error");
+            return;
+        }
+
         try {
             if (submitItemBtn) {
                 submitItemBtn.disabled = true;
@@ -471,8 +481,9 @@ if (createItemForm) {
 
             if (files.length > 0) {
                 const uploadPromises = files.map(async (file) => {
-                    const fileExt = file.name.split('.').pop();
-                    const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
+                    // Eigener Ordner pro Person (Pflicht im Speicher)
+                    const fileExt = IMAGE_TYPES[file.type];
+                    const fileName = `${currentUser.id}/${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
                     
                     const { error: uploadError } = await supabase.storage.from("marketplace").upload(fileName, file);
                     if (uploadError) throw uploadError;

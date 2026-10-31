@@ -1100,6 +1100,28 @@ p {
     border-color: #ff4d4d;
 }
 
+/* Eigene Stimme hervorheben, eigene Setups nicht bewertbar */
+.vote-btn.like-btn.voted {
+    color: #00ff88;
+    border-color: #00ff88;
+    background: rgba(0,255,136,0.12);
+}
+
+.vote-btn.dislike-btn.voted {
+    color: #ff4d4d;
+    border-color: #ff4d4d;
+    background: rgba(255,77,77,0.12);
+}
+
+.vote-btn:disabled,
+.vote-btn:disabled:hover {
+    background: rgba(255,255,255,0.05);
+    border-color: var(--border-subtle);
+    color: #fff;
+    opacity: 0.45;
+    cursor: default;
+}
+
 /* =========================================
    WHATSAPP DESKTOP LAYOUT (GSRA MESSENGER)
 ========================================= */

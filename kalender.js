@@ -15,6 +15,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 let isAdmin = false;
 
+function escapeHtml(str) {
+    if (!str) return "";
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
 async function checkAdminPermissions() {
     try {
         const { data: { user } } = await supabaseClient.auth.getUser();
@@ -44,9 +54,13 @@ async function loadEvents() {
 
     const filterSim = document.getElementById('filter-sim')?.value || 'ALL';
 
+    // Vergangene Events ausblenden (laufende bleiben bis 6 Stunden nach dem Start sichtbar)
+    const visibleFrom = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+
     let query = supabaseClient
         .from('events')
         .select('*')
+        .gte('event_date', visibleFrom)
         .order('event_date', { ascending: true });
 
     if (filterSim !== 'ALL') {
@@ -80,18 +94,21 @@ async function loadEvents() {
             minute: '2-digit'
         });
 
-        const actionCell = isAdmin 
-            ? `<td style="text-align: right;"><button class="btn-delete" onclick="deleteEvent('${ev.id}')"><i class="fa-solid fa-trash"></i> Löschen</button></td>`
+        const actionCell = isAdmin
+            ? `<td style="text-align: right;"><button class="btn-delete"><i class="fa-solid fa-trash"></i> Löschen</button></td>`
             : '';
 
         tr.innerHTML = `
             <td style="font-weight: 600; color: var(--gsra-yellow);">${formattedDate} Uhr</td>
-            <td style="font-weight: 700;">${ev.title}</td>
-            <td><span style="background: rgba(0, 85, 255, 0.2); color: var(--gsra-blue); padding: 3px 8px; border-radius: 4px; font-weight: 600; font-size: 12px; border: 1px solid rgba(0, 85, 255, 0.4);">${ev.simulation}</span></td>
-            <td>${ev.track}</td>
-            <td style="font-family: monospace;">${ev.password || '<span style="color: var(--text-muted);">-</span>'}</td>
+            <td style="font-weight: 700;">${escapeHtml(ev.title)}</td>
+            <td><span style="background: rgba(0, 85, 255, 0.2); color: var(--gsra-blue); padding: 3px 8px; border-radius: 4px; font-weight: 600; font-size: 12px; border: 1px solid rgba(0, 85, 255, 0.4);">${escapeHtml(ev.simulation)}</span></td>
+            <td>${escapeHtml(ev.track)}</td>
+            <td style="font-family: monospace;">${ev.password ? escapeHtml(ev.password) : '<span style="color: var(--text-muted);">-</span>'}</td>
             ${actionCell}
         `;
+
+        const deleteBtn = tr.querySelector('.btn-delete');
+        if (deleteBtn) deleteBtn.addEventListener('click', () => deleteEvent(ev.id));
 
         tbody.appendChild(tr);
     });
