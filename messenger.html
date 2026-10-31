@@ -56,6 +56,7 @@
                             <button type="button" data-action="new-group"><i class="fa-solid fa-users"></i> Neue Gruppe</button>
                             <button type="button" data-action="requests"><i class="fa-solid fa-user-clock"></i> Freundschaftsanfragen</button>
                             <button type="button" data-action="forums"><i class="fa-solid fa-compass"></i> Öffentliche Foren</button>
+                            <button type="button" data-action="game"><i class="fa-solid fa-gamepad"></i> Spielstatus</button>
                             <button type="button" data-action="favorites"><i class="fa-solid fa-star"></i> Favoriten</button>
                             <button type="button" data-action="read-all"><i class="fa-solid fa-check-double"></i> Alle als gelesen markieren</button>
                             <button type="button" data-action="invite"><i class="fa-solid fa-user-group"></i> Freund einladen</button>
@@ -199,20 +200,24 @@
                         <button type="button" id="removeImageBtn" style="background: none; border: none; color: #ff4d4d; cursor: pointer; font-size: 16px;"><i class="fa-solid fa-xmark"></i></button>
                     </div>
 
+                    <!-- Eingabeleiste wie bei WhatsApp: Anhängen, Emoji, Text – rechts Mikrofon (leeres Feld) bzw. Senden -->
                     <form class="chat-input-area" id="chatForm">
+                        <label for="imageUploadInput" class="attachment-btn" title="Fotos & Videos anhängen">
+                            <i class="fa-solid fa-plus"></i>
+                            <input type="file" id="imageUploadInput" accept="image/*,video/*" multiple style="display: none;">
+                        </label>
+
                         <button type="button" id="emojiToggleBtn" class="emoji-btn" title="Emoji auswählen">
                             <i class="fa-regular fa-face-smile"></i>
                         </button>
 
-                        <label for="imageUploadInput" class="attachment-btn" title="Medien anhängen (Fotos & Videos)">
-                            <i class="fa-solid fa-paperclip"></i>
-                            <input type="file" id="imageUploadInput" accept="image/*,video/*" multiple style="display: none;">
-                        </label>
-
                         <textarea id="messageInput" placeholder="Gib eine Nachricht ein..." autocomplete="off" rows="1"></textarea>
-                        
-                        <button type="submit" id="sendBtn" class="login-btn" style="cursor: pointer;">
-                            <i class="fa-solid fa-paper-plane"></i> Senden
+
+                        <button type="submit" id="sendBtn" class="chat-round-btn chat-send-btn" title="Senden">
+                            <i class="fa-solid fa-paper-plane"></i>
+                        </button>
+                        <button type="button" id="voiceRecordBtn" class="chat-round-btn chat-mic-btn" title="Sprachnachricht aufnehmen">
+                            <i class="fa-solid fa-microphone"></i>
                         </button>
                     </form>
 
@@ -278,5 +283,7 @@
     <script src="ui-dialogs.js"></script>
     <script src="messenger.js"></script>
     <script src="messenger-social.js"></script>
+    <script src="messenger-status.js"></script>
+    <script src="messenger-voice.js"></script>
 </body>
 </html>

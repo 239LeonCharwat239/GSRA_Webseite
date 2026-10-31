@@ -91,24 +91,63 @@ document.addEventListener("DOMContentLoaded", async () => {
         return `<div class="admin-history ${warn ? "warn" : "clean"}"><i class="fa-solid ${warn ? "fa-triangle-exclamation" : "fa-circle-check"}"></i> ${escapeHtml(text)}</div>`;
     }
 
-    // Gesprächsverlauf: gemeldete Nachricht mit je 2 Nachrichten davor und danach
+    // Gesprächsverlauf: gemeldete Nachrichten hervorgehoben, dazu der Verlauf im Zeitfenster –
+    // gelöschte und bearbeitete Nachrichten mit ihrem Originalinhalt (Beweissicherung)
+    const DELETED_TEXTS = ["Du hast diese Nachricht gelöscht", "Diese Nachricht wurde gelöscht", "Diese Nachricht wurde von einem Gruppenadmin gelöscht"];
+
     function contextHtml(report) {
         const messages = Array.isArray(report.context) ? report.context : [];
         if (messages.length === 0) {
-            return '<div class="admin-context empty"><i class="fa-solid fa-comment-slash"></i> Kein Gesprächsverlauf – die Person wurde aus dem Profil gemeldet.</div>';
+            return `<div class="admin-context empty"><i class="fa-solid fa-comment-slash"></i> Kein Gesprächsverlauf – die Person wurde ${report.chat_id ? "ohne Nachrichten im Chat" : "ohne Chatbezug (z. B. aus dem Profil)"} gemeldet.</div>`;
         }
+        const deletedCount = messages.filter(m => m.deleted).length;
+        const range = report.whole_chat ? "Ganzer Chat (letzte 150 Nachrichten)"
+            : (report.window_from ? `Zeitfenster ${formatDate(report.window_from)} – ${formatDate(report.window_to)}` : "Gemeldete Nachricht mit Verlauf");
         return `
             <div class="admin-context">
-                <div class="admin-context-title"><i class="fa-solid fa-comments"></i> Gesprächsverlauf</div>
-                ${messages.map(m => `
-                    <div class="admin-msg${m.reported ? " reported" : ""}${m.sender_id === report.reported_id ? " by-reported" : ""}">
-                        <div class="admin-msg-head">
-                            <span class="admin-msg-author">${escapeHtml(m.sender_name)}</span>
-                            <span class="admin-msg-time">${m.created_at ? formatDate(m.created_at) : ""}</span>
-                            ${m.reported ? '<span class="admin-msg-flag"><i class="fa-solid fa-flag"></i> gemeldet</span>' : ""}
-                        </div>
-                        <div class="admin-msg-text">${escapeHtml(m.text && m.text !== "[Medien]" ? m.text : "")}${m.image_url ? `${m.text && m.text !== "[Medien]" ? "<br>" : ""}<span class="admin-msg-media"><i class="fa-solid fa-photo-film"></i> Medien: ${m.image_url.split(",").map((url, i) => `<a href="${escapeHtml(url.trim())}" target="_blank" rel="noopener">Datei ${i + 1}</a>`).join(", ")}</span>` : ""}</div>
-                    </div>`).join("")}
+                <div class="admin-context-title"><i class="fa-solid fa-comments"></i> Gesprächsverlauf
+                    <span class="admin-context-range">${escapeHtml(range)} · ${messages.length} Nachrichten${deletedCount ? ` · ${deletedCount} gelöscht` : ""}</span>
+                </div>
+                ${messages.map(m => messageHtml(m, report)).join("")}
+            </div>`;
+    }
+
+    // Nur echte Webadressen verlinken (kein „javascript:“ o. Ä. aus manipulierten Nachrichten)
+    const safeUrl = (url) => (/^https?:\/\//i.test(String(url || "").trim()) ? String(url).trim() : "#");
+
+    function mediaHtml(imageUrl, audioUrl, transcript) {
+        let html = "";
+        if (imageUrl) html += `<span class="admin-msg-media"><i class="fa-solid fa-photo-film"></i> Medien: ${imageUrl.split(",").map((url, i) => `<a href="${escapeHtml(safeUrl(url))}" target="_blank" rel="noopener">Datei ${i + 1}</a>`).join(", ")}</span>`;
+        if (audioUrl) html += `<span class="admin-msg-media"><i class="fa-solid fa-microphone"></i> <a href="${escapeHtml(safeUrl(audioUrl))}" target="_blank" rel="noopener">Sprachnachricht anhören</a></span>`;
+        if (transcript) html += `<span class="admin-msg-transcript"><i class="fa-solid fa-closed-captioning"></i> „${escapeHtml(transcript)}“</span>`;
+        return html;
+    }
+
+    function messageHtml(m, report) {
+        const history = Array.isArray(m.history) ? m.history : [];
+        const textOf = (text) => (text && text !== "[Medien]" && !/^🎤 Sprachnachricht/.test(text) ? escapeHtml(text) : "");
+        let body;
+        if (m.deleted) {
+            // Original: letzter gesicherter Stand vor dem Löschen
+            const original = !DELETED_TEXTS.includes(m.text) ? m : [...history].reverse().find(h => !DELETED_TEXTS.includes(h.text));
+            const label = m.hard_deleted ? "endgültig gelöscht" : (m.text === DELETED_TEXTS[2] ? "von einem Gruppenadmin gelöscht" : "vom Absender gelöscht");
+            body = `<div class="admin-msg-deleted"><i class="fa-solid fa-trash"></i> ${label}</div>`
+                + (original
+                    ? `<div class="admin-msg-original"><span>Original:</span> ${textOf(original.text)}${mediaHtml(original.image_url, original.audio_url, original.transcript)}</div>`
+                    : '<div class="admin-msg-original missing">Original nicht gesichert (vor Einführung der Beweissicherung gelöscht).</div>');
+        } else {
+            body = `${textOf(m.text)}${mediaHtml(m.image_url, m.audio_url, m.transcript)}`
+                + history.filter(h => h.change_type === "bearbeitet")
+                    .map(h => `<div class="admin-msg-original"><span>Vor der Bearbeitung:</span> ${textOf(h.text)}</div>`).join("");
+        }
+        return `
+            <div class="admin-msg${m.reported ? " reported" : ""}${m.sender_id === report.reported_id ? " by-reported" : ""}${m.deleted ? " deleted" : ""}">
+                <div class="admin-msg-head">
+                    <span class="admin-msg-author">${escapeHtml(m.sender_name)}</span>
+                    <span class="admin-msg-time">${m.created_at ? formatDate(m.created_at) : ""}</span>
+                    ${m.reported ? '<span class="admin-msg-flag"><i class="fa-solid fa-flag"></i> gemeldet</span>' : ""}
+                </div>
+                <div class="admin-msg-text">${body}</div>
             </div>`;
     }
 

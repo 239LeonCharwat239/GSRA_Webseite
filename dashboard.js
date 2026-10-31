@@ -13,7 +13,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const dashAvatar = document.getElementById("dashAvatar");
     const dashGsraId = document.getElementById("dashGsraId");
     const editAvatarFile = document.getElementById("editAvatarFile");
-    const editAvatarName = document.getElementById("editAvatarName");
+    const socialLinksEditor = document.getElementById("socialLinksEditor");
+    const addSocialLinkBtn = document.getElementById("addSocialLinkBtn");
     const editUsername = document.getElementById("editUsername");
     const editBio = document.getElementById("editBio");
     const profileForm = document.getElementById("profileForm");
@@ -25,10 +26,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     try {
         const { data: { session }, error } = await client.auth.getSession();
-        if (error || !session || !session.user) {
-            window.location.href = "login.html";
-            return;
-        }
+        // Nicht angemeldet: Den Anmelde-Hinweis über der Seite zeigt auth-nav.js
+        if (error || !session || !session.user) return;
 
         currentUser = session.user;
         dashEmail.textContent = currentUser.email || "";
@@ -46,7 +45,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (editUsername) editUsername.value = username;
         if (editBio && profile?.bio) editBio.value = profile.bio;
         const showAvatar = (url) => {
-            if (!dashAvatar || !url) return;
+            if (!dashAvatar) return;
+            if (!url) {
+                dashAvatar.innerHTML = '<i class="fa-solid fa-user"></i>';
+                return;
+            }
             const img = document.createElement("img");
             img.src = url;
             img.alt = "Profilbild";
@@ -66,20 +69,134 @@ document.addEventListener("DOMContentLoaded", async () => {
             });
         }
 
-        // Ausgewähltes Profilbild sofort als Vorschau zeigen
-        if (editAvatarFile) {
+        // Profil aktualisieren (Rolle und GSRA-ID schützt die Datenbank); fehlt es noch, wird es angelegt
+        const saveProfile = async (changes) => {
+            let { data: updatedRows, error: saveErr } = await client.from("profiles").update(changes).eq("id", currentUser.id).select("id");
+            if (!saveErr && (!updatedRows || updatedRows.length === 0)) {
+                ({ error: saveErr } = await client.from("profiles").upsert({ id: currentUser.id, username, ...changes }));
+            }
+            return saveErr;
+        };
+
+        // Profilbild: Klick öffnet Hochladen / Ändern / Löschen / Vergrößern – Drag & Drop eines Bildes ändert es direkt
+        const uploadAvatar = async (file) => {
+            if (!file) return;
+            if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) {
+                showToast("Bitte wähle ein Bild (PNG, JPG, WebP oder GIF).", "error");
+                return;
+            }
+            if (file.size > 5 * 1024 * 1024) {
+                showToast("Das Bild darf höchstens 5 MB groß sein.", "error");
+                return;
+            }
+            const fileExt = (file.name.split(".").pop() || "png").toLowerCase();
+            // Eigener Ordner je Nutzer (avatars/<Nutzer-ID>/…) – nur dort darf man selbst hochladen
+            const fileName = `${currentUser.id}/${Date.now()}.${fileExt}`;
+            dashAvatar.classList.add("loading");
+            const { error: uploadErr } = await client.storage.from("avatars").upload(fileName, file, { contentType: file.type });
+            if (uploadErr) {
+                dashAvatar.classList.remove("loading");
+                showToast("Das Profilbild konnte nicht hochgeladen werden: " + uploadErr.message, "error");
+                return;
+            }
+            const { data: pubData } = client.storage.from("avatars").getPublicUrl(fileName);
+            const saveErr = await saveProfile({ avatar_url: pubData.publicUrl });
+            dashAvatar.classList.remove("loading");
+            if (saveErr) {
+                showToast("Das Profilbild konnte nicht gespeichert werden.", "error");
+                return;
+            }
+            profile = { ...(profile || {}), avatar_url: pubData.publicUrl };
+            showAvatar(pubData.publicUrl);
+            showToast("Dein Profilbild wurde aktualisiert.", "success");
+        };
+
+        const deleteAvatar = async () => {
+            const confirmed = await showDialog({
+                icon: "fa-trash",
+                title: "Profilbild löschen?",
+                message: "Statt deines Bildes erscheint dann wieder das Standard-Symbol.",
+                confirmText: "Löschen",
+                cancelText: "Abbrechen",
+                danger: true
+            });
+            if (!confirmed) return;
+            const oldUrl = profile?.avatar_url;
+            const saveErr = await saveProfile({ avatar_url: null });
+            if (saveErr) {
+                showToast("Das Profilbild konnte nicht gelöscht werden.", "error");
+                return;
+            }
+            // Datei im eigenen Ordner ebenfalls entfernen
+            const path = oldUrl && oldUrl.split("/avatars/")[1];
+            if (path && path.startsWith(`${currentUser.id}/`)) client.storage.from("avatars").remove([decodeURIComponent(path)]).catch(() => {});
+            profile = { ...(profile || {}), avatar_url: null };
+            showAvatar(null);
+            showToast("Dein Profilbild wurde gelöscht.", "success");
+        };
+
+        if (dashAvatar && editAvatarFile) {
             editAvatarFile.addEventListener("change", () => {
-                const file = editAvatarFile.files[0];
-                if (!file) return;
-                if (file.size > 5 * 1024 * 1024) {
-                    showToast("Das Bild darf höchstens 5 MB groß sein.", "error");
-                    editAvatarFile.value = "";
-                    return;
-                }
-                if (editAvatarName) editAvatarName.textContent = file.name;
-                showAvatar(URL.createObjectURL(file));
+                uploadAvatar(editAvatarFile.files[0]);
+                editAvatarFile.value = "";
+            });
+            dashAvatar.addEventListener("click", () => {
+                const hasAvatar = Boolean(profile?.avatar_url);
+                const items = [];
+                if (hasAvatar) items.push({ icon: "fa-expand", text: "Vergrößern", onClick: () => showImageLightbox(profile.avatar_url) });
+                items.push({ icon: "fa-upload", text: hasAvatar ? "Bild ändern" : "Bild hochladen", onClick: () => editAvatarFile.click() });
+                if (hasAvatar) items.push({ icon: "fa-trash", text: "Bild löschen", danger: true, onClick: deleteAvatar });
+                showActionMenu(dashAvatar, items);
+            });
+            const wrap = dashAvatar.parentElement;
+            wrap.addEventListener("dragover", (e) => {
+                if (!Array.from(e.dataTransfer?.types || []).includes("Files")) return;
+                e.preventDefault();
+                wrap.classList.add("drop-target");
+            });
+            wrap.addEventListener("dragleave", () => wrap.classList.remove("drop-target"));
+            wrap.addEventListener("drop", (e) => {
+                e.preventDefault();
+                wrap.classList.remove("drop-target");
+                uploadAvatar(e.dataTransfer?.files?.[0]);
             });
         }
+
+        // Social-Media-Links: je Link ein eigenes Feld, das Logo der Plattform erscheint automatisch
+        const addSocialRow = (value = "") => {
+            if (!socialLinksEditor || socialLinksEditor.children.length >= 8) return;
+            const row = document.createElement("div");
+            row.className = "dash-social-row";
+            row.innerHTML = `
+                <span class="dash-social-icon"></span>
+                <input type="text" inputmode="url" maxlength="300" placeholder="z. B. youtube.com/@deinkanal">
+                <button type="button" class="dash-social-remove" title="Link entfernen"><i class="fa-solid fa-xmark"></i></button>`;
+            const input = row.querySelector("input");
+            const icon = row.querySelector(".dash-social-icon");
+            const syncIcon = () => {
+                const link = normalizeSocialUrl(input.value);
+                const platform = link ? socialPlatformOf(link) : { icon: "fa-solid fa-link", color: "#a0a5b1" };
+                icon.innerHTML = socialIconHtml(platform);
+                icon.style.color = platform.color;
+                icon.title = link ? platform.name : "";
+                input.classList.remove("invalid");
+            };
+            input.value = value;
+            input.addEventListener("input", syncIcon);
+            row.querySelector(".dash-social-remove").addEventListener("click", () => {
+                row.remove();
+                if (addSocialLinkBtn) addSocialLinkBtn.style.display = "";
+                if (socialLinksEditor.children.length === 0) addSocialRow();
+            });
+            syncIcon();
+            socialLinksEditor.appendChild(row);
+            if (addSocialLinkBtn) addSocialLinkBtn.style.display = socialLinksEditor.children.length >= 8 ? "none" : "";
+            return input;
+        };
+        const savedLinks = Array.isArray(profile?.social_links) ? profile.social_links : [];
+        savedLinks.forEach(link => addSocialRow(link));
+        if (savedLinks.length === 0) addSocialRow();
+        if (addSocialLinkBtn) addSocialLinkBtn.addEventListener("click", () => addSocialRow()?.focus());
 
         if (userContent) userContent.style.display = "block";
 
@@ -89,32 +206,29 @@ document.addEventListener("DOMContentLoaded", async () => {
                 e.preventDefault();
                 const newUsername = editUsername.value.trim();
                 const newBio = editBio.value.trim();
-                const avatarFile = document.getElementById("editAvatarFile").files[0];
 
-                let avatarUrl = profile?.avatar_url || null;
-
-                if (avatarFile) {
-                    const fileExt = avatarFile.name.split('.').pop();
-                    // Eigener Ordner je Nutzer (avatars/<Nutzer-ID>/…) – nur dort darf man selbst hochladen
-                    const fileName = `${currentUser.id}/${Date.now()}.${fileExt}`;
-
-                    // UPLOAD IN DEN NEUEN BUCKET: avatars
-                    const { error: uploadErr } = await client.storage.from("avatars").upload(fileName, avatarFile, { contentType: avatarFile.type });
-                    if (!uploadErr) {
-                        const { data: pubData } = client.storage.from("avatars").getPublicUrl(fileName);
-                        avatarUrl = pubData.publicUrl;
-                    } else {
-                        console.error("Upload Fehler:", uploadErr.message);
-                        showToast("Das Profilbild konnte nicht hochgeladen werden: " + uploadErr.message, "error");
-                        return;
-                    }
+                // Links prüfen: nur echte Webadressen (ohne „https://“ wird es ergänzt)
+                const socialLinks = [];
+                let invalidInput = null;
+                (socialLinksEditor ? [...socialLinksEditor.querySelectorAll("input")] : []).forEach(input => {
+                    if (!input.value.trim()) return;
+                    const link = normalizeSocialUrl(input.value);
+                    if (link) socialLinks.push(link);
+                    else if (!invalidInput) invalidInput = input;
+                });
+                if (invalidInput) {
+                    invalidInput.classList.add("invalid");
+                    invalidInput.focus();
+                    showToast("Bitte gib einen gültigen Link ein, z. B. youtube.com/@deinkanal.", "error");
+                    return;
                 }
 
-                // Profil aktualisieren (Rolle und GSRA-ID schützt die Datenbank); fehlt es noch, wird es angelegt
-                const changes = { username: newUsername, bio: newBio, avatar_url: avatarUrl };
-                let { data: updatedRows, error: upsertErr } = await client.from("profiles").update(changes).eq("id", currentUser.id).select("id");
-                if (!upsertErr && (!updatedRows || updatedRows.length === 0)) {
-                    ({ error: upsertErr } = await client.from("profiles").upsert({ id: currentUser.id, ...changes }));
+                const changes = { username: newUsername, bio: newBio };
+                let upsertErr = await saveProfile({ ...changes, social_links: socialLinks });
+                // Social-Media-Links noch nicht in der Datenbank eingerichtet: Rest trotzdem speichern
+                if (upsertErr && /social_links/i.test(upsertErr.message || "")) {
+                    upsertErr = await saveProfile(changes);
+                    if (!upsertErr) showToast("Hinweis: Social-Media-Links sind in der Datenbank noch nicht eingerichtet.", "info");
                 }
 
                 if (upsertErr) {

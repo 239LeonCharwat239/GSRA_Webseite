@@ -111,6 +111,14 @@ function isOfficialForum(chatId) {
     return chatId === officialForumChatId || Boolean(chat && chat.title === "GSRA Official / Community Forum");
 }
 
+// Symbol eines Chats ohne Bild: offizielles Forum = rotes Megafon, öffentliches Forum = gelbes Megafon, Gruppe = drei Personen
+function chatIconClass(chat) {
+    if (!chat) return "fa-users";
+    if (isOfficialForum(chat.id)) return "fa-bullhorn icon-official";
+    if (chat.user1_id !== chat.user2_id) return "fa-user";
+    return chat.is_public ? "fa-bullhorn icon-public" : "fa-users";
+}
+
 // Eigener Name für Direktchats: nur für dich sichtbar und nur im Browser gespeichert. In der Datenbank kennzeichnet
 // ein Titel Foren/Gruppen, und Chats mit Titel sind für alle lesbar – ein Direktchat mit Titel wäre nicht mehr privat.
 function getChatAlias(chatId) {
@@ -247,13 +255,16 @@ if (!multiDeleteBar && chatForm) {
 
             for (const msgId of selectedMessageIds) {
                 const deleteText = "Du hast diese Nachricht gelöscht";
-                await supabase.from("messages").update({
+                const changes = {
                     text: deleteText,
                     image_url: null,
                     reply_to: null,
                     is_edited: false,
                     reactions: {}
-                }).eq("id", msgId);
+                };
+                // Sprachnachrichten: Audiodatei und Transkript ebenfalls entfernen
+                if (messagesCacheMap.get(msgId)?.audio_url) Object.assign(changes, { audio_url: null, transcript: null, voice_duration: null, voice_waveform: null });
+                await supabase.from("messages").update(changes).eq("id", msgId);
             }
 
             exitMultiSelectMode();
@@ -305,6 +316,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     await loadUserChats();
     await checkUrlParameters();
     if (typeof initSocialFeatures === "function") initSocialFeatures();
+    if (typeof initStatusFeatures === "function") initStatusFeatures();
 
     document.querySelectorAll(".wa-pill").forEach(pill => {
         pill.addEventListener("click", (e) => {
@@ -382,6 +394,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             else if (action === "invite") inviteFriend();
             else if (action === "requests") openFriendRequestsPanel();
             else if (action === "forums") openForumDirectory();
+            else if (action === "game") openGameStatusDialog();
             else if (action === "logout") document.getElementById("logoutBtn")?.click();
         });
     }
@@ -1277,7 +1290,7 @@ async function renderChatsList() {
         const lastMsg = escapeHtml(chat.last_message || 'Keine Nachrichten');
 
         item.innerHTML = `
-            <div class="wa-avatar">${avatarInner(avatarUrl, isOfficial ? 'fa-bullhorn text-yellow' : (isGroup ? 'fa-users' : 'fa-user'))}</div>
+            <div class="wa-avatar">${avatarInner(avatarUrl, chatIconClass(chat))}</div>
             <div class="wa-chat-info">
                 <div class="wa-chat-row">
                     <span class="wa-chat-name">${escapeHtml(displayTitle)}</span>
@@ -1288,6 +1301,7 @@ async function renderChatsList() {
         `;
 
         item.querySelector(".wa-favorite-btn").addEventListener("click", (e) => toggleFavorite(chat.id, e));
+        if (typeof decorateChatItem === "function") decorateChatItem(item, chat);
 
         item.addEventListener("click", () => {
             activeChatId = chat.id;
@@ -1306,7 +1320,7 @@ async function renderChatsList() {
     if (forums.length > 0) {
         fragment.appendChild(createSectionTitle("Öffentliche Foren"));
         forums.forEach(group => {
-            const row = createPersonRow(group.title, { icon: "fa-users", avatarUrl: group.image_url, note: `${group.member_count} Mitgl.` });
+            const row = createPersonRow(group.title, { icon: "fa-bullhorn icon-public", avatarUrl: group.image_url, note: `${group.member_count} Mitgl.` });
             row.addEventListener("click", () => openPublicGroupPreview(group));
             fragment.appendChild(row);
         });
@@ -1417,6 +1431,7 @@ async function renderPeopleList(container, term, onPick, excludeIds = new Set(),
         list.forEach(person => {
             const profile = profileCache[person.id];
             const row = createPersonRow(person.username, { avatarUrl: profile?.avatar_url, note: !contactIds.has(person.id) && profile?.gsra_id ? `#${profile.gsra_id}` : "" });
+            if (typeof decoratePersonRow === "function") decoratePersonRow(row, person.id);
             row.addEventListener("click", () => handler(person, row));
             results.appendChild(row);
         });
@@ -1631,7 +1646,7 @@ function openForumChat(forumChat = null) {
     const chatObj = forumChat || allChatsCache.find(c => c.id === chatId);
     const isFounder = Boolean(chatObj && chatObj.user1_id === currentUser.id);
     setChatHeader(
-        isOfficialAnnouncement ? "fa-bullhorn text-yellow" : "fa-users",
+        isOfficialAnnouncement ? "fa-bullhorn icon-official" : chatIconClass(chatObj),
         forumChat?.title || "GSRA Official / Community Forum",
         isOfficialAnnouncement ? "Offizielle Ankündigungen des GSRA-Teams" : "Klicke hier für die Gruppeninfo",
         chatObj?.image_url
@@ -1674,6 +1689,7 @@ async function openChat(chatId, recipientName, chatTitle = null) {
     setChatHeader("fa-user", displayName, "Klicke hier für die Kontaktinfo", otherUserId ? profileCache[otherUserId]?.avatar_url : null);
     activeGroupMembers = [];
     activeGroupRole = null;
+    if (typeof updateChatHeaderPresence === "function") updateChatHeaderPresence();
 
     if (chatActions) chatActions.style.display = "flex";
     if (addMemberBtn) addMemberBtn.style.display = "none";
@@ -1736,6 +1752,7 @@ async function refreshGroupMembers(chat) {
     if (editChatTitleBtn) editChatTitleBtn.style.display = isAdmin ? "" : "none";
     if (chatSubtitleText) chatSubtitleText.innerText = members.map(m => (m.user_id === currentUser.id ? "Du" : m.username)).join(", ");
     if (chatInfoPanel && chatInfoPanel.classList.contains("open")) renderChatInfo();
+    if (typeof updateReadTicks === "function") updateReadTicks(); // Häkchen in Gruppen hängen von allen Mitgliedern ab
 }
 
 // Gruppen- bzw. Kontaktinfo (WhatsApp-Stil): öffnet sich per Klick auf die Kopfzeile des Chats
@@ -1786,7 +1803,7 @@ function renderChatInfo() {
     const hero = document.createElement("div");
     hero.className = "wa-info-hero";
     hero.innerHTML = `
-        <div class="wa-avatar wa-info-avatar">${avatarInner(avatarUrl, isOfficial ? "fa-bullhorn text-yellow" : (isDirect ? "fa-user" : "fa-users"))}</div>
+        <div class="wa-avatar wa-info-avatar">${avatarInner(avatarUrl, chatIconClass(chat))}</div>
         <div class="wa-info-name"></div>
         <div class="wa-info-meta"></div>
     `;
@@ -1799,6 +1816,8 @@ function renderChatInfo() {
 
     // Beschreibung (Gruppen & offizielles Forum) – Gruppenadmins bzw. beim Forum die Website-Admins können sie bearbeiten
     const canEditProfile = isAdmin || (isOfficial && isAdminUser);
+    // Klick aufs Bild bzw. Symbol: vergrößern – Admins können es auch auswählen, ändern oder löschen
+    if (typeof setupInfoAvatar === "function") setupInfoAvatar(hero.querySelector(".wa-info-avatar"), chat, { avatarUrl, canEdit: canEditProfile && socialReady && !isDirect });
     if (!isDirect) {
         const about = createInfoSection();
         const text = document.createElement("p");
@@ -2056,6 +2075,7 @@ async function leaveGroup(chat) {
 async function loadChatMessages(chatId) {
     const supabase = window.supabaseClient || window.supabase;
     if (!supabase || !chatId) return;
+    if (typeof onChatOpened === "function") onChatOpened(chatId); // Häkchen & „gelesen“
 
     if (messageSubscription) {
         supabase.removeChannel(messageSubscription);
@@ -2086,6 +2106,7 @@ async function loadChatMessages(chatId) {
             messagesCacheMap.clear();
             if (updatedMessages) updatedMessages.forEach(m => messagesCacheMap.set(m.id, m));
             await renderMessages(updatedMessages || [], chatId);
+            if (chatId === activeChatId && typeof scheduleMarkRead === "function") scheduleMarkRead();
         })
         .subscribe();
 }
@@ -2144,7 +2165,7 @@ async function renderMessages(messages, chatId = activeChatId) {
     const seenSystemTexts = new Set();
     for (const msg of messages) {
         const isSystem = msg.text && (msg.text.includes("hat den Chat") || msg.text.includes("hat das Forum") || msg.text.includes("zum Forum hinzugefügt") || msg.text.includes("umbenannt") || msg.text.includes("aus der Gruppe entfernt") || msg.text.includes("hat die Gruppe verlassen") || msg.text.includes("ist dem Forum beigetreten"));
-        if (isSystem && !msg.image_url && !msg.reply_to) {
+        if (isSystem && !msg.image_url && !msg.reply_to && !/öffentlich gemacht|privat gemacht/.test(msg.text)) {
             const formatted = await formatSystemMessage(msg.text, msg.sender_id);
             if (seenSystemTexts.has(formatted)) continue;
             seenSystemTexts.add(formatted);
@@ -2190,6 +2211,10 @@ async function formatSystemMessage(text, senderId) {
     }
     if (text.includes("hat das Forum erstellt")) {
         return isOwnAction ? "Du hast das Forum erstellt." : `${actorName} hat das Forum erstellt.`;
+    }
+    if (text.includes("hat das Forum öffentlich gemacht") || text.includes("hat das Forum wieder privat gemacht")) {
+        const rest = text.slice(text.indexOf("hat das Forum") + "hat das Forum".length);
+        return isOwnAction ? `Du hast das Forum${rest}` : `${actorName} hat das Forum${rest}`;
     }
     if (text.includes("umbenannt")) {
         return isOwnAction ? text.replace(new RegExp(`^${actorName}\\s+hat`, 'i'), 'Du hast') : text;
@@ -2257,6 +2282,7 @@ async function appendSingleMessage(msg, isSystem = false) {
     const bubble = document.createElement("div");
     bubble.id = `msg-${msg.id}`;
     bubble.className = `message-bubble ${isOwn ? 'message-own' : 'message-other'}`;
+    if (isSystem && /öffentlich gemacht/.test(msg.text || "")) bubble.classList.add("system-alert");
 
     const senderName = isOwn ? "Du" : await fetchUserName(msg.sender_id);
     const dateObj = msg.created_at ? new Date(msg.created_at) : new Date();
@@ -2383,12 +2409,24 @@ async function appendSingleMessage(msg, isSystem = false) {
         copyOption.addEventListener("click", (e) => {
             e.stopPropagation();
             dropdownMenu.style.display = "none";
-            navigator.clipboard.writeText(msg.text || "").then(() => showToast("Nachricht in die Zwischenablage kopiert.", "success"));
+            navigator.clipboard.writeText((msg.audio_url && msg.transcript) || msg.text || "").then(() => showToast("Nachricht in die Zwischenablage kopiert.", "success"));
         });
         dropdownMenu.appendChild(copyOption);
 
+        // Neueste Nachricht der anderen: Chat wieder als ungelesen markieren
+        if (!isOwn && typeof isNewestForeignMessage === "function" && isNewestForeignMessage(msg)) {
+            const unreadOption = document.createElement("button");
+            unreadOption.innerHTML = '<i class="fa-solid fa-envelope"></i> Als ungelesen markieren';
+            unreadOption.addEventListener("click", (e) => {
+                e.stopPropagation();
+                dropdownMenu.style.display = "none";
+                markMessageUnread(msg);
+            });
+            dropdownMenu.appendChild(unreadOption);
+        }
+
         if (isOwn) {
-            if (msg.text && !msg.text.includes("hat den Chat") && !msg.text.includes("hat das Forum")) {
+            if (msg.text && !msg.audio_url && !msg.text.includes("hat den Chat") && !msg.text.includes("hat das Forum")) {
                 const editOption = document.createElement("button");
                 editOption.innerHTML = '<i class="fa-solid fa-pen"></i> Bearbeiten';
                 editOption.addEventListener("click", (e) => {
@@ -2588,7 +2626,11 @@ async function appendSingleMessage(msg, isSystem = false) {
         bubble.appendChild(gridContainer);
     }
 
-    if (msg.text && msg.text !== "[Medien]") {
+    // Sprachnachricht: Abspielen mit Wellenform statt Text (Transkript zum Aufklappen)
+    const isVoice = Boolean(!isDeleted && msg.audio_url && typeof renderVoiceMessage === "function");
+    if (isVoice) renderVoiceMessage(bubble, msg);
+
+    if (msg.text && msg.text !== "[Medien]" && !isVoice) {
         const textDiv = document.createElement("div");
         textDiv.className = "message-text";
         if (isSystem) {
@@ -2621,6 +2663,12 @@ async function appendSingleMessage(msg, isSystem = false) {
     timeSpan.className = "message-time";
     timeSpan.innerText = timeStr;
     footerDiv.appendChild(timeSpan);
+
+    // Häkchen wie bei WhatsApp: gesendet, zugestellt, gelesen
+    if (isOwn && !isSystem && !isDeleted && typeof createReadTicks === "function") {
+        const ticks = createReadTicks(msg);
+        if (ticks) footerDiv.appendChild(ticks);
+    }
 
     bubble.appendChild(footerDiv);
     wrapperDiv.appendChild(bubble);
@@ -2814,7 +2862,7 @@ if (chatForm) {
 
         if (sendBtn) {
             sendBtn.disabled = true;
-            sendBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Sende...`;
+            sendBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i>`;
         }
 
         try {
@@ -2874,7 +2922,7 @@ if (chatForm) {
         } finally {
             if (sendBtn) {
                 sendBtn.disabled = false;
-                sendBtn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Senden`;
+                sendBtn.innerHTML = `<i class="fa-solid fa-paper-plane"></i>`;
             }
         }
     });

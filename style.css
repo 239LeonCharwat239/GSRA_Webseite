@@ -3808,3 +3808,1155 @@ textarea.gsra-dialog-input {
         display: none;
     }
 }
+
+/* =========================================
+   MESSENGER: EINGABELEISTE (MIKROFON ↔ SENDEN) & SPRACHNACHRICHTEN
+========================================= */
+.chat-input-area textarea {
+    border-radius: 21px;
+    padding: 10px 16px;
+    background: #1c1f26;
+}
+
+.chat-input-area textarea:focus {
+    border-color: rgba(0, 85, 255, 0.6);
+    box-shadow: 0 0 0 3px rgba(0, 85, 255, 0.15);
+}
+
+.chat-round-btn {
+    width: 42px;
+    height: 42px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.chat-send-btn {
+    background: var(--gsra-blue);
+    color: #fff;
+    box-shadow: var(--blue-glow);
+}
+
+.chat-send-btn:hover:not(:disabled) {
+    transform: scale(1.08);
+    background: #1a66ff;
+}
+
+.chat-mic-btn {
+    background: #202c33;
+    color: var(--gsra-yellow);
+}
+
+.chat-mic-btn:hover {
+    transform: scale(1.08);
+    background: var(--gsra-yellow);
+    color: #111;
+    box-shadow: var(--yellow-glow);
+}
+
+.chat-round-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+/* Leeres Eingabefeld: Mikrofon statt Senden (wie bei WhatsApp) */
+#voiceRecordBtn {
+    display: none;
+}
+
+@supports selector(:has(a)) {
+    .chat-input-area:not(.no-voice):not(.has-media):has(#messageInput:placeholder-shown) #sendBtn {
+        display: none;
+    }
+    .chat-input-area:not(.no-voice):not(.has-media):has(#messageInput:placeholder-shown) #voiceRecordBtn {
+        display: inline-flex;
+    }
+    .chat-input-area:has(#messageInput:disabled) #voiceRecordBtn {
+        opacity: 0.45;
+        pointer-events: none;
+    }
+}
+
+.chat-input-area.recording > *:not(.voice-recorder) {
+    display: none !important;
+}
+
+/* Aufnahmeleiste: Löschen · Zeit · Wellenform · Pause/Mikrofon · Senden */
+.voice-recorder {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 42px;
+    position: relative;
+}
+
+@media (max-width: 600px) {
+    .voice-recorder {
+        gap: 6px;
+    }
+    .voice-recorder .voice-rec-btn {
+        width: 38px;
+        height: 38px;
+    }
+    .voice-recorder .voice-rec-status {
+        min-width: 50px;
+    }
+}
+
+.voice-rec-btn {
+    width: 42px;
+    height: 42px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 17px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.voice-rec-btn:hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: #fff;
+}
+
+.voice-rec-delete:hover {
+    color: #ff4d4d;
+}
+
+.voice-rec-pause {
+    color: #ff4d4d;
+    border: 2px solid rgba(255, 77, 77, 0.6);
+}
+
+.voice-rec-send {
+    background: var(--gsra-blue);
+    color: #fff;
+    box-shadow: var(--blue-glow);
+}
+
+.voice-rec-send:hover {
+    background: #1a66ff;
+    transform: scale(1.08);
+}
+
+.voice-recorder.busy .voice-rec-btn {
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+.voice-rec-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 62px;
+    color: #fff;
+    font-size: 15px;
+    font-variant-numeric: tabular-nums;
+}
+
+.voice-rec-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #ff4d4d;
+    box-shadow: 0 0 8px rgba(255, 77, 77, 0.8);
+    animation: voiceRecPulse 1s ease-in-out infinite;
+}
+
+.voice-recorder.paused .voice-rec-dot {
+    animation: none;
+    background: var(--text-muted);
+    box-shadow: none;
+}
+
+.voice-rec-wave {
+    flex: 1;
+    min-width: 0;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    overflow: hidden;
+}
+
+.voice-rec-wave span {
+    flex: 1;
+    min-width: 2px;
+    max-width: 5px;
+    height: 8%;
+    border-radius: 2px;
+    background: var(--gsra-yellow);
+    transition: height 0.1s linear;
+}
+
+.voice-rec-wave span.empty,
+.voice-recorder.paused .voice-rec-wave span {
+    background: rgba(255, 255, 255, 0.18);
+}
+
+.voice-rec-transcript {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: calc(100% + 12px);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border-subtle);
+    background: rgba(21, 22, 26, 0.96);
+    color: var(--text-muted);
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.voice-rec-transcript[hidden] {
+    display: none;
+}
+
+.voice-rec-transcript i {
+    color: var(--gsra-yellow);
+}
+
+@keyframes voiceRecPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.25; }
+}
+
+/* Sprachnachricht im Chat */
+.message-bubble.has-voice {
+    width: 330px;
+    max-width: 85%;
+    white-space: normal;
+}
+
+.voice-msg {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 2px 0;
+}
+
+.voice-play {
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.message-other .voice-play {
+    background: var(--gsra-blue);
+}
+
+.voice-play:hover {
+    transform: scale(1.08);
+}
+
+.voice-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.voice-wave {
+    height: 30px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    cursor: pointer;
+}
+
+.voice-wave span {
+    flex: 1;
+    min-width: 2px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.35);
+    transition: background 0.15s ease;
+}
+
+.voice-wave span.played {
+    background: var(--gsra-yellow);
+}
+
+.voice-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 2px;
+    font-size: 11px;
+    opacity: 0.85;
+    font-variant-numeric: tabular-nums;
+}
+
+.voice-speed {
+    border: none;
+    border-radius: 10px;
+    padding: 1px 8px;
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    font-family: inherit;
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.voice-speed:hover {
+    background: rgba(255, 255, 255, 0.28);
+}
+
+.voice-badge {
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.25);
+    color: var(--gsra-yellow);
+    font-size: 14px;
+}
+
+.message-own .voice-badge {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+}
+
+.voice-msg.playing .voice-badge {
+    color: var(--gsra-yellow);
+    animation: voiceRecPulse 1.2s ease-in-out infinite;
+}
+
+.voice-transcript-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 0 0;
+    border: none;
+    background: none;
+    color: inherit;
+    font-family: inherit;
+    font-size: 11px;
+    opacity: 0.8;
+    cursor: pointer;
+}
+
+.voice-transcript-toggle:hover {
+    opacity: 1;
+    text-decoration: underline;
+}
+
+.voice-transcript {
+    margin-top: 4px;
+    padding: 6px 9px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.22);
+    font-size: 13px;
+    font-style: italic;
+    white-space: pre-line;
+}
+
+.voice-transcript[hidden] {
+    display: none;
+}
+
+/* =========================================
+   MESSENGER: HÄKCHEN, ONLINE-STATUS, MEGAFONE, SYSTEMHINWEISE
+========================================= */
+.msg-ticks {
+    display: inline-flex;
+    font-size: 11px;
+    line-height: 1;
+    opacity: 0.75;
+}
+
+.msg-ticks.read {
+    color: var(--gsra-yellow);
+    opacity: 1;
+    text-shadow: 0 0 6px rgba(255, 204, 0, 0.55);
+}
+
+.icon-official {
+    color: #ff3b3b !important;
+}
+
+.icon-public {
+    color: var(--gsra-yellow) !important;
+}
+
+.wa-avatar.is-online {
+    position: relative;
+    overflow: visible;
+}
+
+.wa-avatar.is-online img {
+    border-radius: 50%;
+}
+
+.wa-avatar.is-online::after {
+    content: "";
+    position: absolute;
+    right: -1px;
+    bottom: -1px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #00d26a;
+    border: 2px solid #15161a;
+    box-shadow: 0 0 6px rgba(0, 210, 106, 0.6);
+}
+
+.wa-game-tag {
+    margin-left: 6px;
+    color: var(--gsra-yellow);
+    font-size: 12px;
+}
+
+.wa-chat-row .wa-chat-name + .wa-game-tag {
+    margin-right: auto;
+}
+
+.wa-person-note.wa-game-note {
+    max-width: 45%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.chat-header-subtitle.is-online {
+    color: #00d26a;
+}
+
+.wa-stat-chip.online i {
+    color: #00d26a;
+    font-size: 9px;
+}
+
+.wa-stat-chip.game i {
+    color: var(--gsra-yellow);
+}
+
+.wa-stat-chip.game.active {
+    border-color: rgba(255, 204, 0, 0.5);
+    color: #fff;
+}
+
+.message-bubble.system-alert {
+    border: 1px solid rgba(255, 204, 0, 0.6) !important;
+    background: rgba(255, 204, 0, 0.1) !important;
+    color: #fff;
+}
+
+.message-bubble.system-alert .message-text::before {
+    content: "⚠ ";
+    font-style: normal;
+    color: var(--gsra-yellow);
+}
+
+.wa-avatar.wa-info-avatar.clickable {
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.wa-avatar.wa-info-avatar.clickable:hover {
+    transform: scale(1.04);
+    box-shadow: 0 0 0 3px rgba(255, 204, 0, 0.55), var(--blue-glow);
+}
+
+.wa-avatar.wa-info-avatar.drop-target {
+    box-shadow: 0 0 0 4px var(--gsra-yellow);
+}
+
+/* =========================================
+   PROFIL: ADMIN-LABEL, ONLINE-/SPIELSTATUS, SOCIAL MEDIA, FOREN
+========================================= */
+.gsra-profile-dialog {
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.gsra-admin-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 11px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #ffcc00 0%, #ff9500 100%);
+    color: #111;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.3px;
+    box-shadow: var(--yellow-glow);
+}
+
+.gsra-profile-presence {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    margin: 2px 0 10px;
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.gsra-presence-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #6b7280;
+}
+
+.gsra-profile-presence.online .gsra-presence-dot {
+    background: #00d26a;
+    box-shadow: 0 0 8px rgba(0, 210, 106, 0.7);
+}
+
+.gsra-profile-presence.online .gsra-presence-text {
+    color: #00d26a;
+    font-weight: 600;
+}
+
+.gsra-presence-game {
+    color: var(--gsra-yellow);
+    font-weight: 600;
+}
+
+.gsra-presence-change {
+    padding: 2px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border-subtle);
+    background: none;
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.gsra-presence-change:hover {
+    border-color: var(--gsra-yellow);
+    color: var(--gsra-yellow);
+}
+
+.gsra-profile-links {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 4px 0 14px;
+}
+
+.gsra-social-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border-subtle);
+    border-left: 3px solid var(--platform-color, var(--gsra-blue));
+    background: #1b1d23;
+    color: #fff;
+    text-align: left;
+    text-decoration: none;
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.gsra-social-link:hover {
+    background: #23262e;
+    transform: translateX(2px);
+}
+
+.gsra-social-icon {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--platform-color, #fff);
+    font-size: 17px;
+}
+
+.gsra-social-glyph {
+    font-family: "Segoe UI Symbol", "Apple Symbols", system-ui, sans-serif;
+    font-size: 16px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.gsra-social-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.gsra-social-text strong {
+    font-size: 13px;
+}
+
+.gsra-social-text small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
+.gsra-social-link > i {
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
+.gsra-profile-forums {
+    margin-top: 12px;
+    text-align: left;
+}
+
+.gsra-profile-forums .wa-chat-item {
+    border-radius: 8px;
+}
+
+.gsra-profile-forums .wa-chat-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.gsra-forum-admin-label {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 8px;
+    border-radius: 10px;
+    background: rgba(0, 85, 255, 0.18);
+    border: 1px solid rgba(0, 85, 255, 0.6);
+    color: #8fb2ff;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+/* Spielstatus wählen */
+.gsra-dialog.gsra-game-dialog {
+    max-width: 520px;
+}
+
+.gsra-game-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.gsra-game-option {
+    padding: 10px 8px;
+    border-radius: 10px;
+    border: 1px solid var(--border-subtle);
+    background: #0b0c10;
+    color: #d6d9e0;
+    font-family: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.gsra-game-option:hover {
+    border-color: var(--gsra-yellow);
+    color: #fff;
+}
+
+.gsra-game-option.selected {
+    border-color: var(--gsra-yellow);
+    background: rgba(255, 204, 0, 0.12);
+    color: var(--gsra-yellow);
+    font-weight: 700;
+}
+
+.gsra-game-custom {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.gsra-game-custom .gsra-dialog-input {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+.gsra-game-custom .gsra-dialog-btn {
+    flex: 0 0 auto;
+}
+
+/* Melden: Bezug zu Chat und Nachrichten */
+.gsra-dialog.gsra-report-dialog {
+    max-height: 92vh;
+    overflow-y: auto;
+}
+
+.gsra-report-scope {
+    margin-bottom: 14px;
+    text-align: left;
+}
+
+.gsra-report-scope[hidden],
+.gsra-report-modes[hidden],
+.gsra-report-messages[hidden] {
+    display: none;
+}
+
+.gsra-report-label {
+    margin-bottom: 6px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.gsra-report-label i {
+    color: var(--gsra-yellow);
+}
+
+.gsra-report-chat {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+    background: #0b0c10;
+    color: #fff;
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+}
+
+.gsra-report-chat:focus {
+    border-color: var(--gsra-blue);
+}
+
+.gsra-report-modes {
+    display: flex;
+    gap: 6px;
+    margin: 8px 0;
+}
+
+.gsra-report-mode {
+    flex: 1;
+    padding: 8px;
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+    background: transparent;
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.gsra-report-mode.selected {
+    border-color: #ff4d4d;
+    background: rgba(255, 77, 77, 0.12);
+    color: #fff;
+}
+
+.gsra-report-messages {
+    max-height: 200px;
+    overflow-y: auto;
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+    background: #0b0c10;
+    transition: box-shadow 0.2s ease;
+}
+
+.gsra-report-messages.invalid {
+    border-color: #ff4d4d;
+    box-shadow: 0 0 0 2px rgba(255, 77, 77, 0.3);
+}
+
+.gsra-report-msg {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    color: #dde0e6;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.gsra-report-msg:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.gsra-report-msg input {
+    margin-top: 2px;
+    accent-color: #ff4d4d;
+}
+
+.gsra-report-msg-time {
+    color: var(--text-muted);
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.gsra-report-msg-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    word-break: break-word;
+}
+
+.gsra-report-msg.deleted .gsra-report-msg-text {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.gsra-report-scope-hint {
+    margin-top: 6px;
+    color: var(--text-muted);
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+.gsra-report-tip {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    margin: -8px 0 14px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 204, 0, 0.28);
+    background: rgba(255, 204, 0, 0.08);
+    color: #ffe08a;
+    font-size: 12px;
+    line-height: 1.45;
+    text-align: left;
+}
+
+.gsra-report-tip i {
+    margin-top: 2px;
+    color: var(--gsra-yellow);
+}
+
+/* Auswahlmenü an Bildern & Großansicht */
+.gsra-action-menu {
+    position: fixed;
+    z-index: 10002;
+    min-width: 200px;
+    display: flex;
+    flex-direction: column;
+    padding: 6px;
+    border-radius: 10px;
+    border: 1px solid var(--border-subtle);
+    background: #1b1d23;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.65);
+    animation: gsraDialogPop 0.15s ease;
+}
+
+.gsra-action-menu button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border: none;
+    border-radius: 6px;
+    background: none;
+    color: #fff;
+    font-family: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.gsra-action-menu button:hover,
+.gsra-action-menu button:focus-visible {
+    background: rgba(255, 255, 255, 0.07);
+    outline: none;
+}
+
+.gsra-action-menu button i {
+    width: 16px;
+    color: var(--gsra-yellow);
+}
+
+.gsra-action-menu button.danger,
+.gsra-action-menu button.danger i {
+    color: #ff4d4d;
+}
+
+.gsra-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 10003;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.9);
+    cursor: zoom-out;
+    animation: gsraDialogFade 0.2s ease;
+}
+
+.gsra-lightbox img {
+    max-width: 90vw;
+    max-height: 85vh;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+    cursor: default;
+}
+
+.gsra-lightbox-close {
+    position: absolute;
+    top: 20px;
+    right: 24px;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    font-size: 18px;
+    cursor: pointer;
+}
+
+.gsra-lightbox-close:hover {
+    background: rgba(255, 255, 255, 0.18);
+}
+
+/* =========================================
+   DASHBOARD: PROFILBILD-MENÜ & SOCIAL-MEDIA-LINKS
+========================================= */
+.dash-avatar-wrap {
+    position: relative;
+    flex-shrink: 0;
+    border-radius: 50%;
+}
+
+button.dash-avatar {
+    padding: 0;
+    font-family: inherit;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+}
+
+button.dash-avatar:hover,
+.dash-avatar-wrap.drop-target .dash-avatar {
+    transform: scale(1.04);
+    border-color: var(--gsra-yellow);
+    box-shadow: var(--yellow-glow);
+}
+
+.dash-avatar.loading {
+    opacity: 0.5;
+}
+
+.dash-avatar-edit {
+    position: absolute;
+    right: -2px;
+    bottom: -2px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 3px solid var(--bg-card);
+    background: var(--gsra-yellow);
+    color: #111;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    pointer-events: none;
+}
+
+.dash-social-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.dash-social-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dash-social-icon {
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-main);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+}
+
+.dash-form .dash-social-row input[type="text"] {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+.dash-form .dash-social-row input.invalid {
+    border-color: #ff4d4d;
+    box-shadow: 0 0 0 3px rgba(255, 77, 77, 0.2);
+}
+
+.dash-social-remove {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.dash-social-remove:hover {
+    color: #ff4d4d;
+    background: rgba(255, 77, 77, 0.1);
+}
+
+.dash-add-link {
+    align-self: flex-start;
+    margin-bottom: 10px;
+    padding: 7px 12px;
+    border-radius: 8px;
+    border: 1px dashed rgba(255, 255, 255, 0.22);
+    background: none;
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.dash-add-link:hover {
+    border-color: var(--gsra-yellow);
+    color: var(--gsra-yellow);
+}
+
+/* =========================================
+   ADMIN: VERLAUF MIT GELÖSCHTEN NACHRICHTEN (BEWEISSICHERUNG)
+========================================= */
+.admin-context:not(.empty) {
+    max-height: 560px;
+    overflow-y: auto;
+}
+
+.admin-context-range {
+    margin-left: 8px;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.admin-msg.deleted {
+    border-style: dashed;
+    border-color: rgba(255, 77, 77, 0.45);
+}
+
+.admin-msg.deleted.reported {
+    border-style: solid;
+    border-color: #ff4d4d;
+}
+
+.admin-msg-deleted {
+    color: #ff6b6b;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.admin-msg-original {
+    margin-top: 4px;
+    padding: 6px 9px;
+    border-left: 3px solid var(--gsra-yellow);
+    border-radius: 4px;
+    background: rgba(255, 204, 0, 0.07);
+    font-size: 13px;
+}
+
+.admin-msg-original > span:first-child {
+    margin-right: 4px;
+    color: var(--gsra-yellow);
+    font-weight: 700;
+}
+
+.admin-msg-original.missing {
+    border-left-color: var(--text-muted);
+    background: transparent;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.admin-msg-media,
+.admin-msg-transcript {
+    display: block;
+    margin-top: 3px;
+}
+
+.admin-msg-transcript {
+    color: #d6d9e0;
+    font-style: italic;
+}
+
+/* =========================================
+   MESSENGER: FEINSCHLIFF IM GSRA-LOOK
+========================================= */
+.chat-header {
+    background: linear-gradient(90deg, #15161a 0%, #141a2b 100%);
+    border-bottom: 1px solid rgba(0, 85, 255, 0.28);
+}
+
+.chat-messages {
+    background:
+        radial-gradient(circle at 12% 0%, rgba(0, 85, 255, 0.07), transparent 42%),
+        radial-gradient(circle at 92% 100%, rgba(255, 204, 0, 0.05), transparent 40%);
+}
+
+.message-own {
+    background: linear-gradient(135deg, #0a5cff 0%, #0044cc 100%);
+    box-shadow: 0 3px 10px rgba(0, 85, 255, 0.25);
+}
+
+.message-other {
+    background: #1c1f26;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
+}
+
+.chat-input-area {
+    background: linear-gradient(90deg, #15161a 0%, #141a2b 100%);
+    border-top: 1px solid rgba(0, 85, 255, 0.2);
+}
+
+.wa-chat-item.active {
+    box-shadow: inset 3px 0 0 var(--gsra-blue);
+}

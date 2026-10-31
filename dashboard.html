@@ -49,7 +49,12 @@
                 <div class="card">
                     <h3><i class="fa-solid fa-user-gear text-blue"></i> Profil Informationen</h3>
                     <div class="dash-profile-head">
-                        <div class="dash-avatar" id="dashAvatar"><i class="fa-solid fa-user"></i></div>
+                        <!-- Klick aufs Profilbild: hochladen, ändern, löschen, vergrößern – oder ein Bild darauf ziehen -->
+                        <div class="dash-avatar-wrap">
+                            <button type="button" class="dash-avatar" id="dashAvatar" title="Profilbild ändern"><i class="fa-solid fa-user"></i></button>
+                            <span class="dash-avatar-edit"><i class="fa-solid fa-camera"></i></span>
+                            <input type="file" id="editAvatarFile" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+                        </div>
                         <div class="dash-profile-name">
                             <span id="dashUsername">Lade...</span>
                             <button type="button" class="gsra-id-chip" id="dashGsraId" title="GSRA-ID kopieren" style="display: none;"></button>
@@ -59,6 +64,7 @@
                         <p><strong>E-Mail:</strong> <span id="dashEmail">Lade...</span></p>
                         <p><strong>Mitglied seit:</strong> <span id="dashCreated">Lade...</span></p>
                         <p class="dash-hint"><i class="fa-solid fa-circle-info text-blue"></i> Mit deiner GSRA-ID finden dich Freunde im Messenger eindeutig – auch wenn es deinen Namen mehrmals gibt.</p>
+                        <p class="dash-hint"><i class="fa-solid fa-camera text-yellow"></i> Klicke auf dein Profilbild, um es hochzuladen, zu ändern, zu löschen oder zu vergrößern – oder ziehe einfach ein Bild darauf.</p>
                     </div>
                 </div>
 
@@ -70,11 +76,9 @@
                         <input type="text" id="editUsername" maxlength="40" required>
                         <label for="editBio">Über mich <span>(optional, im Profil für andere sichtbar)</span></label>
                         <textarea id="editBio" rows="3" maxlength="300" placeholder="z. B. Fahre GT3 in iRacing und ACC …"></textarea>
-                        <label>Profilbild</label>
-                        <label class="dash-file-picker" for="editAvatarFile">
-                            <i class="fa-solid fa-image"></i> <span id="editAvatarName">Bild auswählen (PNG, JPG, WebP oder GIF, max. 5 MB)</span>
-                            <input type="file" id="editAvatarFile" accept="image/png,image/jpeg,image/webp,image/gif">
-                        </label>
+                        <label>Social Media <span>(optional, bis zu 8 Links – im Profil für andere sichtbar)</span></label>
+                        <div id="socialLinksEditor" class="dash-social-editor"></div>
+                        <button type="button" id="addSocialLinkBtn" class="dash-add-link"><i class="fa-solid fa-plus"></i> Link hinzufügen</button>
                         <button type="submit" class="login-btn dash-save-btn"><i class="fa-solid fa-floppy-disk"></i> Profil speichern</button>
                     </form>
                 </div>

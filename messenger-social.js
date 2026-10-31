@@ -129,6 +129,15 @@ function closeProfileDialog() {
 async function openUserProfile(userId, context = {}) {
     if (!userId || !currentUser?.id) return;
     await fetchUserName(userId);
+    // Profil und Online-Status frisch laden (z. B. neue Social-Media-Links)
+    const [{ data: freshProfile }] = await Promise.all([
+        socialDb().from("profiles").select("*").eq("id", userId).maybeSingle(),
+        typeof refreshPresenceFor === "function" ? refreshPresenceFor(userId) : null
+    ]);
+    if (freshProfile) {
+        profileCache[userId] = freshProfile;
+        userNamesCache[userId] = freshProfile.username || freshProfile.full_name || "Fahrer";
+    }
     closeProfileDialog();
 
     const overlay = document.createElement("div");
@@ -140,9 +149,12 @@ async function openUserProfile(userId, context = {}) {
             <div class="gsra-profile-avatar"></div>
             <h3 class="gsra-dialog-title"></h3>
             <div class="gsra-profile-meta"></div>
+            <div class="gsra-profile-presence"></div>
             <p class="gsra-profile-bio"></p>
+            <div class="gsra-profile-links"></div>
             <div class="gsra-profile-status"></div>
             <div class="gsra-profile-actions"></div>
+            <div class="gsra-profile-forums"></div>
             <div class="gsra-profile-secondary"></div>
         </div>`;
     const close = () => {
@@ -160,6 +172,52 @@ async function openUserProfile(userId, context = {}) {
     document.addEventListener("keydown", onKey, true);
     document.body.appendChild(overlay);
     renderProfileContent(overlay, userId, context);
+    renderProfileForums(overlay, userId);
+}
+
+// Öffentliche Foren, in denen die Person Mitglied ist – mit Kennzeichnung, wo sie Admin ist
+async function renderProfileForums(overlay, userId) {
+    const box = overlay.querySelector(".gsra-profile-forums");
+    if (!box || !socialReady) return;
+    const { data, error } = await socialDb().rpc("user_public_forums", { _user: userId });
+    if (error || !data || data.length === 0 || !document.body.contains(overlay)) return;
+    box.replaceChildren(createSectionTitle(`Öffentliche Foren (${data.length})`));
+    data.forEach(forum => {
+        const count = Number(forum.member_count) || 0;
+        const row = createPersonRow(forum.title, { icon: "fa-bullhorn icon-public", avatarUrl: forum.image_url, note: forum.is_member ? "Mitglied" : `${count} Mitgl.` });
+        if (forum.role === "admin") {
+            const label = document.createElement("span");
+            label.className = "gsra-forum-admin-label";
+            label.innerHTML = '<i class="fa-solid fa-user-shield"></i> Admin';
+            row.querySelector(".wa-chat-name").after(label);
+        }
+        row.title = forum.is_member ? "Forum öffnen" : "Forum ansehen und beitreten";
+        row.addEventListener("click", () => {
+            closeProfileDialog();
+            openPublicGroupPreview(forum);
+        });
+        box.appendChild(row);
+    });
+}
+
+// Social-Media-Links als Streifen mit dem Logo der Plattform
+function renderSocialLinks(container, links) {
+    container.replaceChildren();
+    const valid = (Array.isArray(links) ? links : []).map(normalizeSocialUrl).filter(Boolean);
+    container.style.display = valid.length ? "" : "none";
+    valid.forEach(link => {
+        const platform = socialPlatformOf(link);
+        const a = document.createElement("a");
+        a.className = "gsra-social-link";
+        a.href = link;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer nofollow";
+        a.style.setProperty("--platform-color", platform.color);
+        a.innerHTML = `<span class="gsra-social-icon">${socialIconHtml(platform)}</span><span class="gsra-social-text"><strong></strong><small></small></span><i class="fa-solid fa-arrow-up-right-from-square"></i>`;
+        a.querySelector("strong").textContent = platform.name;
+        a.querySelector("small").textContent = socialLinkLabel(link);
+        container.appendChild(a);
+    });
 }
 
 function renderProfileContent(overlay, userId, context) {
@@ -175,6 +233,13 @@ function renderProfileContent(overlay, userId, context) {
 
     const meta = overlay.querySelector(".gsra-profile-meta");
     meta.replaceChildren();
+    // GSRA-Admins (Projektteam) sind im Profil gekennzeichnet
+    if (profile.role === "admin") {
+        const badge = document.createElement("span");
+        badge.className = "gsra-admin-badge";
+        badge.innerHTML = '<i class="fa-solid fa-shield-halved"></i> GSRA-Admin';
+        meta.appendChild(badge);
+    }
     if (profile.gsra_id) {
         const idChip = document.createElement("button");
         idChip.type = "button";
@@ -190,9 +255,41 @@ function renderProfileContent(overlay, userId, context) {
         meta.appendChild(since);
     }
 
+    // Online-Status und „Spielt gerade …“ (nur für Freunde und dich selbst sichtbar)
+    const presence = overlay.querySelector(".gsra-profile-presence");
+    const seen = typeof lastSeenText === "function" ? lastSeenText(userId) : "";
+    const game = typeof currentGameOf === "function" ? currentGameOf(userId) : null;
+    presence.replaceChildren();
+    presence.style.display = seen ? "" : "none";
+    if (seen) {
+        const online = isUserOnline(userId);
+        presence.className = `gsra-profile-presence${online ? " online" : ""}`;
+        presence.innerHTML = `<span class="gsra-presence-dot"></span><span class="gsra-presence-text"></span>`;
+        presence.querySelector(".gsra-presence-text").textContent = online ? "Online" : seen.charAt(0).toUpperCase() + seen.slice(1);
+        if (game) {
+            const gameEl = document.createElement("span");
+            gameEl.className = "gsra-presence-game";
+            gameEl.innerHTML = '<i class="fa-solid fa-gamepad"></i> <span></span>';
+            gameEl.querySelector("span").textContent = `Spielt gerade ${game}`;
+            presence.appendChild(gameEl);
+        }
+        if (isMe) {
+            const change = document.createElement("button");
+            change.type = "button";
+            change.className = "gsra-presence-change";
+            change.innerHTML = `<i class="fa-solid fa-pen"></i> ${game ? "Spielstatus ändern" : "Spielstatus setzen"}`;
+            change.addEventListener("click", () => {
+                closeProfileDialog();
+                openGameStatusDialog();
+            });
+            presence.appendChild(change);
+        }
+    }
+
     const bio = overlay.querySelector(".gsra-profile-bio");
     bio.textContent = profile.bio || "";
     bio.style.display = profile.bio ? "" : "none";
+    renderSocialLinks(overlay.querySelector(".gsra-profile-links"), profile.social_links);
 
     const statusEl = overlay.querySelector(".gsra-profile-status");
     const statusText = isMe ? "Das ist dein Profil."
@@ -460,7 +557,8 @@ async function afterBlockChange(userId, blocked) {
     if (activeChatId) loadChatMessages(activeChatId);
 }
 
-// Melden mit Grund und optionalem Text – danach ist die Person sofort für dich blockiert
+// Melden mit Grund, Bezug (ausgewählte Nachrichten oder ganzer Chat) und optionalem Text –
+// danach ist die Person sofort für dich blockiert
 function openReportDialog(userId, context = {}) {
     const name = displayName(userId);
     const overlay = document.createElement("div");
@@ -472,7 +570,18 @@ function openReportDialog(userId, context = {}) {
             <h3 class="gsra-dialog-title"></h3>
             <p class="gsra-dialog-message">Deine Meldung geht vertraulich an das GSRA-Team. Warum meldest du diese Person?</p>
             <div class="gsra-report-reasons"></div>
+            <div class="gsra-report-scope" hidden>
+                <div class="gsra-report-label"><i class="fa-solid fa-link"></i> Worauf bezieht sich deine Meldung?</div>
+                <select class="gsra-report-chat" aria-label="Chat auswählen"></select>
+                <div class="gsra-report-modes">
+                    <button type="button" class="gsra-report-mode selected" data-mode="messages"><i class="fa-solid fa-list-check"></i> Nachrichten auswählen</button>
+                    <button type="button" class="gsra-report-mode" data-mode="chat"><i class="fa-solid fa-comments"></i> Ganzen Chat melden</button>
+                </div>
+                <div class="gsra-report-messages"></div>
+                <p class="gsra-report-scope-hint"></p>
+            </div>
             <textarea class="gsra-dialog-input" rows="3" maxlength="1000" placeholder="Was ist passiert? (optional)"></textarea>
+            <p class="gsra-report-tip"><i class="fa-solid fa-lightbulb"></i> Tipp: Beschreibe kurz, was passiert ist. Das hilft den Admins bei der Prüfung enorm und erhöht die Chance, dass ein Verstoß geahndet wird.</p>
             <p class="gsra-report-hint"><i class="fa-solid fa-shield-halved"></i> <span></span></p>
             <div class="gsra-dialog-actions">
                 <button type="button" class="gsra-dialog-btn secondary">Abbrechen</button>
@@ -508,21 +617,131 @@ function openReportDialog(userId, context = {}) {
         e.stopPropagation();
         close();
     };
+    // Bezug: gemeinsamer Chat, darin einzelne Nachrichten der Person oder der ganze Chat
+    const scope = overlay.querySelector(".gsra-report-scope");
+    const chatSelect = overlay.querySelector(".gsra-report-chat");
+    const messagesBox = overlay.querySelector(".gsra-report-messages");
+    const scopeHint = overlay.querySelector(".gsra-report-scope-hint");
+    const selectedIds = new Set(context.messageId ? [String(context.messageId)] : []);
+    let mode = "messages";
+    let scopeReady = false;
+
+    const syncScope = () => {
+        const hasChat = Boolean(chatSelect.value);
+        overlay.querySelector(".gsra-report-modes").hidden = !hasChat;
+        messagesBox.hidden = !hasChat || mode !== "messages";
+        overlay.querySelectorAll(".gsra-report-mode").forEach(b => b.classList.toggle("selected", b.dataset.mode === mode));
+        scopeHint.textContent = !hasChat
+            ? "Ohne Chatbezug sieht das GSRA-Team nur deine Beschreibung – beschreibe die Situation dann bitte möglichst genau."
+            : (mode === "chat"
+                ? "Das GSRA-Team sieht die letzten 150 Nachrichten dieses Chats – auch Nachrichten, die gelöscht wurden."
+                : "Das GSRA-Team sieht die markierten Nachrichten mit dem Verlauf davor und danach – auch Nachrichten, die gelöscht wurden.");
+    };
+
+    const loadMessages = async () => {
+        const chatId = chatSelect.value;
+        messagesBox.classList.remove("invalid");
+        syncScope();
+        if (!chatId) return;
+        messagesBox.innerHTML = '<p class="wa-empty-note"><i class="fa-solid fa-spinner fa-spin"></i> Lade Nachrichten …</p>';
+        const { data: rows, error } = await socialDb().rpc("reportable_messages", { _chat_id: chatId, _user: userId });
+        if (chatSelect.value !== chatId) return;
+        // Systemnachrichten (z. B. „… hat den Chat eröffnet“) lassen sich nicht melden
+        const data = (rows || []).filter(m => !(typeof SYSTEM_TEXT_PATTERN !== "undefined" && SYSTEM_TEXT_PATTERN.test(m.text || "") && !m.image_url && !m.audio_url));
+        messagesBox.replaceChildren();
+        if (error || data.length === 0) {
+            const note = document.createElement("p");
+            note.className = "wa-empty-note";
+            note.textContent = `In diesem Chat gibt es keine Nachrichten von ${name} – du kannst den ganzen Chat melden.`;
+            messagesBox.appendChild(note);
+            return;
+        }
+        data.forEach(m => {
+            const row = document.createElement("label");
+            row.className = `gsra-report-msg${m.deleted ? " deleted" : ""}`;
+            row.innerHTML = '<input type="checkbox"><span class="gsra-report-msg-time"></span><span class="gsra-report-msg-text"></span>';
+            const checkbox = row.querySelector("input");
+            checkbox.checked = selectedIds.has(String(m.id));
+            checkbox.addEventListener("change", () => {
+                if (checkbox.checked) selectedIds.add(String(m.id));
+                else selectedIds.delete(String(m.id));
+                messagesBox.classList.remove("invalid");
+            });
+            row.querySelector(".gsra-report-msg-time").textContent = new Date(m.created_at).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+            row.querySelector(".gsra-report-msg-text").textContent = m.deleted ? "Gelöschte Nachricht (das Original sieht das GSRA-Team)"
+                : m.audio_url ? `🎤 Sprachnachricht${m.transcript ? `: „${m.transcript}“` : ""}`
+                : (m.image_url && (!m.text || m.text === "[Medien]")) ? "📷 Foto/Video"
+                : m.text;
+            messagesBox.appendChild(row);
+        });
+    };
+
+    const loadReportScope = async () => {
+        const { data: chats, error } = await socialDb().rpc("shared_chats_with", { _other: userId });
+        if (error || !document.body.contains(overlay)) return; // ohne Datenbank-Erweiterung: wie bisher
+        scopeReady = true;
+        const options = (chats || []).map(c => ({
+            value: c.id,
+            text: c.kind === "direkt" ? `Direktchat mit ${name}` : `${c.kind === "forum" ? "Forum" : "Gruppe"} „${c.title}“`
+        }));
+        options.push({ value: "", text: "Kein bestimmter Chat (z. B. Profil oder Verhalten)" });
+        chatSelect.replaceChildren(...options.map(o => {
+            const option = document.createElement("option");
+            option.value = o.value;
+            option.textContent = o.text;
+            return option;
+        }));
+        chatSelect.value = context.chatId && (chats || []).some(c => c.id === context.chatId) ? context.chatId : ((chats || [])[0]?.id || "");
+        scope.hidden = false;
+        loadMessages();
+    };
+    chatSelect.addEventListener("change", () => {
+        selectedIds.clear();
+        loadMessages();
+    });
+    overlay.querySelectorAll(".gsra-report-mode").forEach(btn => btn.addEventListener("click", () => {
+        mode = btn.dataset.mode;
+        messagesBox.classList.remove("invalid");
+        syncScope();
+    }));
+
     const submitBtn = overlay.querySelector(".gsra-dialog-btn.primary");
     submitBtn.addEventListener("click", async () => {
         if (!reason) {
             reasonsBox.classList.add("invalid");
             return;
         }
+        const chatId = scopeReady ? (chatSelect.value || null) : (context.chatId || null);
+        const messageIds = scopeReady && chatId && mode === "messages" ? [...selectedIds] : [];
+        const hasChoices = Boolean(messagesBox.querySelector("input"));
+        if (scopeReady && chatId && mode === "messages" && hasChoices && messageIds.length === 0) {
+            messagesBox.classList.add("invalid");
+            showToast("Bitte markiere mindestens eine Nachricht – oder melde den ganzen Chat.", "info");
+            return;
+        }
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Wird gesendet …';
-        const { error } = await socialDb().rpc("report_user", {
-            _reported: userId,
-            _reason: reason,
-            _details: overlay.querySelector("textarea").value.trim() || null,
-            _chat_id: context.chatId || null,
-            _message_id: context.messageId ? String(context.messageId) : null
-        });
+        const details = overlay.querySelector("textarea").value.trim() || null;
+        let error = null;
+        if (scopeReady) {
+            ({ error } = await socialDb().rpc("submit_report", {
+                _reported: userId,
+                _reason: reason,
+                _details: details,
+                _chat_id: chatId,
+                _message_ids: messageIds.length ? messageIds : null,
+                _whole_chat: Boolean(chatId && (mode === "chat" || messageIds.length === 0))
+            }));
+        }
+        if (!scopeReady || isMissingFunction(error)) {
+            ({ error } = await socialDb().rpc("report_user", {
+                _reported: userId,
+                _reason: reason,
+                _details: details,
+                _chat_id: chatId,
+                _message_id: messageIds[0] || (context.messageId ? String(context.messageId) : null)
+            }));
+        }
         if (error) {
             submitBtn.disabled = false;
             submitBtn.textContent = "Melden & blockieren";
@@ -538,6 +757,7 @@ function openReportDialog(userId, context = {}) {
     overlay.addEventListener("mousedown", (e) => { if (e.target === overlay) close(); });
     document.addEventListener("keydown", onKey, true);
     document.body.appendChild(overlay);
+    if (socialReady) loadReportScope();
 }
 
 /* ---------- Verwarnungen ---------- */
@@ -598,10 +818,15 @@ function renderWelcomeInfo() {
             items.push({ action: "requests", icon: "fa-user-clock", value: requests, label: requests === 1 ? "Freundschaftsanfrage" : "Freundschaftsanfragen", highlight: requests > 0 });
             items.push({ action: "friends", icon: "fa-user-group", value: friends, label: friends === 1 ? "Freund" : "Freunde", highlight: false });
         }
-        stats.replaceChildren(...items.map(item => {
+        // Wie viele Freunde gerade online sind
+        if (socialReady && typeof presenceReady !== "undefined" && presenceReady) {
+            const online = onlineFriendIds().length;
+            items.push({ action: "friends", icon: "fa-circle", value: online, label: online === 1 ? "Freund online" : "Freunde online", highlight: false, cls: "online" });
+        }
+        const chips = items.map(item => {
             const chip = document.createElement("button");
             chip.type = "button";
-            chip.className = `wa-stat-chip${item.highlight ? " highlight" : ""}`;
+            chip.className = `wa-stat-chip${item.highlight ? " highlight" : ""}${item.cls ? ` ${item.cls}` : ""}`;
             chip.innerHTML = `<i class="fa-solid ${item.icon}"></i><strong>${item.value}</strong><span>${item.label}</span>`;
             chip.addEventListener("click", () => {
                 if (item.action === "requests") openFriendRequestsPanel();
@@ -609,7 +834,20 @@ function renderWelcomeInfo() {
                 else document.querySelector('.wa-pill[data-filter="unread"]')?.click();
             });
             return chip;
-        }));
+        });
+        // Eigener Spielstatus („Spielt gerade …“) – per Klick ändern
+        if (typeof presenceReady !== "undefined" && presenceReady) {
+            const myGame = presenceByUser.get(currentUser.id)?.current_game;
+            const gameChip = document.createElement("button");
+            gameChip.type = "button";
+            gameChip.className = `wa-stat-chip game${myGame ? " active" : ""}`;
+            gameChip.title = "Spielstatus für deine Freunde festlegen";
+            gameChip.innerHTML = '<i class="fa-solid fa-gamepad"></i><span></span>';
+            gameChip.querySelector("span").textContent = myGame ? `Spielt gerade ${myGame}` : "Spielstatus setzen";
+            gameChip.addEventListener("click", openGameStatusDialog);
+            chips.push(gameChip);
+        }
+        stats.replaceChildren(...chips);
     }
 
     const idBox = document.getElementById("welcomeGsraId");
@@ -667,7 +905,7 @@ async function openPublicGroupPreview(group) {
     }
     const count = Number(group.member_count) || 0;
     const join = await showDialog({
-        icon: "fa-users",
+        icon: "fa-bullhorn",
         title: group.title,
         message: `${group.description || "Öffentliches Forum der GSRA-Community."}\n\n${count} ${count === 1 ? "Mitglied" : "Mitglieder"}`,
         confirmText: "Beitreten",
@@ -725,7 +963,7 @@ function openForumDirectory() {
         list.replaceChildren();
         groups.forEach(group => {
             const count = Number(group.member_count) || 0;
-            const row = createPersonRow(group.title, { icon: "fa-users", avatarUrl: group.image_url, note: group.is_member ? "Mitglied" : `${count} Mitgl.` });
+            const row = createPersonRow(group.title, { icon: "fa-bullhorn icon-public", avatarUrl: group.image_url, note: group.is_member ? "Mitglied" : `${count} Mitgl.` });
             if (group.description) {
                 const desc = document.createElement("div");
                 desc.className = "wa-chat-msg";
@@ -769,8 +1007,8 @@ async function saveGroupFields(chat, fields, successMessage) {
     Object.assign(chat, fields);
     const cached = allChatsCache.find(c => c.id === chat.id);
     if (cached && cached !== chat) Object.assign(cached, fields);
-    if (activeChatId === chat.id && "image_url" in fields) {
-        chatHeaderAvatar.innerHTML = avatarInner(fields.image_url, isOfficialForum(chat.id) ? "fa-bullhorn text-yellow" : "fa-users");
+    if (activeChatId === chat.id && ("image_url" in fields || "is_public" in fields)) {
+        chatHeaderAvatar.innerHTML = avatarInner(chat.image_url, chatIconClass(chat));
     }
     renderChatInfo();
     renderChatsList();
@@ -795,25 +1033,78 @@ function changeGroupImage(chat) {
     const picker = document.createElement("input");
     picker.type = "file";
     picker.accept = "image/png,image/jpeg,image/webp,image/gif";
-    picker.addEventListener("change", async () => {
-        const file = picker.files[0];
-        if (!file) return;
-        if (file.size > 5 * 1024 * 1024) {
-            showToast("Das Bild darf höchstens 5 MB groß sein.", "error");
-            return;
-        }
-        const supabase = socialDb();
-        const ext = (file.name.split(".").pop() || "png").toLowerCase();
-        const path = `foren/${chat.id}/${Date.now()}.${ext}`;
-        const { error: uploadError } = await supabase.storage.from("avatars").upload(path, file, { contentType: file.type });
-        if (uploadError) {
-            showToast(`Das Bild konnte nicht hochgeladen werden: ${uploadError.message}`, "error");
-            return;
-        }
-        const { data } = supabase.storage.from("avatars").getPublicUrl(path);
-        await saveGroupFields(chat, { image_url: data.publicUrl }, "Das Forenbild wurde aktualisiert.");
+    picker.addEventListener("change", () => {
+        if (picker.files[0]) uploadGroupImage(chat, picker.files[0]);
     });
     picker.click();
+}
+
+async function uploadGroupImage(chat, file) {
+    if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) {
+        showToast("Bitte wähle ein Bild (PNG, JPG, WebP oder GIF).", "error");
+        return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+        showToast("Das Bild darf höchstens 5 MB groß sein.", "error");
+        return;
+    }
+    const supabase = socialDb();
+    const ext = (file.name.split(".").pop() || "png").toLowerCase();
+    const path = `foren/${chat.id}/${Date.now()}.${ext}`;
+    const { error: uploadError } = await supabase.storage.from("avatars").upload(path, file, { contentType: file.type });
+    if (uploadError) {
+        showToast(`Das Bild konnte nicht hochgeladen werden: ${uploadError.message}`, "error");
+        return;
+    }
+    const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+    await saveGroupFields(chat, { image_url: data.publicUrl }, "Das Forenbild wurde aktualisiert.");
+}
+
+async function removeGroupImage(chat) {
+    const confirmed = await showDialog({
+        icon: "fa-trash",
+        title: "Bild löschen?",
+        message: "Statt des Bildes erscheint wieder das Symbol der Gruppe.",
+        confirmText: "Löschen",
+        cancelText: "Abbrechen",
+        danger: true
+    });
+    if (confirmed) await saveGroupFields(chat, { image_url: null }, "Das Bild wurde entfernt.");
+}
+
+// Bild in der Gruppen-/Kontaktinfo: Klick öffnet Vergrößern – Admins können es auch auswählen, ändern oder löschen
+// (auch per Drag & Drop eines Bildes auf das Symbol)
+function setupInfoAvatar(avatarEl, chat, { avatarUrl, canEdit }) {
+    if (!avatarEl || (!avatarUrl && !canEdit)) return;
+    avatarEl.classList.add("clickable");
+    avatarEl.title = canEdit ? "Bild anzeigen oder ändern" : "Bild vergrößern";
+    avatarEl.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (!canEdit) {
+            showImageLightbox(avatarUrl);
+            return;
+        }
+        const items = [];
+        if (avatarUrl) items.push({ icon: "fa-expand", text: "Vergrößern", onClick: () => showImageLightbox(avatarUrl) });
+        items.push({ icon: "fa-image", text: avatarUrl ? "Bild ändern" : "Bild auswählen", onClick: () => changeGroupImage(chat) });
+        if (avatarUrl) items.push({ icon: "fa-trash", text: "Bild löschen", danger: true, onClick: () => removeGroupImage(chat) });
+        showActionMenu(avatarEl, items);
+    });
+    if (!canEdit) return;
+    avatarEl.addEventListener("dragover", (e) => {
+        if (!Array.from(e.dataTransfer?.types || []).includes("Files")) return;
+        e.preventDefault();
+        e.stopPropagation();
+        avatarEl.classList.add("drop-target");
+    });
+    avatarEl.addEventListener("dragleave", () => avatarEl.classList.remove("drop-target"));
+    avatarEl.addEventListener("drop", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        avatarEl.classList.remove("drop-target");
+        const file = e.dataTransfer?.files?.[0];
+        if (file) uploadGroupImage(chat, file);
+    });
 }
 
 async function toggleGroupPublic(chat) {
@@ -828,7 +1119,15 @@ async function toggleGroupPublic(chat) {
         cancelText: "Abbrechen"
     });
     if (!confirmed) return;
-    await saveGroupFields(chat, { is_public: makePublic }, makePublic ? "Das Forum ist jetzt öffentlich." : "Das Forum ist jetzt privat.");
+    const saved = await saveGroupFields(chat, { is_public: makePublic }, makePublic ? "Das Forum ist jetzt öffentlich." : "Das Forum ist jetzt privat.");
+    if (!saved) return;
+    // Systemnachricht im Chat, damit alle Mitglieder Bescheid wissen
+    const sysMsg = makePublic
+        ? `${currentUsername} hat das Forum öffentlich gemacht. Jedes GSRA-Mitglied kann es jetzt finden, beitreten und alle bisherigen Nachrichten lesen.`
+        : `${currentUsername} hat das Forum wieder privat gemacht. Neue Mitglieder können nur noch Gruppenadmins hinzufügen.`;
+    await socialDb().from("messages").insert([{ chat_id: chat.id, sender_id: currentUser.id, text: sysMsg }]);
+    await socialDb().from("chats").update({ last_message: sysMsg }).eq("id", chat.id);
+    loadUserChats();
 }
 
 /* ---------- Löschen: für mich / für alle (Gruppenadmins) ---------- */
@@ -866,8 +1165,10 @@ async function deleteMessageForAllAsAdmin(msg) {
         danger: true
     });
     if (!confirmed) return;
+    const changes = { text: ADMIN_DELETED_TEXT, image_url: null, reply_to: null, is_edited: false, reactions: {} };
+    if (msg.audio_url) Object.assign(changes, { audio_url: null, transcript: null, voice_duration: null, voice_waveform: null });
     const { data, error } = await socialDb().from("messages")
-        .update({ text: ADMIN_DELETED_TEXT, image_url: null, reply_to: null, is_edited: false, reactions: {} })
+        .update(changes)
         .eq("id", msg.id)
         .select("id");
     if (error || !data || data.length === 0) {
