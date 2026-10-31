@@ -56,6 +56,7 @@
             <div>
                 <label style="display: block; font-size: 14px; font-weight: bold; margin-bottom: 5px; color: var(--text-light);">Passwort</label>
                 <input type="password" id="password" placeholder="••••••••" required style="width: 100%; padding: 10px; background-color: var(--bg-main); border: 1px solid var(--border-subtle); border-radius: 4px; font-size: 14px; color: var(--text-light);">
+                <button type="button" id="forgotPasswordBtn" style="background: none; border: none; color: var(--gsra-yellow); font-size: 13px; cursor: pointer; padding: 6px 0 0; text-decoration: underline;">Passwort vergessen?</button>
             </div>
             
             <button type="submit" id="submitBtn" style="background-color: var(--gsra-blue); color: var(--text-light); border: none; padding: 12px; border-radius: 4px; font-weight: bold; font-size: 16px; cursor: pointer; margin-top: 10px;">Anmelden</button>
@@ -80,6 +81,24 @@
         const usernameInput = document.getElementById('username');
         const submitBtn = document.getElementById('submitBtn');
         const toggleModeBtn = document.getElementById('toggleModeBtn');
+        const forgotPasswordBtn = document.getElementById('forgotPasswordBtn');
+
+        // Links in den E-Mails führen zurück auf diese Webseite
+        const pageUrl = (page) => new URL(page, window.location.href).href;
+
+        // Häufige Fehlermeldungen von Supabase auf Deutsch
+        const authErrorText = (error) => {
+            const msg = error?.message || '';
+            const minLength = /password should be at least (\d+)/i.exec(msg);
+            if (minLength) return `Das Passwort muss mindestens ${minLength[1]} Zeichen lang sein.`;
+            if (/password should contain/i.test(msg)) return 'Das Passwort braucht Groß- und Kleinbuchstaben, Ziffern und Sonderzeichen.';
+            if (/invalid login credentials/i.test(msg)) return 'E-Mail-Adresse oder Passwort ist falsch.';
+            if (/email not confirmed/i.test(msg)) return 'Bitte bestätige zuerst deine E-Mail-Adresse.';
+            if (/already (been )?registered/i.test(msg)) return 'Für diese E-Mail-Adresse gibt es bereits ein Konto.';
+            if (/rate limit|only request this after|too many/i.test(msg)) return 'Zu viele Versuche in kurzer Zeit. Bitte warte einen Moment und versuche es dann erneut.';
+            if (/invalid.*email|unable to validate email/i.test(msg)) return 'Bitte gib eine gültige E-Mail-Adresse ein.';
+            return msg;
+        };
 
         // Umschalten zwischen Anmelden und Registrieren
         toggleModeBtn.addEventListener('click', () => {
@@ -89,13 +108,59 @@
                 usernameInput.setAttribute('required', 'true');
                 submitBtn.textContent = 'Konto erstellen';
                 toggleModeBtn.textContent = 'Bereits registriert? Zum Login';
+                forgotPasswordBtn.style.display = 'none';
             } else {
                 usernameGroup.style.display = 'none';
                 usernameInput.removeAttribute('required');
                 submitBtn.textContent = 'Anmelden';
                 toggleModeBtn.textContent = 'Kein Konto? Jetzt registrieren';
+                forgotPasswordBtn.style.display = '';
             }
         });
+
+        // Passwort vergessen: Link zum Zurücksetzen per E-Mail
+        forgotPasswordBtn.addEventListener('click', async () => {
+            const email = await showDialog({
+                icon: 'fa-key',
+                title: 'Passwort vergessen?',
+                message: 'Gib deine E-Mail-Adresse ein. Wir schicken dir einen Link, mit dem du ein neues Passwort festlegen kannst.',
+                input: { placeholder: 'name@beispiel.de', value: document.getElementById('email').value.trim(), maxLength: 120 },
+                confirmText: 'Link senden',
+                cancelText: 'Abbrechen'
+            });
+            if (!email) return;
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                showToast('Bitte gib eine gültige E-Mail-Adresse ein.', 'error');
+                return;
+            }
+
+            const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo: pageUrl('passwort-neu.html') });
+            if (error) {
+                showToast(authErrorText(error), 'error');
+                return;
+            }
+            showDialog({
+                icon: 'fa-envelope',
+                title: 'E-Mail ist unterwegs',
+                message: `Falls es ein GSRA-Konto mit ${email} gibt, bekommst du gleich einen Link zum Zurücksetzen deines Passworts. Schau auch im Spam-Ordner nach.`,
+                confirmText: 'OK'
+            });
+        });
+
+        // Anmeldung ohne bestätigte E-Mail: Bestätigungs-Mail erneut senden
+        const offerResend = async (email) => {
+            const resend = await showDialog({
+                icon: 'fa-envelope',
+                title: 'E-Mail noch nicht bestätigt',
+                message: 'Bitte klicke auf den Link in der Bestätigungs-Mail. Keine Mail bekommen? Schau im Spam-Ordner nach oder lass sie dir erneut schicken.',
+                confirmText: 'Erneut senden',
+                cancelText: 'Schließen'
+            });
+            if (!resend) return;
+            const { error } = await client.auth.resend({ type: 'signup', email, options: { emailRedirectTo: pageUrl('dashboard.html') } });
+            if (error) showToast(authErrorText(error), 'error');
+            else showToast('Die Bestätigungs-Mail wurde erneut gesendet.', 'success');
+        };
 
         // Gesperrtes Konto: Hinweis mit Dauer (dauerhaft oder bis zu einem Datum)
         const showBanNotice = (until) => {
@@ -123,27 +188,38 @@
             const username = usernameInput.value.trim();
 
             if (isSignUpMode) {
-                // Registrierung mit Benutzernamen in user_metadata
+                // Gleiche Namensregeln wie beim Ändern im Dashboard
+                if (username.length < 3 || username.length > 40) {
+                    showToast('Der Benutzername muss 3 bis 40 Zeichen lang sein.', 'error');
+                    return;
+                }
+                if (/\b(admin|administrator|moderator|gsra|support|system)\b/i.test(username)) {
+                    showToast('Dieser Benutzername ist für das GSRA-Team reserviert.', 'error');
+                    return;
+                }
+
+                // Registrierung mit Benutzernamen in user_metadata; der Bestätigungs-Link führt direkt ins Dashboard
                 const { data, error } = await client.auth.signUp({
                     email,
                     password,
                     options: {
                         data: {
                             username: username
-                        }
+                        },
+                        emailRedirectTo: pageUrl('dashboard.html')
                     }
                 });
 
                 if (error) {
-                    showToast('Registrierung fehlgeschlagen: ' + error.message, 'error');
+                    showToast('Registrierung fehlgeschlagen: ' + authErrorText(error), 'error');
                 } else if (data.session) {
                     showToast('Konto erfolgreich erstellt!', 'success');
                     setTimeout(() => { window.location.href = 'dashboard.html'; }, 1200);
                 } else {
                     showDialog({
                         icon: 'fa-envelope',
-                        title: 'Konto erstellt!',
-                        message: 'Bitte überprüfe deine E-Mails und bestätige deine Adresse. Danach kannst du dich hier anmelden.',
+                        title: 'Fast geschafft!',
+                        message: `Wir haben dir eine E-Mail an ${email} geschickt. Klicke auf den Link darin, um dein Konto zu bestätigen – danach bist du direkt angemeldet. Schau auch im Spam-Ordner nach.`,
                         confirmText: 'OK'
                     });
                 }
@@ -153,7 +229,8 @@
 
                 if (error) {
                     if (/banned/i.test(error.message)) showBanNotice(null);
-                    else showToast('Login fehlgeschlagen: ' + error.message, 'error');
+                    else if (/email not confirmed/i.test(error.message)) offerResend(email);
+                    else showToast('Login fehlgeschlagen: ' + authErrorText(error), 'error');
                 } else {
                     // Gesperrte Konten werden sofort wieder abgemeldet
                     const { data: bans } = await client.from('user_bans').select('banned_until').eq('user_id', data.user.id).is('lifted_at', null);

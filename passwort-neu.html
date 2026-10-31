@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neues Passwort - GSRA</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Supabase SDK & Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-client.js"></script>
+    <script src="auth-nav.js"></script>
+</head>
+<body>
+
+<header>
+    <div class="logo-slogan-container">
+        <a href="index.html" class="logo-link">
+            <img src="GSRA_Logo_ohne Hintergrund.png" alt="GSRA Logo" class="logo">
+        </a>
+        <div class="header-slogan">
+            <span class="text-blue">UNITED BY SPEED.</span>
+            <span class="text-yellow">DRIVEN GLOBALLY.</span>
+        </div>
+    </div>
+    <nav>
+        <a href="index.html">Home</a>
+        <a href="marktplatz.html">Marktplatz</a>
+        <a href="setups.html">Setups</a>
+        <a href="nachschlagewerk.html">Nachschlagewerk</a>
+        <a href="kalender.html">Rennkalender</a>
+        <a href="dashboard.html">Dashboard</a>
+        <a href="messenger.html">Messenger</a>
+        <a href="login.html" class="login-btn" id="loginNavBtn">Login</a>
+        <button id="logoutBtn" class="login-btn" style="display: none;">Logout</button>
+    </nav>
+</header>
+
+<main class="container">
+    <section style="max-width: 450px; margin: 40px auto; background-color: var(--bg-card); padding: 30px; border-radius: 6px; border: 1.5px solid var(--border-subtle); text-align: left;">
+        <h2 style="margin-bottom: 15px; border-bottom: 2px solid var(--gsra-blue); padding-bottom: 5px;">Neues Passwort festlegen</h2>
+
+        <p id="resetChecking" style="font-size: 14px; color: var(--text-muted);">Link wird geprüft …</p>
+
+        <div id="resetInvalid" style="display: none;">
+            <p style="font-size: 14px; margin-bottom: 20px; color: var(--text-muted);">Dieser Link ist ungültig oder abgelaufen. Auf der Login-Seite kannst du über „Passwort vergessen?“ jederzeit einen neuen anfordern.</p>
+            <a href="login.html" class="login-btn" style="display: inline-block; text-decoration: none;">Zum Login</a>
+        </div>
+
+        <form id="resetForm" style="display: none; flex-direction: column; gap: 15px;">
+            <p style="font-size: 14px; color: var(--text-muted);">Wähle ein neues Passwort für dein GSRA-Konto.</p>
+
+            <div>
+                <label style="display: block; font-size: 14px; font-weight: bold; margin-bottom: 5px; color: var(--text-light);">Neues Passwort</label>
+                <input type="password" id="newPassword" placeholder="••••••••" required autocomplete="new-password" style="width: 100%; padding: 10px; background-color: var(--bg-main); border: 1px solid var(--border-subtle); border-radius: 4px; font-size: 14px; color: var(--text-light);">
+            </div>
+
+            <div>
+                <label style="display: block; font-size: 14px; font-weight: bold; margin-bottom: 5px; color: var(--text-light);">Passwort wiederholen</label>
+                <input type="password" id="newPasswordRepeat" placeholder="••••••••" required autocomplete="new-password" style="width: 100%; padding: 10px; background-color: var(--bg-main); border: 1px solid var(--border-subtle); border-radius: 4px; font-size: 14px; color: var(--text-light);">
+            </div>
+
+            <button type="submit" id="resetSubmitBtn" style="background-color: var(--gsra-blue); color: var(--text-light); border: none; padding: 12px; border-radius: 4px; font-weight: bold; font-size: 16px; cursor: pointer; margin-top: 10px;">Passwort speichern</button>
+        </form>
+    </section>
+</main>
+
+<script src="ui-dialogs.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', async () => {
+        const client = window.supabaseClient || window.supabase;
+
+        if (!client) {
+            console.error("Supabase Client nicht bereit.");
+            return;
+        }
+
+        const checking = document.getElementById('resetChecking');
+        const invalid = document.getElementById('resetInvalid');
+        const resetForm = document.getElementById('resetForm');
+        const submitBtn = document.getElementById('resetSubmitBtn');
+
+        // Abgelaufene oder ungültige Links meldet Supabase im Adress-Anker (#error_code=...),
+        // gültige Links melden den Nutzer automatisch an
+        const linkError = new URLSearchParams(window.location.hash.slice(1)).get('error_code');
+        const { data: { session } } = await client.auth.getSession();
+
+        checking.style.display = 'none';
+        if (linkError || !session) {
+            invalid.style.display = 'block';
+            return;
+        }
+        resetForm.style.display = 'flex';
+
+        resetForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const password = document.getElementById('newPassword').value.trim();
+
+            if (password !== document.getElementById('newPasswordRepeat').value.trim()) {
+                showToast('Die beiden Passwörter stimmen nicht überein.', 'error');
+                return;
+            }
+
+            submitBtn.disabled = true;
+            const { error } = await client.auth.updateUser({ password });
+            submitBtn.disabled = false;
+
+            if (error) {
+                const msg = error.message || '';
+                const minLength = /password should be at least (\d+)/i.exec(msg);
+                if (minLength) showToast(`Das Passwort muss mindestens ${minLength[1]} Zeichen lang sein.`, 'error');
+                else if (/different from the old/i.test(msg)) showToast('Das neue Passwort muss sich vom bisherigen unterscheiden.', 'error');
+                else if (/password should contain/i.test(msg)) showToast('Das Passwort braucht Groß- und Kleinbuchstaben, Ziffern und Sonderzeichen.', 'error');
+                else showToast('Das Passwort konnte nicht geändert werden: ' + msg, 'error');
+                return;
+            }
+
+            showToast('Dein Passwort wurde geändert.', 'success');
+            setTimeout(() => { window.location.href = 'dashboard.html'; }, 1200);
+        });
+    });
+</script>
+
+</body>
+</html>

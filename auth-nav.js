@@ -294,7 +294,7 @@ const LOGIN_REQUIRED_TEXTS = {
 
 function showLoginRequiredOverlay() {
     const page = (window.location.pathname.split("/").pop() || "").replace(/\.html$/, "").toLowerCase();
-    if (["", "index", "login"].includes(page) || document.getElementById("loginRequired")) return;
+    if (["", "index", "login", "passwort-neu"].includes(page) || document.getElementById("loginRequired")) return;
     const [area, text] = LOGIN_REQUIRED_TEXTS[page] || ["diese Seite", "Mit deinem GSRA-Konto hast du Zugriff auf alle Bereiche der Global Simracing Alliance."];
     const overlay = document.createElement("div");
     overlay.id = "loginRequired";
