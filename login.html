@@ -147,6 +147,7 @@
             if (/already (been )?registered/i.test(msg)) return 'Für diese E-Mail-Adresse gibt es bereits ein Konto.';
             if (/rate limit|only request this after|too many/i.test(msg)) return 'Zu viele Versuche in kurzer Zeit. Bitte warte einen Moment und versuche es dann erneut.';
             if (/invalid.*email|unable to validate email/i.test(msg)) return 'Bitte gib eine gültige E-Mail-Adresse ein.';
+            if (/database error saving new user/i.test(msg)) return 'Das Konto konnte nicht angelegt werden. Ist der Benutzername vielleicht schon vergeben?';
             return msg;
         };
 
@@ -260,6 +261,13 @@
                 }
                 if (!acceptTerms.checked) {
                     showToast('Bitte akzeptiere die Nutzungsbedingungen und die Datenschutzerklärung.', 'error');
+                    return;
+                }
+                // Jeder Benutzername nur einmal (fehlt die Datenbank-Funktion noch, geht es ohne Vorab-Prüfung weiter)
+                const { data: nameFree, error: nameError } = await client.rpc('username_available', { _name: username });
+                if (!nameError && nameFree === false) {
+                    showToast('Dieser Benutzername ist bereits vergeben.', 'error');
+                    usernameInput.focus();
                     return;
                 }
 
