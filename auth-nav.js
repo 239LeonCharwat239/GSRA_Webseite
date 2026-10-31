@@ -223,6 +223,10 @@ const initAuthNav = async () => {
         deliveredTimer = setTimeout(() => client.rpc("mark_chats_delivered").then(() => {}, () => {}), 1500);
     };
 
+    addSiteFooter();
+    // Login-Knopf in der Kopfzeile führt nach der Anmeldung zurück zur aktuellen Unterseite
+    if (loginNavBtn && !PUBLIC_PAGES.includes(currentPageName())) loginNavBtn.href = loginLinkHere();
+
     const { data: { session } } = await client.auth.getSession();
     updateUI(session);
 
@@ -292,9 +296,35 @@ const LOGIN_REQUIRED_TEXTS = {
     admin: ["den Admin-Bereich", "Der Admin-Bereich ist nur für Administratoren der GSRA."]
 };
 
+// Seiten ohne Anmelde-Pflicht (Startseite, Login und Rechtstexte)
+const PUBLIC_PAGES = ["", "index", "login", "passwort-neu", "impressum", "datenschutz", "nutzungsbedingungen"];
+const currentPageName = () => (window.location.pathname.split("/").pop() || "").replace(/\.html$/, "").toLowerCase();
+
+// Login-Link, der nach der Anmeldung zur aktuellen Seite zurückführt
+const loginLinkHere = (extra = "") => {
+    const here = (window.location.pathname.split("/").pop() || "index.html") + window.location.search;
+    return `login.html?${extra}weiter=${encodeURIComponent(here)}`;
+};
+
+// Fußzeile mit Impressum, Datenschutz und Nutzungsbedingungen auf jeder Seite
+function addSiteFooter() {
+    if (document.getElementById("gsraSiteFooter")) return;
+    const footer = document.createElement("footer");
+    footer.id = "gsraSiteFooter";
+    footer.className = "gsra-site-footer";
+    footer.innerHTML = `
+        <span>© ${new Date().getFullYear()} Global Simracing Alliance</span>
+        <div class="gsra-site-footer-links">
+            <a href="impressum.html">Impressum</a>
+            <a href="datenschutz.html">Datenschutz</a>
+            <a href="nutzungsbedingungen.html">Nutzungsbedingungen</a>
+        </div>`;
+    document.body.appendChild(footer);
+}
+
 function showLoginRequiredOverlay() {
-    const page = (window.location.pathname.split("/").pop() || "").replace(/\.html$/, "").toLowerCase();
-    if (["", "index", "login", "passwort-neu"].includes(page) || document.getElementById("loginRequired")) return;
+    const page = currentPageName();
+    if (PUBLIC_PAGES.includes(page) || document.getElementById("loginRequired")) return;
     const [area, text] = LOGIN_REQUIRED_TEXTS[page] || ["diese Seite", "Mit deinem GSRA-Konto hast du Zugriff auf alle Bereiche der Global Simracing Alliance."];
     const overlay = document.createElement("div");
     overlay.id = "loginRequired";
@@ -305,10 +335,13 @@ function showLoginRequiredOverlay() {
             <h2>Melde dich an, um ${area} zu nutzen</h2>
             <p>${text}</p>
             <div class="gsra-login-actions">
-                <a href="login.html" class="gsra-dialog-btn primary"><i class="fa-solid fa-right-to-bracket"></i> Anmelden</a>
-                <a href="login.html?registrieren=1" class="gsra-dialog-btn secondary"><i class="fa-solid fa-user-plus"></i> Konto erstellen</a>
+                <a href="${loginLinkHere()}" class="gsra-dialog-btn primary"><i class="fa-solid fa-right-to-bracket"></i> Anmelden</a>
+                <a href="${loginLinkHere("registrieren=1&")}" class="gsra-dialog-btn secondary"><i class="fa-solid fa-user-plus"></i> Konto erstellen</a>
             </div>
             <a href="index.html" class="gsra-login-back"><i class="fa-solid fa-arrow-left"></i> Zur Startseite</a>
+            <div class="gsra-login-legal">
+                <a href="impressum.html">Impressum</a> · <a href="datenschutz.html">Datenschutz</a> · <a href="nutzungsbedingungen.html">Nutzungsbedingungen</a>
+            </div>
         </div>`;
     document.body.appendChild(overlay);
     document.body.style.overflow = "hidden";

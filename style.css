@@ -5319,3 +5319,119 @@ button.dash-avatar:hover,
 .dash-dialog-error[hidden] {
     display: none;
 }
+
+/* =========================================
+   FUSSZEILE UND RECHTSSEITEN
+========================================= */
+.gsra-site-footer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px 24px;
+    padding: 18px 24px;
+    border-top: 1px solid var(--border-subtle);
+    background: var(--bg-card);
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.gsra-site-footer-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 20px;
+}
+
+.gsra-site-footer a,
+.gsra-login-legal a {
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.gsra-site-footer a:hover,
+.gsra-login-legal a:hover {
+    color: var(--gsra-yellow);
+}
+
+.gsra-login-legal {
+    margin-top: 14px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.legal-page {
+    max-width: 800px;
+    margin: 40px auto;
+    padding: 30px;
+    text-align: left;
+    background: var(--bg-card);
+    border: 1.5px solid var(--border-subtle);
+    border-radius: 6px;
+}
+
+.legal-page h2 {
+    margin-bottom: 15px;
+    padding-bottom: 5px;
+    border-bottom: 2px solid var(--gsra-blue);
+}
+
+.legal-page p {
+    margin-bottom: 14px;
+}
+
+.legal-placeholder {
+    padding: 12px 16px;
+    border-left: 4px solid var(--gsra-yellow);
+    border-radius: 4px;
+    background: rgba(255, 204, 0, 0.08);
+    color: var(--text-light);
+}
+
+/* =========================================
+   REGISTRIERUNG: PASSWORT-STÄRKE UND PFLICHT-HAKEN
+========================================= */
+.pw-strength {
+    margin-top: 8px;
+}
+
+.pw-strength-bar {
+    height: 5px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+}
+
+.pw-strength-bar span {
+    display: block;
+    height: 100%;
+    width: 0;
+    border-radius: 3px;
+    transition: width 0.25s ease, background-color 0.25s ease;
+}
+
+.pw-strength-text {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+}
+
+.terms-check {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.terms-check input {
+    margin-top: 3px;
+    flex-shrink: 0;
+    accent-color: var(--gsra-blue);
+}
+
+.terms-check a {
+    color: var(--gsra-yellow);
+}

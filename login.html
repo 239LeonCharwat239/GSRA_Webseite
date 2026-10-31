@@ -57,7 +57,21 @@
                 <label style="display: block; font-size: 14px; font-weight: bold; margin-bottom: 5px; color: var(--text-light);">Passwort</label>
                 <input type="password" id="password" placeholder="••••••••" required style="width: 100%; padding: 10px; background-color: var(--bg-main); border: 1px solid var(--border-subtle); border-radius: 4px; font-size: 14px; color: var(--text-light);">
                 <button type="button" id="forgotPasswordBtn" style="background: none; border: none; color: var(--gsra-yellow); font-size: 13px; cursor: pointer; padding: 6px 0 0; text-decoration: underline;">Passwort vergessen?</button>
+                <div id="passwordStrength" class="pw-strength" style="display: none;">
+                    <div class="pw-strength-bar"><span></span></div>
+                    <small class="pw-strength-text"></small>
+                </div>
             </div>
+
+            <div id="passwordRepeatGroup" style="display: none;">
+                <label style="display: block; font-size: 14px; font-weight: bold; margin-bottom: 5px; color: var(--text-light);">Passwort wiederholen</label>
+                <input type="password" id="passwordRepeat" placeholder="••••••••" autocomplete="new-password" style="width: 100%; padding: 10px; background-color: var(--bg-main); border: 1px solid var(--border-subtle); border-radius: 4px; font-size: 14px; color: var(--text-light);">
+            </div>
+
+            <label id="termsGroup" class="terms-check" style="display: none;">
+                <input type="checkbox" id="acceptTerms">
+                <span>Ich akzeptiere die <a href="nutzungsbedingungen.html" target="_blank">Nutzungsbedingungen</a> und habe die <a href="datenschutz.html" target="_blank">Datenschutzerklärung</a> gelesen.</span>
+            </label>
             
             <button type="submit" id="submitBtn" style="background-color: var(--gsra-blue); color: var(--text-light); border: none; padding: 12px; border-radius: 4px; font-weight: bold; font-size: 16px; cursor: pointer; margin-top: 10px;">Anmelden</button>
             <button type="button" id="toggleModeBtn" style="background-color: transparent; color: var(--gsra-yellow); border: 1px solid var(--gsra-yellow); padding: 10px; border-radius: 4px; font-weight: bold; font-size: 14px; cursor: pointer;">Kein Konto? Jetzt registrieren</button>
@@ -82,9 +96,45 @@
         const submitBtn = document.getElementById('submitBtn');
         const toggleModeBtn = document.getElementById('toggleModeBtn');
         const forgotPasswordBtn = document.getElementById('forgotPasswordBtn');
+        const passwordInput = document.getElementById('password');
+        const passwordRepeatGroup = document.getElementById('passwordRepeatGroup');
+        const passwordRepeatInput = document.getElementById('passwordRepeat');
+        const passwordStrength = document.getElementById('passwordStrength');
+        const termsGroup = document.getElementById('termsGroup');
+        const acceptTerms = document.getElementById('acceptTerms');
 
         // Links in den E-Mails führen zurück auf diese Webseite
         const pageUrl = (page) => new URL(page, window.location.href).href;
+
+        // Nach der Anmeldung zurück zur ursprünglich aufgerufenen Unterseite (nur eigene Seiten, sonst Dashboard)
+        const params = new URLSearchParams(window.location.search);
+        const requestedPage = params.get('weiter') || '';
+        const nextPage = /^[\w-]+\.html(\?[^#]*)?$/.test(requestedPage) && !/^(login|passwort-neu)\.html/.test(requestedPage)
+            ? requestedPage
+            : 'dashboard.html';
+
+        // Passwort-Stärke beim Registrieren (nur als Hinweis, die Mindestlänge prüft Supabase)
+        const updatePasswordStrength = () => {
+            const pw = passwordInput.value;
+            const bar = passwordStrength.querySelector('.pw-strength-bar span');
+            const text = passwordStrength.querySelector('.pw-strength-text');
+            let score = 0;
+            if (pw.length >= 8) score++;
+            if (pw.length >= 12) score++;
+            if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) score++;
+            if (/\d/.test(pw)) score++;
+            if (/[^A-Za-z0-9]/.test(pw)) score++;
+            const level = !pw ? ['', '0%', 'transparent']
+                : pw.length < 8 ? ['Zu kurz – mindestens 8 Zeichen empfohlen', '15%', '#ff4d4d']
+                : score <= 2 ? ['Schwach', '35%', '#ff4d4d']
+                : score === 3 ? ['Mittel', '65%', '#ffcc00']
+                : ['Stark', '100%', '#00ff88'];
+            text.textContent = level[0] ? `Passwort-Stärke: ${level[0]}` : '';
+            text.style.color = level[2];
+            bar.style.width = level[1];
+            bar.style.backgroundColor = level[2];
+        };
+        passwordInput.addEventListener('input', () => { if (isSignUpMode) updatePasswordStrength(); });
 
         // Häufige Fehlermeldungen von Supabase auf Deutsch
         const authErrorText = (error) => {
@@ -116,6 +166,13 @@
                 toggleModeBtn.textContent = 'Kein Konto? Jetzt registrieren';
                 forgotPasswordBtn.style.display = '';
             }
+            // Nur beim Registrieren: Passwort wiederholen, Stärke-Anzeige und Pflicht-Haken
+            passwordRepeatGroup.style.display = isSignUpMode ? 'block' : 'none';
+            passwordStrength.style.display = isSignUpMode ? 'block' : 'none';
+            termsGroup.style.display = isSignUpMode ? 'flex' : 'none';
+            passwordRepeatInput.required = isSignUpMode;
+            passwordInput.autocomplete = isSignUpMode ? 'new-password' : 'current-password';
+            if (isSignUpMode) updatePasswordStrength();
         });
 
         // Passwort vergessen: Link zum Zurücksetzen per E-Mail
@@ -157,7 +214,7 @@
                 cancelText: 'Schließen'
             });
             if (!resend) return;
-            const { error } = await client.auth.resend({ type: 'signup', email, options: { emailRedirectTo: pageUrl('dashboard.html') } });
+            const { error } = await client.auth.resend({ type: 'signup', email, options: { emailRedirectTo: pageUrl(nextPage) } });
             if (error) showToast(authErrorText(error), 'error');
             else showToast('Die Bestätigungs-Mail wurde erneut gesendet.', 'success');
         };
@@ -177,7 +234,6 @@
                 danger: true
             });
         };
-        const params = new URLSearchParams(window.location.search);
         if (params.has('registrieren')) toggleModeBtn.click();
         if (params.has('gesperrt')) showBanNotice(params.get('gesperrt'));
 
@@ -197,16 +253,27 @@
                     showToast('Dieser Benutzername ist für das GSRA-Team reserviert.', 'error');
                     return;
                 }
+                if (password !== passwordRepeatInput.value.trim()) {
+                    showToast('Die beiden Passwörter stimmen nicht überein.', 'error');
+                    passwordRepeatInput.focus();
+                    return;
+                }
+                if (!acceptTerms.checked) {
+                    showToast('Bitte akzeptiere die Nutzungsbedingungen und die Datenschutzerklärung.', 'error');
+                    return;
+                }
 
-                // Registrierung mit Benutzernamen in user_metadata; der Bestätigungs-Link führt direkt ins Dashboard
+                // Registrierung mit Benutzernamen und Zeitpunkt der Zustimmung in user_metadata;
+                // der Bestätigungs-Link führt direkt zur gewünschten Seite (sonst ins Dashboard)
                 const { data, error } = await client.auth.signUp({
                     email,
                     password,
                     options: {
                         data: {
-                            username: username
+                            username: username,
+                            terms_accepted_at: new Date().toISOString()
                         },
-                        emailRedirectTo: pageUrl('dashboard.html')
+                        emailRedirectTo: pageUrl(nextPage)
                     }
                 });
 
@@ -214,7 +281,7 @@
                     showToast('Registrierung fehlgeschlagen: ' + authErrorText(error), 'error');
                 } else if (data.session) {
                     showToast('Konto erfolgreich erstellt!', 'success');
-                    setTimeout(() => { window.location.href = 'dashboard.html'; }, 1200);
+                    setTimeout(() => { window.location.href = nextPage; }, 1200);
                 } else {
                     showDialog({
                         icon: 'fa-envelope',
@@ -240,7 +307,7 @@
                         showBanNotice(activeBan.banned_until || 'dauerhaft');
                         return;
                     }
-                    window.location.href = 'dashboard.html';
+                    window.location.href = nextPage;
                 }
             }
         });
