@@ -81,7 +81,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     setupLocationAutocomplete(itemLocationInput, locationDropdown, null);
     setupLocationAutocomplete(searchLocation, searchLocationDropdown, () => filterItems());
 
-    loadMarketplaceItems();
+    await loadMarketplaceItems();
+
+    // Links aus dem Dashboard: ein bestimmtes Inserat öffnen oder direkt ein neues anlegen
+    const params = new URLSearchParams(window.location.search);
+    const linkedItem = params.get("inserat") && allItems.find(item => String(item.id) === params.get("inserat"));
+    if (linkedItem) openDetailModal(linkedItem);
+    else if (params.has("neu") && currentUser) openCreateOrEditModal(null);
 });
 
 // ERWEITERTE ORTS-SUCHE MIT GENAUERER SELEKTIERUNG (DÖRFER, WEILER, BUNDESLAND/REGION)

@@ -261,6 +261,46 @@ document.addEventListener("DOMContentLoaded", async () => {
             });
         }
 
+        // Eigene Inserate und Setups im Überblick (mit Hinweis, wenn noch nichts da ist)
+        const renderOwnList = (containerId, countId, rows, error, emptyHtml, rowHtml) => {
+            const container = document.getElementById(containerId);
+            const count = document.getElementById(countId);
+            if (!container) return;
+            if (error) {
+                container.innerHTML = '<p class="dash-own-empty">Konnte nicht geladen werden.</p>';
+                return;
+            }
+            if (count) count.textContent = rows.length ? `(${rows.length})` : "";
+            container.innerHTML = rows.length ? rows.map(rowHtml).join("") : emptyHtml;
+        };
+        const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[c]));
+        const shortDate = (value) => (value ? new Date(value).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }) : "");
+
+        const [ownListings, ownSetups] = await Promise.all([
+            client.from("marketplace").select("id, title, price, images, created_at").eq("user_id", currentUser.id).order("created_at", { ascending: false }),
+            client.from("setups").select("id, simulation, car_model, track_name, likes, dislikes, created_at").eq("uploader_id", currentUser.id)
+        ]);
+        renderOwnList("ownListings", "ownListingsCount", ownListings.data || [], ownListings.error,
+            `<div class="dash-own-empty"><p>Du hast noch keine Inserate.</p><a href="marktplatz.html?neu=1" class="login-btn">Erstes Inserat erstellen</a></div>`,
+            (item) => {
+                const image = (item.images || [])[0];
+                return `
+                <a class="dash-own-item" href="marktplatz.html?inserat=${encodeURIComponent(item.id)}">
+                    <span class="dash-own-thumb">${/^https?:\/\//i.test(image || "") ? `<img src="${esc(image)}" alt="">` : '<i class="fa-solid fa-image"></i>'}</span>
+                    <span class="dash-own-text"><strong>${esc(item.title)}</strong><small>${esc(shortDate(item.created_at))}</small></span>
+                    <span class="dash-own-meta text-yellow">${parseFloat(item.price || 0).toFixed(2)} €</span>
+                </a>`;
+            });
+        const setupRows = (ownSetups.data || []).sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+        renderOwnList("ownSetups", "ownSetupsCount", setupRows, ownSetups.error,
+            `<div class="dash-own-empty"><p>Du hast noch keine Setups hochgeladen.</p><a href="setups.html#setupUploadForm" class="login-btn">Setup hochladen</a></div>`,
+            (item) => `
+                <a class="dash-own-item" href="setups.html">
+                    <span class="dash-own-thumb"><i class="fa-solid fa-sliders"></i></span>
+                    <span class="dash-own-text"><strong>${esc(item.car_model)}</strong><small>${esc(item.simulation || "iRacing")} · ${esc(item.track_name)}</small></span>
+                    <span class="dash-own-meta"><i class="fa-solid fa-thumbs-up"></i> ${Number(item.likes) || 0} <i class="fa-solid fa-thumbs-down"></i> ${Number(item.dislikes) || 0}</span>
+                </a>`);
+
         // Konto löschen: Passwort bestätigen, dann endgültig löschen (die Datenbank prüft, dass das Passwort gerade eben bestätigt wurde)
         const deleteAccountBtn = document.getElementById("deleteAccountBtn");
         if (deleteAccountBtn) {

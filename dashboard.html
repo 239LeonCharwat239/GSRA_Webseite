@@ -42,7 +42,7 @@
         <!-- DAS PROFIL WIRD ERST PER JS EINGEBLENDET, WENN DER USER EINGELOGGT IST -->
         <div id="userContent" style="display: none;">
             <h1 class="hero-title">Fahrer <span class="text-blue">Dashboard</span></h1>
-            <p style="margin-bottom: 20px;">Verwalte dein Profil, dein Profilbild und deine GSRA-ID.</p>
+            <p style="margin-bottom: 20px;">Verwalte dein Profil, deine Inserate, deine Setups und deine GSRA-ID.</p>
 
             <div class="grid-2">
                 <!-- Profil Übersicht -->
@@ -82,6 +82,24 @@
                         <button type="button" id="addSocialLinkBtn" class="dash-add-link"><i class="fa-solid fa-plus"></i> Link hinzufügen</button>
                         <button type="submit" class="login-btn dash-save-btn"><i class="fa-solid fa-floppy-disk"></i> Profil speichern</button>
                     </form>
+                </div>
+            </div>
+
+            <!-- Eigene Inserate und Setups im Überblick -->
+            <div class="grid-2">
+                <div class="card">
+                    <div class="dash-own-head">
+                        <h3><i class="fa-solid fa-tags text-yellow"></i> Meine Inserate <span class="dash-own-count" id="ownListingsCount"></span></h3>
+                        <a href="marktplatz.html" class="dash-own-link">Zum Marktplatz <i class="fa-solid fa-arrow-right"></i></a>
+                    </div>
+                    <div id="ownListings" class="dash-own-list"><p class="dash-own-empty">Lade …</p></div>
+                </div>
+                <div class="card">
+                    <div class="dash-own-head">
+                        <h3><i class="fa-solid fa-sliders text-blue"></i> Meine Setups <span class="dash-own-count" id="ownSetupsCount"></span></h3>
+                        <a href="setups.html" class="dash-own-link">Zu den Setups <i class="fa-solid fa-arrow-right"></i></a>
+                    </div>
+                    <div id="ownSetups" class="dash-own-list"><p class="dash-own-empty">Lade …</p></div>
                 </div>
             </div>
 

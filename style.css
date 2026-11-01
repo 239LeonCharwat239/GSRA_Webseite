@@ -3854,6 +3854,26 @@ textarea.gsra-dialog-input {
     }
 }
 
+/* Handy: Eingabeleiste etwas enger, Platzhalter-Text einzeilig statt abgeschnitten */
+@media (max-width: 600px) {
+    .chat-input-area {
+        padding: 10px;
+        gap: 6px;
+    }
+    .chat-input-area textarea {
+        padding: 10px 12px;
+    }
+    .chat-input-area textarea::placeholder {
+        font-size: 13px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .message-footer .message-time {
+        white-space: nowrap;
+    }
+}
+
 /* =========================================
    MESSENGER: EINGABELEISTE (MIKROFON ↔ SENDEN) & SPRACHNACHRICHTEN
 ========================================= */
@@ -5409,6 +5429,125 @@ button.dash-avatar:hover,
     border-radius: 4px;
     background: rgba(255, 204, 0, 0.08);
     color: var(--text-light);
+}
+
+/* =========================================
+   DASHBOARD: MEINE INSERATE UND SETUPS
+========================================= */
+.dash-own-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.dash-own-head h3 {
+    margin: 0;
+}
+
+.dash-own-count {
+    font-size: 14px;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.dash-own-link {
+    font-size: 13px;
+    color: var(--gsra-yellow);
+    text-decoration: none;
+}
+
+.dash-own-link:hover {
+    text-decoration: underline;
+}
+
+.dash-own-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 340px;
+    overflow-y: auto;
+    text-align: left;
+}
+
+.dash-own-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+    background: rgba(0, 0, 0, 0.25);
+    color: var(--text-light);
+    text-decoration: none;
+    transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.dash-own-item:hover {
+    border-color: rgba(0, 85, 255, 0.5);
+    background: rgba(0, 85, 255, 0.08);
+}
+
+.dash-own-thumb {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #0d0e12;
+    color: var(--text-muted);
+}
+
+.dash-own-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.dash-own-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.dash-own-text strong,
+.dash-own-text small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dash-own-text small {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.dash-own-meta {
+    flex-shrink: 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-muted);
+}
+
+.dash-own-empty {
+    padding: 18px 10px;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.dash-own-empty p {
+    margin-bottom: 12px;
+}
+
+.dash-own-empty .login-btn {
+    display: inline-block;
+    text-decoration: none;
 }
 
 /* =========================================
