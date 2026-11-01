@@ -474,6 +474,23 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    // Handy: Chatliste und geöffneter Chat wechseln sich ab (siehe style.css, bis 850 px Breite)
+    const waContainer = document.querySelector(".wa-container");
+    if (waContainer && waChatActivePane) {
+        const syncMobileView = () => waContainer.classList.toggle("chat-open", waChatActivePane.style.display !== "none");
+        new MutationObserver(syncMobileView).observe(waChatActivePane, { attributes: true, attributeFilter: ["style"] });
+        syncMobileView();
+    }
+    const chatBackBtn = document.getElementById("chatBackBtn");
+    if (chatBackBtn) {
+        chatBackBtn.addEventListener("click", () => {
+            closeChatInfo();
+            activeChatId = null;
+            if (waWelcomeScreen) waWelcomeScreen.style.display = "flex";
+            if (waChatActivePane) waChatActivePane.style.display = "none";
+        });
+    }
+
     // Fotos & Videos per Drag & Drop in den geöffneten Chat ziehen
     const isFileDrag = (e) => Array.from(e.dataTransfer?.types || []).includes("Files");
     if (waChatActivePane) {

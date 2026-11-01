@@ -223,6 +223,7 @@ const initAuthNav = async () => {
         deliveredTimer = setTimeout(() => client.rpc("mark_chats_delivered").then(() => {}, () => {}), 1500);
     };
 
+    addNavToggle();
     addSiteFooter();
     // Login-Knopf in der Kopfzeile führt nach der Anmeldung zurück zur aktuellen Unterseite
     if (loginNavBtn && !PUBLIC_PAGES.includes(currentPageName())) loginNavBtn.href = loginLinkHere();
@@ -320,6 +321,29 @@ function addSiteFooter() {
             <a href="nutzungsbedingungen.html">Nutzungsbedingungen</a>
         </div>`;
     document.body.appendChild(footer);
+}
+
+// Handy: Menü-Knopf blendet die Navigation ein und aus (siehe style.css, bis 900 px Breite)
+function addNavToggle() {
+    const header = document.querySelector("header");
+    const nav = header?.querySelector("nav");
+    if (!header || !nav || header.querySelector(".nav-toggle")) return;
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "nav-toggle";
+    toggle.innerHTML = "<span></span><span></span><span></span>";
+    header.insertBefore(toggle, nav);
+
+    const setOpen = (open) => {
+        header.classList.toggle("nav-open", open);
+        toggle.setAttribute("aria-expanded", String(open));
+        toggle.setAttribute("aria-label", open ? "Menü schließen" : "Menü öffnen");
+    };
+    setOpen(false);
+    toggle.addEventListener("click", () => setOpen(!header.classList.contains("nav-open")));
+    nav.addEventListener("click", (e) => { if (e.target.closest("a, button")) setOpen(false); });
+    document.addEventListener("click", (e) => { if (!header.contains(e.target)) setOpen(false); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") setOpen(false); });
 }
 
 function showLoginRequiredOverlay() {

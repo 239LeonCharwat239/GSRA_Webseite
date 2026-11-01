@@ -3822,12 +3822,35 @@ textarea.gsra-dialog-input {
     color: var(--text-muted);
 }
 
+/* Zurück-Pfeil im Chat nur auf schmalen Bildschirmen */
+.chat-back-btn {
+    display: none;
+    flex-shrink: 0;
+    margin-right: 6px;
+}
+
+/* Schmale Bildschirme: erst die Chatliste, nach dem Öffnen nur der Chat (wie bei WhatsApp) */
 @media (max-width: 850px) {
     .wa-container {
         grid-template-columns: 1fr;
+        height: calc(100vh - 150px);
+        height: calc(100dvh - 150px);
+        min-height: 420px;
     }
     .wa-sidebar {
+        border-right: none;
+    }
+    .wa-main-pane {
         display: none;
+    }
+    .wa-container.chat-open .wa-sidebar {
+        display: none;
+    }
+    .wa-container.chat-open .wa-main-pane {
+        display: flex;
+    }
+    .chat-back-btn {
+        display: inline-flex;
     }
 }
 
@@ -5386,6 +5409,110 @@ button.dash-avatar:hover,
     border-radius: 4px;
     background: rgba(255, 204, 0, 0.08);
     color: var(--text-light);
+}
+
+/* =========================================
+   HANDY: MENÜ-KNOPF IN DER KOPFZEILE
+========================================= */
+.nav-toggle {
+    display: none;
+}
+
+@media (max-width: 900px) {
+    header {
+        min-height: 64px;
+        padding: 8px 16px;
+    }
+    header .logo {
+        height: 48px;
+    }
+    .header-slogan {
+        font-size: 11px;
+    }
+    .nav-toggle {
+        display: inline-flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 5px;
+        width: 44px;
+        height: 44px;
+        padding: 0 11px;
+        margin-left: auto;
+        flex-shrink: 0;
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 8px;
+        cursor: pointer;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .nav-toggle span {
+        display: block;
+        height: 2px;
+        border-radius: 2px;
+        background: #fff;
+        transition: transform 0.25s ease, opacity 0.25s ease, background-color 0.2s ease;
+    }
+    header.nav-open .nav-toggle span:nth-child(1) {
+        transform: translateY(7px) rotate(45deg);
+    }
+    header.nav-open .nav-toggle span:nth-child(2) {
+        opacity: 0;
+    }
+    header.nav-open .nav-toggle span:nth-child(3) {
+        transform: translateY(-7px) rotate(-45deg);
+    }
+    /* Neue Nachrichten: auch der Menü-Knopf leuchtet */
+    header:has(nav a.nav-unread-glow) .nav-toggle {
+        border-color: #ff4d4d;
+        box-shadow: 0 0 12px rgba(255, 77, 77, 0.7);
+    }
+    header:has(nav a.nav-unread-glow) .nav-toggle span {
+        background: #ff4d4d;
+    }
+    header nav {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        flex-direction: column;
+        align-items: stretch;
+        flex-wrap: nowrap;
+        gap: 0;
+        padding: 6px 20px 18px;
+        background: #000;
+        border-bottom: 3px solid var(--gsra-blue);
+        box-shadow: 0 14px 25px rgba(0, 0, 0, 0.85);
+        max-height: calc(100vh - 70px);
+        overflow-y: auto;
+    }
+    header.nav-open nav {
+        display: flex;
+    }
+    header nav a {
+        padding: 13px 2px;
+        font-size: 14px;
+        border-bottom: 1px solid var(--border-subtle);
+    }
+    header nav a::after {
+        display: none;
+    }
+    header nav .login-btn,
+    header nav #logoutBtn {
+        margin-top: 14px;
+        padding: 12px;
+        text-align: center;
+        border-bottom: none;
+    }
+    .container {
+        padding-top: 100px;
+    }
+}
+
+@media (max-width: 560px) {
+    .header-slogan {
+        display: none;
+    }
 }
 
 /* =========================================
