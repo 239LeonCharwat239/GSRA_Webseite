@@ -1103,7 +1103,7 @@ async function uploadGroupImage(chat, file) {
         return;
     }
     const { data } = supabase.storage.from("avatars").getPublicUrl(path);
-    await saveGroupFields(chat, { image_url: data.publicUrl }, "Das Forenbild wurde aktualisiert.");
+    await saveGroupFields(chat, { image_url: data.publicUrl }, chat.is_public ? "Das Forenbild wurde aktualisiert." : "Das Gruppenbild wurde aktualisiert.");
 }
 
 async function removeGroupImage(chat) {
@@ -1157,15 +1157,15 @@ async function toggleGroupPublic(chat) {
     const makePublic = !chat.is_public;
     const confirmed = await showDialog({
         icon: makePublic ? "fa-globe" : "fa-lock",
-        title: makePublic ? "Forum öffentlich machen?" : "Forum wieder privat machen?",
+        title: makePublic ? "Gruppe öffentlich machen?" : "Forum wieder privat machen?",
         message: makePublic
-            ? "Alle GSRA-Mitglieder finden das Forum dann über die Suche und können selbst beitreten. Neue Mitglieder sehen auch die bisherigen Nachrichten."
-            : "Das Forum verschwindet aus der Suche. Neue Mitglieder können dann nur noch Gruppenadmins hinzufügen.",
-        confirmText: makePublic ? "Öffentlich machen" : "Privat machen",
+            ? "Die Gruppe wird damit zu einem öffentlichen Forum: Alle GSRA-Mitglieder finden es über die Suche und können selbst beitreten. Neue Mitglieder sehen auch die bisherigen Nachrichten."
+            : "Das Forum wird wieder zu einer privaten Gruppe und verschwindet aus der Suche. Neue Mitglieder können dann nur noch Gruppenadmins hinzufügen.",
+        confirmText: makePublic ? "Zum Forum machen" : "Zur Gruppe machen",
         cancelText: "Abbrechen"
     });
     if (!confirmed) return;
-    const saved = await saveGroupFields(chat, { is_public: makePublic }, makePublic ? "Das Forum ist jetzt öffentlich." : "Das Forum ist jetzt privat.");
+    const saved = await saveGroupFields(chat, { is_public: makePublic }, makePublic ? "Die Gruppe ist jetzt ein öffentliches Forum." : "Das Forum ist jetzt wieder eine private Gruppe.");
     if (!saved) return;
     // Systemnachricht im Chat, damit alle Mitglieder Bescheid wissen
     const sysMsg = makePublic

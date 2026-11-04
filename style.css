@@ -3931,17 +3931,15 @@ textarea.gsra-dialog-input {
     box-shadow: none;
 }
 
-/* Leeres Eingabefeld: Mikrofon statt Senden (wie bei WhatsApp) */
-#voiceRecordBtn {
+/* Mikrofon sitzt fest in der Werkzeugleiste (ohne Sprachnachrichten-Unterstützung ausgeblendet),
+   Senden ist bei leerem Feld gedimmt */
+.chat-input-area.no-voice #voiceRecordBtn {
     display: none;
 }
 
 @supports selector(:has(a)) {
-    .chat-input-area:not(.no-voice):not(.has-media):has(#messageInput:placeholder-shown) #sendBtn {
-        display: none;
-    }
-    .chat-input-area:not(.no-voice):not(.has-media):has(#messageInput:placeholder-shown) #voiceRecordBtn {
-        display: inline-flex;
+    .chat-input-area:not(.has-media):has(#messageInput:placeholder-shown) #sendBtn {
+        opacity: 0.45;
     }
     .chat-input-area:has(#messageInput:disabled) #voiceRecordBtn {
         opacity: 0.45;
@@ -5700,4 +5698,266 @@ button.dash-avatar:hover,
 
 .terms-check a {
     color: var(--gsra-yellow);
+}
+
+/* =========================================
+   MESSENGER: FILTERLEISTE IM GSRA-STIL
+   (Segmente wie eine Anzeige im Cockpit statt runder Pillen)
+========================================= */
+.wa-filter-pills {
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 0;
+    padding: 0;
+    margin: 4px 12px 8px;
+    background: #0d0f13;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+}
+
+.wa-filter-pills .wa-pill {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 7px 2px 6px;
+    border-radius: 0;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    border-bottom: 2px solid transparent;
+}
+
+.wa-filter-pills .wa-pill i {
+    font-size: 13px;
+}
+
+.wa-filter-pills .wa-pill span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wa-filter-pills .wa-pill:hover {
+    background: rgba(255, 255, 255, 0.04);
+    color: #fff;
+}
+
+.wa-filter-pills .wa-pill.active {
+    background: linear-gradient(180deg, rgba(0, 85, 255, 0) 0%, rgba(0, 85, 255, 0.22) 100%);
+    color: #fff;
+    border-bottom-color: var(--gsra-blue);
+}
+
+.wa-filter-pills .wa-pill.active i {
+    color: var(--gsra-yellow);
+}
+
+.wa-filter-pills .wa-pill-icon {
+    flex: 0 0 32px;
+}
+
+.wa-pill-divider {
+    width: 1px;
+    margin: 8px 0;
+    background: rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
+}
+
+/* =========================================
+   MESSENGER: GSRA-EINGABELEISTE
+   Werkzeugleiste (Anhang · Emoji · Sprachnachricht) · Textfeld · Senden
+========================================= */
+.chat-input-area.composer {
+    align-items: flex-end;
+    gap: 10px;
+    padding: 12px 14px;
+    background: #0d0f13;
+    border-top: 2px solid var(--gsra-blue);
+}
+
+.composer-tools {
+    display: flex;
+    flex-shrink: 0;
+    height: 44px;
+    background: #17191f;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px);
+}
+
+.composer-tool {
+    width: 40px;
+    height: 100%;
+    padding: 0;
+    margin: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 16px;
+    cursor: pointer;
+    transition: color 0.2s ease, background 0.2s ease;
+}
+
+.composer-tool + .composer-tool {
+    border-left: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.composer-tool:hover {
+    transform: none;
+    color: var(--gsra-yellow);
+    background: rgba(255, 204, 0, 0.08);
+}
+
+.composer-mic:hover {
+    color: #ff4d4d;
+    background: rgba(255, 77, 77, 0.1);
+}
+
+.composer textarea {
+    min-height: 44px;
+    padding: 11px 14px;
+    border-radius: 0;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-left: 3px solid var(--gsra-blue);
+    background: #17191f;
+    caret-color: var(--gsra-yellow);
+}
+
+.composer textarea:focus {
+    border-color: rgba(0, 85, 255, 0.5);
+    border-left-color: var(--gsra-yellow);
+    box-shadow: 0 0 0 2px rgba(0, 85, 255, 0.15);
+}
+
+/* Senden: schräger Startknopf in GSRA-Gelb */
+.composer-send {
+    flex-shrink: 0;
+    height: 44px;
+    padding: 0 20px 0 24px;
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    border: none;
+    background: var(--gsra-yellow);
+    color: #111;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    clip-path: polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
+    transition: filter 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
+}
+
+.composer-send:hover:not(:disabled) {
+    filter: brightness(1.08);
+    transform: translateX(2px);
+}
+
+.composer-send:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+/* Anhänge und Antwort: Leisten im gleichen Stil über dem Textfeld */
+#imagePreviewContainer,
+#replyPreviewBanner {
+    background: #0d0f13 !important;
+    border-top: 1px solid rgba(0, 85, 255, 0.25) !important;
+    border-left: 3px solid var(--gsra-yellow);
+}
+
+/* Emoji-Auswahl: Feld mit schrägen Ecken und blauer Oberkante */
+.emoji-picker-container {
+    left: 14px;
+    bottom: 76px;
+    border-radius: 0;
+    border-top: 3px solid var(--gsra-blue);
+    clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+}
+
+/* Sprachaufnahme: eckige Knöpfe, Senden wie oben */
+.composer .voice-recorder {
+    min-height: 44px;
+    padding: 0 0 0 10px;
+    background: #17191f;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-left: 3px solid #ff4d4d;
+}
+
+.composer .voice-rec-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 0;
+}
+
+.composer .voice-rec-pause {
+    border: none;
+    border-left: 1px solid rgba(255, 255, 255, 0.07);
+    border-right: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.composer .voice-rec-send {
+    width: auto;
+    height: 44px;
+    margin: -1px -1px -1px 0;
+    padding: 0 18px 0 22px;
+    background: var(--gsra-yellow);
+    color: #111;
+    box-shadow: none;
+    clip-path: polygon(12px 0, 100% 0, 100% 100%, 0 100%);
+}
+
+.composer .voice-rec-send:hover {
+    background: var(--gsra-yellow);
+    filter: brightness(1.08);
+    transform: none;
+}
+
+.composer .voice-rec-wave span {
+    border-radius: 0;
+    background: linear-gradient(180deg, var(--gsra-yellow), var(--gsra-blue));
+}
+
+.composer .voice-rec-transcript {
+    border-radius: 0;
+    border-left: 3px solid var(--gsra-yellow);
+}
+
+@media (max-width: 600px) {
+    .chat-input-area.composer {
+        gap: 6px;
+        padding: 10px;
+    }
+    .composer-tool {
+        width: 34px;
+        font-size: 15px;
+    }
+    .composer-send {
+        padding: 0 16px 0 20px;
+    }
+    .composer-send span {
+        display: none;
+    }
+    .composer .voice-rec-btn {
+        width: 36px;
+    }
+    .emoji-picker-container {
+        left: 6px;
+        right: 6px;
+    }
+    .emoji-picker-container emoji-picker {
+        width: 100%;
+    }
 }

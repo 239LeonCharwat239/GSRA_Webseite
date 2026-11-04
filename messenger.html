@@ -71,10 +71,13 @@
                 </div>
 
                 <div class="wa-filter-pills">
-                    <button class="wa-pill active" data-filter="all">Alle</button>
-                    <button class="wa-pill" data-filter="unread">Ungelesen</button>
-                    <button class="wa-pill" data-filter="favorites">Favoriten</button>
-                    <button class="wa-pill" data-filter="forums">Foren</button>
+                    <button class="wa-pill active" data-filter="all" title="Alle Chats"><i class="fa-solid fa-layer-group"></i><span>Alle</span></button>
+                    <button class="wa-pill" data-filter="direct" title="Direktchats mit Freunden"><i class="fa-solid fa-user"></i><span>Direkt</span></button>
+                    <button class="wa-pill" data-filter="groups" title="Private Gruppen"><i class="fa-solid fa-users"></i><span>Gruppen</span></button>
+                    <button class="wa-pill" data-filter="forums" title="Öffentliche Foren und das offizielle GSRA-Forum"><i class="fa-solid fa-bullhorn"></i><span>Foren</span></button>
+                    <span class="wa-pill-divider" aria-hidden="true"></span>
+                    <button class="wa-pill wa-pill-icon" data-filter="unread" title="Ungelesen" aria-label="Ungelesen"><i class="fa-solid fa-envelope"></i></button>
+                    <button class="wa-pill wa-pill-icon" data-filter="favorites" title="Favoriten" aria-label="Favoriten"><i class="fa-solid fa-star"></i></button>
                 </div>
 
                 <div class="chat-sidebar-list" id="chatsList">
@@ -201,24 +204,25 @@
                         <button type="button" id="removeImageBtn" style="background: none; border: none; color: #ff4d4d; cursor: pointer; font-size: 16px;"><i class="fa-solid fa-xmark"></i></button>
                     </div>
 
-                    <!-- Eingabeleiste wie bei WhatsApp: Anhängen, Emoji, Text – rechts Mikrofon (leeres Feld) bzw. Senden -->
-                    <form class="chat-input-area" id="chatForm">
-                        <label for="imageUploadInput" class="attachment-btn" title="Fotos & Videos anhängen">
-                            <i class="fa-solid fa-plus"></i>
-                            <input type="file" id="imageUploadInput" accept="image/*,video/*" multiple style="display: none;">
-                        </label>
+                    <!-- GSRA-Eingabeleiste: Werkzeugleiste (Anhang, Emoji, Sprachnachricht) · Textfeld · Senden -->
+                    <form class="chat-input-area composer" id="chatForm">
+                        <div class="composer-tools">
+                            <label for="imageUploadInput" class="attachment-btn composer-tool" title="Fotos & Videos anhängen">
+                                <i class="fa-solid fa-paperclip"></i>
+                                <input type="file" id="imageUploadInput" accept="image/*,video/*" multiple style="display: none;">
+                            </label>
+                            <button type="button" id="emojiToggleBtn" class="emoji-btn composer-tool" title="Emoji auswählen">
+                                <i class="fa-regular fa-face-grin"></i>
+                            </button>
+                            <button type="button" id="voiceRecordBtn" class="composer-tool composer-mic" title="Sprachnachricht aufnehmen">
+                                <i class="fa-solid fa-microphone"></i>
+                            </button>
+                        </div>
 
-                        <button type="button" id="emojiToggleBtn" class="emoji-btn" title="Emoji auswählen">
-                            <i class="fa-regular fa-face-smile"></i>
-                        </button>
+                        <textarea id="messageInput" placeholder="Nachricht schreiben …" autocomplete="off" rows="1"></textarea>
 
-                        <textarea id="messageInput" placeholder="Gib eine Nachricht ein..." autocomplete="off" rows="1"></textarea>
-
-                        <button type="submit" id="sendBtn" class="chat-round-btn chat-send-btn" title="Senden">
-                            <i class="fa-solid fa-paper-plane"></i>
-                        </button>
-                        <button type="button" id="voiceRecordBtn" class="chat-round-btn chat-mic-btn" title="Sprachnachricht aufnehmen">
-                            <i class="fa-solid fa-microphone"></i>
+                        <button type="submit" id="sendBtn" class="composer-send" title="Senden">
+                            <span>Senden</span><i class="fa-solid fa-paper-plane"></i>
                         </button>
                     </form>
 

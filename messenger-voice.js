@@ -45,7 +45,7 @@ function compressWaveform(levels, bars) {
     return out.map(v => Math.round((v / max) * 100) / 100);
 }
 
-/* ---------- Eingabeleiste: Mikrofon ↔ Senden ---------- */
+/* ---------- Eingabeleiste: Mikrofon in der Werkzeugleiste ---------- */
 
 function initVoiceMessages() {
     const micBtn = document.getElementById("voiceRecordBtn");
@@ -56,7 +56,7 @@ function initVoiceMessages() {
     }
     micBtn.addEventListener("click", startVoiceRecording);
 
-    // Angehängte Fotos/Videos: Senden statt Mikrofon anzeigen
+    // Angehängte Fotos/Videos: Senden ist auch ohne Text aktiv
     if (imagePreviewContainer) {
         const syncMedia = () => chatForm.classList.toggle("has-media", imagePreviewContainer.style.display !== "none");
         new MutationObserver(syncMedia).observe(imagePreviewContainer, { attributes: true, attributeFilter: ["style"] });

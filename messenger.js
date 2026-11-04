@@ -207,7 +207,7 @@ if (!editPreviewBanner && chatForm) {
         if (messageInput) {
             messageInput.value = "";
             messageInput.style.height = "42px";
-            messageInput.placeholder = "Gib eine Nachricht ein...";
+            messageInput.placeholder = "Nachricht schreiben …";
         }
     });
 }
@@ -321,8 +321,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.querySelectorAll(".wa-pill").forEach(pill => {
         pill.addEventListener("click", (e) => {
             document.querySelectorAll(".wa-pill").forEach(p => p.classList.remove("active"));
-            e.target.classList.add("active");
-            currentFilter = e.target.getAttribute("data-filter");
+            e.currentTarget.classList.add("active");
+            currentFilter = e.currentTarget.getAttribute("data-filter");
             renderChatsList();
         });
     });
@@ -1262,7 +1262,10 @@ async function renderChatsList() {
 
         if (currentFilter === 'unread') return chat.unread === true;
         if (currentFilter === 'favorites') return userFavorites.has(chat.id);
-        if (currentFilter === 'forums') return isGroup || isOfficial;
+        // Foren = öffentlich geschaltete Gruppen und das offizielle Forum, Gruppen = private Gruppen
+        if (currentFilter === 'forums') return isOfficial || (isGroup && chat.is_public === true);
+        if (currentFilter === 'groups') return isGroup && chat.is_public !== true;
+        if (currentFilter === 'direct') return !isGroup && !isOfficial;
         return true;
     });
 
@@ -1304,7 +1307,7 @@ async function renderChatsList() {
         
         const customName = isForumOrGroup ? null : (getChatAlias(chat.id) || chat.title);
         let displayTitle = isOfficial ? "GSRA Official / Community Forum" : (isGroup ? chat.title : (customName ? `${customName} (${otherUserName})` : `Chat mit ${otherUserName}`));
-        const lastMsg = escapeHtml(chat.last_message || 'Keine Nachrichten');
+        const lastMsg = escapeHtml(asGroupWording(chat.last_message, chat.id) || 'Keine Nachrichten');
 
         item.innerHTML = `
             <div class="wa-avatar">${avatarInner(avatarUrl, chatIconClass(chat))}</div>
@@ -1597,8 +1600,8 @@ async function createNewGroup() {
     const supabase = window.supabaseClient || window.supabase;
     const forumName = await showDialog({
         icon: "fa-users",
-        title: "Neues Forum / Gruppe erstellen",
-        message: "Gib deiner Gruppe einen Namen. Danach kannst du direkt Mitglieder hinzufügen.",
+        title: "Neue Gruppe erstellen",
+        message: "Gib deiner Gruppe einen Namen. Danach kannst du direkt Mitglieder hinzufügen. Schaltest du sie später in der Gruppeninfo öffentlich, wird sie zum Forum.",
         input: { placeholder: "z. B. GT3 Setup Talk", maxLength: 50 },
         confirmText: "Gruppe erstellen",
         cancelText: "Abbrechen"
@@ -1684,7 +1687,7 @@ function openForumChat(forumChat = null) {
         if (messageInput) { messageInput.disabled = true; messageInput.placeholder = "Nur Administratoren können im offiziellen Forum schreiben."; }
         if (sendBtn) sendBtn.disabled = true;
     } else {
-        if (messageInput) { messageInput.disabled = false; messageInput.placeholder = "Schreibe eine Nachricht..."; }
+        if (messageInput) { messageInput.disabled = false; messageInput.placeholder = "Nachricht schreiben …"; }
         if (sendBtn) sendBtn.disabled = false;
     }
 
@@ -1714,7 +1717,7 @@ async function openChat(chatId, recipientName, chatTitle = null) {
     if (editChatTitleBtn) editChatTitleBtn.style.display = "";
     if (deleteChatBtn) deleteChatBtn.style.display = "";
 
-    if (messageInput) { messageInput.disabled = false; messageInput.placeholder = "Gib eine Nachricht ein..."; }
+    if (messageInput) { messageInput.disabled = false; messageInput.placeholder = "Nachricht schreiben …"; }
     if (imageUploadInput) imageUploadInput.disabled = false;
     if (emojiToggleBtn) emojiToggleBtn.disabled = false;
     if (sendBtn) sendBtn.disabled = false;
@@ -1845,10 +1848,11 @@ function renderChatInfo() {
         about.appendChild(text);
         if (canEditProfile && socialReady) {
             about.appendChild(createInfoRow("fa-solid fa-align-left", "Beschreibung bearbeiten", () => editGroupDescription(chat)));
-            about.appendChild(createInfoRow("fa-solid fa-image", chat.image_url ? "Forenbild ändern" : "Forenbild hinzufügen", () => changeGroupImage(chat)));
+            const imageNoun = isGroup && !chat.is_public ? "Gruppenbild" : "Forenbild";
+            about.appendChild(createInfoRow("fa-solid fa-image", chat.image_url ? `${imageNoun} ändern` : `${imageNoun} hinzufügen`, () => changeGroupImage(chat)));
             if (isGroup) {
                 about.appendChild(createInfoRow(chat.is_public ? "fa-solid fa-lock" : "fa-solid fa-globe",
-                    chat.is_public ? "Wieder privat machen" : "Öffentlich machen (in der Suche auffindbar)", () => toggleGroupPublic(chat)));
+                    chat.is_public ? "Wieder privat machen (wird zur Gruppe)" : "Öffentlich machen (wird zum Forum)", () => toggleGroupPublic(chat)));
             }
         }
         chatInfoBody.appendChild(about);
@@ -2200,7 +2204,28 @@ async function renderMessages(messages, chatId = activeChatId) {
     }
 }
 
+// Private Gruppe = „Gruppe“, öffentlich geschaltet = „Forum“ (gespeicherte Systemtexte sagen immer „Forum“)
+function isPrivateGroup(chatId = activeChatId) {
+    const chat = allChatsCache.find(c => c.id === chatId);
+    return Boolean(chat && chat.title !== null && chat.user1_id === chat.user2_id && !chat.is_public && !isOfficialForum(chat.id));
+}
+
+function asGroupWording(text, chatId = activeChatId) {
+    if (!text || !isPrivateGroup(chatId)) return text;
+    return text
+        .replace(/zum Forum hinzugefügt/g, "zur Gruppe hinzugefügt")
+        .replace(/dem Forum beigetreten/g, "der Gruppe beigetreten")
+        .replace(/das Forum erstellt/g, "die Gruppe erstellt")
+        .replace(/das Forum in "/g, 'die Gruppe in "');
+}
+
 async function formatSystemMessage(text, senderId) {
+    // Öffentlich/privat schalten beschreibt den Wechsel selbst, alles andere heißt so, wie die Gruppe gerade ist
+    if (/hat das Forum (öffentlich|wieder privat) gemacht/.test(text || "")) return formatSystemMessageText(text, senderId);
+    return asGroupWording(await formatSystemMessageText(text, senderId));
+}
+
+async function formatSystemMessageText(text, senderId) {
     if (!text) return "";
     const isOwnAction = String(senderId) === String(currentUser?.id);
     const actorName = await fetchUserName(senderId);
@@ -2229,9 +2254,13 @@ async function formatSystemMessage(text, senderId) {
     if (text.includes("hat das Forum erstellt")) {
         return isOwnAction ? "Du hast das Forum erstellt." : `${actorName} hat das Forum erstellt.`;
     }
-    if (text.includes("hat das Forum öffentlich gemacht") || text.includes("hat das Forum wieder privat gemacht")) {
-        const rest = text.slice(text.indexOf("hat das Forum") + "hat das Forum".length);
-        return isOwnAction ? `Du hast das Forum${rest}` : `${actorName} hat das Forum${rest}`;
+    if (text.includes("hat das Forum öffentlich gemacht")) {
+        const rest = text.slice(text.indexOf("öffentlich gemacht") + "öffentlich gemacht".length);
+        return `${isOwnAction ? "Du hast" : `${actorName} hat`} die Gruppe öffentlich gemacht – sie ist jetzt ein Forum${rest}`;
+    }
+    if (text.includes("hat das Forum wieder privat gemacht")) {
+        const rest = text.slice(text.indexOf("wieder privat gemacht") + "wieder privat gemacht".length);
+        return `${isOwnAction ? "Du hast" : `${actorName} hat`} das Forum wieder privat gemacht – es ist jetzt eine Gruppe${rest}`;
     }
     if (text.includes("umbenannt")) {
         return isOwnAction ? text.replace(new RegExp(`^${actorName}\\s+hat`, 'i'), 'Du hast') : text;
@@ -2750,7 +2779,7 @@ if (editChatTitleBtn) {
         const isForum = Boolean(chatObj && chatObj.user1_id === chatObj.user2_id);
         const newTitle = await showDialog({
             icon: "fa-pen",
-            title: isForum ? "Gruppe umbenennen" : "Chat umbenennen",
+            title: isForum ? (chatObj.is_public ? "Forum umbenennen" : "Gruppe umbenennen") : "Chat umbenennen",
             message: isForum ? "Gib einen neuen Namen ein:" : "Gib einen eigenen Namen für diesen Chat ein. Er ist nur für dich sichtbar.",
             input: { placeholder: "Neuer Name", value: (isForum ? null : getChatAlias(activeChatId)) || (chatObj && chatObj.title) || "", maxLength: 50 },
             confirmText: "Speichern",
@@ -2797,10 +2826,13 @@ if (deleteChatBtn) {
             return;
         }
 
+        const chatToDelete = allChatsCache.find(c => c.id === activeChatId);
+        const deleteKind = !chatToDelete || chatToDelete.user1_id !== chatToDelete.user2_id ? ["Chat", "diesen Chat"]
+            : chatToDelete.is_public ? ["Forum", "dieses Forum"] : ["Gruppe", "diese Gruppe"];
         const confirmed = await showDialog({
             icon: "fa-trash",
-            title: "Chat löschen?",
-            message: "Möchtest du dieses Forum / diesen Chat wirklich löschen? Alle Nachrichten gehen dabei verloren.",
+            title: `${deleteKind[0]} löschen?`,
+            message: `Möchtest du ${deleteKind[1]} wirklich löschen? Alle Nachrichten gehen dabei verloren.`,
             confirmText: "Löschen",
             cancelText: "Abbrechen",
             danger: true
