@@ -5865,9 +5865,37 @@ button.dash-avatar:hover,
     transition: filter 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
 }
 
-.composer-send:hover:not(:disabled) {
-    filter: brightness(1.08);
-    transform: translateX(2px);
+/* Darüberfahren wie „Angebot erstellen“: schwarz mit gelbem Rand (Rand = gelbe Fläche hinter einer schwarzen Innenfläche) */
+.composer-send,
+.composer .voice-rec-send {
+    position: relative;
+    isolation: isolate;
+}
+
+.composer-send::before,
+.composer .voice-rec-send::before {
+    content: "";
+    position: absolute;
+    inset: 2px;
+    z-index: -1;
+    background: #0b0c10;
+    clip-path: polygon(11px 0, 100% 0, calc(100% - 11px) 100%, 0 100%);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.composer .voice-rec-send::before {
+    clip-path: polygon(11px 0, 100% 0, 100% 100%, 0 100%);
+}
+
+.composer-send:hover:not(:disabled),
+.composer .voice-rec-send:hover {
+    color: var(--gsra-yellow);
+}
+
+.composer-send:hover:not(:disabled)::before,
+.composer .voice-rec-send:hover::before {
+    opacity: 1;
 }
 
 .composer-send:disabled {
@@ -5926,7 +5954,6 @@ button.dash-avatar:hover,
 
 .composer .voice-rec-send:hover {
     background: var(--gsra-yellow);
-    filter: brightness(1.08);
     transform: none;
 }
 
