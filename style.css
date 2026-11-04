@@ -5818,6 +5818,11 @@ button.dash-avatar:hover,
     background: rgba(255, 204, 0, 0.08);
 }
 
+.composer-tool.attachment-btn:hover {
+    color: var(--gsra-blue);
+    background: rgba(0, 85, 255, 0.12);
+}
+
 .composer-mic:hover {
     color: #ff4d4d;
     background: rgba(255, 77, 77, 0.1);
