@@ -43,16 +43,15 @@
         <!-- ELEGANTE FILTERBAR (MODERN & CLEAN) -->
         <section class="filter-bar">
             <div class="filter-inputs-group">
+                <!-- Kategorien und Unterkategorien füllt marktplatz.js -->
                 <select id="filterCategory">
                     <option value="all">Alle Kategorien</option>
-                    <option value="Wheelbases">Wheelbases & Lenkräder</option>
-                    <option value="Pedale">Pedale</option>
-                    <option value="Rigs">Rigs & Sitze</option>
-                    <option value="Monitore">Monitore & VR</option>
-                    <option value="Zubehoer">Zubehör & Sonstiges</option>
+                </select>
+                <select id="filterSubcategory" style="display: none;">
+                    <option value="all">Alle Unterkategorien</option>
                 </select>
 
-                <input type="text" id="searchMarketplace" placeholder="Suche Artikel..." style="min-width: 150px;">
+                <input type="text" id="searchMarketplace" placeholder="Suche Artikel, Hersteller, Modell..." style="min-width: 150px;">
                 
                 <!-- ORTSUCHE MIT COMBOBOX IN DER FILTERLEISTE -->
                 <div class="location-container">
@@ -75,10 +74,11 @@
 
         <!-- KARTEN GRID -->
         <section>
-            <h2>Aktuelle <span class="text-yellow">Angebote</span></h2>
+            <h2>Aktuelle <span class="text-yellow">Angebote</span> <span id="marketplaceCount" class="market-count"></span></h2>
             <div id="marketplaceGrid">
                 <!-- Dynamisch geladene Marktplatz-Karten -->
             </div>
+            <div id="marketplaceMore" class="market-more"></div>
         </section>
     </main>
 
@@ -87,8 +87,10 @@
         <div class="modal-content">
             <button class="modal-close" id="closeDetailModalBtn">&times;</button>
             
+            <div id="modalStatus" class="market-status-banner" style="display: none;"></div>
             <h2 id="modalTitle" class="text-blue" style="margin-bottom: 5px;">Artikel Titel</h2>
-            <p id="modalMeta" style="font-size: 14px; color: var(--text-muted); margin-bottom: 15px;"></p>
+            <p id="modalMeta" style="font-size: 14px; color: var(--text-muted); margin-bottom: 8px;"></p>
+            <div id="modalSpecs" class="market-specs"></div>
 
             <div>
                 <img id="modalMainImage" src="" alt="Hauptbild" class="modal-main-image">
@@ -107,7 +109,10 @@
                     <span id="modalPrice" style="font-size: 24px; font-weight: bold; color: var(--gsra-yellow);">0,00 €</span>
                 </div>
 
-                <div style="display: flex; gap: 10px;">
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button id="modalReportBtn" class="market-report-btn" style="display: none;" title="Inserat melden">
+                        <i class="fa-solid fa-flag"></i> Melden
+                    </button>
                     <button id="modalContactBtn" class="login-btn" style="display: flex; align-items: center; gap: 8px;">
                         <i class="fa-solid fa-envelope"></i> Verkäufer kontaktieren
                     </button>
@@ -119,6 +124,9 @@
                     </button>
                 </div>
             </div>
+
+            <!-- Nur für den Verkäufer: Status ändern -->
+            <div id="modalStatusActions" class="market-status-actions" style="display: none;"></div>
         </div>
     </div>
 
@@ -138,13 +146,30 @@
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                     <div>
                         <label for="itemCategory" style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">Kategorie*</label>
-                        <select id="itemCategory" required>
-                            <option value="Wheelbases">Wheelbases & Lenkräder</option>
-                            <option value="Pedale">Pedale</option>
-                            <option value="Rigs">Rigs & Sitze</option>
-                            <option value="Monitore">Monitore & VR</option>
-                            <option value="Zubehoer">Zubehör & Sonstiges</option>
-                        </select>
+                        <select id="itemCategory" required></select>
+                    </div>
+                    <div>
+                        <label for="itemSubcategory" style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">Unterkategorie*</label>
+                        <select id="itemSubcategory" required></select>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div>
+                        <label for="itemManufacturer" style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">Hersteller*</label>
+                        <input type="text" id="itemManufacturer" list="manufacturerList" maxlength="60" placeholder="z.B. Fanatec (oder Eigenbau)" required autocomplete="off">
+                        <datalist id="manufacturerList"></datalist>
+                    </div>
+                    <div>
+                        <label for="itemModel" style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">Modell*</label>
+                        <input type="text" id="itemModel" maxlength="80" placeholder="z.B. CSL DD" required>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div id="itemSpecGroup" style="display: none;">
+                        <label id="itemSpecLabel" for="itemSpec" style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;"></label>
+                        <input type="number" id="itemSpec" step="0.1" min="0">
                     </div>
                     <div>
                         <label for="itemCondition" style="color: #fff; font-size: 13px; display: block; margin-bottom: 5px;">Zustand*</label>

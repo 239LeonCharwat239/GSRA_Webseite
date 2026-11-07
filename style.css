@@ -562,6 +562,164 @@ nav a.nav-unread-glow::after {
     color: var(--gsra-yellow);
 }
 
+/* =========================================
+   MARKTPLATZ: STATUS, TECHNISCHE ANGABEN, MELDEN, WEITERE LADEN
+========================================= */
+.marketplace-card-clickable {
+    position: relative;
+}
+
+.market-badge {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    z-index: 1;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+}
+
+.market-badge.reserved {
+    background: var(--gsra-yellow);
+    color: #111;
+}
+
+.market-card-product {
+    margin: -4px 0 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.market-card-product strong {
+    color: #fff;
+}
+
+.market-card-sub {
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.market-count {
+    font-size: 16px;
+    color: var(--text-muted);
+}
+
+.market-more {
+    display: flex;
+    justify-content: center;
+    margin-top: 24px;
+}
+
+.market-status-banner {
+    margin-bottom: 14px;
+    padding: 10px 14px;
+    font-weight: 700;
+    border-left: 4px solid var(--gsra-yellow);
+    background: rgba(255, 204, 0, 0.1);
+    color: #fff;
+    text-align: left;
+}
+
+.market-status-banner.verkauft {
+    border-left-color: #00c26e;
+    background: rgba(0, 194, 110, 0.12);
+}
+
+.market-specs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 15px;
+}
+
+.market-specs span {
+    display: flex;
+    flex-direction: column;
+    padding: 6px 12px;
+    background: #0b0c10;
+    border: 1px solid var(--border-subtle);
+    border-left: 3px solid var(--gsra-blue);
+    color: #fff;
+    font-weight: 700;
+    text-align: left;
+}
+
+.market-specs small {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.market-report-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: transparent;
+    border: 1px solid rgba(255, 77, 77, 0.4);
+    border-radius: 4px;
+    color: #ff6b6b;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.market-report-btn:hover {
+    background: rgba(255, 77, 77, 0.12);
+}
+
+.market-status-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px dashed var(--border-subtle);
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.market-status-actions > span {
+    margin-right: auto;
+}
+
+.market-status-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: #0b0c10;
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.market-status-btn.reserviert:hover {
+    border-color: var(--gsra-yellow);
+    color: var(--gsra-yellow);
+}
+
+.market-status-btn.verkauft:hover {
+    border-color: #00c26e;
+    color: #00c26e;
+}
+
+.market-status-btn.aktiv:hover {
+    border-color: var(--gsra-blue);
+    color: var(--gsra-blue);
+}
+
 .autocomplete-credit {
     padding: 6px 14px;
     font-size: 10px;

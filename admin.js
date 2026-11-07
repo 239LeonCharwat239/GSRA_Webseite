@@ -95,8 +95,27 @@ document.addEventListener("DOMContentLoaded", async () => {
     // gelöschte und bearbeitete Nachrichten mit ihrem Originalinhalt (Beweissicherung)
     const DELETED_TEXTS = ["Du hast diese Nachricht gelöscht", "Diese Nachricht wurde gelöscht", "Diese Nachricht wurde von einem Gruppenadmin gelöscht"];
 
+    // Gemeldetes Inserat: Kopie zum Zeitpunkt der Meldung (auch wenn es danach geändert oder gelöscht wurde)
+    function listingHtml(listing) {
+        const images = Array.isArray(listing.images) ? listing.images : [];
+        return `
+            <div class="admin-context">
+                <div class="admin-context-title"><i class="fa-solid fa-tags"></i> Gemeldetes Inserat
+                    <span class="admin-context-range">Kopie vom Zeitpunkt der Meldung</span>
+                </div>
+                <div class="admin-msg">
+                    <strong>${escapeHtml(listing.title || "Ohne Titel")}</strong> · ${escapeHtml(String(listing.price ?? ""))} €
+                    · ${escapeHtml([listing.category, listing.subcategory].filter(Boolean).join(" › "))}${listing.location ? ` · ${escapeHtml(listing.location)}` : ""}
+                    <div class="admin-msg-text">${escapeHtml(listing.description || "")}</div>
+                    ${images.length ? `<span class="admin-msg-media"><i class="fa-solid fa-image"></i> Bilder: ${images.map((url, i) => `<a href="${escapeHtml(safeUrl(url))}" target="_blank" rel="noopener">Bild ${i + 1}</a>`).join(", ")}</span>` : ""}
+                    <span class="admin-msg-media"><i class="fa-solid fa-arrow-up-right-from-square"></i> <a href="marktplatz.html?inserat=${encodeURIComponent(listing.listing_id || "")}" target="_blank" rel="noopener">Inserat im Marktplatz öffnen (dort als Admin löschbar)</a></span>
+                </div>
+            </div>`;
+    }
+
     function contextHtml(report) {
         if (report.scope === "zeitraum") return windowHtml(report);
+        if (report.scope === "inserat" && report.context && !Array.isArray(report.context)) return listingHtml(report.context);
         const messages = Array.isArray(report.context) ? report.context : [];
         if (messages.length === 0) {
             return `<div class="admin-context empty"><i class="fa-solid fa-comment-slash"></i> Kein Gesprächsverlauf – die Person wurde ${report.chat_id ? "ohne Nachrichten im Chat" : "ohne Chatbezug (z. B. aus dem Profil)"} gemeldet.</div>`;
@@ -253,7 +272,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         list.replaceChildren(...reports.map(report => {
             const chatRef = report.chat_id || report.window_chat_id;
             const chat = (chats || []).find(c => c.id === chatRef);
-            const where = !chatRef ? "aus dem Profil"
+            const where = report.scope === "inserat" ? "im Marktplatz (Inserat)"
+                : !chatRef ? "aus dem Profil"
                 : (chat ? (chat.user1_id === chat.user2_id ? `in der Gruppe „${chat.title}“` : "im Direktchat") : "in einem inzwischen gelöschten Chat");
             const card = document.createElement("article");
             card.className = `admin-report status-${report.status}`;

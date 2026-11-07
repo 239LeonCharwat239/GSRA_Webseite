@@ -277,7 +277,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const shortDate = (value) => (value ? new Date(value).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" }) : "");
 
         const [ownListings, ownSetups] = await Promise.all([
-            client.from("marketplace").select("id, title, price, images, created_at").eq("user_id", currentUser.id).order("created_at", { ascending: false }),
+            client.from("marketplace").select("*").eq("user_id", currentUser.id).order("created_at", { ascending: false }),
             client.from("setups").select("id, simulation, car_model, track_name, likes, dislikes, created_at").eq("uploader_id", currentUser.id)
         ]);
         renderOwnList("ownListings", "ownListingsCount", ownListings.data || [], ownListings.error,
@@ -287,7 +287,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 return `
                 <a class="dash-own-item" href="marktplatz.html?inserat=${encodeURIComponent(item.id)}">
                     <span class="dash-own-thumb">${/^https?:\/\//i.test(image || "") ? `<img src="${esc(image)}" alt="">` : '<i class="fa-solid fa-image"></i>'}</span>
-                    <span class="dash-own-text"><strong>${esc(item.title)}</strong><small>${esc(shortDate(item.created_at))}</small></span>
+                    <span class="dash-own-text"><strong>${esc(item.title)}</strong><small>${esc(shortDate(item.created_at))}${item.status === "reserviert" ? " · Reserviert" : item.status === "verkauft" ? " · Verkauft" : ""}</small></span>
                     <span class="dash-own-meta text-yellow">${parseFloat(item.price || 0).toFixed(2)} €</span>
                 </a>`;
             });
