@@ -90,58 +90,73 @@ document.addEventListener("DOMContentLoaded", async () => {
     else if (params.has("neu") && currentUser) openCreateOrEditModal(null);
 });
 
-// ERWEITERTE ORTS-SUCHE MIT GENAUERER SELEKTIERUNG (DÖRFER, WEILER, BUNDESLAND/REGION)
+// ORTS-SUCHE BEIM TIPPEN (Photon, für Suche beim Tippen gedacht; Daten von OpenStreetMap)
+// Der gewählte Ort merkt sich seine Koordinaten am Eingabefeld (Grundlage für die Umkreissuche)
 function setupLocationAutocomplete(inputElement, dropdownElement, onSelectCallback) {
     if (!inputElement || !dropdownElement) return;
 
     let debounceTimer;
+    let pendingRequest = null;
     inputElement.addEventListener("input", (e) => {
         const query = e.target.value.trim();
         clearTimeout(debounceTimer);
+        // Eigener Text statt Auswahl: keine Koordinaten
+        delete inputElement.dataset.lat;
+        delete inputElement.dataset.lon;
+        delete inputElement.dataset.place;
 
-        if (query.length < 2) {
+        if (query.length < 3) {
             dropdownElement.style.display = "none";
             return;
         }
 
         debounceTimer = setTimeout(async () => {
+            if (pendingRequest) pendingRequest.abort();
+            pendingRequest = new AbortController();
             try {
-                const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=8`);
+                const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&osm_tag=place&lang=de&limit=8`, { signal: pendingRequest.signal });
                 const data = await res.json();
+                const seen = new Set();
 
                 dropdownElement.innerHTML = "";
-                if (data.length === 0) {
-                    dropdownElement.style.display = "none";
-                    return;
-                }
+                (data.features || []).forEach(feature => {
+                    const props = feature.properties || {};
+                    const [lon, lat] = feature.geometry?.coordinates || [];
+                    if (!props.name || typeof lat !== "number" || typeof lon !== "number") return;
 
-                data.forEach(place => {
+                    // Eindeutig unterscheidbar: Ortsname + Bundesland/Region + Land (z. B. Vogelsang)
+                    const parts = [props.name];
+                    if (props.state && props.state !== props.name) parts.push(props.state);
+                    if (props.country && props.country !== props.state && props.country !== props.name) parts.push(props.country);
+                    const displayName = parts.join(", ");
+                    if (seen.has(displayName)) return;
+                    seen.add(displayName);
+
                     const item = document.createElement("div");
                     item.className = "autocomplete-item";
-                    
-                    const addr = place.address || {};
-                    const specificName = addr.suburb || addr.village || addr.hamlet || addr.quarter || addr.town || addr.city || addr.municipality || place.name;
-                    const region = addr.state || addr.county || "";
-                    const country = addr.country || "";
-                    
-                    // Disambiguierung: Ortsname + Region/Bundesland + Land für eindeutige Unterscheidung (z.B. Vogelsang)
-                    let parts = [specificName];
-                    if (region && region !== specificName) parts.push(region);
-                    if (country && country !== region) parts.push(country);
-                    const displayName = parts.join(", ");
-
                     item.innerText = displayName;
                     item.addEventListener("click", () => {
                         inputElement.value = displayName;
+                        inputElement.dataset.lat = String(lat);
+                        inputElement.dataset.lon = String(lon);
+                        inputElement.dataset.place = displayName;
                         dropdownElement.style.display = "none";
                         if (onSelectCallback) onSelectCallback();
                     });
                     dropdownElement.appendChild(item);
                 });
 
+                if (!dropdownElement.children.length) {
+                    dropdownElement.style.display = "none";
+                    return;
+                }
+                const credit = document.createElement("div");
+                credit.className = "autocomplete-credit";
+                credit.textContent = "Orte: © OpenStreetMap-Mitwirkende";
+                dropdownElement.appendChild(credit);
                 dropdownElement.style.display = "block";
             } catch (err) {
-                console.error("Fehler bei der Orts-Suche:", err);
+                if (err.name !== "AbortError") console.error("Fehler bei der Orts-Suche:", err);
             }
         }, 300);
     });
@@ -365,6 +380,11 @@ function openCreateOrEditModal(itemToEdit = null) {
 
     createItemForm.reset();
     existingImagesUrls = [];
+    if (itemLocationInput) {
+        delete itemLocationInput.dataset.lat;
+        delete itemLocationInput.dataset.lon;
+        delete itemLocationInput.dataset.place;
+    }
 
     if (itemToEdit) {
         isEditMode = true;
@@ -378,6 +398,12 @@ function openCreateOrEditModal(itemToEdit = null) {
         document.getElementById("itemCondition").value = itemToEdit.condition || "Gebraucht";
         document.getElementById("itemPrice").value = itemToEdit.price || 0;
         document.getElementById("itemLocation").value = itemToEdit.location || "";
+        // Gespeicherte Koordinaten bleiben, solange der Ort nicht geändert wird
+        if (itemLocationInput && itemToEdit.latitude != null && itemToEdit.longitude != null) {
+            itemLocationInput.dataset.lat = String(itemToEdit.latitude);
+            itemLocationInput.dataset.lon = String(itemToEdit.longitude);
+            itemLocationInput.dataset.place = itemToEdit.location || "";
+        }
         document.getElementById("itemDescription").value = itemToEdit.description || "";
 
         existingImagesUrls = itemToEdit.images || itemToEdit.image_urls || [];
@@ -514,8 +540,21 @@ if (createItemForm) {
 
             const sellerName = currentUser.user_metadata?.full_name || (currentUser.email ? currentUser.email.split('@')[0] : "Anonym");
 
+            // Koordinaten nur, wenn der Ort aus der Vorschlagsliste gewählt wurde
+            const picked = locationInput && locationInput.dataset.place === location;
+            const coords = {
+                latitude: picked ? Number(locationInput.dataset.lat) : null,
+                longitude: picked ? Number(locationInput.dataset.lon) : null
+            };
+            // Fehlen die Spalten noch (SQL nicht ausgeführt), wird ohne Koordinaten gespeichert
+            const withCoords = async (run, fields) => {
+                const { error } = await run({ ...fields, ...coords });
+                if (!error || !/latitude|longitude/i.test(error.message || "")) return error;
+                return (await run(fields)).error;
+            };
+
             if (isEditMode) {
-                const { error: updateError } = await supabase.from("marketplace").update({
+                const updateError = await withCoords((fields) => supabase.from("marketplace").update(fields).eq("id", currentEditItemId), {
                     title: title,
                     category: category,
                     condition: condition,
@@ -523,12 +562,12 @@ if (createItemForm) {
                     location: location,
                     description: description,
                     images: finalImageArray
-                }).eq("id", currentEditItemId);
+                });
 
                 if (updateError) throw updateError;
                 showToast("Angebot erfolgreich aktualisiert!", "success");
             } else {
-                const { error: insertError } = await supabase.from("marketplace").insert([{
+                const insertError = await withCoords((fields) => supabase.from("marketplace").insert([fields]), {
                     title: title,
                     category: category,
                     condition: condition,
@@ -538,7 +577,7 @@ if (createItemForm) {
                     images: finalImageArray,
                     user_id: currentUser.id,
                     seller_name: sellerName
-                }]);
+                });
 
                 if (insertError) throw insertError;
                 showToast("Angebot erfolgreich erstellt!", "success");

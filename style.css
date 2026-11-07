@@ -562,6 +562,13 @@ nav a.nav-unread-glow::after {
     color: var(--gsra-yellow);
 }
 
+.autocomplete-credit {
+    padding: 6px 14px;
+    font-size: 10px;
+    color: var(--text-muted);
+    text-align: right;
+}
+
 input[type="date"],
 input[type="datetime-local"] {
     position: relative;
