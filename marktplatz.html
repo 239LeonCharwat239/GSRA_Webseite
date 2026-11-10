@@ -108,6 +108,11 @@
 
         <!-- ERGEBNISSE -->
         <section class="mk-results">
+            <!-- Top-Anzeigen (bezahlter Bonus) über den normalen Angeboten -->
+            <div id="marketplaceTop" class="mk-top" hidden>
+                <div class="mk-top-head"><i class="fa-solid fa-crown"></i> Top-Anzeigen</div>
+                <div id="marketplaceTopGrid" class="mk-grid mk-top-grid"></div>
+            </div>
             <div id="marketplaceGrid" class="mk-grid">
                 <!-- Dynamisch geladene Marktplatz-Karten -->
             </div>
@@ -144,6 +149,7 @@
                         <div>
                             <small>Verkäufer</small>
                             <strong id="modalSeller"></strong>
+                            <span id="modalSellerPlan" class="plan-badge-slot"></span>
                         </div>
                     </div>
 
@@ -174,6 +180,9 @@
 
             <!-- Nur für den Verkäufer: Status ändern -->
             <div id="modalStatusActions" class="market-status-actions" style="display: none;"></div>
+
+            <!-- Nur für den Verkäufer: Boni kaufen (Hervorheben, Hochschieben, Top-Anzeige) -->
+            <section id="modalBoosts" class="mk-boosts" style="display: none;"></section>
         </div>
     </div>
 

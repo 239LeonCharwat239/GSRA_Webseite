@@ -7056,3 +7056,742 @@ button.dash-avatar:hover,
         width: 100%;
     }
 }
+/* =========================================
+   MARKTPLATZ-BONI, TOP-ANZEIGEN, ABO-ABZEICHEN
+========================================= */
+.mk-card.highlighted {
+    border-color: rgba(255, 204, 0, 0.75);
+    box-shadow: 0 0 0 1px rgba(255, 204, 0, 0.35), 0 0 18px rgba(255, 204, 0, 0.12);
+    background: linear-gradient(180deg, rgba(255, 204, 0, 0.06), #15161a 55%);
+}
+
+.mk-card.highlighted:hover,
+.mk-card.highlighted:focus-visible {
+    border-color: var(--gsra-yellow);
+    box-shadow: 0 14px 30px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 204, 0, 0.5);
+}
+
+.market-badge.top {
+    background: linear-gradient(90deg, #ffcc00, #ffdd55);
+    color: #111;
+}
+
+.mk-top {
+    margin-bottom: 26px;
+    padding: 16px;
+    background: linear-gradient(135deg, rgba(255, 204, 0, 0.08), rgba(0, 85, 255, 0.05));
+    border: 1px solid rgba(255, 204, 0, 0.25);
+    border-left: 4px solid var(--gsra-yellow);
+    border-radius: 6px;
+}
+
+.mk-top[hidden] {
+    display: none;
+}
+
+.mk-top-head {
+    margin-bottom: 12px;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--gsra-yellow);
+}
+
+.mk-top-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 14px;
+}
+
+/* Boni im Detailfenster (nur für eigene Angebote) */
+.mk-boosts {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px dashed var(--border-subtle);
+    text-align: left;
+}
+
+.mk-boosts-head h4 {
+    margin: 0 0 2px;
+    font-size: 14px;
+    color: #fff;
+}
+
+.mk-boosts-head h4 i {
+    color: var(--gsra-yellow);
+}
+
+.mk-boosts-head span {
+    display: block;
+    margin-bottom: 10px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.mk-boost-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.mk-boost {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background: #0f1116;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 4px;
+}
+
+.mk-boost.active {
+    border-color: rgba(0, 194, 110, 0.45);
+}
+
+.mk-boost-icon {
+    width: 30px;
+    flex-shrink: 0;
+    text-align: center;
+    font-size: 17px;
+    color: var(--gsra-yellow);
+}
+
+.mk-boost-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.mk-boost-text strong {
+    display: block;
+    font-size: 14px;
+    color: #fff;
+}
+
+.mk-boost-text span {
+    display: block;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--text-muted);
+}
+
+.mk-boost-buy {
+    flex-shrink: 0;
+    min-width: 76px;
+    padding: 8px 12px;
+    border: 1px solid var(--gsra-yellow);
+    background: var(--gsra-yellow);
+    color: #111;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+    clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.mk-boost-buy:hover:not(:disabled) {
+    background: #111;
+    color: var(--gsra-yellow);
+}
+
+.mk-boost-buy:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+.mk-boost-state {
+    flex-shrink: 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: #00c26e;
+}
+
+/* Abo-Abzeichen (Paddock, Pole, Alliance) */
+.plan-badge-slot:empty {
+    display: none;
+}
+
+.plan-badge-slot {
+    display: block;
+    margin-top: 4px;
+}
+
+.plan-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 9px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 3px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.plan-badge.pole {
+    border-color: rgba(255, 204, 0, 0.6);
+    background: rgba(255, 204, 0, 0.1);
+    color: var(--gsra-yellow);
+}
+
+.plan-badge.alliance {
+    border-color: rgba(0, 85, 255, 0.7);
+    background: rgba(0, 85, 255, 0.14);
+    color: #6f9bff;
+}
+
+a.plan-badge:hover {
+    filter: brightness(1.2);
+}
+
+@media (max-width: 600px) {
+    .mk-top {
+        padding: 12px;
+    }
+    .mk-top-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+    .mk-boost {
+        flex-wrap: wrap;
+    }
+    .mk-boost-buy {
+        margin-left: 42px;
+    }
+}
+
+/* =========================================
+   ABO-SEITE (Paddock, Pole, Alliance)
+========================================= */
+.plan-badge-slot.inline {
+    display: inline-block;
+    margin: 0 8px 0 2px;
+    vertical-align: middle;
+}
+
+.dash-plan-row .dash-own-link {
+    font-size: 13px;
+}
+
+.abo-page {
+    text-align: center;
+}
+
+.abo-hero {
+    padding: 30px 0 10px;
+}
+
+.abo-hero p {
+    max-width: 680px;
+}
+
+.abo-plans {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 22px;
+    margin: 10px 0 40px;
+    text-align: left;
+}
+
+.abo-plan {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    padding: 26px 24px 24px;
+    background: #15161a;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-top: 4px solid #5d6270;
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+.abo-plan.pole {
+    border-top-color: var(--gsra-yellow);
+    background: linear-gradient(180deg, rgba(255, 204, 0, 0.07), #15161a 40%);
+}
+
+.abo-plan.alliance {
+    border-top-color: var(--gsra-blue);
+    background: linear-gradient(180deg, rgba(0, 85, 255, 0.09), #15161a 40%);
+}
+
+.abo-plan.current {
+    box-shadow: 0 0 0 2px rgba(0, 194, 110, 0.55), 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+.abo-plan-ribbon {
+    position: absolute;
+    top: -13px;
+    right: 18px;
+    padding: 4px 12px;
+    background: var(--gsra-yellow);
+    color: #111;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+}
+
+.abo-plan-head h2 {
+    margin: 10px 0 2px;
+    padding: 0;
+    border: none;
+    font-size: 26px;
+}
+
+.abo-plan-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.06);
+    color: #c9ccd4;
+    font-size: 19px;
+}
+
+.abo-plan.pole .abo-plan-icon {
+    background: rgba(255, 204, 0, 0.14);
+    color: var(--gsra-yellow);
+}
+
+.abo-plan.alliance .abo-plan-icon {
+    background: rgba(0, 85, 255, 0.18);
+    color: #6f9bff;
+}
+
+.abo-plan-for {
+    margin: 0;
+    font-size: 14px;
+}
+
+.abo-plan-price {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 18px 0 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px dashed var(--border-subtle);
+}
+
+.abo-plan-price strong {
+    font-size: 34px;
+    font-weight: 900;
+    color: #fff;
+}
+
+.abo-plan-price span {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.abo-plan-features {
+    flex: 1;
+    margin: 0 0 22px;
+    padding: 0;
+    list-style: none;
+}
+
+.abo-plan-features li {
+    display: flex;
+    gap: 10px;
+    padding: 6px 0;
+    font-size: 14px;
+    color: #e6e8ee;
+}
+
+.abo-plan-features li i {
+    width: 16px;
+    margin-top: 3px;
+    flex-shrink: 0;
+    color: #00c26e;
+}
+
+.abo-plan-features li.off {
+    color: #6b7080;
+}
+
+.abo-plan-features li.off i {
+    color: #6b7080;
+}
+
+.abo-plan-features small {
+    color: var(--text-muted);
+}
+
+.abo-plan-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 16px;
+    border: 2px solid var(--gsra-yellow);
+    background: var(--gsra-yellow);
+    color: #111;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    text-decoration: none;
+    cursor: pointer;
+    clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.abo-plan-btn:hover:not(:disabled) {
+    background: #111;
+    color: var(--gsra-yellow);
+}
+
+.abo-plan-btn.ghost {
+    background: transparent;
+    border-color: rgba(255, 255, 255, 0.18);
+    color: #fff;
+}
+
+.abo-plan-btn.ghost:hover:not(:disabled) {
+    border-color: var(--gsra-yellow);
+    color: var(--gsra-yellow);
+}
+
+.abo-plan-btn.current {
+    background: rgba(0, 194, 110, 0.12);
+    border-color: rgba(0, 194, 110, 0.6);
+    color: #00c26e;
+}
+
+.abo-plan-btn:disabled {
+    cursor: default;
+    opacity: 0.75;
+}
+
+.abo-plan-btn.current:disabled {
+    opacity: 1;
+}
+
+/* Eigenes Abo und Team */
+.abo-mine {
+    margin: 10px 0 34px;
+    padding: 20px 22px;
+    background: #121318;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-left: 4px solid #00c26e;
+    border-radius: 8px;
+    text-align: left;
+}
+
+.abo-mine[hidden] {
+    display: none;
+}
+
+.abo-mine.warning {
+    border-left-color: #ff9f1a;
+}
+
+.abo-mine-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.abo-mine-head small {
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.abo-mine-plan {
+    margin: 6px 0;
+}
+
+.abo-mine-plan .plan-badge {
+    font-size: 14px;
+    padding: 4px 12px;
+}
+
+.abo-mine-text {
+    margin: 0;
+    max-width: none;
+    font-size: 15px;
+}
+
+.abo-mine-actions .abo-plan-btn {
+    width: auto;
+}
+
+.abo-team {
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px dashed var(--border-subtle);
+}
+
+.abo-team-head h3 {
+    margin: 0 0 12px;
+    font-size: 17px;
+    color: #fff;
+}
+
+.abo-team-head h3 i {
+    color: #6f9bff;
+}
+
+.abo-team-count {
+    margin-left: 6px;
+    padding: 2px 8px;
+    border-radius: 3px;
+    background: rgba(0, 85, 255, 0.16);
+    color: #9db8ff;
+    font-size: 12px;
+}
+
+.abo-team-add {
+    display: flex;
+    gap: 10px;
+    max-width: 480px;
+}
+
+.abo-team-add input {
+    flex: 1;
+    min-width: 0;
+    height: 44px;
+    padding: 0 12px;
+    background: #0b0c10;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 4px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 14px;
+    outline: none;
+}
+
+.abo-team-add input:focus {
+    border-color: var(--gsra-blue);
+}
+
+.abo-team-add .abo-plan-btn {
+    width: auto;
+    white-space: nowrap;
+}
+
+.abo-team-hint {
+    margin: 8px 0 14px;
+    max-width: none;
+    font-size: 13px;
+}
+
+.abo-team-hint i {
+    color: var(--gsra-blue);
+}
+
+.abo-team-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.abo-team-list li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background: #0f1116;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 4px;
+}
+
+.abo-team-avatar {
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border-radius: 50%;
+    background: #1c1f26;
+    color: var(--text-muted);
+}
+
+.abo-team-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.abo-team-name {
+    flex: 1;
+    min-width: 0;
+}
+
+.abo-team-name strong,
+.abo-team-name small {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.abo-team-name strong {
+    font-size: 14px;
+    color: #fff;
+}
+
+.abo-team-name small {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.abo-team-role {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: var(--gsra-yellow);
+}
+
+.abo-team-remove {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.abo-team-remove:hover {
+    border-color: rgba(255, 77, 77, 0.45);
+    color: #ff6b6b;
+}
+
+.abo-team-leave {
+    margin-top: 14px;
+    padding: 8px 12px;
+    background: transparent;
+    border: 1px solid rgba(255, 77, 77, 0.4);
+    border-radius: 4px;
+    color: #ff6b6b;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.abo-team-leave:hover {
+    background: rgba(255, 77, 77, 0.12);
+}
+
+/* Boni-Übersicht */
+.abo-boosts {
+    padding: 22px;
+    background: #121318;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    text-align: left;
+}
+
+.abo-boosts h3 {
+    margin: 0 0 6px;
+    color: #fff;
+}
+
+.abo-boosts p {
+    margin: 0 0 16px;
+    max-width: none;
+    font-size: 14px;
+}
+
+.abo-boost-list {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.abo-boost-list div {
+    display: grid;
+    grid-template-columns: 28px 1fr auto;
+    grid-template-areas: "icon name price" "icon text text";
+    align-items: center;
+    column-gap: 10px;
+    padding: 12px 14px;
+    background: #0f1116;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 4px;
+}
+
+.abo-boost-list i {
+    grid-area: icon;
+    font-size: 18px;
+    color: var(--gsra-yellow);
+}
+
+.abo-boost-list strong {
+    grid-area: name;
+    color: #fff;
+    font-size: 14px;
+}
+
+.abo-boost-list span {
+    grid-area: text;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.abo-boost-list em {
+    grid-area: price;
+    font-style: normal;
+    font-weight: 800;
+    color: var(--gsra-yellow);
+}
+
+.abo-footnote {
+    margin: 22px auto 10px;
+    font-size: 13px;
+}
+
+@media (max-width: 900px) {
+    .abo-plans,
+    .abo-boost-list {
+        grid-template-columns: 1fr;
+    }
+    .abo-plans {
+        gap: 26px;
+    }
+}
+
+@media (max-width: 600px) {
+    .abo-plan {
+        padding: 22px 18px 20px;
+    }
+    .abo-mine {
+        padding: 16px;
+    }
+    .abo-mine-actions,
+    .abo-mine-actions .abo-plan-btn {
+        width: 100%;
+    }
+    .abo-team-add {
+        flex-direction: column;
+    }
+    .abo-team-add .abo-plan-btn {
+        width: 100%;
+    }
+}

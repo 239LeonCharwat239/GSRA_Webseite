@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GSRA - Abos</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Supabase SDK & Auth -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-client.js"></script>
+    <script src="auth-nav.js"></script>
+</head>
+<body>
+
+    <!-- HEADER -->
+    <header>
+        <div class="logo-slogan-container">
+            <a href="index.html" class="logo-link">
+                <img src="GSRA_Logo_ohne Hintergrund.png" alt="GSRA Logo" class="logo">
+            </a>
+            <div class="header-slogan">
+                <span class="text-blue">UNITED BY SPEED.</span>
+                <span class="text-yellow">DRIVEN GLOBALLY.</span>
+            </div>
+        </div>
+        <nav>
+            <a href="index.html">Home</a>
+            <a href="marktplatz.html">Marktplatz</a>
+            <a href="setups.html">Setups</a>
+            <a href="nachschlagewerk.html">Nachschlagewerk</a>
+            <a href="kalender.html">Rennkalender</a>
+            <a href="dashboard.html">Dashboard</a>
+            <a href="messenger.html">Messenger</a>
+            <a href="login.html" class="login-btn" id="loginNavBtn">Login</a>
+            <button id="logoutBtn" class="login-btn" style="display: none;">Logout</button>
+        </nav>
+    </header>
+
+    <main class="container abo-page">
+        <section class="abo-hero">
+            <h1 class="hero-title">GSRA <span class="text-blue">Abos</span></h1>
+            <p>Paddock ist kostenlos und bleibt es. Mit Pole und Alliance schaltest du die exklusiven Werkzeuge der GSRA frei – monatlich abgerechnet und jederzeit kündbar.</p>
+        </section>
+
+        <!-- Eigenes Abo (nur angemeldet, füllt abo.js) -->
+        <section id="aboMine" class="abo-mine" hidden></section>
+
+        <!-- Die drei Stufen -->
+        <section class="abo-plans">
+            <article class="abo-plan paddock" data-plan="paddock">
+                <div class="abo-plan-head">
+                    <span class="abo-plan-icon"><i class="fa-solid fa-flag-checkered"></i></span>
+                    <h2>Paddock</h2>
+                    <p class="abo-plan-for">Für alle Fahrer der Community</p>
+                </div>
+                <div class="abo-plan-price"><strong>0 €</strong><span>kostenlos</span></div>
+                <ul class="abo-plan-features">
+                    <li><i class="fa-solid fa-check"></i> Messenger, Gruppen und Foren</li>
+                    <li><i class="fa-solid fa-check"></i> Marktplatz: kaufen und verkaufen</li>
+                    <li><i class="fa-solid fa-check"></i> Setups herunterladen und teilen</li>
+                    <li><i class="fa-solid fa-check"></i> Nachschlagewerk und Rennkalender</li>
+                    <li class="off"><i class="fa-solid fa-xmark"></i> Pro Setups</li>
+                    <li class="off"><i class="fa-solid fa-xmark"></i> Telemetry-Tool</li>
+                    <li class="off"><i class="fa-solid fa-xmark"></i> Stint-Planer</li>
+                    <li class="off"><i class="fa-solid fa-xmark"></i> Weitere exklusive Features</li>
+                </ul>
+                <div class="abo-plan-action" data-action-for="paddock"></div>
+            </article>
+
+            <article class="abo-plan pole" data-plan="pole">
+                <span class="abo-plan-ribbon">Für Ehrgeizige</span>
+                <div class="abo-plan-head">
+                    <span class="abo-plan-icon"><i class="fa-solid fa-stopwatch"></i></span>
+                    <h2>Pole</h2>
+                    <p class="abo-plan-for">Für ambitionierte Fahrer</p>
+                </div>
+                <div class="abo-plan-price"><strong>8,49 €</strong><span>pro Monat</span></div>
+                <ul class="abo-plan-features">
+                    <li><i class="fa-solid fa-check"></i> Alles aus Paddock</li>
+                    <li><i class="fa-solid fa-check"></i> Pro Setups</li>
+                    <li><i class="fa-solid fa-check"></i> Telemetry-Tool <small>(in Entwicklung)</small></li>
+                    <li><i class="fa-solid fa-check"></i> Stint-Planer <small>(in Entwicklung)</small></li>
+                    <li><i class="fa-solid fa-check"></i> Alle weiteren exklusiven Features</li>
+                    <li><i class="fa-solid fa-check"></i> Pole-Abzeichen im Profil</li>
+                </ul>
+                <div class="abo-plan-action" data-action-for="pole"></div>
+            </article>
+
+            <article class="abo-plan alliance" data-plan="alliance">
+                <div class="abo-plan-head">
+                    <span class="abo-plan-icon"><i class="fa-solid fa-people-group"></i></span>
+                    <h2>Alliance</h2>
+                    <p class="abo-plan-for">Für Teams mit bis zu 10 Personen</p>
+                </div>
+                <div class="abo-plan-price"><strong>39,99 €</strong><span>pro Monat · ca. 4 € pro Person</span></div>
+                <ul class="abo-plan-features">
+                    <li><i class="fa-solid fa-check"></i> Alle Pole-Vorteile für bis zu 10 Personen</li>
+                    <li><i class="fa-solid fa-check"></i> Jede Person nutzt ihr eigenes GSRA-Konto</li>
+                    <li><i class="fa-solid fa-check"></i> Die Teamleitung fügt Mitglieder per GSRA-ID hinzu</li>
+                    <li><i class="fa-solid fa-check"></i> Alliance-Abzeichen im Profil</li>
+                </ul>
+                <div class="abo-plan-action" data-action-for="alliance"></div>
+            </article>
+        </section>
+
+        <!-- Marktplatz-Boni: in jedem Abo extra -->
+        <section class="abo-boosts">
+            <h3><i class="fa-solid fa-bolt text-yellow"></i> Marktplatz-Boni</h3>
+            <p>Einmal zahlen, gilt dauerhaft für das jeweilige Inserat – in jedem Abo zusätzlich buchbar. Du findest sie im Detailfenster deines eigenen Inserats.</p>
+            <div class="abo-boost-list">
+                <div><i class="fa-solid fa-highlighter"></i><strong>Hervorheben</strong><span>Gelber Rahmen in der Liste</span><em>2,99 €</em></div>
+                <div><i class="fa-solid fa-angles-up"></i><strong>Hochschieben</strong><span>Automatisch alle 7 Tage wieder ganz oben</span><em>3,99 €</em></div>
+                <div><i class="fa-solid fa-crown"></i><strong>Top-Anzeige</strong><span>Zusätzlich im Bereich „Top-Anzeigen“</span><em>5,99 €</em></div>
+            </div>
+        </section>
+
+        <p class="abo-footnote"><i class="fa-solid fa-lock"></i> Sichere Bezahlung über Stripe. Abos verlängern sich monatlich und lassen sich jederzeit zum Ende des laufenden Monats kündigen.</p>
+    </main>
+
+    <script src="ui-dialogs.js"></script>
+    <script src="abo.js"></script>
+</body>
+</html>

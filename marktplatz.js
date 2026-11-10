@@ -118,9 +118,103 @@ const modalDeleteBtn = document.getElementById("modalDeleteBtn");
 const modalReportBtn = document.getElementById("modalReportBtn");
 const modalStatus = document.getElementById("modalStatus");
 const modalCategory = document.getElementById("modalCategory");
+const modalBoosts = document.getElementById("modalBoosts");
+const marketplaceTop = document.getElementById("marketplaceTop");
+const marketplaceTopGrid = document.getElementById("marketplaceTopGrid");
+
+// Boni (Preise legt der Server fest – hier nur zur Anzeige)
+const BOOSTS = [
+    { kind: "highlight", icon: "fa-highlighter", name: "Hervorheben", price: "2,99 €",
+      text: "Dein Angebot fällt in der Liste mit gelbem Rahmen sofort ins Auge.", active: (i) => Boolean(i.highlighted) },
+    { kind: "bump", icon: "fa-angles-up", name: "Hochschieben", price: "3,99 €",
+      text: "Rutscht jetzt und danach automatisch alle 7 Tage wieder ganz nach oben.", active: (i) => Boolean(i.bump_since) },
+    { kind: "top", icon: "fa-crown", name: "Top-Anzeige", price: "5,99 €",
+      text: "Erscheint zusätzlich im Bereich „Top-Anzeigen“ über allen Angeboten.", active: (i) => Boolean(i.top_ad) }
+];
+
+// Bezahlung über Stripe starten (Server-Funktion create-checkout liefert die Bezahlseite)
+async function startCheckout(body, button) {
+    const supabase = window.supabaseClient || window.supabase;
+    if (button) button.disabled = true;
+    try {
+        const { data, error } = await supabase.functions.invoke("create-checkout", { body });
+        let message = data?.error;
+        if (error) {
+            try { message = (await error.context?.json())?.error || message; } catch (e) { /* keine Details */ }
+            message = message || "Die Bezahlung ist noch nicht eingerichtet oder gerade nicht erreichbar.";
+        }
+        if (!data?.url) throw new Error(message || "Die Bezahlseite konnte nicht geöffnet werden.");
+        window.location.href = data.url;
+    } catch (err) {
+        showToast(err.message, "error");
+        if (button) button.disabled = false;
+    }
+}
+
+function renderBoosts(item, isOwner) {
+    if (!modalBoosts) return;
+    // Nur wenn die Datenbank die Bonus-Spalten schon hat (SQL „Zahlungen“ ausgeführt)
+    const show = isOwner && (item.status || "aktiv") !== "verkauft" && !legacyMarketplace && "highlighted" in item;
+    modalBoosts.style.display = show ? "" : "none";
+    if (!show) return;
+    modalBoosts.innerHTML = `
+        <div class="mk-boosts-head">
+            <h4><i class="fa-solid fa-bolt"></i> Mehr Sichtbarkeit für dein Angebot</h4>
+            <span>Einmal zahlen, gilt dauerhaft für dieses Inserat – in jedem Abo extra.</span>
+        </div>
+        <div class="mk-boost-list"></div>`;
+    const list = modalBoosts.querySelector(".mk-boost-list");
+    BOOSTS.forEach(boost => {
+        const active = boost.active(item);
+        const card = document.createElement("div");
+        card.className = `mk-boost${active ? " active" : ""}`;
+        card.innerHTML = `
+            <i class="fa-solid ${boost.icon} mk-boost-icon"></i>
+            <div class="mk-boost-text"><strong></strong><span></span></div>
+            ${active ? '<span class="mk-boost-state"><i class="fa-solid fa-check"></i> Aktiv</span>'
+                     : `<button type="button" class="mk-boost-buy">${boost.price}</button>`}`;
+        card.querySelector("strong").textContent = boost.name;
+        card.querySelector(".mk-boost-text span").textContent = boost.text;
+        const buy = card.querySelector(".mk-boost-buy");
+        if (buy) buy.addEventListener("click", () => startCheckout({ kind: boost.kind, listing_id: String(item.id) }, buy));
+        list.appendChild(card);
+    });
+}
+
+// Nach der Bezahlung: Inserat bis zu ~30 Sekunden lang nachladen, bis der gekaufte Bonus eingetragen ist
+async function refreshBoostsAfterPayment(item) {
+    const supabase = window.supabaseClient || window.supabase;
+    const activeCount = (i) => BOOSTS.filter(b => b.active(i)).length;
+    const before = activeCount(item);
+    for (let attempt = 0; attempt < 10; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        const { data } = await supabase.from("marketplace").select("*").eq("id", item.id).maybeSingle();
+        if (data && activeCount(data) > before) {
+            if (itemDetailModal && itemDetailModal.style.display !== "none") openDetailModal(data);
+            showToast("Dein Bonus ist jetzt aktiv.", "success");
+            loadMarketplaceItems();
+            return;
+        }
+    }
+}
+
+// Top-Anzeigen über den Angeboten (passend zu den aktuellen Filtern, zufällige Auswahl)
+let topRequest = 0;
+async function loadTopAds(rpcArgs) {
+    if (!marketplaceTop || !marketplaceTopGrid) return;
+    const supabase = window.supabaseClient || window.supabase;
+    const requestId = ++topRequest;
+    const { data, error } = await supabase.rpc("search_marketplace", { ...rpcArgs, _top_only: true, _limit: 4, _offset: 0 });
+    if (requestId !== topRequest) return;
+    const rows = error ? [] : (data || []).map(row => ({ ...row.item, _distance: row.distance_km }));
+    marketplaceTop.hidden = rows.length === 0;
+    marketplaceTopGrid.innerHTML = "";
+    rows.forEach(item => marketplaceTopGrid.appendChild(createListingCard(item, true)));
+}
 const modalFacts = document.getElementById("modalFacts");
 const modalSeller = document.getElementById("modalSeller");
 const modalSellerAvatar = document.getElementById("modalSellerAvatar");
+const modalSellerPlan = document.getElementById("modalSellerPlan");
 const modalStatusActions = document.getElementById("modalStatusActions");
 
 // Erstellen / Bearbeiten Modal
@@ -236,14 +330,24 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Links aus Dashboard oder Chat: ein bestimmtes Inserat öffnen (auch verkaufte) oder direkt ein neues anlegen
     const params = new URLSearchParams(window.location.search);
+    const payment = params.get("zahlung");
+    if (payment) {
+        // Rückkehr von der Bezahlseite: Hinweis zeigen und den Parameter aus der Adresse nehmen (kein erneuter Hinweis beim Neuladen)
+        params.delete("zahlung");
+        history.replaceState(null, "", window.location.pathname + (params.toString() ? `?${params}` : ""));
+        if (payment === "erfolg") showToast("Danke für deinen Kauf! Der Bonus wird in wenigen Sekunden freigeschaltet.", "success");
+        else showToast("Die Bezahlung wurde abgebrochen – es wurde nichts berechnet.", "info");
+    }
     if (params.get("inserat")) {
         let linkedItem = allItems.find(item => String(item.id) === params.get("inserat"));
-        if (!linkedItem) {
+        if (!linkedItem || payment === "erfolg") {
             const { data } = await supabase.from("marketplace").select("*").eq("id", params.get("inserat")).maybeSingle();
-            linkedItem = data;
+            linkedItem = data || linkedItem;
         }
         if (linkedItem) openDetailModal(linkedItem);
         else showToast("Dieses Inserat gibt es nicht mehr.", "info");
+        // Stripe meldet die Zahlung kurz nach der Rückkehr: Boni noch einige Male nachladen, bis sie aktiv sind
+        if (linkedItem && payment === "erfolg") refreshBoostsAfterPayment(linkedItem);
     } else if (params.has("neu") && currentUser) {
         openCreateOrEditModal(null);
     }
@@ -370,7 +474,7 @@ async function loadMarketplaceItems(append = false) {
 
     // Neue Suche in der Datenbank (mit Umkreis); fehlt sie noch (SQL nicht ausgeführt), die bisherige Abfrage
     if (!legacyMarketplace && !window.__marketSearchMissing) {
-        const { data, error } = await supabase.rpc("search_marketplace", {
+        const filterArgs = {
             _category: category !== "all" ? category : null,
             _subcategory: subcategory !== "all" ? subcategory : null,
             _search: search || null,
@@ -382,10 +486,10 @@ async function loadMarketplaceItems(append = false) {
             _lon: origin ? origin.lon : null,
             _radius_km: origin ? radiusKm : null,
             _europe: radiusChoice === "europe",
-            _sort: sortValue,
-            _limit: PAGE_SIZE,
-            _offset: append ? allItems.length : 0
-        });
+            _sort: sortValue
+        };
+        if (!append) loadTopAds(filterArgs);
+        const { data, error } = await supabase.rpc("search_marketplace", { ...filterArgs, _limit: PAGE_SIZE, _offset: append ? allItems.length : 0 });
         if (!error) {
             if (requestId !== loadRequest) return;
             const rows = (data || []).map(row => ({ ...row.item, _distance: row.distance_km }));
@@ -401,6 +505,7 @@ async function loadMarketplaceItems(append = false) {
         }
         window.__marketSearchMissing = true;
     }
+    if (marketplaceTop) marketplaceTop.hidden = true;
 
     const buildQuery = (legacy) => {
         let query = supabase.from("marketplace").select("*", { count: "exact" });
@@ -475,9 +580,13 @@ function renderMarketplaceItems(items) {
         return;
     }
 
-    items.forEach((item) => {
+    items.forEach((item) => marketplaceGrid.appendChild(createListingCard(item)));
+}
+
+// Angebotskarte (Top-Anzeigen mit eigenem Abzeichen, hervorgehobene mit gelbem Rahmen)
+function createListingCard(item, isTop = false) {
         const card = document.createElement("article");
-        card.className = "mk-card";
+        card.className = `mk-card${item.highlighted ? " highlighted" : ""}${isTop ? " top" : ""}`;
         card.tabIndex = 0;
 
         const images = item.images || item.image_urls || item.imageUrls || [];
@@ -491,7 +600,8 @@ function renderMarketplaceItems(items) {
         card.innerHTML = `
             <div class="mk-card-media">
                 <img src="${escapeHtml(coverImage)}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.src='${DEFAULT_PLACEHOLDER}'">
-                ${item.status === "reserviert" ? '<span class="market-badge reserved">Reserviert</span>' : ""}
+                ${item.status === "reserviert" ? '<span class="market-badge reserved">Reserviert</span>'
+                    : isTop ? '<span class="market-badge top"><i class="fa-solid fa-crown"></i> Top</span>' : ""}
                 ${images.length > 1 ? `<span class="mk-card-photos"><i class="fa-solid fa-camera"></i> ${images.length}</span>` : ""}
             </div>
             <div class="mk-card-body">
@@ -509,8 +619,7 @@ function renderMarketplaceItems(items) {
 
         card.addEventListener("click", () => openDetailModal(item));
         card.addEventListener("keydown", (e) => { if (e.key === "Enter") openDetailModal(item); });
-        marketplaceGrid.appendChild(card);
-    });
+        return card;
 }
 
 // Preis ohne unnötige Nachkommastellen („899 €“, „19,90 €“)
@@ -664,6 +773,8 @@ function openDetailModal(item) {
     // Verkäufer: Benutzername und Profilbild aus dem Profil (ältere Inserate speichern dort teils den E-Mail-Namen)
     if (modalSeller) modalSeller.textContent = sellerName;
     if (modalSellerAvatar) modalSellerAvatar.innerHTML = '<i class="fa-solid fa-user"></i>';
+    if (modalSellerPlan) modalSellerPlan.replaceChildren();
+    if (sellerId && typeof window.showPlanBadge === "function") window.showPlanBadge(modalSellerPlan, sellerId);
     if (sellerId && supabase) {
         supabase.from("profiles").select("username, avatar_url").eq("id", sellerId).maybeSingle().then(({ data }) => {
             if (!data) return;
@@ -706,6 +817,7 @@ function openDetailModal(item) {
             });
         }
     }
+    renderBoosts(item, isOwner);
     if (modalDescription) modalDescription.innerText = item.description || "Keine Beschreibung angegeben.";
     if (modalPrice) modalPrice.innerText = formatPrice(item.price);
 

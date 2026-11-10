@@ -240,6 +240,13 @@ function renderProfileContent(overlay, userId, context) {
         badge.innerHTML = '<i class="fa-solid fa-shield-halved"></i> GSRA-Admin';
         meta.appendChild(badge);
     }
+    // Abo-Stufe (Paddock, Pole oder Alliance) – erscheint, sobald die Datenbank geantwortet hat
+    if (typeof window.showPlanBadge === "function") {
+        const planSlot = document.createElement("span");
+        planSlot.className = "plan-badge-slot inline";
+        meta.appendChild(planSlot);
+        window.showPlanBadge(planSlot, userId);
+    }
     if (profile.gsra_id) {
         const idChip = document.createElement("button");
         idChip.type = "button";

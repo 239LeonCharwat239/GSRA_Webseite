@@ -32,6 +32,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         currentUser = session.user;
         dashEmail.textContent = currentUser.email || "";
         dashCreated.textContent = new Date(currentUser.created_at).toLocaleDateString("de-DE");
+        // Abo-Stufe (Paddock, Pole oder Alliance) – Details und Verwaltung auf der Abo-Seite
+        if (typeof window.showPlanBadge === "function") window.showPlanBadge(document.getElementById("dashPlan"), currentUser.id);
 
         // Profil aus Tabelle laden
         let { data: profile } = await client
