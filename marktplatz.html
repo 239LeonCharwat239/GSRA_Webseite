@@ -117,46 +117,60 @@
 
     <!-- MODAL 1: DETAIL-ANSICHT -->
     <div id="itemDetailModal" class="modal-overlay" style="display: none;">
-        <div class="modal-content">
-            <button class="modal-close" id="closeDetailModalBtn">&times;</button>
-            
+        <div class="modal-content mk-detail">
+            <button class="modal-close" id="closeDetailModalBtn" title="Schließen">&times;</button>
+
             <div id="modalStatus" class="market-status-banner" style="display: none;"></div>
-            <h2 id="modalTitle" class="text-blue" style="margin-bottom: 5px;">Artikel Titel</h2>
-            <p id="modalMeta" style="font-size: 14px; color: var(--text-muted); margin-bottom: 8px;"></p>
-            <div id="modalSpecs" class="market-specs"></div>
 
-            <div>
-                <img id="modalMainImage" src="" alt="Hauptbild" class="modal-main-image">
-            </div>
-
-            <div id="modalGalleryStrip" class="gallery-container"></div>
-
-            <div style="background: #0b0c10; padding: 20px; border-radius: 8px; border: 1px solid var(--border-subtle); margin-bottom: 20px;">
-                <h4 style="color: #fff; margin-bottom: 10px; font-size: 16px;">Beschreibung:</h4>
-                <p id="modalDescription" style="text-align: left; max-width: 100%; margin: 0; white-space: pre-line;"></p>
-            </div>
-
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; border-top: 1px solid var(--border-subtle); padding-top: 15px;">
-                <div>
-                    <span style="font-size: 14px; color: var(--text-muted);">Preis: </span>
-                    <span id="modalPrice" style="font-size: 24px; font-weight: bold; color: var(--gsra-yellow);">0,00 €</span>
+            <div class="mk-detail-grid">
+                <!-- Bilder -->
+                <div class="mk-detail-gallery">
+                    <div class="mk-detail-main">
+                        <img id="modalMainImage" src="" alt="Hauptbild">
+                    </div>
+                    <div id="modalGalleryStrip" class="mk-detail-thumbs"></div>
                 </div>
 
-                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button id="modalReportBtn" class="market-report-btn" style="display: none;" title="Inserat melden">
-                        <i class="fa-solid fa-flag"></i> Melden
-                    </button>
-                    <button id="modalContactBtn" class="login-btn" style="display: flex; align-items: center; gap: 8px;">
-                        <i class="fa-solid fa-envelope"></i> Verkäufer kontaktieren
-                    </button>
-                    <button id="modalEditBtn" class="btn-edit" style="display: none;">
-                        <i class="fa-solid fa-pen-to-square"></i> Bearbeiten
-                    </button>
-                    <button id="modalDeleteBtn" class="btn-delete" style="display: none;">
-                        <i class="fa-solid fa-trash"></i> Löschen
-                    </button>
+                <!-- Eckdaten: Kategorie, Titel, Preis, technische Angaben, Verkäufer, Aktionen -->
+                <div class="mk-detail-info">
+                    <div id="modalCategory" class="mk-detail-cat"></div>
+                    <h2 id="modalTitle" class="mk-detail-title">Artikel Titel</h2>
+                    <div id="modalPrice" class="mk-detail-price">0 €</div>
+
+                    <dl id="modalFacts" class="mk-detail-facts"></dl>
+
+                    <div class="mk-detail-seller">
+                        <span id="modalSellerAvatar" class="mk-seller-avatar"><i class="fa-solid fa-user"></i></span>
+                        <div>
+                            <small>Verkäufer</small>
+                            <strong id="modalSeller"></strong>
+                        </div>
+                    </div>
+
+                    <div class="mk-detail-actions">
+                        <button id="modalContactBtn" class="mk-contact-btn">
+                            <i class="fa-solid fa-envelope"></i> Verkäufer kontaktieren
+                        </button>
+                        <div class="mk-detail-secondary">
+                            <button id="modalEditBtn" class="mk-detail-link" style="display: none;">
+                                <i class="fa-solid fa-pen-to-square"></i> Bearbeiten
+                            </button>
+                            <button id="modalDeleteBtn" class="mk-detail-link danger" style="display: none;">
+                                <i class="fa-solid fa-trash"></i> Löschen
+                            </button>
+                            <button id="modalReportBtn" class="mk-detail-link danger" style="display: none;" title="Inserat melden">
+                                <i class="fa-solid fa-flag"></i> Melden
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
+
+            <!-- Beschreibung -->
+            <section class="mk-detail-desc">
+                <h4>Beschreibung</h4>
+                <p id="modalDescription"></p>
+            </section>
 
             <!-- Nur für den Verkäufer: Status ändern -->
             <div id="modalStatusActions" class="market-status-actions" style="display: none;"></div>

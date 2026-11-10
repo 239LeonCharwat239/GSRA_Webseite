@@ -1182,6 +1182,303 @@ nav a.nav-unread-glow::after {
     background: rgba(0, 85, 255, 0.18);
 }
 
+/* Detailansicht eines Angebots: Bilder links, Eckdaten rechts, Beschreibung darunter */
+.modal-content.mk-detail {
+    max-width: 1020px;
+    padding: 26px;
+}
+
+.mk-detail-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(280px, 1fr);
+    gap: 26px;
+    align-items: start;
+}
+
+.mk-detail-main {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
+    background: #0b0c10;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 6px;
+}
+
+.mk-detail-main img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.mk-detail-thumbs {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 10px 0 2px;
+}
+
+.mk-detail-thumbs .gallery-thumbnail {
+    width: 64px;
+    height: 64px;
+    padding: 0;
+    object-fit: cover;
+    border-radius: 4px;
+}
+
+.mk-detail-thumbs .gallery-thumbnail:hover,
+.mk-detail-thumbs .gallery-thumbnail.active {
+    transform: none;
+}
+
+.mk-detail-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.mk-detail-cat {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    padding-right: 30px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--gsra-blue);
+}
+
+.mk-detail-title {
+    display: block;
+    margin: 0 0 10px;
+    font-size: 26px;
+    line-height: 1.25;
+    letter-spacing: 0.5px;
+    color: #fff;
+    overflow-wrap: anywhere;
+}
+
+.mk-detail-price {
+    margin-bottom: 18px;
+    font-size: 32px;
+    font-weight: 900;
+    color: var(--gsra-yellow);
+}
+
+.mk-detail-facts {
+    margin: 0 0 18px;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.mk-fact {
+    display: grid;
+    grid-template-columns: 150px minmax(0, 1fr);
+    gap: 12px;
+    padding: 9px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    font-size: 14px;
+}
+
+.mk-fact dt {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    color: var(--text-muted);
+}
+
+.mk-fact dt i {
+    width: 16px;
+    text-align: center;
+    color: var(--gsra-blue);
+}
+
+.mk-fact dd {
+    margin: 0;
+    font-weight: 700;
+    color: #fff;
+    overflow-wrap: anywhere;
+}
+
+.mk-detail-seller {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+    padding: 12px 14px;
+    background: #0f1116;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-left: 3px solid var(--gsra-blue);
+    border-radius: 4px;
+}
+
+.mk-seller-avatar {
+    width: 42px;
+    height: 42px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border-radius: 50%;
+    background: #1c1f26;
+    color: var(--text-muted);
+}
+
+.mk-seller-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.mk-detail-seller small {
+    display: block;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.mk-detail-seller strong {
+    color: #fff;
+    font-size: 15px;
+}
+
+.mk-detail-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* Kontaktieren: schräger gelber Knopf wie „Angebot erstellen“ */
+.mk-contact-btn {
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    height: 48px;
+    border: none;
+    background: var(--gsra-yellow);
+    color: #111;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    clip-path: polygon(14px 0, 100% 0, calc(100% - 14px) 100%, 0 100%);
+    transition: color 0.2s ease;
+}
+
+.mk-contact-btn::before {
+    content: "";
+    position: absolute;
+    inset: 2px;
+    z-index: -1;
+    background: #0b0c10;
+    clip-path: polygon(13px 0, 100% 0, calc(100% - 13px) 100%, 0 100%);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.mk-contact-btn:hover {
+    color: var(--gsra-yellow);
+}
+
+.mk-contact-btn:hover::before {
+    opacity: 1;
+}
+
+.mk-detail-secondary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.mk-detail-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 12px;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 4px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.mk-detail-link:hover {
+    border-color: var(--gsra-blue);
+    color: var(--gsra-blue);
+}
+
+.mk-detail-link.danger {
+    color: #ff6b6b;
+    border-color: rgba(255, 77, 77, 0.35);
+}
+
+.mk-detail-link.danger:hover {
+    background: rgba(255, 77, 77, 0.1);
+    border-color: #ff4d4d;
+    color: #ff4d4d;
+}
+
+.mk-detail-desc {
+    margin-top: 24px;
+    padding: 18px 20px;
+    background: #0f1116;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 6px;
+}
+
+.mk-detail-desc h4 {
+    margin: 0 0 10px;
+    font-size: 13px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.mk-detail-desc p {
+    margin: 0;
+    max-width: 100%;
+    color: #e6e8ee;
+    line-height: 1.65;
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+}
+
+.mk-detail .market-status-banner {
+    margin-right: 34px;
+}
+
+@media (max-width: 760px) {
+    .modal-content.mk-detail {
+        padding: 18px 16px;
+    }
+    .mk-detail-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+    .mk-detail-title {
+        font-size: 21px;
+    }
+    .mk-detail-price {
+        font-size: 26px;
+    }
+    .mk-fact {
+        grid-template-columns: 120px minmax(0, 1fr);
+    }
+}
+
 @media (max-width: 760px) {
     .mk-title {
         font-size: 26px;
@@ -2467,6 +2764,111 @@ body.multi-select-active .message-actions {
 .wa-quick-reaction-bar span:hover {
     transform: scale(1.15);
     background: rgba(255, 255, 255, 0.08);
+}
+
+/* Rechtsklick-Menü einer Nachricht: Einträge senkrecht, Reaktionen darunter */
+.msg-context-menu {
+    position: fixed;
+    z-index: 3000;
+    min-width: 230px;
+    overflow: hidden;
+    background: #15161a;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: 2px solid var(--gsra-blue);
+    border-radius: 6px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.85);
+    animation: msgContextIn 0.12s ease-out;
+}
+
+@keyframes msgContextIn {
+    from { opacity: 0; transform: scale(0.97); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.msg-context-list {
+    display: flex;
+    flex-direction: column;
+    padding: 4px 0;
+}
+
+.msg-context-list button {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 16px;
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-family: inherit;
+    font-size: 14px;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.msg-context-list button i {
+    width: 16px;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.msg-context-list button:hover {
+    background: rgba(0, 85, 255, 0.22);
+    color: var(--gsra-yellow);
+}
+
+.msg-context-list button:hover i {
+    color: var(--gsra-yellow);
+}
+
+.msg-context-list button.danger,
+.msg-context-list button.danger i {
+    color: #ff6b6b;
+}
+
+.msg-context-list button.danger:hover {
+    background: rgba(255, 77, 77, 0.14);
+}
+
+.msg-context-reactions {
+    display: flex;
+    justify-content: space-between;
+    gap: 4px;
+    padding: 8px 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: #0f1116;
+}
+
+.msg-context-reactions button {
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.msg-context-reactions button:hover {
+    transform: scale(1.15);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.msg-context-reactions button.more {
+    font-size: 13px;
+    color: var(--text-muted);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.msg-context-reactions button.more:hover {
+    color: var(--gsra-yellow);
+    border-color: var(--gsra-yellow);
 }
 
 /* Große Emoji-Auswahl für Reaktionen (gleiche Komponente wie beim Schreiben).

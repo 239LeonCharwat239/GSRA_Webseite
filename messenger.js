@@ -824,6 +824,84 @@ function closeReactionPickers() {
 
 if (chatMessages) chatMessages.addEventListener("scroll", closeReactionPickers);
 
+// Rechtsklick (auf dem Handy langes Drücken) auf eine Nachricht: Menü senkrecht, darunter die Reaktionen
+function closeMessageContextMenu() {
+    document.querySelectorAll(".msg-context-menu, .message-react-picker-popup[data-ctx]").forEach(el => el.remove());
+}
+
+function openMessageContextMenu(x, y, msg, optionButtons, emojis) {
+    closeMessageContextMenu();
+    closeReactionPickers();
+    document.querySelectorAll(".wa-msg-dropdown, .wa-quick-reaction-bar").forEach(el => el.style.display = "none");
+
+    const menu = document.createElement("div");
+    menu.className = "msg-context-menu";
+    menu.addEventListener("click", (e) => e.stopPropagation());
+    menu.addEventListener("contextmenu", (e) => e.preventDefault());
+
+    // Die Einträge entsprechen dem Menü am Pfeil (Antworten, Kopieren, Bearbeiten, Löschen …)
+    const list = document.createElement("div");
+    list.className = "msg-context-list";
+    optionButtons.forEach(original => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.innerHTML = original.innerHTML;
+        if (original.style.color) btn.classList.add("danger");
+        btn.addEventListener("click", () => {
+            closeMessageContextMenu();
+            original.click();
+        });
+        list.appendChild(btn);
+    });
+
+    const reactions = document.createElement("div");
+    reactions.className = "msg-context-reactions";
+    emojis.forEach(emoji => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = emoji;
+        btn.title = `Mit ${emoji} reagieren`;
+        btn.addEventListener("click", async () => {
+            closeMessageContextMenu();
+            await toggleReaction(msg, emoji);
+        });
+        reactions.appendChild(btn);
+    });
+    const more = document.createElement("button");
+    more.type = "button";
+    more.className = "more";
+    more.title = "Weitere Emojis";
+    more.innerHTML = '<i class="fa-solid fa-plus"></i>';
+    more.addEventListener("click", () => {
+        // Große Emoji-Auswahl an der Stelle des Menüs
+        const popup = document.createElement("div");
+        popup.className = "message-react-picker-popup";
+        popup.dataset.ctx = "1"; // wird beim nächsten Klick daneben entfernt
+        popup.addEventListener("click", (e) => e.stopPropagation());
+        document.body.appendChild(popup);
+        const picker = createReactionEmojiPicker(msg, popup);
+        popup.appendChild(picker);
+        placeReactionPicker(popup, menu, true, picker);
+        menu.remove();
+        setTimeout(() => picker.shadowRoot?.querySelector("input")?.focus({ preventScroll: true }), 50);
+    });
+    reactions.appendChild(more);
+
+    menu.append(list, reactions);
+    document.body.appendChild(menu);
+
+    // An der Mausposition öffnen, aber immer vollständig im Fenster
+    const width = menu.offsetWidth;
+    const height = menu.offsetHeight;
+    menu.style.left = `${Math.max(8, Math.min(x, document.documentElement.clientWidth - width - 8))}px`;
+    menu.style.top = `${Math.max(8, Math.min(y, window.innerHeight - height - 8))}px`;
+}
+
+document.addEventListener("click", closeMessageContextMenu);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMessageContextMenu(); });
+window.addEventListener("resize", closeMessageContextMenu);
+if (chatMessages) chatMessages.addEventListener("scroll", closeMessageContextMenu);
+
 let lastPageScrollY = window.scrollY;
 window.addEventListener("scroll", () => {
     const delta = window.scrollY - lastPageScrollY;
@@ -2553,6 +2631,14 @@ async function appendSingleMessage(msg, isSystem = false) {
             quickBar.style.display = "none";
             pickerPopup.style.display = "none";
             pickerPopup.replaceChildren();
+        });
+
+        // Rechtsklick bzw. langes Drücken: dieselben Einträge senkrecht, Reaktionen darunter
+        // (bei Links bleibt das Browsermenü, z. B. zum Kopieren der Adresse)
+        bubble.addEventListener("contextmenu", (e) => {
+            if (isMultiSelectMode || e.target.closest("a")) return;
+            e.preventDefault();
+            openMessageContextMenu(e.clientX, e.clientY, msg, [...dropdownMenu.children], topEmojis);
         });
 
         actionsDiv.appendChild(arrowBtn);

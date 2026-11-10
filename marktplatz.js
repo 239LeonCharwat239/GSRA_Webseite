@@ -108,7 +108,6 @@ const sortOrderInput = document.getElementById("sortOrder");
 const itemDetailModal = document.getElementById("itemDetailModal");
 const closeDetailModalBtn = document.getElementById("closeDetailModalBtn");
 const modalTitle = document.getElementById("modalTitle");
-const modalMeta = document.getElementById("modalMeta");
 const modalMainImage = document.getElementById("modalMainImage");
 const modalGalleryStrip = document.getElementById("modalGalleryStrip");
 const modalDescription = document.getElementById("modalDescription");
@@ -118,7 +117,10 @@ const modalEditBtn = document.getElementById("modalEditBtn");
 const modalDeleteBtn = document.getElementById("modalDeleteBtn");
 const modalReportBtn = document.getElementById("modalReportBtn");
 const modalStatus = document.getElementById("modalStatus");
-const modalSpecs = document.getElementById("modalSpecs");
+const modalCategory = document.getElementById("modalCategory");
+const modalFacts = document.getElementById("modalFacts");
+const modalSeller = document.getElementById("modalSeller");
+const modalSellerAvatar = document.getElementById("modalSellerAvatar");
 const modalStatusActions = document.getElementById("modalStatusActions");
 
 // Erstellen / Bearbeiten Modal
@@ -627,24 +629,52 @@ function openDetailModal(item) {
     const sellerId = item.user_id || item.seller_id || item.sellerId;
     const images = item.images || item.image_urls || item.imageUrls || [];
     const condition = item.condition || 'Gebraucht';
-    const loc = item.location ? ` | Ort: ${item.location}` : '';
 
     const isOwner = Boolean(currentUser && currentUser.id === sellerId);
     const status = item.status || "aktiv";
-    const categoryText = categoryLabel(item.category) + (item.subcategory ? ` › ${item.subcategory}` : "");
 
     if (modalTitle) modalTitle.innerText = item.title || "";
-    if (modalMeta) modalMeta.innerText = `Kategorie: ${categoryText} | Zustand: ${condition}${loc} | Verkäufer: ${sellerName}`;
-    if (modalSpecs) {
-        const specs = [
-            item.manufacturer ? ["Hersteller", item.manufacturer] : null,
-            item.model ? ["Modell", item.model] : null,
-            item.torque_nm != null ? ["Drehmoment", `${Number(item.torque_nm).toLocaleString("de-DE")} Nm`] : null,
-            item.wheel_diameter_mm != null ? ["Durchmesser", `${item.wheel_diameter_mm} mm`] : null,
-            item.screen_size_inch != null ? ["Bildschirmgröße", `${Number(item.screen_size_inch).toLocaleString("de-DE")} Zoll`] : null
+    if (modalCategory) {
+        modalCategory.innerHTML = `<i class="fa-solid ${CATEGORY_ICONS[item.category] || "fa-tag"}"></i> <span></span>`;
+        modalCategory.querySelector("span").textContent = categoryLabel(item.category) + (item.subcategory ? ` › ${item.subcategory}` : "");
+    }
+    // Alle Eckdaten einheitlich als Liste: Symbol, Bezeichnung, Wert
+    if (modalFacts) {
+        const created = item.created_at ? new Date(item.created_at) : null;
+        const facts = [
+            ["fa-star-half-stroke", "Zustand", condition],
+            item.manufacturer ? ["fa-industry", "Hersteller", item.manufacturer] : null,
+            item.model ? ["fa-tag", "Modell", item.model] : null,
+            item.torque_nm != null ? ["fa-gauge-high", "Drehmoment", `${Number(item.torque_nm).toLocaleString("de-DE")} Nm`] : null,
+            item.wheel_diameter_mm != null ? ["fa-circle-notch", "Durchmesser", `${item.wheel_diameter_mm} mm`] : null,
+            item.screen_size_inch != null ? ["fa-display", "Bildschirmgröße", `${Number(item.screen_size_inch).toLocaleString("de-DE")} Zoll`] : null,
+            item.location ? ["fa-location-dot", "Standort", item.location + (typeof item._distance === "number" ? ` (ca. ${Math.max(1, Math.round(item._distance)).toLocaleString("de-DE")} km)` : "")] : null,
+            created ? ["fa-clock", "Eingestellt", `${created.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })} · ${timeAgo(item.created_at)}`] : null
         ].filter(Boolean);
-        modalSpecs.innerHTML = specs.map(([label, value]) => `<span><small>${escapeHtml(label)}</small>${escapeHtml(value)}</span>`).join("");
-        modalSpecs.style.display = specs.length ? "" : "none";
+        modalFacts.innerHTML = "";
+        facts.forEach(([icon, label, value]) => {
+            const row = document.createElement("div");
+            row.className = "mk-fact";
+            row.innerHTML = `<dt><i class="fa-solid ${icon}"></i> <span></span></dt><dd></dd>`;
+            row.querySelector("dt span").textContent = label;
+            row.querySelector("dd").textContent = value;
+            modalFacts.appendChild(row);
+        });
+    }
+    // Verkäufer: Benutzername und Profilbild aus dem Profil (ältere Inserate speichern dort teils den E-Mail-Namen)
+    if (modalSeller) modalSeller.textContent = sellerName;
+    if (modalSellerAvatar) modalSellerAvatar.innerHTML = '<i class="fa-solid fa-user"></i>';
+    if (sellerId && supabase) {
+        supabase.from("profiles").select("username, avatar_url").eq("id", sellerId).maybeSingle().then(({ data }) => {
+            if (!data) return;
+            if (data.username && modalSeller) modalSeller.textContent = data.username;
+            if (/^https:\/\//i.test(data.avatar_url || "") && modalSellerAvatar) {
+                const img = document.createElement("img");
+                img.src = data.avatar_url;
+                img.alt = "";
+                modalSellerAvatar.replaceChildren(img);
+            }
+        }, () => {});
     }
     // Status: verkauft (nur noch per Link erreichbar) oder reserviert
     if (modalStatus) {
@@ -653,9 +683,9 @@ function openDetailModal(item) {
             : status === "reserviert" ? '<i class="fa-solid fa-clock"></i> Reserviert – der Verkäufer ist bereits mit jemandem im Gespräch.' : "";
         modalStatus.style.display = status === "aktiv" ? "none" : "";
     }
-    if (modalContactBtn) modalContactBtn.style.display = status === "verkauft" ? "none" : "flex";
+    if (modalContactBtn) modalContactBtn.style.display = status === "verkauft" || isOwner ? "none" : "";
     if (modalReportBtn) {
-        modalReportBtn.style.display = currentUser && !isOwner ? "inline-flex" : "none";
+        modalReportBtn.style.display = currentUser && !isOwner ? "" : "none";
         modalReportBtn.onclick = () => reportListing(item);
     }
     if (modalStatusActions) {
@@ -676,8 +706,8 @@ function openDetailModal(item) {
             });
         }
     }
-    if (modalDescription) modalDescription.innerText = item.description || "";
-    if (modalPrice) modalPrice.innerText = `${parseFloat(item.price || 0).toFixed(2)} €`;
+    if (modalDescription) modalDescription.innerText = item.description || "Keine Beschreibung angegeben.";
+    if (modalPrice) modalPrice.innerText = formatPrice(item.price);
 
     if (modalGalleryStrip) modalGalleryStrip.innerHTML = "";
 
@@ -1001,7 +1031,9 @@ if (createItemForm) {
                 return;
             }
 
-            const sellerName = currentUser.user_metadata?.full_name || (currentUser.email ? currentUser.email.split('@')[0] : "Anonym");
+            // Verkäufername = Benutzername (nicht der Anfang der E-Mail-Adresse)
+            const { data: ownProfile } = await supabase.from("profiles").select("username").eq("id", currentUser.id).maybeSingle();
+            const sellerName = ownProfile?.username || currentUser.user_metadata?.username || "GSRA-Mitglied";
 
             // Koordinaten nur, wenn der Ort aus der Vorschlagsliste gewählt wurde
             const picked = locationInput && locationInput.dataset.place === location;
