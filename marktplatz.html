@@ -34,48 +34,81 @@
     </header>
 
     <!-- MAIN CONTAINER -->
-    <main class="container">
-        <section class="hero-section">
-            <h1 class="hero-title">GSRA <span class="text-blue">Marktplatz</span></h1>
-            <p class="hero-subtitle">Kaufe und verkaufe SimRacing-Hardware, Pedale, Lenkräder und Zubehör direkt in der Community.</p>
-        </section>
-
-        <!-- ELEGANTE FILTERBAR (MODERN & CLEAN) -->
-        <section class="filter-bar">
-            <div class="filter-inputs-group">
-                <!-- Kategorien und Unterkategorien füllt marktplatz.js -->
-                <select id="filterCategory">
-                    <option value="all">Alle Kategorien</option>
-                </select>
-                <select id="filterSubcategory" style="display: none;">
-                    <option value="all">Alle Unterkategorien</option>
-                </select>
-
-                <input type="text" id="searchMarketplace" placeholder="Suche Artikel, Hersteller, Modell..." style="min-width: 150px;">
-                
-                <!-- ORTSUCHE MIT COMBOBOX IN DER FILTERLEISTE -->
-                <div class="location-container">
-                    <input type="text" id="searchLocation" placeholder="Ort / Land..." autocomplete="off" style="width: 140px;">
-                    <div id="searchLocationDropdown" class="autocomplete-dropdown"></div>
-                </div>
-                
-                <input type="number" id="minPrice" placeholder="Min €" style="width: 80px;">
-                <input type="number" id="maxPrice" placeholder="Max €" style="width: 80px;">
-                
-                <select id="sortOrder">
-                    <option value="newest">Neueste zuerst</option>
-                    <option value="price-asc">Preis: Niedrigster zuerst</option>
-                    <option value="price-desc">Preis: Höchster zuerst</option>
-                </select>
+    <main class="container mk-page">
+        <section class="mk-hero">
+            <div>
+                <h1 class="mk-title">GSRA <span class="text-blue">Marktplatz</span></h1>
+                <p class="mk-subtitle">Sim-Racing-Hardware kaufen und verkaufen – direkt in der Community.</p>
             </div>
-
-            <button id="openItemModalBtn" class="login-btn" style="cursor: pointer;">+ Angebot Erstellen</button>
+            <button type="button" id="openItemModalBtn" class="mk-create-btn"><i class="fa-solid fa-plus"></i> Angebot erstellen</button>
         </section>
 
-        <!-- KARTEN GRID -->
-        <section>
-            <h2>Aktuelle <span class="text-yellow">Angebote</span> <span id="marketplaceCount" class="market-count"></span></h2>
-            <div id="marketplaceGrid">
+        <!-- Suche: Was · Wo · Umkreis -->
+        <section class="mk-search">
+            <label class="mk-field mk-field-what">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" id="searchMarketplace" placeholder="Was suchst du? z. B. Simucube, Loadcell, Rig" autocomplete="off">
+            </label>
+            <div class="mk-field mk-field-where location-container">
+                <i class="fa-solid fa-location-dot"></i>
+                <input type="text" id="searchLocation" placeholder="Ort oder PLZ" autocomplete="off">
+                <button type="button" id="useMyLocationBtn" class="mk-locate-btn" title="Meinen Standort verwenden"><i class="fa-solid fa-location-crosshairs"></i></button>
+                <div id="searchLocationDropdown" class="autocomplete-dropdown"></div>
+            </div>
+            <label class="mk-field mk-field-radius">
+                <i class="fa-solid fa-bullseye"></i>
+                <select id="filterRadius" title="Umkreis">
+                    <option value="world">Weltweit</option>
+                    <option value="europe">Europaweit</option>
+                    <option value="10">Umkreis 10 km</option>
+                    <option value="25">Umkreis 25 km</option>
+                    <option value="50">Umkreis 50 km</option>
+                    <option value="100">Umkreis 100 km</option>
+                    <option value="150">Umkreis 150 km</option>
+                    <option value="300">Umkreis 300 km</option>
+                    <option value="500">Umkreis 500 km</option>
+                    <option value="custom">Individuell …</option>
+                </select>
+                <input type="number" id="filterRadiusCustom" min="1" max="20000" placeholder="km" title="Umkreis in km" style="display: none;">
+            </label>
+        </section>
+        <p id="radiusHint" class="mk-hint" hidden></p>
+
+        <!-- Kategorien als Schnellauswahl (füllt marktplatz.js) -->
+        <div id="categoryChips" class="mk-chips" role="group" aria-label="Kategorien"></div>
+
+        <!-- Feinfilter -->
+        <section class="mk-toolbar">
+            <select id="filterCategory" hidden>
+                <option value="all">Alle Kategorien</option>
+            </select>
+            <select id="filterSubcategory" style="display: none;" title="Unterkategorie">
+                <option value="all">Alle Unterkategorien</option>
+            </select>
+            <select id="filterCondition" title="Zustand">
+                <option value="all">Jeder Zustand</option>
+                <option value="Neu">Neu (OVP)</option>
+                <option value="Wie neu">Wie neu</option>
+                <option value="Gebraucht">Gebraucht</option>
+                <option value="Defekt">Defekt / Ersatzteil</option>
+            </select>
+            <div class="mk-price">
+                <input type="number" id="minPrice" min="0" placeholder="Preis von">
+                <span>–</span>
+                <input type="number" id="maxPrice" min="0" placeholder="bis €">
+            </div>
+            <select id="sortOrder" title="Sortierung">
+                <option value="newest">Neueste zuerst</option>
+                <option value="price-asc">Preis aufsteigend</option>
+                <option value="price-desc">Preis absteigend</option>
+                <option value="distance">Entfernung</option>
+            </select>
+            <button type="button" id="resetFiltersBtn" class="mk-reset"><i class="fa-solid fa-rotate-left"></i> Zurücksetzen</button>
+        </section>
+
+        <!-- ERGEBNISSE -->
+        <section class="mk-results">
+            <div id="marketplaceGrid" class="mk-grid">
                 <!-- Dynamisch geladene Marktplatz-Karten -->
             </div>
             <div id="marketplaceMore" class="market-more"></div>

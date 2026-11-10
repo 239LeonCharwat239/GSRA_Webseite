@@ -46,6 +46,12 @@ const MARKET_MANUFACTURERS = ["Fanatec", "Simucube", "Moza", "Simagic", "Thrustm
     "Heusinkveld", "Cube Controls", "Ascher Racing", "Gomez Sim Industries", "VNM", "Precision Sim Engineering", "Sim-Lab", "Trak Racer",
     "Next Level Racing", "Playseat", "GT Omega", "Sparco", "Bucket Seat", "SimHub", "Buttkicker", "Meta", "Pimax", "HP", "Samsung", "LG", "Eigenbau"];
 
+const CATEGORY_ICONS = {
+    Wheelbases: "fa-gear", Lenkraeder: "fa-dharmachakra", Pedale: "fa-shoe-prints", Schalthebel: "fa-arrows-up-down",
+    Rigs: "fa-cubes", Sitze: "fa-chair", Monitore: "fa-display", ButtonBoxen: "fa-sliders", Zubehoer: "fa-plug",
+    Bundles: "fa-box-open", Sonstiges: "fa-ellipsis"
+};
+
 const categoryOf = (key) => MARKET_CATEGORIES.find(c => c.key === key) || null;
 const categoryLabel = (key) => categoryOf(key)?.label || key || "Allgemein";
 // Welche technische Angabe gehört zu Kategorie + Unterkategorie? (null = keine)
@@ -82,9 +88,15 @@ const MAX_IMAGE_SIZE = 8 * 1024 * 1024;
 // DOM-Elemente
 const marketplaceGrid = document.getElementById("marketplaceGrid");
 const marketplaceMore = document.getElementById("marketplaceMore");
-const marketplaceCount = document.getElementById("marketplaceCount");
 const filterCategory = document.getElementById("filterCategory");
 const filterSubcategory = document.getElementById("filterSubcategory");
+const filterCondition = document.getElementById("filterCondition");
+const filterRadius = document.getElementById("filterRadius");
+const filterRadiusCustom = document.getElementById("filterRadiusCustom");
+const useMyLocationBtn = document.getElementById("useMyLocationBtn");
+const resetFiltersBtn = document.getElementById("resetFiltersBtn");
+const categoryChips = document.getElementById("categoryChips");
+const radiusHint = document.getElementById("radiusHint");
 const searchMarketplace = document.getElementById("searchMarketplace");
 const searchLocation = document.getElementById("searchLocation");
 const searchLocationDropdown = document.getElementById("searchLocationDropdown");
@@ -165,7 +177,28 @@ function updateFilterSubcategories() {
     filterSubcategory.style.display = cat ? "" : "none";
 }
 
+// Kategorien als Schnellauswahl über den Angeboten
+function renderCategoryChips() {
+    if (!categoryChips) return;
+    const active = filterCategory?.value || "all";
+    categoryChips.innerHTML = "";
+    [{ key: "all", label: "Alle", icon: "fa-border-all" }, ...MARKET_CATEGORIES.map(c => ({ key: c.key, label: c.label, icon: CATEGORY_ICONS[c.key] }))]
+        .forEach(({ key, label, icon }) => {
+            const chip = document.createElement("button");
+            chip.type = "button";
+            chip.className = `mk-chip${key === active ? " active" : ""}`;
+            chip.innerHTML = `<i class="fa-solid ${icon}"></i><span></span>`;
+            chip.querySelector("span").textContent = label;
+            chip.addEventListener("click", () => {
+                filterCategory.value = key;
+                filterCategory.dispatchEvent(new Event("change"));
+            });
+            categoryChips.appendChild(chip);
+        });
+}
+
 fillOptions(filterCategory, MARKET_CATEGORIES.map(c => [c.key, c.label]), ["all", "Alle Kategorien"]);
+renderCategoryChips();
 fillOptions(itemCategorySelect, MARKET_CATEGORIES.map(c => [c.key, c.label]));
 updateFormSubcategories();
 const manufacturerList = document.getElementById("manufacturerList");
@@ -228,8 +261,9 @@ function setupLocationAutocomplete(inputElement, dropdownElement, onSelectCallba
         delete inputElement.dataset.lat;
         delete inputElement.dataset.lon;
         delete inputElement.dataset.place;
+        delete inputElement.dataset.cc;
 
-        if (query.length < 3) {
+        if (query.length < 2 || (query.length < 3 && !/^\d+$/.test(query))) {
             dropdownElement.style.display = "none";
             return;
         }
@@ -238,7 +272,9 @@ function setupLocationAutocomplete(inputElement, dropdownElement, onSelectCallba
             if (pendingRequest) pendingRequest.abort();
             pendingRequest = new AbortController();
             try {
-                const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&osm_tag=place&lang=de&limit=8`, { signal: pendingRequest.signal });
+                // Alle Ortsarten (Städte, Dörfer, Weiler, Ortsteile, Postleitzahlen), Mitteleuropa zuerst
+                const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&osm_tag=place&lang=de&limit=10&lat=50.5&lon=10.5&location_bias_scale=0.3`, { signal: pendingRequest.signal });
+                if (!res.ok) throw new Error(`Ortssuche nicht erreichbar (${res.status})`);
                 const data = await res.json();
                 const seen = new Set();
 
@@ -248,9 +284,13 @@ function setupLocationAutocomplete(inputElement, dropdownElement, onSelectCallba
                     const [lon, lat] = feature.geometry?.coordinates || [];
                     if (!props.name || typeof lat !== "number" || typeof lon !== "number") return;
 
-                    // Eindeutig unterscheidbar: Ortsname + Bundesland/Region + Land (z. B. Vogelsang)
-                    const parts = [props.name];
-                    if (props.state && props.state !== props.name) parts.push(props.state);
+                    // Eindeutig unterscheidbar: Ortsname (bei Ortsteilen mit Gemeinde, bei PLZ mit Stadt) + Bundesland/Region + Land
+                    const isPostcode = props.osm_value === "postcode" || /^[\dA-Z -]{3,10}$/.test(props.name) && /\d/.test(props.name);
+                    let name = props.name;
+                    if (isPostcode && props.city) name = `${props.name} ${props.city}`;
+                    else if (props.city && props.city !== props.name && ["district", "locality"].includes(props.type)) name = `${props.name} (${props.city})`;
+                    const parts = [name];
+                    if (props.state && props.state !== props.name && props.state !== props.city) parts.push(props.state);
                     if (props.country && props.country !== props.state && props.country !== props.name) parts.push(props.country);
                     const displayName = parts.join(", ");
                     if (seen.has(displayName)) return;
@@ -264,6 +304,7 @@ function setupLocationAutocomplete(inputElement, dropdownElement, onSelectCallba
                         inputElement.dataset.lat = String(lat);
                         inputElement.dataset.lon = String(lon);
                         inputElement.dataset.place = displayName;
+                        if (props.countrycode) inputElement.dataset.cc = String(props.countrycode).toUpperCase();
                         dropdownElement.style.display = "none";
                         if (onSelectCallback) onSelectCallback();
                     });
@@ -280,7 +321,11 @@ function setupLocationAutocomplete(inputElement, dropdownElement, onSelectCallba
                 dropdownElement.appendChild(credit);
                 dropdownElement.style.display = "block";
             } catch (err) {
-                if (err.name !== "AbortError") console.error("Fehler bei der Orts-Suche:", err);
+                if (err.name === "AbortError") return;
+                console.error("Fehler bei der Orts-Suche:", err);
+                // Ortssuche gerade nicht erreichbar: eingetippter Ort funktioniert trotzdem (ohne Umkreis)
+                dropdownElement.innerHTML = '<div class="autocomplete-credit" style="text-align: left;">Die Ortssuche ist gerade nicht erreichbar. Du kannst den Ort trotzdem eintippen.</div>';
+                dropdownElement.style.display = "block";
             }
         }, 300);
     });
@@ -303,11 +348,57 @@ async function loadMarketplaceItems(append = false) {
 
     const category = filterCategory ? filterCategory.value : "all";
     const subcategory = filterSubcategory ? filterSubcategory.value : "all";
+    const condition = filterCondition ? filterCondition.value : "all";
     const search = (searchMarketplace ? searchMarketplace.value : "").replace(/[,()%*\\]/g, " ").trim();
-    const place = (searchLocation ? searchLocation.value : "").replace(/[,()%*\\]/g, " ").trim();
     const minPrice = minPriceInput && minPriceInput.value !== "" ? parseFloat(minPriceInput.value) : null;
     const maxPrice = maxPriceInput && maxPriceInput.value !== "" ? parseFloat(maxPriceInput.value) : null;
-    const sortValue = sortOrderInput ? sortOrderInput.value : "newest";
+
+    // Ort: aus der Liste gewählt (oder „Mein Standort“) = Koordinaten für den Umkreis, sonst Textsuche im Ort
+    const origin = searchLocation && searchLocation.dataset.lat && searchLocation.dataset.place === searchLocation.value
+        ? { lat: Number(searchLocation.dataset.lat), lon: Number(searchLocation.dataset.lon) } : null;
+    const place = origin ? "" : (searchLocation ? searchLocation.value : "").replace(/[,()%*\\]/g, " ").trim();
+    const radiusChoice = filterRadius ? filterRadius.value : "world";
+    const radiusKm = radiusChoice === "custom" ? (Number(filterRadiusCustom?.value) || null)
+        : /^\d+$/.test(radiusChoice) ? Number(radiusChoice) : null;
+    if (radiusHint) {
+        radiusHint.hidden = !(radiusKm && !origin);
+        radiusHint.textContent = "Für den Umkreis wähle einen Ort aus der Vorschlagsliste oder nutze deinen Standort (Fadenkreuz).";
+    }
+    const sortValue = sortOrderInput ? (sortOrderInput.value === "distance" && !origin ? "newest" : sortOrderInput.value) : "newest";
+
+    // Neue Suche in der Datenbank (mit Umkreis); fehlt sie noch (SQL nicht ausgeführt), die bisherige Abfrage
+    if (!legacyMarketplace && !window.__marketSearchMissing) {
+        const { data, error } = await supabase.rpc("search_marketplace", {
+            _category: category !== "all" ? category : null,
+            _subcategory: subcategory !== "all" ? subcategory : null,
+            _search: search || null,
+            _condition: condition !== "all" ? condition : null,
+            _place: place || null,
+            _min_price: minPrice,
+            _max_price: maxPrice,
+            _lat: origin ? origin.lat : null,
+            _lon: origin ? origin.lon : null,
+            _radius_km: origin ? radiusKm : null,
+            _europe: radiusChoice === "europe",
+            _sort: sortValue,
+            _limit: PAGE_SIZE,
+            _offset: append ? allItems.length : 0
+        });
+        if (!error) {
+            if (requestId !== loadRequest) return;
+            const rows = (data || []).map(row => ({ ...row.item, _distance: row.distance_km }));
+            allItems = append ? [...allItems, ...rows] : rows;
+            totalItems = data && data.length ? Number(data[0].total_count) : (append ? allItems.length : 0);
+            renderMarketplaceItems(allItems);
+            return;
+        }
+        if (!/could not find the function|schema cache/i.test(error.message || "")) {
+            console.error("Fehler bei der Marktplatz-Suche:", error);
+            marketplaceGrid.innerHTML = '<p class="mk-empty">Die Angebote konnten nicht geladen werden.</p>';
+            return;
+        }
+        window.__marketSearchMissing = true;
+    }
 
     const buildQuery = (legacy) => {
         let query = supabase.from("marketplace").select("*", { count: "exact" });
@@ -315,6 +406,7 @@ async function loadMarketplaceItems(append = false) {
         query = query.neq("status", "verkauft");
         if (category !== "all") query = query.eq("category", category);
         if (subcategory !== "all") query = query.eq("subcategory", subcategory);
+        if (condition !== "all") query = query.eq("condition", condition);
         if (search) query = query.or(["title", "description", "manufacturer", "model"].map(c => `${c}.ilike.%${search}%`).join(","));
         if (place) query = query.ilike("location", `%${place}%`);
         if (minPrice !== null) query = query.gte("price", minPrice);
@@ -349,16 +441,15 @@ async function loadMarketplaceItems(append = false) {
     }
 }
 
-// Anzahl und „Weitere Angebote laden“
+// „Weitere Angebote laden“
 function renderLoadMore(shown, total) {
-    if (marketplaceCount) marketplaceCount.textContent = total ? `(${total})` : "";
     if (!marketplaceMore) return;
     marketplaceMore.innerHTML = "";
     if (shown >= total) return;
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "login-btn";
-    btn.textContent = `Weitere Angebote laden (${total - shown} übrig)`;
+    btn.className = "mk-more-btn";
+    btn.textContent = "Weitere Angebote laden";
     btn.addEventListener("click", () => {
         btn.disabled = true;
         loadMarketplaceItems(true);
@@ -373,45 +464,68 @@ function renderMarketplaceItems(items) {
     renderLoadMore(items.length, legacyMarketplace ? items.length : totalItems);
 
     if (items.length === 0) {
-        marketplaceGrid.innerHTML = "<p>Keine passenden Angebote gefunden.</p>";
+        marketplaceGrid.innerHTML = `
+            <div class="mk-empty">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <strong>Keine passenden Angebote gefunden</strong>
+                <span>Probiere einen größeren Umkreis, eine andere Kategorie oder setze die Filter zurück.</span>
+            </div>`;
         return;
     }
 
     items.forEach((item) => {
-        const card = document.createElement("div");
-        card.className = "card marketplace-card-clickable";
+        const card = document.createElement("article");
+        card.className = "mk-card";
+        card.tabIndex = 0;
 
         const images = item.images || item.image_urls || item.imageUrls || [];
         const coverImage = images.length > 0 ? images[0] : DEFAULT_PLACEHOLDER;
-        const formattedPrice = parseFloat(item.price || 0).toFixed(2);
-        const seller = item.seller_name || item.sellerName || "Anonym";
         const condition = item.condition || "Gebraucht";
-        const locationText = item.location ? `<i class="fa-solid fa-location-dot"></i> ${escapeHtml(item.location)}` : "";
         const productLine = [item.manufacturer, item.model].filter(Boolean).join(" ");
         const specs = specText(item);
+        const city = String(item.location || "").split(",")[0].trim();
+        const distance = typeof item._distance === "number" ? ` · ${item._distance < 1 ? "< 1" : Math.round(item._distance).toLocaleString("de-DE")} km` : "";
 
         card.innerHTML = `
-            ${item.status === "reserviert" ? '<span class="market-badge reserved">Reserviert</span>' : ""}
-            <img src="${escapeHtml(coverImage)}" alt="${escapeHtml(item.title)}" class="marketplace-card-img" onerror="this.src='${DEFAULT_PLACEHOLDER}'">
-            <h3>${escapeHtml(item.title)}</h3>
-            ${productLine || specs ? `<div class="market-card-product">${escapeHtml(productLine)}${productLine && specs ? " · " : ""}${specs ? `<strong>${escapeHtml(specs)}</strong>` : ""}</div>` : ""}
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; gap: 8px;">
-                <span style="font-size: 13px; color: var(--gsra-blue); font-weight: bold;">${escapeHtml(categoryLabel(item.category))}${item.subcategory ? ` <span class="market-card-sub">› ${escapeHtml(item.subcategory)}</span>` : ""}</span>
-                <span style="font-size: 11px; background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; color: #ccc; white-space: nowrap;">Zustand: ${escapeHtml(condition)}</span>
+            <div class="mk-card-media">
+                <img src="${escapeHtml(coverImage)}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.src='${DEFAULT_PLACEHOLDER}'">
+                ${item.status === "reserviert" ? '<span class="market-badge reserved">Reserviert</span>' : ""}
+                ${images.length > 1 ? `<span class="mk-card-photos"><i class="fa-solid fa-camera"></i> ${images.length}</span>` : ""}
             </div>
-            <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted); margin-bottom: 15px;">
-                <span>Verkäufer: ${escapeHtml(seller)}</span>
-                <span>${locationText}</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: auto;">
-                <span class="text-yellow" style="font-size: 20px; font-weight: bold;">${formattedPrice} €</span>
-                <span style="font-size: 12px; color: var(--text-muted);"><i class="fa-solid fa-images"></i> ${images.length} Bilder</span>
+            <div class="mk-card-body">
+                <div class="mk-card-cat">${escapeHtml(categoryLabel(item.category))}${item.subcategory ? ` › ${escapeHtml(item.subcategory)}` : ""}</div>
+                <h3 class="mk-card-title">${escapeHtml(item.title)}</h3>
+                ${productLine || specs ? `<div class="mk-card-product">${escapeHtml(productLine)}${productLine && specs ? " · " : ""}${specs ? `<strong>${escapeHtml(specs)}</strong>` : ""}</div>` : ""}
+                <div class="mk-card-price">${formatPrice(item.price)}</div>
+                <div class="mk-card-foot">
+                    <span class="mk-card-cond">${escapeHtml(condition)}</span>
+                    <span class="mk-card-where">${city ? `<i class="fa-solid fa-location-dot"></i> ${escapeHtml(city)}${distance}` : ""}</span>
+                    <span class="mk-card-age">${escapeHtml(timeAgo(item.created_at))}</span>
+                </div>
             </div>
         `;
 
         card.addEventListener("click", () => openDetailModal(item));
+        card.addEventListener("keydown", (e) => { if (e.key === "Enter") openDetailModal(item); });
         marketplaceGrid.appendChild(card);
     });
+}
+
+// Preis ohne unnötige Nachkommastellen („899 €“, „19,90 €“)
+function formatPrice(value) {
+    const price = parseFloat(value || 0);
+    return price.toLocaleString("de-DE", { minimumFractionDigits: Number.isInteger(price) ? 0 : 2, maximumFractionDigits: 2 }) + " €";
+}
+
+// „vor 3 Std.“, „vor 2 Tagen“, danach das Datum
+function timeAgo(value) {
+    if (!value) return "";
+    const minutes = Math.max(0, Math.round((Date.now() - new Date(value).getTime()) / 60000));
+    if (minutes < 60) return minutes <= 1 ? "gerade eben" : `vor ${minutes} Min.`;
+    if (minutes < 24 * 60) return `vor ${Math.round(minutes / 60)} Std.`;
+    const days = Math.round(minutes / 1440);
+    if (days < 7) return days === 1 ? "gestern" : `vor ${days} Tagen`;
+    return new Date(value).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" });
 }
 
 // Filter & Sortierung im Browser (nur solange die Datenbank die neuen Spalten noch nicht hat)
@@ -451,7 +565,52 @@ const reloadSoon = () => {
     clearTimeout(filterTimer);
     filterTimer = setTimeout(() => loadMarketplaceItems(), 350);
 };
-if (filterCategory) filterCategory.addEventListener("change", () => { updateFilterSubcategories(); loadMarketplaceItems(); });
+if (filterCategory) filterCategory.addEventListener("change", () => { updateFilterSubcategories(); renderCategoryChips(); loadMarketplaceItems(); });
+if (filterCondition) filterCondition.addEventListener("change", () => loadMarketplaceItems());
+if (filterRadius) filterRadius.addEventListener("change", () => {
+    if (filterRadiusCustom) filterRadiusCustom.style.display = filterRadius.value === "custom" ? "" : "none";
+    if (filterRadius.value === "custom" && filterRadiusCustom) filterRadiusCustom.focus();
+    // Mit Umkreis ergibt „Entfernung“ als Sortierung meist am meisten Sinn
+    if (/^\d+$|custom/.test(filterRadius.value) && sortOrderInput && sortOrderInput.value === "newest") sortOrderInput.value = "distance";
+    loadMarketplaceItems();
+});
+if (filterRadiusCustom) filterRadiusCustom.addEventListener("input", reloadSoon);
+
+// Mein Standort: Koordinaten nur für diese Suche (werden nirgends gespeichert)
+if (useMyLocationBtn) useMyLocationBtn.addEventListener("click", () => {
+    if (!navigator.geolocation) {
+        showToast("Dein Browser kann den Standort nicht bestimmen.", "error");
+        return;
+    }
+    useMyLocationBtn.classList.add("busy");
+    navigator.geolocation.getCurrentPosition((pos) => {
+        useMyLocationBtn.classList.remove("busy");
+        searchLocation.value = "Mein Standort";
+        searchLocation.dataset.place = "Mein Standort";
+        searchLocation.dataset.lat = String(pos.coords.latitude);
+        searchLocation.dataset.lon = String(pos.coords.longitude);
+        if (filterRadius && !/^\d+$|custom/.test(filterRadius.value)) filterRadius.value = "50";
+        if (sortOrderInput && sortOrderInput.value === "newest") sortOrderInput.value = "distance";
+        loadMarketplaceItems();
+    }, () => {
+        useMyLocationBtn.classList.remove("busy");
+        showToast("Der Standort konnte nicht ermittelt werden. Bitte erlaube den Zugriff oder gib einen Ort ein.", "error");
+    }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 });
+});
+
+// Alle Filter zurücksetzen
+if (resetFiltersBtn) resetFiltersBtn.addEventListener("click", () => {
+    [searchMarketplace, searchLocation, minPriceInput, maxPriceInput, filterRadiusCustom].forEach(el => { if (el) el.value = ""; });
+    if (searchLocation) ["lat", "lon", "place", "cc"].forEach(k => delete searchLocation.dataset[k]);
+    if (filterCategory) filterCategory.value = "all";
+    if (filterCondition) filterCondition.value = "all";
+    if (filterRadius) filterRadius.value = "world";
+    if (filterRadiusCustom) filterRadiusCustom.style.display = "none";
+    if (sortOrderInput) sortOrderInput.value = "newest";
+    updateFilterSubcategories();
+    renderCategoryChips();
+    loadMarketplaceItems();
+});
 if (filterSubcategory) filterSubcategory.addEventListener("change", () => loadMarketplaceItems());
 if (searchMarketplace) searchMarketplace.addEventListener("input", reloadSoon);
 if (searchLocation) searchLocation.addEventListener("input", reloadSoon);
@@ -681,6 +840,7 @@ function openCreateOrEditModal(itemToEdit = null) {
         delete itemLocationInput.dataset.lat;
         delete itemLocationInput.dataset.lon;
         delete itemLocationInput.dataset.place;
+        delete itemLocationInput.dataset.cc;
     }
 
     if (itemToEdit) {
@@ -705,6 +865,7 @@ function openCreateOrEditModal(itemToEdit = null) {
             itemLocationInput.dataset.lat = String(itemToEdit.latitude);
             itemLocationInput.dataset.lon = String(itemToEdit.longitude);
             itemLocationInput.dataset.place = itemToEdit.location || "";
+            if (itemToEdit.country_code) itemLocationInput.dataset.cc = itemToEdit.country_code;
         }
         document.getElementById("itemDescription").value = itemToEdit.description || "";
 
@@ -850,6 +1011,7 @@ if (createItemForm) {
             const extras = {
                 latitude: picked ? Number(locationInput.dataset.lat) : null,
                 longitude: picked ? Number(locationInput.dataset.lon) : null,
+                country_code: picked && /^[A-Z]{2}$/.test(locationInput.dataset.cc || "") ? locationInput.dataset.cc : null,
                 subcategory: itemSubcategorySelect?.value || null,
                 manufacturer: document.getElementById("itemManufacturer").value.trim() || null,
                 model: document.getElementById("itemModel").value.trim() || null,
@@ -859,7 +1021,11 @@ if (createItemForm) {
             };
             // Fehlen die neuen Spalten noch (SQL nicht ausgeführt), wird ohne sie gespeichert
             const withCoords = async (run, fields) => {
-                const { error } = await run({ ...fields, ...extras });
+                let { error } = await run({ ...fields, ...extras });
+                if (error && /country_code/i.test(error.message || "")) {
+                    const { country_code, ...withoutCountry } = extras;
+                    ({ error } = await run({ ...fields, ...withoutCountry }));
+                }
                 if (!error || !/latitude|longitude|subcategory|manufacturer|model|torque_nm|wheel_diameter_mm|screen_size_inch|schema cache/i.test(error.message || "")) return error;
                 return (await run(fields)).error;
             };
