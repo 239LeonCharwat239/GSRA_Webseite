@@ -22,6 +22,7 @@
           features: [["Alles aus Paddock"], ["Pro Setups"], ["Telemetry-Tool", "in Entwicklung"], ["Stint-Planer", "in Entwicklung"],
                      ["Alle weiteren exklusiven Features"], ["Pole-Abzeichen im Profil"]] },
         { plan: "alliance", icon: "fa-people-group", for: "Für Teams mit bis zu 10 Personen", price: "39,99 €", per: "pro Monat · ca. 4 € pro Person",
+          save: "<strong>Über die Hälfte gespart:</strong> 10 × Pole kosten 84,90 € im Monat – mit Alliance spart ihr 44,91 €.",
           features: [["Alle Pole-Vorteile für bis zu 10 Personen"], ["Jede Person nutzt ihr eigenes GSRA-Konto"],
                      ["Mitglieder per Freundesliste, GSRA-ID oder Einladungslink"], ["Alliance-Abzeichen im Profil"]] }
     ];
@@ -42,6 +43,7 @@
                         <p class="abo-plan-for">${card.for}</p>
                     </div>
                     <div class="abo-plan-price"><strong>${card.price}</strong><span>${card.per}</span></div>
+                    ${card.save ? `<p class="abo-plan-save"><i class="fa-solid fa-piggy-bank"></i> ${card.save}</p>` : ""}
                     <ul class="abo-plan-features">
                         ${card.features.map(([text, note, off]) => `<li${off ? ' class="off"' : ""}><i class="fa-solid ${off ? "fa-xmark" : "fa-check"}"></i> <span>${text}${note ? ` <small>(${note})</small>` : ""}</span></li>`).join("")}
                     </ul>
@@ -176,6 +178,8 @@
             </div>
             <div class="abo-team" hidden></div>`;
         mine.querySelector(".abo-mine-text").textContent = text;
+        mine.classList.remove("plan-paddock", "plan-pole", "plan-alliance");
+        mine.classList.add(`plan-${plan}`);
         mine.classList.toggle("warning", Boolean((m.pole?.status === "past_due" && plan === "pole") || (team?.is_owner && team.status === "past_due")));
 
         // Zahlungsart, Rechnungen, Kündigung: Stripe-Kundenportal (nicht für reine Teammitglieder)
