@@ -298,7 +298,7 @@ const LOGIN_REQUIRED_TEXTS = {
 };
 
 // Seiten ohne Anmelde-Pflicht (Startseite, Login, Abos/Preise und Rechtstexte)
-const PUBLIC_PAGES = ["", "index", "login", "passwort-neu", "abo", "impressum", "datenschutz", "nutzungsbedingungen"];
+const PUBLIC_PAGES = ["", "index", "login", "passwort-neu", "abo", "kuendigen", "impressum", "datenschutz", "nutzungsbedingungen"];
 
 // Abo-Stufen der GSRA: Paddock (kostenlos), Pole (Premium), Alliance (Team) – Abzeichen in Profilen und beim Verkäufer
 const GSRA_PLANS = {
@@ -362,6 +362,7 @@ function addSiteFooter() {
         <span>© ${new Date().getFullYear()} Global Simracing Alliance</span>
         <div class="gsra-site-footer-links">
             <a href="abo.html">Abos</a>
+            <a href="kuendigen.html" class="gsra-footer-cancel">Verträge hier kündigen</a>
             <a href="impressum.html">Impressum</a>
             <a href="datenschutz.html">Datenschutz</a>
             <a href="nutzungsbedingungen.html">Nutzungsbedingungen</a>

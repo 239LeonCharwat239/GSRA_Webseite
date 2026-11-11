@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GSRA - Verträge hier kündigen</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Supabase SDK & Auth -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-client.js"></script>
+    <script src="auth-nav.js"></script>
+</head>
+<body>
+
+    <!-- HEADER -->
+    <header>
+        <div class="logo-slogan-container">
+            <a href="index.html" class="logo-link">
+                <img src="GSRA_Logo_ohne Hintergrund.png" alt="GSRA Logo" class="logo">
+            </a>
+            <div class="header-slogan">
+                <span class="text-blue">UNITED BY SPEED.</span>
+                <span class="text-yellow">DRIVEN GLOBALLY.</span>
+            </div>
+        </div>
+        <nav>
+            <a href="index.html">Home</a>
+            <a href="marktplatz.html">Marktplatz</a>
+            <a href="setups.html">Setups</a>
+            <a href="nachschlagewerk.html">Nachschlagewerk</a>
+            <a href="kalender.html">Rennkalender</a>
+            <a href="dashboard.html">Dashboard</a>
+            <a href="messenger.html">Messenger</a>
+            <a href="login.html" class="login-btn" id="loginNavBtn">Login</a>
+            <button id="logoutBtn" class="login-btn" style="display: none;">Logout</button>
+        </nav>
+    </header>
+
+    <main class="container kd-page">
+        <section class="abo-hero">
+            <h1 class="hero-title">Verträge hier <span class="text-blue">kündigen</span></h1>
+            <p>Hier kündigst du dein GSRA-Abo (Pole oder Alliance) – auch ohne Anmeldung. Du bekommst sofort eine Bestätigung auf dieser Seite und per E-Mail.</p>
+        </section>
+
+        <!-- Laufende Verträge (nur angemeldet, füllt kuendigen.js) -->
+        <section id="kdMine" class="kd-mine" hidden></section>
+
+        <form id="kdForm" class="kd-form" novalidate>
+            <fieldset>
+                <legend>1. Welchen Vertrag möchtest du kündigen?</legend>
+                <label class="kd-choice"><input type="radio" name="contract" value="pole" required> <span><strong>GSRA Pole</strong><small>8,49 € pro Monat</small></span></label>
+                <label class="kd-choice"><input type="radio" name="contract" value="alliance"> <span><strong>GSRA Alliance</strong><small>39,99 € pro Monat · nur die Teamleitung kann kündigen</small></span></label>
+            </fieldset>
+
+            <fieldset>
+                <legend>2. Art der Kündigung</legend>
+                <label class="kd-choice"><input type="radio" name="kind" value="ordentlich" checked> <span><strong>Ordentliche Kündigung</strong><small>Zum Ende der laufenden Abrechnungsperiode</small></span></label>
+                <label class="kd-choice"><input type="radio" name="kind" value="ausserordentlich"> <span><strong>Außerordentliche Kündigung</strong><small>Aus wichtigem Grund – bitte den Grund angeben</small></span></label>
+                <div class="kd-field" id="kdReasonField" hidden>
+                    <label for="kdReason">Grund der außerordentlichen Kündigung*</label>
+                    <textarea id="kdReason" rows="3" maxlength="2000"></textarea>
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>3. Zu wann?</legend>
+                <label class="kd-choice"><input type="radio" name="when" value="next" checked> <span><strong>Zum nächstmöglichen Zeitpunkt</strong><small>Du nutzt alle Vorteile bis zum Ende der bezahlten Laufzeit</small></span></label>
+                <label class="kd-choice"><input type="radio" name="when" value="date"> <span><strong>Zu einem späteren Datum</strong><small>Liegt es vor dem Laufzeitende, endet der Vertrag zum Laufzeitende</small></span></label>
+                <div class="kd-field" id="kdDateField" hidden>
+                    <label for="kdDate">Gewünschtes Datum*</label>
+                    <input type="date" id="kdDate">
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>4. Deine Angaben</legend>
+                <div class="kd-field">
+                    <label for="kdName">Vor- und Nachname*</label>
+                    <input type="text" id="kdName" maxlength="120" autocomplete="name" required>
+                </div>
+                <div class="kd-field">
+                    <label for="kdEmail">E-Mail-Adresse deines GSRA-Kontos*</label>
+                    <input type="email" id="kdEmail" maxlength="200" autocomplete="email" required>
+                    <small>An diese Adresse schicken wir die Eingangsbestätigung.</small>
+                </div>
+                <div class="kd-field">
+                    <label for="kdAccount">Benutzername oder GSRA-ID <span>(optional, hilft beim Zuordnen)</span></label>
+                    <input type="text" id="kdAccount" maxlength="120">
+                </div>
+            </fieldset>
+
+            <button type="submit" id="kdSubmit" class="abo-plan-btn kd-submit"><i class="fa-solid fa-file-signature"></i> Jetzt kündigen</button>
+            <p class="kd-note">Mit „Jetzt kündigen“ geht deine Kündigung sofort bei uns ein. Den Eingang bestätigen wir dir direkt hier und per E-Mail.</p>
+        </form>
+
+        <!-- Bestätigung (füllt kuendigen.js) -->
+        <section id="kdDone" class="kd-done" hidden></section>
+    </main>
+
+    <script src="ui-dialogs.js"></script>
+    <script src="kuendigen.js"></script>
+</body>
+</html>

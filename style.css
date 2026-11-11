@@ -8303,3 +8303,280 @@ a.plan-badge:hover {
         padding: 8px 10px;
     }
 }
+
+/* =========================================
+   VERTRÄGE HIER KÜNDIGEN (§ 312k BGB)
+========================================= */
+.gsra-site-footer a.gsra-footer-cancel {
+    color: #fff;
+    font-weight: 700;
+}
+
+.kd-page {
+    max-width: 760px;
+    text-align: center;
+}
+
+.kd-mine {
+    margin: 0 0 22px;
+    padding: 16px 18px;
+    background: #121318;
+    border: 2px solid #2f6bff;
+    border-radius: 10px;
+    text-align: left;
+    color: #dfe5f5;
+    font-size: 14px;
+}
+
+.kd-mine[hidden] {
+    display: none;
+}
+
+.kd-mine strong {
+    display: block;
+    margin-bottom: 6px;
+    color: #fff;
+}
+
+.kd-mine i {
+    color: #6f9bff;
+}
+
+.kd-mine ul {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.kd-form {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    text-align: left;
+}
+
+.kd-form[hidden] {
+    display: none;
+}
+
+.kd-form fieldset {
+    margin: 0;
+    padding: 16px 18px 18px;
+    background: #15161a;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+}
+
+.kd-form legend {
+    padding: 0 6px;
+    font-size: 15px;
+    font-weight: 800;
+    color: #fff;
+}
+
+.kd-choice {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 10px;
+    padding: 10px 12px;
+    background: #0f1116;
+    border: 2px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: border-color 0.2s ease;
+}
+
+.kd-choice:hover {
+    border-color: rgba(255, 204, 0, 0.45);
+}
+
+.kd-choice.checked {
+    border-color: var(--gsra-yellow);
+}
+
+.kd-choice input {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    flex-shrink: 0;
+    accent-color: var(--gsra-yellow);
+}
+
+.kd-choice strong {
+    display: block;
+    font-size: 14px;
+    color: #fff;
+}
+
+.kd-choice small {
+    display: block;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.kd-field {
+    margin-top: 12px;
+}
+
+.kd-field[hidden] {
+    display: none;
+}
+
+.kd-field label {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 13px;
+    color: #fff;
+}
+
+.kd-field label span,
+.kd-field small {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.kd-field input,
+.kd-field textarea {
+    width: 100%;
+    padding: 10px 12px;
+    background: #0b0c10;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 4px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 14px;
+    outline: none;
+}
+
+.kd-field input:focus,
+.kd-field textarea:focus {
+    border-color: var(--gsra-blue);
+}
+
+.kd-field input[type="date"] {
+    color-scheme: dark;
+}
+
+.kd-submit {
+    min-height: 52px;
+    font-size: 15px;
+}
+
+.kd-note {
+    margin: -6px 0 0;
+    max-width: none;
+    font-size: 13px;
+    text-align: center;
+}
+
+.kd-done {
+    padding: 22px;
+    background: #121318;
+    border: 3px solid #00c26e;
+    border-radius: 10px;
+    text-align: left;
+}
+
+.kd-done[hidden] {
+    display: none;
+}
+
+.kd-done-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+}
+
+.kd-done-head > i {
+    font-size: 30px;
+    color: #00c26e;
+}
+
+.kd-done-head h2 {
+    margin: 0 0 4px;
+    padding: 0;
+    border: none;
+    font-size: 22px;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.kd-done-head p,
+.kd-effective {
+    margin: 0;
+    max-width: none;
+    font-size: 14px;
+}
+
+.kd-summary {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 8px 16px;
+    margin: 18px 0;
+    padding: 14px 16px;
+    background: #0f1116;
+    border-radius: 8px;
+}
+
+.kd-summary dt {
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.kd-summary dd {
+    margin: 0;
+    color: #fff;
+    font-weight: 700;
+    font-size: 14px;
+}
+
+.kd-effective {
+    margin-top: 8px;
+    color: #dfe5f5;
+}
+
+.kd-done-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 18px;
+}
+
+.kd-done-actions .abo-plan-btn {
+    width: auto;
+}
+
+@media (max-width: 600px) {
+    .kd-summary {
+        grid-template-columns: 1fr;
+        gap: 2px;
+    }
+    .kd-summary dd {
+        margin-bottom: 8px;
+    }
+    .kd-done-actions .abo-plan-btn {
+        width: 100%;
+    }
+}
+
+/* Bestätigung ausdrucken bzw. als PDF speichern: nur die Bestätigung, gut lesbar auf Weiß */
+@media print {
+    body.kd-print header,
+    body.kd-print .gsra-site-footer,
+    body.kd-print .abo-hero,
+    body.kd-print .kd-done-actions,
+    body.kd-print .nav-toggle {
+        display: none !important;
+    }
+    body.kd-print,
+    body.kd-print .kd-done,
+    body.kd-print .kd-summary {
+        background: #fff !important;
+        color: #000 !important;
+        box-shadow: none !important;
+    }
+    body.kd-print .kd-done *,
+    body.kd-print .kd-summary * {
+        color: #000 !important;
+    }
+}

@@ -50,7 +50,8 @@ Deno.serve(async (req) => {
       _customer_id: typeof sub.customer === "string" ? sub.customer : sub.customer?.id ?? null,
       _status: sub.status,
       _period_end: periodEnd(sub),
-      _cancel_at_period_end: Boolean(sub.cancel_at_period_end),
+      // gekündigt zum Ende der Laufzeit oder zu einem festen Termin („cancel_at“)
+      _cancel_at_period_end: Boolean(sub.cancel_at_period_end || sub.cancel_at),
     });
     if (error) throw new Error(error.message);
   };
