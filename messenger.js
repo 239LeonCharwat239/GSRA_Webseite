@@ -854,24 +854,25 @@ function openMessageContextMenu(x, y, msg, optionButtons, emojis) {
         list.appendChild(btn);
     });
 
+    // Darunter angeheftet: genau dieselbe Reaktionsleiste wie am Smiley der Nachricht
+    const box = document.createElement("div");
+    box.className = "msg-context-box";
+    box.appendChild(list);
     const reactions = document.createElement("div");
-    reactions.className = "msg-context-reactions";
+    reactions.className = "wa-quick-reaction-bar in-context";
     emojis.forEach(emoji => {
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.textContent = emoji;
-        btn.title = `Mit ${emoji} reagieren`;
-        btn.addEventListener("click", async () => {
+        const span = document.createElement("span");
+        span.innerText = emoji;
+        span.title = `Mit ${emoji} reagieren`;
+        span.addEventListener("click", async () => {
             closeMessageContextMenu();
             await toggleReaction(msg, emoji);
         });
-        reactions.appendChild(btn);
+        reactions.appendChild(span);
     });
-    const more = document.createElement("button");
-    more.type = "button";
-    more.className = "more";
+    const more = document.createElement("span");
     more.title = "Weitere Emojis";
-    more.innerHTML = '<i class="fa-solid fa-plus"></i>';
+    more.innerHTML = '<i class="fa-solid fa-plus" style="font-size: 12px;"></i>';
     more.addEventListener("click", () => {
         // Große Emoji-Auswahl an der Stelle des Menüs
         const popup = document.createElement("div");
@@ -887,7 +888,7 @@ function openMessageContextMenu(x, y, msg, optionButtons, emojis) {
     });
     reactions.appendChild(more);
 
-    menu.append(list, reactions);
+    menu.append(box, reactions);
     document.body.appendChild(menu);
 
     // An der Mausposition öffnen, aber immer vollständig im Fenster
@@ -988,6 +989,13 @@ async function checkUrlParameters() {
     const supabase = window.supabaseClient || window.supabase;
     if (!supabase || !currentUser?.id) return;
     const urlParams = new URLSearchParams(window.location.search);
+    // Aus dem Marktplatz: vollständiges Profil einer Person öffnen (Freundschaft, Melden, Blockieren)
+    const profileId = urlParams.get("profil");
+    if (profileId) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+        openUserProfile(profileId);
+        return;
+    }
     const sellerId = urlParams.get("sellerId");
     const sellerName = urlParams.get("sellerName") || "Verkäufer";
     const itemTitle = urlParams.get("itemTitle");

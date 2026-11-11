@@ -104,6 +104,17 @@
                 </div>
             </div>
 
+            <!-- Abo und Team: aktueller Stand, alle Stufen direkt buchbar (füllt abo.js) -->
+            <div class="card dash-abo-card">
+                <div class="dash-own-head">
+                    <h3><i class="fa-solid fa-crown text-yellow"></i> Abo &amp; Team</h3>
+                    <a href="abo.html" class="dash-own-link">Alle Details <i class="fa-solid fa-arrow-right"></i></a>
+                </div>
+                <section id="aboMine" class="abo-mine" hidden></section>
+                <div class="abo-plans compact" data-plan-cards></div>
+                <p class="dash-hint"><i class="fa-solid fa-bolt text-yellow"></i> Marktplatz-Boni (Hervorheben, Hochschieben, Top-Anzeige) zahlst du in jedem Abo extra – direkt beim Erstellen eines Inserats.</p>
+            </div>
+
             <!-- Konto löschen: Passwort bestätigen, dann endgültig löschen -->
             <div class="card dash-danger-card">
                 <div>
@@ -117,5 +128,6 @@
 
     <script src="ui-dialogs.js"></script>
     <script src="dashboard.js"></script>
+    <script src="abo.js"></script>
 </body>
 </html>

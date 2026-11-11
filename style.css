@@ -2766,10 +2766,18 @@ body.multi-select-active .message-actions {
     background: rgba(255, 255, 255, 0.08);
 }
 
-/* Rechtsklick-Menü einer Nachricht: Einträge senkrecht, Reaktionen darunter */
+/* Rechtsklick-Menü einer Nachricht: Einträge senkrecht, darunter angeheftet die normale Reaktionsleiste */
 .msg-context-menu {
     position: fixed;
     z-index: 3000;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    animation: msgContextIn 0.12s ease-out;
+}
+
+.msg-context-box {
     min-width: 230px;
     overflow: hidden;
     background: #15161a;
@@ -2777,7 +2785,12 @@ body.multi-select-active .message-actions {
     border-top: 2px solid var(--gsra-blue);
     border-radius: 6px;
     box-shadow: 0 16px 40px rgba(0, 0, 0, 0.85);
-    animation: msgContextIn 0.12s ease-out;
+}
+
+/* Gleiche Leiste wie am Smiley, nur fest unter dem Menü statt schwebend an der Nachricht */
+.wa-quick-reaction-bar.in-context {
+    position: static;
+    display: inline-flex;
 }
 
 @keyframes msgContextIn {
@@ -2828,47 +2841,6 @@ body.multi-select-active .message-actions {
 
 .msg-context-list button.danger:hover {
     background: rgba(255, 77, 77, 0.14);
-}
-
-.msg-context-reactions {
-    display: flex;
-    justify-content: space-between;
-    gap: 4px;
-    padding: 8px 10px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-    background: #0f1116;
-}
-
-.msg-context-reactions button {
-    width: 34px;
-    height: 34px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    background: transparent;
-    border: none;
-    border-radius: 4px;
-    font-size: 20px;
-    line-height: 1;
-    cursor: pointer;
-    transition: transform 0.15s ease, background 0.15s ease;
-}
-
-.msg-context-reactions button:hover {
-    transform: scale(1.15);
-    background: rgba(255, 255, 255, 0.08);
-}
-
-.msg-context-reactions button.more {
-    font-size: 13px;
-    color: var(--text-muted);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-}
-
-.msg-context-reactions button.more:hover {
-    color: var(--gsra-yellow);
-    border-color: var(--gsra-yellow);
 }
 
 /* Große Emoji-Auswahl für Reaktionen (gleiche Komponente wie beim Schreiben).
@@ -7176,23 +7148,39 @@ button.dash-avatar:hover,
 }
 
 .mk-boost-buy {
+    position: relative;
+    isolation: isolate;
     flex-shrink: 0;
-    min-width: 76px;
-    padding: 8px 12px;
-    border: 1px solid var(--gsra-yellow);
+    min-width: 80px;
+    padding: 8px 14px;
+    border: none;
     background: var(--gsra-yellow);
     color: #111;
     font-family: inherit;
     font-size: 13px;
     font-weight: 800;
     cursor: pointer;
+    clip-path: polygon(7px 0, 100% 0, calc(100% - 7px) 100%, 0 100%);
+    transition: color 0.2s ease;
+}
+
+.mk-boost-buy::before {
+    content: "";
+    position: absolute;
+    inset: 2px;
+    z-index: -1;
+    background: #0b0c10;
     clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
-    transition: background 0.2s ease, color 0.2s ease;
+    opacity: 0;
+    transition: opacity 0.2s ease;
 }
 
 .mk-boost-buy:hover:not(:disabled) {
-    background: #111;
     color: var(--gsra-yellow);
+}
+
+.mk-boost-buy:hover:not(:disabled)::before {
+    opacity: 1;
 }
 
 .mk-boost-buy:disabled {
@@ -7427,16 +7415,23 @@ a.plan-badge:hover {
     color: var(--text-muted);
 }
 
+/* Schräge Knöpfe: Der Rand entsteht aus der Hintergrundfarbe des Knopfs (--edge) und einer 2 px kleineren
+   Innenfläche (::before) – so bleibt er auch an den schrägen Kanten sichtbar (ein normaler Rand würde abgeschnitten). */
 .abo-plan-btn {
+    --edge: var(--gsra-yellow);
+    --fill: #0b0c10;
+    --fill-on: 0;
+    position: relative;
+    isolation: isolate;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
     width: 100%;
     min-height: 44px;
-    padding: 10px 16px;
-    border: 2px solid var(--gsra-yellow);
-    background: var(--gsra-yellow);
+    padding: 10px 18px;
+    border: none;
+    background: var(--edge);
     color: #111;
     font-family: inherit;
     font-size: 13px;
@@ -7446,28 +7441,40 @@ a.plan-badge:hover {
     text-decoration: none;
     cursor: pointer;
     clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
-    transition: background 0.2s ease, color 0.2s ease;
+    transition: color 0.2s ease;
+}
+
+.abo-plan-btn::before {
+    content: "";
+    position: absolute;
+    inset: 2px;
+    z-index: -1;
+    background: var(--fill);
+    clip-path: polygon(9px 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
+    opacity: var(--fill-on);
+    transition: opacity 0.2s ease;
 }
 
 .abo-plan-btn:hover:not(:disabled) {
-    background: #111;
+    --fill-on: 1;
     color: var(--gsra-yellow);
 }
 
 .abo-plan-btn.ghost {
-    background: transparent;
-    border-color: rgba(255, 255, 255, 0.18);
+    --edge: rgba(255, 255, 255, 0.22);
+    --fill: #15161a;
+    --fill-on: 1;
     color: #fff;
 }
 
 .abo-plan-btn.ghost:hover:not(:disabled) {
-    border-color: var(--gsra-yellow);
-    color: var(--gsra-yellow);
+    --edge: var(--gsra-yellow);
 }
 
 .abo-plan-btn.current {
-    background: rgba(0, 194, 110, 0.12);
-    border-color: rgba(0, 194, 110, 0.6);
+    --edge: rgba(0, 194, 110, 0.65);
+    --fill: #0f1a15;
+    --fill-on: 1;
     color: #00c26e;
 }
 
@@ -7793,5 +7800,430 @@ a.plan-badge:hover {
     }
     .abo-team-add .abo-plan-btn {
         width: 100%;
+    }
+}
+
+/* =========================================
+   ABO: EINLADUNG, TEAM-VERWALTUNG, ABOS IM DASHBOARD
+========================================= */
+.abo-invite {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin: 10px 0 24px;
+    padding: 18px 20px;
+    background: linear-gradient(135deg, rgba(0, 85, 255, 0.14), #121318 60%);
+    border: 1px solid rgba(0, 85, 255, 0.4);
+    border-left: 4px solid var(--gsra-blue);
+    border-radius: 8px;
+    text-align: left;
+}
+
+.abo-invite[hidden] {
+    display: none;
+}
+
+.abo-invite.success {
+    background: linear-gradient(135deg, rgba(0, 194, 110, 0.12), #121318 60%);
+    border-color: rgba(0, 194, 110, 0.4);
+    border-left-color: #00c26e;
+}
+
+.abo-invite.warning {
+    background: linear-gradient(135deg, rgba(255, 159, 26, 0.12), #121318 60%);
+    border-color: rgba(255, 159, 26, 0.4);
+    border-left-color: #ff9f1a;
+}
+
+.abo-invite-icon {
+    margin-top: 2px;
+    font-size: 24px;
+    color: #6f9bff;
+}
+
+.abo-invite.success .abo-invite-icon {
+    color: #00c26e;
+}
+
+.abo-invite.warning .abo-invite-icon {
+    color: #ff9f1a;
+}
+
+.abo-invite strong {
+    display: block;
+    font-size: 17px;
+    color: #fff;
+}
+
+.abo-invite p {
+    margin: 4px 0 0;
+    max-width: none;
+    font-size: 14px;
+}
+
+.abo-invite-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.abo-invite-actions .abo-plan-btn {
+    width: auto;
+}
+
+/* Teamleitung: drei Wege, Mitglieder hinzuzufügen */
+.abo-team-invite {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin-top: 16px;
+}
+
+.abo-team-block {
+    min-width: 0;
+    padding: 14px;
+    background: #0f1116;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 6px;
+}
+
+.abo-team-block h4 {
+    margin: 0 0 8px;
+    font-size: 14px;
+    color: #fff;
+}
+
+.abo-team-block h4 i {
+    width: 18px;
+    color: #6f9bff;
+}
+
+.abo-team-block .abo-team-hint {
+    margin: 6px 0 0;
+}
+
+.abo-team-block .abo-team-add {
+    flex-direction: column;
+    max-width: none;
+}
+
+.abo-team-block .abo-team-add .abo-plan-btn,
+.abo-team-block .abo-plan-btn {
+    width: 100%;
+}
+
+.abo-friend-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 230px;
+    overflow-y: auto;
+}
+
+.abo-friend {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 8px;
+    background: #15161a;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 4px;
+}
+
+.abo-friend .abo-team-avatar {
+    width: 30px;
+    height: 30px;
+}
+
+.abo-friend-add {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    border: 1px solid rgba(255, 204, 0, 0.5);
+    border-radius: 50%;
+    background: transparent;
+    color: var(--gsra-yellow);
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.abo-friend-add:hover:not(:disabled) {
+    background: var(--gsra-yellow);
+    color: #111;
+}
+
+.abo-friend-add:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.abo-invite-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.abo-invite-row input {
+    width: 100%;
+    height: 40px;
+    padding: 0 10px;
+    background: #0b0c10;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 4px;
+    color: #9db8ff;
+    font-family: inherit;
+    font-size: 12px;
+}
+
+.abo-invite-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 12px;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.abo-invite-meta button {
+    padding: 0;
+    background: none;
+    border: none;
+    color: #9db8ff;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.abo-invite-meta button:hover {
+    color: var(--gsra-yellow);
+}
+
+.abo-team-hint a {
+    color: #9db8ff;
+}
+
+/* Abos im Dashboard */
+.card.dash-abo-card {
+    margin-top: 30px;
+    text-align: left;
+    border-top-color: var(--gsra-yellow);
+}
+
+.card.dash-abo-card:hover {
+    transform: none;
+}
+
+.dash-abo-card .abo-mine {
+    margin: 6px 0 18px;
+}
+
+.abo-plans.compact {
+    gap: 16px;
+    margin: 6px 0 16px;
+}
+
+.abo-plans.compact .abo-plan {
+    padding: 20px 18px 18px;
+    box-shadow: none;
+}
+
+.abo-plans.compact .abo-plan-head h2 {
+    font-size: 21px;
+}
+
+.abo-plans.compact .abo-plan-icon {
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+}
+
+.abo-plans.compact .abo-plan-price {
+    margin: 12px 0 10px;
+    padding-bottom: 10px;
+}
+
+.abo-plans.compact .abo-plan-price strong {
+    font-size: 26px;
+}
+
+.abo-plans.compact .abo-plan-features li {
+    padding: 3px 0;
+    font-size: 13px;
+}
+
+.abo-plans.compact .abo-plan-features li.off {
+    display: none;
+}
+
+@media (max-width: 1100px) {
+    .abo-team-invite {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 900px) {
+    .abo-plans.compact {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 600px) {
+    .abo-invite {
+        flex-direction: column;
+        gap: 10px;
+        padding: 16px;
+    }
+    .abo-invite-actions .abo-plan-btn {
+        width: 100%;
+    }
+}
+
+/* =========================================
+   MARKTPLATZ: VERKÄUFER ANKLICKBAR, BONI IM FORMULAR
+========================================= */
+#modalSellerBox {
+    cursor: pointer;
+    transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+#modalSellerBox:hover,
+#modalSellerBox:focus-visible {
+    background: #131722;
+    border-color: rgba(0, 85, 255, 0.45);
+    outline: none;
+}
+
+.mk-seller-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.mk-seller-open {
+    flex-shrink: 0;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    transition: color 0.2s ease;
+}
+
+#modalSellerBox:hover .mk-seller-open {
+    color: var(--gsra-yellow);
+}
+
+.profile-card-listings i {
+    color: var(--gsra-yellow);
+}
+
+.mk-create-boosts {
+    margin: 4px 0 0;
+    padding: 12px 14px 10px;
+    background: #0f1116;
+    border: 1px solid rgba(255, 204, 0, 0.25);
+    border-radius: 6px;
+}
+
+.mk-create-boosts[hidden] {
+    display: none;
+}
+
+.mk-create-boosts legend {
+    padding: 0 6px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+}
+
+.mk-create-boosts legend i {
+    color: var(--gsra-yellow);
+}
+
+.mk-create-boosts legend span {
+    font-weight: 400;
+    color: var(--text-muted);
+}
+
+.mk-create-boost {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 8px;
+    padding: 9px 12px;
+    background: #15161a;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.mk-create-boost:hover {
+    border-color: rgba(255, 204, 0, 0.4);
+}
+
+.mk-create-boost.checked {
+    background: rgba(255, 204, 0, 0.08);
+    border-color: var(--gsra-yellow);
+}
+
+#create-item-form .mk-create-boost input {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    padding: 0;
+    flex-shrink: 0;
+    accent-color: var(--gsra-yellow);
+}
+
+.mk-create-boost > i {
+    width: 20px;
+    text-align: center;
+    color: var(--gsra-yellow);
+}
+
+.mk-create-boost span {
+    flex: 1;
+    min-width: 0;
+}
+
+.mk-create-boost strong {
+    display: block;
+    font-size: 14px;
+    color: #fff;
+}
+
+.mk-create-boost small {
+    display: block;
+    font-size: 12px;
+    line-height: 1.35;
+    color: var(--text-muted);
+}
+
+.mk-create-boost em {
+    flex-shrink: 0;
+    font-style: normal;
+    font-weight: 800;
+    color: var(--gsra-yellow);
+}
+
+.mk-create-boosts-note {
+    margin: 10px 0 0;
+    max-width: none;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+@media (max-width: 600px) {
+    .mk-seller-open {
+        font-size: 0;
+    }
+    .mk-seller-open i {
+        font-size: 13px;
+    }
+    .mk-create-boost {
+        gap: 10px;
+        padding: 8px 10px;
     }
 }

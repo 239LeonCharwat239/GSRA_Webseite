@@ -308,7 +308,25 @@ const GSRA_PLANS = {
 };
 const planCache = new Map();
 window.GSRA_PLANS = GSRA_PLANS;
-window.showPlanBadge = async (target, userId) => {
+// „Zuletzt online“ (auf allen GSRA-Seiten gemessen): Freunde sehen die Uhrzeit, alle anderen nur den Tag.
+// Ergebnis: { online, text } oder null (nicht angemeldet, blockiert, SQL fehlt, noch nie online)
+window.lastSeenInfo = async (userId) => {
+    const client = window.supabaseClient || window.supabase;
+    if (!client || !userId) return null;
+    const { data, error } = await client.rpc("last_seen_of", { _user: userId });
+    if (error || !data?.last_seen_at) return null;
+    if (data.online) return { online: true, text: "Online" };
+    const seen = new Date(data.last_seen_at);
+    const day = seen.toDateString() === new Date().toDateString() ? "heute"
+        : seen.toDateString() === new Date(Date.now() - 86400000).toDateString() ? "gestern" : null;
+    const time = seen.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+    const minutes = Math.round((Date.now() - seen.getTime()) / 60000);
+    if (data.exact && minutes < 60) return { online: false, text: `Zuletzt online vor ${Math.max(1, minutes)} Min.` };
+    if (day) return { online: false, text: data.exact ? `Zuletzt online ${day} um ${time}` : `Zuletzt online ${day}` };
+    return { online: false, text: `Zuletzt online am ${seen.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })}` };
+};
+
+window.showPlanBadge = async (target, userId, { link = true } = {}) => {
     const client = window.supabaseClient || window.supabase;
     if (!target || !userId || !client) return;
     target.dataset.planUser = userId;
@@ -318,8 +336,8 @@ window.showPlanBadge = async (target, userId) => {
     const plan = await planCache.get(userId);
     // Ohne die Zahlungs-Tabellen (SQL noch nicht ausgeführt) oder bei einem anderen Profil inzwischen: kein Abzeichen
     if (!GSRA_PLANS[plan] || target.dataset.planUser !== userId) return;
-    const badge = document.createElement("a");
-    badge.href = "abo.html";
+    const badge = document.createElement(link ? "a" : "span");
+    if (link) badge.href = "abo.html";
     badge.className = `plan-badge ${plan}`;
     badge.title = `Abo: ${GSRA_PLANS[plan].name}`;
     badge.innerHTML = `<i class="fa-solid ${GSRA_PLANS[plan].icon}"></i>`;

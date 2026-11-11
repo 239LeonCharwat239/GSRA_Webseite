@@ -44,71 +44,19 @@
             <p>Paddock ist kostenlos und bleibt es. Mit Pole und Alliance schaltest du die exklusiven Werkzeuge der GSRA frei – monatlich abgerechnet und jederzeit kündbar.</p>
         </section>
 
+        <!-- Einladung in ein Alliance-Team (abo.html?team=…) -->
+        <section id="aboInvite" class="abo-invite" hidden></section>
+
         <!-- Eigenes Abo (nur angemeldet, füllt abo.js) -->
         <section id="aboMine" class="abo-mine" hidden></section>
 
-        <!-- Die drei Stufen -->
-        <section class="abo-plans">
-            <article class="abo-plan paddock" data-plan="paddock">
-                <div class="abo-plan-head">
-                    <span class="abo-plan-icon"><i class="fa-solid fa-flag-checkered"></i></span>
-                    <h2>Paddock</h2>
-                    <p class="abo-plan-for">Für alle Fahrer der Community</p>
-                </div>
-                <div class="abo-plan-price"><strong>0 €</strong><span>kostenlos</span></div>
-                <ul class="abo-plan-features">
-                    <li><i class="fa-solid fa-check"></i> Messenger, Gruppen und Foren</li>
-                    <li><i class="fa-solid fa-check"></i> Marktplatz: kaufen und verkaufen</li>
-                    <li><i class="fa-solid fa-check"></i> Setups herunterladen und teilen</li>
-                    <li><i class="fa-solid fa-check"></i> Nachschlagewerk und Rennkalender</li>
-                    <li class="off"><i class="fa-solid fa-xmark"></i> Pro Setups</li>
-                    <li class="off"><i class="fa-solid fa-xmark"></i> Telemetry-Tool</li>
-                    <li class="off"><i class="fa-solid fa-xmark"></i> Stint-Planer</li>
-                    <li class="off"><i class="fa-solid fa-xmark"></i> Weitere exklusive Features</li>
-                </ul>
-                <div class="abo-plan-action" data-action-for="paddock"></div>
-            </article>
-
-            <article class="abo-plan pole" data-plan="pole">
-                <span class="abo-plan-ribbon">Für Ehrgeizige</span>
-                <div class="abo-plan-head">
-                    <span class="abo-plan-icon"><i class="fa-solid fa-stopwatch"></i></span>
-                    <h2>Pole</h2>
-                    <p class="abo-plan-for">Für ambitionierte Fahrer</p>
-                </div>
-                <div class="abo-plan-price"><strong>8,49 €</strong><span>pro Monat</span></div>
-                <ul class="abo-plan-features">
-                    <li><i class="fa-solid fa-check"></i> Alles aus Paddock</li>
-                    <li><i class="fa-solid fa-check"></i> Pro Setups</li>
-                    <li><i class="fa-solid fa-check"></i> Telemetry-Tool <small>(in Entwicklung)</small></li>
-                    <li><i class="fa-solid fa-check"></i> Stint-Planer <small>(in Entwicklung)</small></li>
-                    <li><i class="fa-solid fa-check"></i> Alle weiteren exklusiven Features</li>
-                    <li><i class="fa-solid fa-check"></i> Pole-Abzeichen im Profil</li>
-                </ul>
-                <div class="abo-plan-action" data-action-for="pole"></div>
-            </article>
-
-            <article class="abo-plan alliance" data-plan="alliance">
-                <div class="abo-plan-head">
-                    <span class="abo-plan-icon"><i class="fa-solid fa-people-group"></i></span>
-                    <h2>Alliance</h2>
-                    <p class="abo-plan-for">Für Teams mit bis zu 10 Personen</p>
-                </div>
-                <div class="abo-plan-price"><strong>39,99 €</strong><span>pro Monat · ca. 4 € pro Person</span></div>
-                <ul class="abo-plan-features">
-                    <li><i class="fa-solid fa-check"></i> Alle Pole-Vorteile für bis zu 10 Personen</li>
-                    <li><i class="fa-solid fa-check"></i> Jede Person nutzt ihr eigenes GSRA-Konto</li>
-                    <li><i class="fa-solid fa-check"></i> Die Teamleitung fügt Mitglieder per GSRA-ID hinzu</li>
-                    <li><i class="fa-solid fa-check"></i> Alliance-Abzeichen im Profil</li>
-                </ul>
-                <div class="abo-plan-action" data-action-for="alliance"></div>
-            </article>
-        </section>
+        <!-- Die drei Stufen (füllt abo.js, gleiche Karten wie im Dashboard) -->
+        <section class="abo-plans" data-plan-cards></section>
 
         <!-- Marktplatz-Boni: in jedem Abo extra -->
         <section class="abo-boosts">
             <h3><i class="fa-solid fa-bolt text-yellow"></i> Marktplatz-Boni</h3>
-            <p>Einmal zahlen, gilt dauerhaft für das jeweilige Inserat – in jedem Abo zusätzlich buchbar. Du findest sie im Detailfenster deines eigenen Inserats.</p>
+            <p>Einmal zahlen, gilt dauerhaft für das jeweilige Inserat – in jedem Abo zusätzlich buchbar. Buchen kannst du sie direkt beim Erstellen eines Inserats oder später im Detailfenster deines Inserats.</p>
             <div class="abo-boost-list">
                 <div><i class="fa-solid fa-highlighter"></i><strong>Hervorheben</strong><span>Gelber Rahmen in der Liste</span><em>2,99 €</em></div>
                 <div><i class="fa-solid fa-angles-up"></i><strong>Hochschieben</strong><span>Automatisch alle 7 Tage wieder ganz oben</span><em>3,99 €</em></div>

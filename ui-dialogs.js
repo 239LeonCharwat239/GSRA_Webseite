@@ -269,3 +269,23 @@ function socialLinkLabel(link) {
         return String(link).slice(0, 60);
     }
 }
+
+// Social-Media-Links als Streifen mit dem Logo der Plattform (Profil im Messenger und im Marktplatz)
+function renderSocialLinks(container, links) {
+    container.replaceChildren();
+    const valid = (Array.isArray(links) ? links : []).map(normalizeSocialUrl).filter(Boolean);
+    container.style.display = valid.length ? "" : "none";
+    valid.forEach(link => {
+        const platform = socialPlatformOf(link);
+        const a = document.createElement("a");
+        a.className = "gsra-social-link";
+        a.href = link;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer nofollow";
+        a.style.setProperty("--platform-color", platform.color);
+        a.innerHTML = `<span class="gsra-social-icon">${socialIconHtml(platform)}</span><span class="gsra-social-text"><strong></strong><small></small></span><i class="fa-solid fa-arrow-up-right-from-square"></i>`;
+        a.querySelector("strong").textContent = platform.name;
+        a.querySelector("small").textContent = socialLinkLabel(link);
+        container.appendChild(a);
+    });
+}

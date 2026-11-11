@@ -198,6 +198,43 @@ async function refreshBoostsAfterPayment(item) {
     }
 }
 
+// Boni direkt beim Erstellen bzw. Bearbeiten: Auswahl im Formular, der Knopf zeigt den Gesamtpreis
+const BOOST_CENTS = { highlight: 299, bump: 399, top: 599 };
+let boostsReady = false;
+const createBoosts = document.getElementById("createBoosts");
+const formatCents = (cents) => (cents / 100).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+const selectedCreateBoosts = () => createBoosts && !createBoosts.hidden
+    ? [...createBoosts.querySelectorAll("input:checked")].map(input => input.value) : [];
+
+function updateSubmitLabel() {
+    if (!submitItemBtn) return;
+    const cents = selectedCreateBoosts().reduce((sum, kind) => sum + BOOST_CENTS[kind], 0);
+    submitItemBtn.innerHTML = isEditMode
+        ? (cents ? `Speichern und bezahlen · ${formatCents(cents)}` : "Änderungen Speichern")
+        : `Angebot Veröffentlichen · ${cents ? formatCents(cents) : "kostenlos"}`;
+}
+
+function renderCreateBoosts(item = null) {
+    if (!createBoosts) return;
+    const available = boostsReady && !legacyMarketplace ? BOOSTS.filter(boost => !item || !boost.active(item)) : [];
+    createBoosts.hidden = available.length === 0 || (item && (item.status || "aktiv") === "verkauft");
+    createBoosts.innerHTML = `
+        <legend><i class="fa-solid fa-bolt"></i> Mehr Sichtbarkeit <span>(optional, gilt dauerhaft)</span></legend>
+        ${available.map(boost => `
+            <label class="mk-create-boost">
+                <input type="checkbox" value="${boost.kind}">
+                <i class="fa-solid ${boost.icon}"></i>
+                <span><strong>${boost.name}</strong><small>${boost.text}</small></span>
+                <em>${boost.price}</em>
+            </label>`).join("")}
+        <p class="mk-create-boosts-note"><i class="fa-solid fa-lock"></i> Mit Boni geht es nach dem ${item ? "Speichern" : "Veröffentlichen"} direkt zur sicheren Bezahlung (Stripe). Das Angebot ist sofort sichtbar, die Boni nach der Zahlung.</p>`;
+    createBoosts.querySelectorAll("input").forEach(input => input.addEventListener("change", () => {
+        input.closest(".mk-create-boost").classList.toggle("checked", input.checked);
+        updateSubmitLabel();
+    }));
+    updateSubmitLabel();
+}
+
 // Top-Anzeigen über den Angeboten (passend zu den aktuellen Filtern, zufällige Auswahl)
 let topRequest = 0;
 async function loadTopAds(rpcArgs) {
@@ -205,6 +242,8 @@ async function loadTopAds(rpcArgs) {
     const supabase = window.supabaseClient || window.supabase;
     const requestId = ++topRequest;
     const { data, error } = await supabase.rpc("search_marketplace", { ...rpcArgs, _top_only: true, _limit: 4, _offset: 0 });
+    // Klappt die Top-Suche, ist die Bezahlung in der Datenbank eingerichtet (Boni dann auch beim Erstellen anbieten)
+    boostsReady = !error;
     if (requestId !== topRequest) return;
     const rows = error ? [] : (data || []).map(row => ({ ...row.item, _distance: row.distance_km }));
     marketplaceTop.hidden = rows.length === 0;
@@ -774,7 +813,20 @@ function openDetailModal(item) {
     if (modalSeller) modalSeller.textContent = sellerName;
     if (modalSellerAvatar) modalSellerAvatar.innerHTML = '<i class="fa-solid fa-user"></i>';
     if (modalSellerPlan) modalSellerPlan.replaceChildren();
-    if (sellerId && typeof window.showPlanBadge === "function") window.showPlanBadge(modalSellerPlan, sellerId);
+    if (sellerId && typeof window.showPlanBadge === "function") window.showPlanBadge(modalSellerPlan, sellerId, { link: false });
+    // Klick auf den Verkäufer: sein Profil (Abo, zuletzt online, weitere Angebote, Nachricht)
+    const sellerBox = document.getElementById("modalSellerBox");
+    if (sellerBox) {
+        const openSeller = () => {
+            if (sellerId && typeof openProfileCard === "function") openProfileCard(sellerId, { sellerName: modalSeller?.textContent || sellerName, itemTitle: item.title });
+        };
+        sellerBox.onclick = openSeller;
+        sellerBox.onkeydown = (e) => {
+            if (e.key !== "Enter" && e.key !== " ") return;
+            e.preventDefault();
+            openSeller();
+        };
+    }
     if (sellerId && supabase) {
         supabase.from("profiles").select("username, avatar_url").eq("id", sellerId).maybeSingle().then(({ data }) => {
             if (!data) return;
@@ -990,7 +1042,7 @@ function openCreateOrEditModal(itemToEdit = null) {
         currentEditItemId = itemToEdit.id;
         if (modalFormHeader) modalFormHeader.innerHTML = 'Artikel <span class="text-blue">Bearbeiten</span>';
         if (modalFormSubheader) modalFormSubheader.innerText = "Passe deine Angaben und Bilder an.";
-        if (submitItemBtn) submitItemBtn.innerText = "Änderungen Speichern";
+        renderCreateBoosts(itemToEdit);
 
         document.getElementById("itemTitle").value = itemToEdit.title || "";
         document.getElementById("itemCategory").value = categoryOf(itemToEdit.category) ? itemToEdit.category : "Sonstiges";
@@ -1021,7 +1073,7 @@ function openCreateOrEditModal(itemToEdit = null) {
         currentEditItemId = null;
         if (modalFormHeader) modalFormHeader.innerHTML = 'Artikel <span class="text-blue">Inserieren</span>';
         if (modalFormSubheader) modalFormSubheader.innerText = "Verkaufe dein Equipment in der GSRA-Community.";
-        if (submitItemBtn) submitItemBtn.innerText = "Angebot Veröffentlichen";
+        renderCreateBoosts(null);
 
         if (existingImagesContainer) existingImagesContainer.style.display = "none";
         document.getElementById("itemImages").required = true;
@@ -1136,10 +1188,8 @@ if (createItemForm) {
 
             if (finalImageArray.length === 0) {
                 showToast("Das Angebot muss mindestens 1 Bild enthalten.", "error");
-                if (submitItemBtn) {
-                    submitItemBtn.disabled = false;
-                    submitItemBtn.innerText = isEditMode ? "Änderungen Speichern" : "Angebot Veröffentlichen";
-                }
+                if (submitItemBtn) submitItemBtn.disabled = false;
+                updateSubmitLabel();
                 return;
             }
 
@@ -1165,17 +1215,19 @@ if (createItemForm) {
             };
             // Fehlen die neuen Spalten noch (SQL nicht ausgeführt), wird ohne sie gespeichert
             const withCoords = async (run, fields) => {
-                let { error } = await run({ ...fields, ...extras });
-                if (error && /country_code/i.test(error.message || "")) {
+                let result = await run({ ...fields, ...extras });
+                if (result.error && /country_code/i.test(result.error.message || "")) {
                     const { country_code, ...withoutCountry } = extras;
-                    ({ error } = await run({ ...fields, ...withoutCountry }));
+                    result = await run({ ...fields, ...withoutCountry });
                 }
-                if (!error || !/latitude|longitude|subcategory|manufacturer|model|torque_nm|wheel_diameter_mm|screen_size_inch|schema cache/i.test(error.message || "")) return error;
-                return (await run(fields)).error;
+                if (!result.error || !/latitude|longitude|subcategory|manufacturer|model|torque_nm|wheel_diameter_mm|screen_size_inch|schema cache/i.test(result.error.message || "")) return result;
+                return run(fields);
             };
+            const boostKinds = selectedCreateBoosts();
+            let savedId = currentEditItemId;
 
             if (isEditMode) {
-                const updateError = await withCoords((fields) => supabase.from("marketplace").update(fields).eq("id", currentEditItemId), {
+                const { error: updateError } = await withCoords((fields) => supabase.from("marketplace").update(fields).eq("id", currentEditItemId), {
                     title: title,
                     category: category,
                     condition: condition,
@@ -1188,7 +1240,7 @@ if (createItemForm) {
                 if (updateError) throw updateError;
                 showToast("Angebot erfolgreich aktualisiert!", "success");
             } else {
-                const insertError = await withCoords((fields) => supabase.from("marketplace").insert([fields]), {
+                const { data: inserted, error: insertError } = await withCoords((fields) => supabase.from("marketplace").insert([fields]).select("id"), {
                     title: title,
                     category: category,
                     condition: condition,
@@ -1201,20 +1253,23 @@ if (createItemForm) {
                 });
 
                 if (insertError) throw insertError;
-                showToast("Angebot erfolgreich erstellt!", "success");
+                savedId = inserted?.[0]?.id ?? null;
+                showToast(boostKinds.length ? "Angebot veröffentlicht – weiter zur Bezahlung der Boni …" : "Angebot erfolgreich erstellt!", "success");
             }
 
             createItemForm.reset();
             itemCreateModal.style.display = "none";
             loadMarketplaceItems();
+            // Gewählte Boni: direkt zur Bezahlung (das Angebot ist schon gespeichert und sichtbar)
+            if (boostKinds.length && savedId) {
+                await startCheckout({ kinds: boostKinds, listing_id: String(savedId) });
+            }
         } catch (error) {
             console.error("Fehler beim Speichern des Angebots:", error);
             showToast(/höchstens 100/.test(error?.message || "") ? error.message : "Fehler beim Speichern des Angebots.", "error");
         } finally {
-            if (submitItemBtn) {
-                submitItemBtn.disabled = false;
-                submitItemBtn.innerText = isEditMode ? "Änderungen Speichern" : "Angebot Veröffentlichen";
-            }
+            if (submitItemBtn) submitItemBtn.disabled = false;
+            updateSubmitLabel();
         }
     });
 }

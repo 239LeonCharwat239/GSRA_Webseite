@@ -144,13 +144,15 @@
 
                     <dl id="modalFacts" class="mk-detail-facts"></dl>
 
-                    <div class="mk-detail-seller">
+                    <!-- Klick öffnet das Profil des Verkäufers -->
+                    <div class="mk-detail-seller" id="modalSellerBox" role="button" tabindex="0" title="Profil des Verkäufers ansehen">
                         <span id="modalSellerAvatar" class="mk-seller-avatar"><i class="fa-solid fa-user"></i></span>
-                        <div>
+                        <div class="mk-seller-info">
                             <small>Verkäufer</small>
                             <strong id="modalSeller"></strong>
                             <span id="modalSellerPlan" class="plan-badge-slot"></span>
                         </div>
+                        <span class="mk-seller-open">Profil <i class="fa-solid fa-chevron-right"></i></span>
                     </div>
 
                     <div class="mk-detail-actions">
@@ -268,6 +270,9 @@
                     <input type="file" id="itemImages" accept="image/jpeg,image/png,image/webp" multiple style="padding: 6px;">
                 </div>
 
+                <!-- Boni direkt beim Erstellen (füllt marktplatz.js, nur wenn die Bezahlung eingerichtet ist) -->
+                <fieldset id="createBoosts" class="mk-create-boosts" hidden></fieldset>
+
                 <button type="submit" id="submitItemBtn" class="login-btn" style="margin-top: 10px; width: 100%;">Angebot Veröffentlichen</button>
             </form>
         </div>
@@ -291,6 +296,7 @@
     <script src="supabase-client.js"></script>
     <script src="auth-nav.js"></script>
     <script src="ui-dialogs.js"></script>
+    <script src="profil-karte.js"></script>
     <script src="marktplatz.js"></script>
 </body>
 </html>

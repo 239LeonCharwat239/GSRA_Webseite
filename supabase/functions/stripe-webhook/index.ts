@@ -64,16 +64,21 @@ Deno.serve(async (req) => {
         const user = session.metadata?.user_id;
         if (!kind || !user) break;
         if (session.mode === "payment" && session.payment_status !== "paid") break; // z. B. Lastschrift noch offen
-        const { error } = await db.rpc("stripe_apply_payment", {
-          _session_id: session.id,
-          _kind: kind,
-          _user: user,
-          _listing_id: session.metadata?.listing_id ?? null,
-          _amount_cents: session.amount_total ?? null,
-          _currency: session.currency ?? null,
-          _customer_id: session.customer ?? null,
-        });
-        if (error) throw new Error(error.message);
+        // Mehrere Boni in einer Zahlung: jeder Bonus wird einzeln verbucht (Beträge hat create-checkout mitgegeben)
+        const kinds = String(session.metadata?.kinds || kind).split(",").filter(Boolean);
+        const amounts = String(session.metadata?.amounts || "").split(",").map((a) => Number(a) || null);
+        for (const [i, k] of kinds.entries()) {
+          const { error } = await db.rpc("stripe_apply_payment", {
+            _session_id: session.id,
+            _kind: k,
+            _user: user,
+            _listing_id: session.metadata?.listing_id ?? null,
+            _amount_cents: kinds.length === 1 ? (session.amount_total ?? null) : amounts[i],
+            _currency: session.currency ?? null,
+            _customer_id: session.customer ?? null,
+          });
+          if (error) throw new Error(error.message);
+        }
         // Abo: aktuellen Stand direkt von Stripe holen und eintragen
         if (session.mode === "subscription" && session.subscription && stripeKey) {
           const res = await fetch(`https://api.stripe.com/v1/subscriptions/${session.subscription}`, {

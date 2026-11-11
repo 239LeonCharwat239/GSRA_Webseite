@@ -34,9 +34,18 @@ Deno.serve(async (req) => {
     if (!stripeKey) return json({ error: "Die Bezahlung ist noch nicht eingerichtet (STRIPE_SECRET_KEY fehlt)." }, 500);
     const site = (Deno.env.get("SITE_URL") || "https://gsra-webseite.vercel.app").replace(/\/+$/, "");
 
-    const { kind, listing_id } = await req.json().catch(() => ({}));
-    const product = PRODUCTS[kind as string];
-    if (!product) return json({ error: "Unbekanntes Produkt." }, 400);
+    // Boni: ein oder mehrere (kinds: ["highlight", "top"]), Abos: genau eines (kind: "pole" | "alliance")
+    const body = await req.json().catch(() => ({}));
+    const { listing_id } = body;
+    const kinds: string[] = Array.isArray(body.kinds) ? [...new Set(body.kinds.map(String))] : [String(body.kind || "")];
+    const kind = kinds[0];
+    const product = PRODUCTS[kind];
+    if (!product || kinds.length === 0 || kinds.length > 3 || kinds.some((k) => !PRODUCTS[k] || PRODUCTS[k].mode !== product.mode)
+        || (product.mode === "subscription" && kinds.length !== 1)) {
+      return json({ error: "Unbekanntes Produkt." }, 400);
+    }
+    // Nach dem Abo-Kauf zurück auf die Seite, von der aus gebucht wurde
+    const returnPage = body.return_page === "dashboard" ? "dashboard.html" : "abo.html";
 
     // Angemeldete Person aus dem mitgeschickten Zugangsschlüssel
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
@@ -49,8 +58,8 @@ Deno.serve(async (req) => {
       return json({ error: "Dein Konto ist gesperrt." }, 403);
     }
 
-    let successUrl = `${site}/abo.html?abo=erfolg`;
-    let cancelUrl = `${site}/abo.html?abo=abbruch`;
+    let successUrl = `${site}/${returnPage}?abo=erfolg`;
+    let cancelUrl = `${site}/${returnPage}?abo=abbruch`;
     let title = "";
 
     if (product.mode === "payment") {
@@ -59,8 +68,11 @@ Deno.serve(async (req) => {
       const { data: listing } = await admin.from("marketplace").select("*").eq("id", listing_id).maybeSingle();
       if (!listing || String(listing.user_id) !== user.id) return json({ error: "Dieses Inserat gehört nicht dir." }, 403);
       if (listing.status === "verkauft") return json({ error: "Für verkaufte Inserate gibt es keine Boni." }, 400);
-      const column = BOOST_COLUMN[kind];
-      if (listing[column]) return json({ error: "Dieser Bonus ist für das Inserat bereits aktiv." }, 400);
+      const active = kinds.filter((k) => listing[BOOST_COLUMN[k]]);
+      if (active.length) {
+        const names = active.map((k) => PRODUCTS[k].name.split(" (")[0]).join(" und ");
+        return json({ error: `${names} ${active.length > 1 ? "sind" : "ist"} für das Inserat bereits aktiv.` }, 400);
+      }
       title = String(listing.title || "").slice(0, 60);
       successUrl = `${site}/marktplatz.html?inserat=${encodeURIComponent(listing_id)}&zahlung=erfolg`;
       cancelUrl = `${site}/marktplatz.html?inserat=${encodeURIComponent(listing_id)}&zahlung=abbruch`;
@@ -78,12 +90,16 @@ Deno.serve(async (req) => {
     params.set("success_url", successUrl);
     params.set("cancel_url", cancelUrl);
     params.set("client_reference_id", user.id);
-    params.set("line_items[0][quantity]", "1");
-    params.set("line_items[0][price_data][currency]", "eur");
-    params.set("line_items[0][price_data][unit_amount]", String(product.amount));
-    params.set("line_items[0][price_data][product_data][name]", title ? `${product.name}: ${title}` : product.name);
-    if (product.mode === "subscription") params.set("line_items[0][price_data][recurring][interval]", "month");
+    kinds.forEach((k, i) => {
+      params.set(`line_items[${i}][quantity]`, "1");
+      params.set(`line_items[${i}][price_data][currency]`, "eur");
+      params.set(`line_items[${i}][price_data][unit_amount]`, String(PRODUCTS[k].amount));
+      params.set(`line_items[${i}][price_data][product_data][name]`, title ? `${PRODUCTS[k].name}: ${title}` : PRODUCTS[k].name);
+      if (product.mode === "subscription") params.set(`line_items[${i}][price_data][recurring][interval]`, "month");
+    });
     params.set("metadata[kind]", kind);
+    params.set("metadata[kinds]", kinds.join(","));
+    params.set("metadata[amounts]", kinds.map((k) => PRODUCTS[k].amount).join(","));
     params.set("metadata[user_id]", user.id);
     if (listing_id) params.set("metadata[listing_id]", String(listing_id));
     if (product.mode === "subscription") {

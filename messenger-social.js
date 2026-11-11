@@ -200,25 +200,7 @@ async function renderProfileForums(overlay, userId) {
     });
 }
 
-// Social-Media-Links als Streifen mit dem Logo der Plattform
-function renderSocialLinks(container, links) {
-    container.replaceChildren();
-    const valid = (Array.isArray(links) ? links : []).map(normalizeSocialUrl).filter(Boolean);
-    container.style.display = valid.length ? "" : "none";
-    valid.forEach(link => {
-        const platform = socialPlatformOf(link);
-        const a = document.createElement("a");
-        a.className = "gsra-social-link";
-        a.href = link;
-        a.target = "_blank";
-        a.rel = "noopener noreferrer nofollow";
-        a.style.setProperty("--platform-color", platform.color);
-        a.innerHTML = `<span class="gsra-social-icon">${socialIconHtml(platform)}</span><span class="gsra-social-text"><strong></strong><small></small></span><i class="fa-solid fa-arrow-up-right-from-square"></i>`;
-        a.querySelector("strong").textContent = platform.name;
-        a.querySelector("small").textContent = socialLinkLabel(link);
-        container.appendChild(a);
-    });
-}
+// renderSocialLinks (Social-Media-Links als Streifen) steht jetzt in ui-dialogs.js – auch das Marktplatz-Profil nutzt sie
 
 function renderProfileContent(overlay, userId, context) {
     const profile = profileCache[userId] || {};
@@ -262,12 +244,22 @@ function renderProfileContent(overlay, userId, context) {
         meta.appendChild(since);
     }
 
-    // Online-Status und „Spielt gerade …“ (nur für Freunde und dich selbst sichtbar)
+    // Online-Status auf allen GSRA-Seiten gemessen. Freunde (und du selbst) sehen die Uhrzeit und „Spielt gerade …“,
+    // alle anderen nur den Tag, an dem die Person zuletzt online war
     const presence = overlay.querySelector(".gsra-profile-presence");
     const seen = typeof lastSeenText === "function" ? lastSeenText(userId) : "";
     const game = typeof currentGameOf === "function" ? currentGameOf(userId) : null;
     presence.replaceChildren();
     presence.style.display = seen ? "" : "none";
+    if (!seen && typeof window.lastSeenInfo === "function") {
+        window.lastSeenInfo(userId).then(info => {
+            if (!info || !document.body.contains(overlay) || presence.childElementCount) return;
+            presence.className = `gsra-profile-presence${info.online ? " online" : ""}`;
+            presence.innerHTML = `<span class="gsra-presence-dot"></span><span class="gsra-presence-text"></span>`;
+            presence.querySelector(".gsra-presence-text").textContent = info.text;
+            presence.style.display = "";
+        }, () => {});
+    }
     if (seen) {
         const online = isUserOnline(userId);
         presence.className = `gsra-profile-presence${online ? " online" : ""}`;

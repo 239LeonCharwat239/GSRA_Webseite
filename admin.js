@@ -248,14 +248,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (currentTab === "sperren") return renderBans();
 
         const statuses = currentTab === "offen" ? ["offen"] : ["verwarnt", "gesperrt", "verworfen"];
-        const { data: reports, error } = await client.from("reports").select("*").in("status", statuses)
-            .order("created_at", { ascending: currentTab === "offen" }).limit(100);
+        let query = client.from("reports").select("*").in("status", statuses);
+        // Erledigte Meldungen verschwinden nach zwei Wochen aus der Liste (in der Datenbank bleiben sie als Nachweis)
+        if (currentTab !== "offen") query = query.gte("resolved_at", new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString());
+        const { data: reports, error } = await query.order("created_at", { ascending: currentTab === "offen" }).limit(100);
         if (error) {
             list.innerHTML = `<div class="admin-empty"><i class="fa-solid fa-database"></i> Die Moderations-Tabellen fehlen noch – bitte die SQL in Supabase ausführen. (${escapeHtml(error.message)})</div>`;
             return;
         }
         if (!reports || reports.length === 0) {
-            list.innerHTML = `<div class="admin-empty"><i class="fa-solid fa-mug-hot"></i> ${currentTab === "offen" ? "Keine offenen Meldungen – alles ruhig." : "Noch keine erledigten Meldungen."}</div>`;
+            list.innerHTML = `<div class="admin-empty"><i class="fa-solid fa-mug-hot"></i> ${currentTab === "offen" ? "Keine offenen Meldungen – alles ruhig." : "Keine erledigten Meldungen in den letzten 14 Tagen."}</div>`;
             return;
         }
 
