@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Setups | GSRA</title>
+    <title>Setup Hub | GSRA</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -18,7 +18,7 @@
             <img src="GSRA_Logo_ohne Hintergrund.png" alt="GSRA Logo" class="logo">
         </a>
         <div class="header-slogan">
-            <span class="text-blue">UNITED BY SPEED.</span> 
+            <span class="text-blue">UNITED BY SPEED.</span>
             <span class="text-yellow">DRIVEN GLOBALLY.</span>
         </div>
     </div>
@@ -36,64 +36,114 @@
     </nav>
 </header>
 
-<div class="container">
-    <section class="hero-section">
-        <h1 class="hero-title"><span class="text-blue">SETUPS</span></h1>
-        <p class="hero-subtitle text-yellow">Lade erprobte .sto-Dateien herunter oder teile deine eigenen Abstimmungen.</p>
+<main class="container sh-page">
+    <section class="sh-hero">
+        <div>
+            <h1 class="hero-title">Setup <span class="text-blue">Hub</span></h1>
+            <p>Setups für 17 Simulationen – geteilt von der Community, bewertet von euch. Pro Setups von Profis gibt es mit Pole und Alliance.</p>
+        </div>
+        <button type="button" id="openUploadBtn" class="mk-create-btn"><i class="fa-solid fa-file-arrow-up"></i> Setup hochladen</button>
     </section>
 
-    <!-- UPLOAD CARD -->
-    <div class="card" style="max-width: 800px; margin: 0 auto 30px auto;">
-        <h3><i class="fa-solid fa-file-arrow-up text-blue"></i> .sto Setup-Datei hochladen</h3>
-        
-        <form id="setupUploadForm" style="margin-top: 20px; display: flex; flex-direction: column; gap: 15px;">
-            <div>
-                <label style="display: block; text-align: left; margin-bottom: 5px; font-size: 13px; color: var(--text-muted);">Simulation</label>
-                <select id="simSelect" required style="width: 100%; padding: 12px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
-                    <option value="iRacing">iRacing</option>
-                    <option value="ACC">Assetto Corsa Competizione</option>
-                    <option value="Assetto Corsa">Assetto Corsa</option>
-                    <option value="Le Mans Ultimate">Le Mans Ultimate</option>
-                    <option value="Automobilista 2">Automobilista 2</option>
-                </select>
-            </div>
+    <!-- Hinweis auf Pro Setups (nur ohne Abo) -->
+    <a href="abo.html" id="proTeaser" class="sh-teaser" hidden>
+        <i class="fa-solid fa-crown"></i>
+        <span><strong>Pro Setups von bezahlten Profis</strong> – erprobt für Quali und Rennen. Freigeschaltet mit Pole oder Alliance.</span>
+        <i class="fa-solid fa-arrow-right"></i>
+    </a>
 
-            <div style="text-align: left;">
-                <label style="display: block; margin-bottom: 5px; font-size: 13px; color: var(--text-muted);">Fahrzeug</label>
+    <!-- Filter -->
+    <section class="sh-toolbar">
+        <div class="sh-search">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="searchSetup" placeholder="Fahrzeug, Strecke oder Fahrer suchen …" autocomplete="off">
+        </div>
+        <div class="sh-kinds" role="group" aria-label="Art der Setups">
+            <button type="button" class="active" data-kind="all">Alle</button>
+            <button type="button" data-kind="community">Community</button>
+            <button type="button" data-kind="pro"><i class="fa-solid fa-crown"></i> Pro</button>
+        </div>
+        <select id="sortSetups" aria-label="Sortierung">
+            <option value="best">Beste Bewertung</option>
+            <option value="new">Neueste zuerst</option>
+        </select>
+    </section>
+    <div id="simChips" class="sh-chips" role="group" aria-label="Simulation"></div>
+
+    <div class="sh-list-head"><span id="setupCount"></span></div>
+    <div id="setupList" class="sh-grid">
+        <p class="sh-empty">Lade Setups …</p>
+    </div>
+</main>
+
+<!-- SETUP HOCHLADEN -->
+<div id="uploadModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content sh-modal">
+        <button class="modal-close" type="button" data-close-modal="uploadModal">&times;</button>
+        <h2>Setup <span class="text-blue">hochladen</span></h2>
+        <form id="setupUploadForm" class="sh-form">
+            <div class="sh-row">
+                <div>
+                    <label for="simSelect">Simulation*</label>
+                    <select id="simSelect" required></select>
+                </div>
+                <div>
+                    <label for="setupTypeSelect">Art des Setups</label>
+                    <select id="setupTypeSelect"></select>
+                </div>
+            </div>
+            <p id="formatHint" class="sh-format"></p>
+
+            <div>
+                <label for="carInput">Fahrzeug*</label>
                 <div class="combo-box-container">
-                    <input type="text" id="carInput" class="combo-box-input" placeholder="Fahrzeug suchen oder eingeben..." required autocomplete="off">
+                    <input type="text" id="carInput" class="combo-box-input" placeholder="Fahrzeug suchen oder eingeben …" required autocomplete="off" maxlength="120">
                     <div id="carDropdown" class="combo-box-dropdown"></div>
                 </div>
             </div>
-
-            <div style="text-align: left;">
-                <label style="display: block; margin-bottom: 5px; font-size: 13px; color: var(--text-muted);">Strecke & Layout</label>
+            <div>
+                <label for="trackInput">Strecke &amp; Layout*</label>
                 <div class="combo-box-container">
-                    <input type="text" id="trackInput" class="combo-box-input" placeholder="Strecke oder Layout suchen..." required autocomplete="off">
+                    <input type="text" id="trackInput" class="combo-box-input" placeholder="Strecke oder Layout suchen …" required autocomplete="off" maxlength="120">
                     <div id="trackDropdown" class="combo-box-dropdown"></div>
                 </div>
             </div>
 
-            <div style="text-align: left;">
-                <label style="display: block; margin-bottom: 5px; font-size: 13px; color: var(--text-muted);">Wähle die .sto Datei aus:</label>
-                <input type="file" id="setupFile" accept=".sto" required style="width: 100%; padding: 10px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
+            <div id="fileField">
+                <label for="setupFile">Setup-Datei*</label>
+                <input type="file" id="setupFile">
             </div>
 
-            <button type="submit" class="btn-yellow" style="margin-top: 10px; padding: 12px; font-weight: bold; cursor: pointer; border: none; border-radius: 4px; background: var(--gsra-yellow); color: #000;">SETUP VERÖFFENTLICHEN</button>
-            <p id="uploadStatus" style="font-size: 14px; margin-top: 5px;"></p>
+            <div id="manualField" hidden>
+                <label for="manualValues">Werte der Einstellungen</label>
+                <textarea id="manualValues" rows="6" maxlength="5000" placeholder="z. B. Frontflügel: 30 · Heckflügel: 25 · Differential (an/aus): 60 / 55 · Reifendruck vorne: 23,5 psi …"></textarea>
+                <label for="screenshotFiles">Screenshots der Einstellungen <span>(optional, bis zu 5 Bilder, JPG/PNG/WebP)</span></label>
+                <input type="file" id="screenshotFiles" accept="image/jpeg,image/png,image/webp" multiple>
+            </div>
+
+            <div>
+                <label for="setupDescription">Beschreibung <span>(optional)</span></label>
+                <textarea id="setupDescription" rows="2" maxlength="500" placeholder="z. B. stabil im Heck, für Sprintrennen bei trockener Strecke"></textarea>
+            </div>
+
+            <label id="proOption" class="sh-pro-option" hidden>
+                <input type="checkbox" id="proCheck">
+                <span><strong><i class="fa-solid fa-crown"></i> Als Pro Setup veröffentlichen</strong><small>Nur für Abonnenten (Pole und Alliance) sichtbar und herunterladbar.</small></span>
+            </label>
+
+            <button type="submit" class="login-btn sh-submit">Setup veröffentlichen</button>
+            <p id="uploadStatus" class="sh-status"></p>
         </form>
     </div>
+</div>
 
-    <!-- LISTE DER SETUPS -->
-    <div class="card" style="max-width: 800px; margin: 0 auto;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-            <h3 style="margin: 0;"><i class="fa-solid fa-download text-yellow"></i> Verfügbare Team-Setups</h3>
-            <input type="text" id="searchSetup" placeholder="Suchen..." style="padding: 6px 12px; background: rgba(0,0,0,0.4); border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px; width: 180px;">
-        </div>
-
-        <ul id="setupList" style="list-style: none; padding: 0; margin: 0; text-align: left;">
-            <li style="color: var(--text-muted); text-align: center; padding: 15px;">Lade Setups...</li>
-        </ul>
+<!-- WERTE UND SCREENSHOTS (Spiele ohne Setup-Datei) -->
+<div id="detailModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content sh-modal">
+        <button class="modal-close" type="button" data-close-modal="detailModal">&times;</button>
+        <h2 id="detailTitle" class="sh-detail-title"></h2>
+        <p id="detailSub" class="sh-detail-sub"></p>
+        <div id="detailBody"></div>
     </div>
 </div>
 

@@ -1,3 +1,6 @@
+/* =========================================
+   GSRA - Setup Hub (Setups teilen, bewerten, Pro Setups für Abonnenten)
+========================================= */
 let currentUser = null;
 let isAdmin = false;
 let loadedSetups = [];
@@ -358,9 +361,48 @@ function setupComboBox(inputId, dropdownId, getListFn, isTrack = false) {
     });
 }
 
+// ==========================================================================
+// SETUP HUB: Simulationen, Formate, Pro Setups
+// ==========================================================================
+
+// Simulationen mit erlaubter Dateiendung ('' = keine Datei: Werte eintragen oder Screenshots hochladen).
+// Die Schlüssel stimmen mit der Datenbank (setup_allowed_ext) überein – dort wird ebenfalls geprüft.
+const SIMS = [
+    { key: "iRacing", label: "iRacing", ext: "sto" },
+    { key: "ACC", label: "Assetto Corsa Competizione", ext: "json" },
+    { key: "Assetto Corsa", label: "Assetto Corsa", ext: "ini" },
+    { key: "Assetto Corsa EVO", label: "Assetto Corsa EVO", ext: "ini" },
+    { key: "Le Mans Ultimate", label: "Le Mans Ultimate", ext: "svm" },
+    { key: "rFactor 2", label: "rFactor 2", ext: "svm" },
+    { key: "Automobilista 2", label: "Automobilista 2", ext: "svm" },
+    { key: "RaceRoom", label: "RaceRoom Racing Experience", ext: "usr" },
+    { key: "Rennsport", label: "Rennsport", ext: "json" },
+    { key: "BeamNG.drive", label: "BeamNG.drive", ext: "pc" },
+    { key: "Richard Burns Rally", label: "Richard Burns Rally (RSF)", ext: "ini" },
+    { key: "F1 26", label: "F1 26", ext: "" },
+    { key: "F1 25", label: "F1 25", ext: "" },
+    { key: "F1 24", label: "F1 24", ext: "" },
+    { key: "F1 23", label: "F1 23", ext: "" },
+    { key: "EA SPORTS WRC", label: "EA SPORTS WRC", ext: "" },
+    { key: "DiRT Rally 2.0", label: "DiRT Rally 2.0", ext: "" }
+];
+const simOf = (key) => SIMS.find(s => s.key === key) || null;
+const simLabel = (key) => simOf(key)?.label || key || "iRacing";
+const SETUP_TYPES = ["Allround", "Qualifying", "Rennen", "Nass"];
+const IMAGE_EXT = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+const MAX_SCREENSHOTS = 5;
+
+let hubFilter = { sim: "all", kind: "all", sort: "best", search: "" };
+let canSeePro = false;
+let isProCreator = false;
+let hubReady = true;            // false, solange das SQL „Setup Hub“ fehlt (dann wie bisher, ohne Pro und ohne Werte)
+let uploaderNames = {};
+
 document.addEventListener('DOMContentLoaded', async () => {
     const simSelect = document.getElementById('simSelect');
-    
+    simSelect.innerHTML = SIMS.map(s => `<option value="${escapeHtml(s.key)}">${escapeHtml(s.label)}</option>`).join('');
+    document.getElementById('setupTypeSelect').innerHTML = SETUP_TYPES.map(t => `<option value="${t}">${t}</option>`).join('');
+
     function updateListsForSim(sim) {
         if (sim === 'iRacing') {
             currentTrackList = IRACING_TRACKS;
@@ -374,249 +416,367 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         document.getElementById('carInput').value = '';
         document.getElementById('trackInput').value = '';
+        updateFormatFields(sim);
     }
-
-    if (simSelect) {
-        simSelect.addEventListener('change', (e) => {
-            updateListsForSim(e.target.value);
-        });
-    }
-
+    simSelect.addEventListener('change', (e) => updateListsForSim(e.target.value));
     setupComboBox('trackInput', 'trackDropdown', () => currentTrackList, true);
     setupComboBox('carInput', 'carDropdown', () => currentCarList, false);
-
-    const uploadForm = document.getElementById('setupUploadForm');
-    const statusText = document.getElementById('uploadStatus');
-    const searchInput = document.getElementById('searchSetup');
+    updateFormatFields(simSelect.value);
 
     const { data: { user } } = await supabase.auth.getUser();
     currentUser = user;
-
     if (user) {
-        const { data: profile } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', user.id)
-            .single();
-        if (profile && profile.role === 'admin') {
-            isAdmin = true;
-        }
+        const [{ data: profile }, plan, creator] = await Promise.all([
+            supabase.from('profiles').select('role').eq('id', user.id).maybeSingle(),
+            supabase.rpc('plan_of', { _user: user.id }),
+            supabase.rpc('is_pro_creator', { _user: user.id })
+        ]);
+        isAdmin = profile?.role === 'admin';
+        isProCreator = !creator.error && creator.data === true;
+        hubReady = !creator.error;
+        canSeePro = isAdmin || isProCreator || ['pole', 'alliance'].includes(plan.data);
     }
+    document.getElementById('proOption').hidden = !(hubReady && (isProCreator || isAdmin));
+    document.getElementById('proTeaser').hidden = canSeePro || !hubReady;
 
-    if (uploadForm) {
-        uploadForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            if (!currentUser) {
-                showToast('Bitte melde dich an, um Setups hochzuladen.', 'error');
-                return;
-            }
-
-            const sim = document.getElementById('simSelect').value;
-            const car = document.getElementById('carInput').value.trim();
-            const track = document.getElementById('trackInput').value.trim();
-            const fileInput = document.getElementById('setupFile');
-            const file = fileInput.files[0];
-
-            if (!car || !track || !file) {
-                showToast('Bitte alle Felder ausfüllen!', 'error');
-                return;
-            }
-
-            if (file.size > 5 * 1024 * 1024) {
-                showToast('Die Setup-Datei ist zu groß (höchstens 5 MB).', 'error');
-                return;
-            }
-
-            statusText.style.color = '#ffcc00';
-            statusText.textContent = 'Upload läuft...';
-
-            // Eigener Ordner pro Person (Pflicht im Speicher)
-            const filePath = `${currentUser.id}/${storageName(sim)}_${storageName(car)}_${storageName(track)}_${Date.now()}.sto`;
-
-            const { error: storageError } = await supabase.storage
-                .from('setups')
-                .upload(filePath, file);
-
-            if (storageError) {
-                statusText.style.color = '#ff4d4d';
-                statusText.textContent = 'Fehler beim Upload: ' + storageError.message;
-                return;
-            }
-
-            const { data: urlData } = supabase.storage.from('setups').getPublicUrl(filePath);
-
-            const { error: dbError } = await supabase
-                .from('setups')
-                .insert([
-                    { 
-                        simulation: sim,
-                        car_model: car, 
-                        track_name: track, 
-                        file_url: urlData.publicUrl, 
-                        file_name: file.name, 
-                        uploader_id: currentUser.id,
-                        likes: 0,
-                        dislikes: 0
-                    }
-                ]);
-
-            if (dbError) {
-                statusText.style.color = '#ff4d4d';
-                statusText.textContent = 'Fehler beim Speichern der Daten: ' + dbError.message;
-            } else {
-                statusText.style.color = '#00ff88';
-                statusText.textContent = 'Setup erfolgreich hochgeladen!';
-                uploadForm.reset();
-                loadSetups();
-            }
-        });
-    }
-
-    if (searchInput) {
-        searchInput.addEventListener('input', (e) => {
-            const query = e.target.value.toLowerCase();
-            const items = document.querySelectorAll('#setupList li[data-search]');
-            items.forEach(item => {
-                const match = item.getAttribute('data-search').toLowerCase().includes(query);
-                item.style.display = match ? 'flex' : 'none';
-            });
-        });
-    }
-
-    // Abstimmen und Löschen über die Knöpfe in der Liste
-    const setupList = document.getElementById('setupList');
-    if (setupList) {
-        setupList.addEventListener('click', (e) => {
-            const voteBtn = e.target.closest('button[data-vote]');
-            if (voteBtn) {
-                if (!voteBtn.disabled) voteSetup(voteBtn.dataset.id, voteBtn.dataset.vote);
-                return;
-            }
-            const deleteBtn = e.target.closest('button[data-delete]');
-            if (deleteBtn) deleteSetup(deleteBtn.dataset.delete);
-        });
-    }
-
+    renderSimChips();
+    bindHubControls();
+    bindUpload();
     loadSetups();
 });
+
+// Format-Hinweis und Felder je Simulation: Datei mit passender Endung oder Werte + Screenshots
+function updateFormatFields(simKey) {
+    const sim = simOf(simKey);
+    const hasFile = Boolean(sim?.ext);
+    const fileInput = document.getElementById('setupFile');
+    document.getElementById('fileField').hidden = !hasFile;
+    document.getElementById('manualField').hidden = hasFile;
+    fileInput.accept = hasFile ? `.${sim.ext}` : '';
+    fileInput.value = '';
+    document.getElementById('formatHint').innerHTML = hasFile
+        ? `<i class="fa-solid fa-file-circle-check"></i> Für ${escapeHtml(sim.label)} ist nur das Format <strong>.${sim.ext}</strong> erlaubt.`
+        : `<i class="fa-solid fa-pen-to-square"></i> ${escapeHtml(sim?.label || simKey)} hat keinen Setup-Export: Trage die Werte ein und/oder lade Screenshots der Einstellungen hoch.`;
+}
+
+// Schnellauswahl der Simulationen
+function renderSimChips() {
+    const box = document.getElementById('simChips');
+    const chips = [{ key: 'all', label: 'Alle' }, ...SIMS.map(s => ({ key: s.key, label: s.key }))];
+    box.innerHTML = chips.map(c => `<button type="button" class="sh-chip${hubFilter.sim === c.key ? ' active' : ''}" data-sim="${escapeHtml(c.key)}">${escapeHtml(c.label)}</button>`).join('');
+}
+
+function bindHubControls() {
+    document.getElementById('simChips').addEventListener('click', (e) => {
+        const chip = e.target.closest('[data-sim]');
+        if (!chip) return;
+        hubFilter.sim = chip.dataset.sim;
+        renderSimChips();
+        renderSetups();
+    });
+    document.querySelectorAll('[data-kind]').forEach(btn => btn.addEventListener('click', () => {
+        hubFilter.kind = btn.dataset.kind;
+        document.querySelectorAll('[data-kind]').forEach(b => b.classList.toggle('active', b === btn));
+        renderSetups();
+    }));
+    document.getElementById('sortSetups').addEventListener('change', (e) => { hubFilter.sort = e.target.value; renderSetups(); });
+    let timer = null;
+    document.getElementById('searchSetup').addEventListener('input', (e) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => { hubFilter.search = e.target.value.trim().toLowerCase(); renderSetups(); }, 200);
+    });
+    document.getElementById('openUploadBtn').addEventListener('click', () => {
+        if (!currentUser) return showToast('Bitte melde dich an, um Setups hochzuladen.', 'error');
+        document.getElementById('uploadModal').style.display = 'flex';
+    });
+    document.querySelectorAll('[data-close-modal]').forEach(btn => btn.addEventListener('click', () => {
+        document.getElementById(btn.dataset.closeModal).style.display = 'none';
+    }));
+    window.addEventListener('click', (e) => {
+        if (e.target.classList?.contains('modal-overlay')) e.target.style.display = 'none';
+    });
+
+    // Aktionen in der Liste: abstimmen, herunterladen, Werte ansehen, löschen
+    document.getElementById('setupList').addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+        const setup = loadedSetups.find(s => String(s.id) === btn.dataset.id);
+        if (!setup) return;
+        if (btn.dataset.action === 'like' || btn.dataset.action === 'dislike') { if (!btn.disabled) voteSetup(setup.id, btn.dataset.action); }
+        else if (btn.dataset.action === 'pro-download') downloadProFile(setup, btn);
+        else if (btn.dataset.action === 'details') openSetupDetails(setup);
+        else if (btn.dataset.action === 'delete') deleteSetup(setup);
+    });
+}
 
 async function loadSetups() {
     const list = document.getElementById('setupList');
     if (!list) return;
-
-    const [{ data, error }] = await Promise.all([
-        supabase.from('setups').select('*'),
-        loadMyVotes()
-    ]);
-
+    const [{ data, error }] = await Promise.all([supabase.from('setups').select('*'), loadMyVotes()]);
     if (error || !data) {
-        list.innerHTML = '<li style="color: #ff4d4d; text-align: center; padding: 15px;">Setups konnten nicht geladen werden.</li>';
+        list.innerHTML = '<p class="sh-empty">Setups konnten nicht geladen werden.</p>';
         return;
     }
-
-    if (data.length === 0) {
-        list.innerHTML = '<li style="color: var(--text-muted); text-align: center; padding: 15px;">Noch keine Setups hochgeladen.</li>';
-        return;
-    }
-
-    data.sort((a, b) => ((b.likes || 0) - (b.dislikes || 0)) - ((a.likes || 0) - (a.dislikes || 0)));
     loadedSetups = data;
+    const ids = [...new Set(data.map(s => s.uploader_id).filter(Boolean))];
+    if (ids.length) {
+        const { data: profiles } = await supabase.from('profiles').select('id, username').in('id', ids);
+        uploaderNames = Object.fromEntries((profiles || []).map(p => [p.id, p.username]));
+    }
+    renderSetups();
+}
 
-    list.innerHTML = data.map(item => {
-        const isOwner = currentUser && currentUser.id === item.uploader_id;
-        const canDelete = isOwner || isAdmin;
-        const simName = item.simulation || 'iRacing';
-        const likes = Number(item.likes) || 0;
-        const dislikes = Number(item.dislikes) || 0;
-        const id = escapeHtml(item.id);
-        const myVote = myVotes[item.id] || 0;
-        const voteAttrs = (vote) => isOwner
-            ? ' disabled title="Eigene Setups kannst du nicht bewerten."'
-            : myVote === vote ? ' title="Deine Stimme – nochmal klicken zum Zurücknehmen"' : '';
-        const downloadUrl = safeDownloadUrl(item.file_url);
+function renderSetups() {
+    const list = document.getElementById('setupList');
+    const score = (s) => (Number(s.likes) || 0) - (Number(s.dislikes) || 0);
+    let items = loadedSetups.filter(s => {
+        if (hubFilter.sim !== 'all' && (s.simulation || 'iRacing') !== hubFilter.sim) return false;
+        if (hubFilter.kind === 'pro' && !s.is_pro) return false;
+        if (hubFilter.kind === 'community' && s.is_pro) return false;
+        if (!hubFilter.search) return true;
+        return `${simLabel(s.simulation)} ${s.car_model} ${s.track_name} ${s.file_name} ${s.setup_type} ${s.description} ${uploaderNames[s.uploader_id] || ''}`.toLowerCase().includes(hubFilter.search);
+    });
+    items.sort(hubFilter.sort === 'new'
+        ? (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
+        : (a, b) => (Number(b.is_pro) - Number(a.is_pro)) || score(b) - score(a));
+    document.getElementById('setupCount').textContent = `${items.length} ${items.length === 1 ? 'Setup' : 'Setups'}`;
+    if (!items.length) {
+        list.innerHTML = `<div class="sh-empty"><i class="fa-solid fa-sliders"></i><strong>Keine passenden Setups</strong><span>${loadedSetups.length ? 'Probiere eine andere Simulation oder Suche.' : 'Sei der Erste und teile dein Setup mit der Community.'}</span></div>`;
+        return;
+    }
+    list.innerHTML = items.map(renderSetupCard).join('');
+}
 
-        return `
-            <li data-search="${escapeHtml(`${simName} ${item.car_model} ${item.track_name} ${item.file_name}`)}" style="padding: 12px 16px; background: rgba(0,0,0,0.3); margin-bottom: 8px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--border-subtle);">
-                <div>
-                    <span style="font-size: 11px; background: var(--gsra-blue); color: #fff; padding: 2px 6px; border-radius: 3px; font-weight: bold;">${escapeHtml(simName)}</span>
-                    <strong style="color: var(--gsra-yellow); font-size: 15px; margin-left: 6px;">${escapeHtml(item.car_model)}</strong> – <span style="color: #fff; font-size: 15px;">${escapeHtml(item.track_name)}</span>
-                    <br><small style="color: var(--text-muted); font-size: 12px;">${escapeHtml(item.file_name)}</small>
+function renderSetupCard(item) {
+    const isOwner = currentUser && currentUser.id === item.uploader_id;
+    const locked = item.is_pro && !canSeePro && !isOwner;
+    const sim = simOf(item.simulation);
+    const manual = sim ? !sim.ext : !item.file_url && !item.is_pro;
+    const likes = Number(item.likes) || 0;
+    const dislikes = Number(item.dislikes) || 0;
+    const id = escapeHtml(item.id);
+    const myVote = myVotes[item.id] || 0;
+    const voteAttrs = (vote) => isOwner ? ' disabled title="Eigene Setups kannst du nicht bewerten."'
+        : locked ? ' disabled title="Pro Setups bewerten nur Abonnenten."'
+        : myVote === vote ? ' title="Deine Stimme – nochmal klicken zum Zurücknehmen"' : '';
+    const downloadUrl = safeDownloadUrl(item.file_url);
+    const date = item.created_at ? new Date(item.created_at).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+    const uploader = uploaderNames[item.uploader_id] || 'GSRA-Mitglied';
+
+    let action;
+    if (locked) action = `<a href="abo.html" class="sh-btn locked"><i class="fa-solid fa-lock"></i> Mit Pole freischalten</a>`;
+    else if (manual) action = `<button type="button" class="sh-btn" data-action="details" data-id="${id}"><i class="fa-solid fa-list-check"></i> Werte ansehen</button>`;
+    else if (item.is_pro) action = `<button type="button" class="sh-btn" data-action="pro-download" data-id="${id}"><i class="fa-solid fa-download"></i> Download</button>`;
+    else if (downloadUrl) action = `<a href="${escapeHtml(downloadUrl)}" download class="sh-btn"><i class="fa-solid fa-download"></i> Download</a>`;
+    else action = `<span class="sh-btn disabled" title="Kein sicherer Download-Link">Download</span>`;
+
+    return `
+        <article class="sh-card${item.is_pro ? ' pro' : ''}${locked ? ' locked' : ''}">
+            <div class="sh-card-tags">
+                <span class="sh-sim">${escapeHtml(simLabel(item.simulation))}</span>
+                ${item.setup_type ? `<span class="sh-type">${escapeHtml(item.setup_type)}</span>` : ''}
+                ${item.is_pro ? '<span class="sh-pro"><i class="fa-solid fa-crown"></i> Pro</span>' : ''}
+                ${manual ? '<span class="sh-type"><i class="fa-solid fa-pen"></i> Werte</span>' : ''}
+            </div>
+            <h3 class="sh-car">${escapeHtml(item.car_model)}</h3>
+            <div class="sh-track"><i class="fa-solid fa-route"></i> ${escapeHtml(item.track_name)}</div>
+            ${item.description ? `<p class="sh-desc">${escapeHtml(item.description)}</p>` : ''}
+            <div class="sh-meta"><i class="fa-solid fa-user"></i> ${escapeHtml(uploader)}${date ? ` · ${date}` : ''}${!manual && item.file_name && !locked ? ` · <span title="${escapeHtml(item.file_name)}">${escapeHtml(item.file_name)}</span>` : ''}</div>
+            <div class="sh-actions">
+                <div class="sh-votes">
+                    <button data-action="like" data-id="${id}" class="vote-btn like-btn${myVote === 1 ? ' voted' : ''}"${voteAttrs(1)}><i class="fa-solid fa-thumbs-up"></i> ${likes}</button>
+                    <button data-action="dislike" data-id="${id}" class="vote-btn dislike-btn${myVote === -1 ? ' voted' : ''}"${voteAttrs(-1)}><i class="fa-solid fa-thumbs-down"></i> ${dislikes}</button>
                 </div>
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <div style="display: flex; align-items: center; gap: 4px;">
-                        <button data-vote="like" data-id="${id}" class="vote-btn like-btn${myVote === 1 ? ' voted' : ''}"${voteAttrs(1)}><i class="fa-solid fa-thumbs-up"></i> ${likes}</button>
-                        <button data-vote="dislike" data-id="${id}" class="vote-btn dislike-btn${myVote === -1 ? ' voted' : ''}"${voteAttrs(-1)}><i class="fa-solid fa-thumbs-down"></i> ${dislikes}</button>
-                    </div>
-                    ${downloadUrl
-                        ? `<a href="${escapeHtml(downloadUrl)}" download class="login-btn" style="padding: 6px 12px; font-size: 12px; text-decoration: none;">Download</a>`
-                        : `<span class="login-btn" title="Kein sicherer Download-Link" style="padding: 6px 12px; font-size: 12px; opacity: 0.4; cursor: not-allowed;">Download</span>`}
-                    ${canDelete ? `<button data-delete="${id}" class="btn-delete"><i class="fa-solid fa-trash-can"></i></button>` : ''}
-                </div>
-            </li>
-        `;
-    }).join('');
+                ${action}
+                ${isOwner || isAdmin ? `<button type="button" data-action="delete" data-id="${id}" class="btn-delete" title="Setup löschen"><i class="fa-solid fa-trash-can"></i></button>` : ''}
+            </div>
+        </article>`;
+}
+
+// Inhalte (Werte, Screenshots, Pfad der Pro-Datei) – bei Pro Setups gibt die Datenbank sie nur Berechtigten heraus
+async function loadContents(setup) {
+    const { data, error } = await supabase.from('setup_contents').select('*').eq('setup_id', setup.id).maybeSingle();
+    if (error) return null;
+    return data;
+}
+
+async function fileUrl(setup, path) {
+    if (setup.is_pro) {
+        const { data } = await supabase.storage.from('setups-pro').createSignedUrl(path, 300);
+        return data?.signedUrl || null;
+    }
+    return supabase.storage.from('setups').getPublicUrl(path).data.publicUrl;
+}
+
+async function downloadProFile(setup, btn) {
+    btn.disabled = true;
+    const contents = await loadContents(setup);
+    let url = null;
+    if (contents?.pro_file_path) {
+        const { data } = await supabase.storage.from('setups-pro').createSignedUrl(contents.pro_file_path, 60, { download: setup.file_name || true });
+        url = data?.signedUrl || null;
+    }
+    btn.disabled = false;
+    if (!url) return showToast('Die Datei ist gerade nicht verfügbar.', 'error');
+    window.location.href = url;
+}
+
+async function openSetupDetails(setup) {
+    const modal = document.getElementById('detailModal');
+    const body = document.getElementById('detailBody');
+    document.getElementById('detailTitle').textContent = `${setup.car_model} – ${setup.track_name}`;
+    document.getElementById('detailSub').textContent = [simLabel(setup.simulation), setup.setup_type, uploaderNames[setup.uploader_id]].filter(Boolean).join(' · ');
+    body.innerHTML = '<p class="sh-empty">Lade …</p>';
+    modal.style.display = 'flex';
+    const contents = await loadContents(setup);
+    if (!contents || (!contents.manual_values && !(contents.screenshots || []).length)) {
+        body.innerHTML = '<p class="sh-empty">Zu diesem Setup gibt es keine Werte.</p>';
+        return;
+    }
+    body.innerHTML = `
+        ${setup.description ? `<p class="sh-detail-desc"></p>` : ''}
+        ${contents.manual_values ? '<h4><i class="fa-solid fa-list-check"></i> Werte</h4><pre class="sh-values"></pre>' : ''}
+        ${(contents.screenshots || []).length ? '<h4><i class="fa-solid fa-image"></i> Screenshots</h4><div class="sh-shots"></div>' : ''}`;
+    if (setup.description) body.querySelector('.sh-detail-desc').textContent = setup.description;
+    if (contents.manual_values) body.querySelector('.sh-values').textContent = contents.manual_values;
+    const shots = body.querySelector('.sh-shots');
+    for (const path of contents.screenshots || []) {
+        const url = await fileUrl(setup, path);
+        if (!url || !/^https?:|^#/.test(url)) continue;
+        const a = document.createElement('a');
+        a.href = url;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.innerHTML = '<img alt="Screenshot der Einstellungen" loading="lazy">';
+        a.querySelector('img').src = url;
+        shots.appendChild(a);
+    }
+}
+
+// Hochladen: Datei mit passender Endung oder Werte/Screenshots; Pro Setups im privaten Speicher
+function bindUpload() {
+    const form = document.getElementById('setupUploadForm');
+    const statusText = document.getElementById('uploadStatus');
+    const submit = form.querySelector('button[type="submit"]');
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!currentUser) return showToast('Bitte melde dich an, um Setups hochzuladen.', 'error');
+        const simKey = document.getElementById('simSelect').value;
+        const sim = simOf(simKey);
+        const car = document.getElementById('carInput').value.trim();
+        const track = document.getElementById('trackInput').value.trim();
+        const setupType = document.getElementById('setupTypeSelect').value;
+        const description = document.getElementById('setupDescription').value.trim();
+        const isPro = !document.getElementById('proOption').hidden && document.getElementById('proCheck').checked;
+        const file = document.getElementById('setupFile').files[0];
+        const values = document.getElementById('manualValues').value.trim();
+        const shots = Array.from(document.getElementById('screenshotFiles').files || []);
+
+        if (!car || !track) return showToast('Bitte Fahrzeug und Strecke angeben.', 'error');
+        if (sim.ext) {
+            if (!file) return showToast(`Bitte wähle die .${sim.ext}-Datei aus.`, 'error');
+            if (!file.name.toLowerCase().endsWith(`.${sim.ext}`)) return showToast(`Für ${sim.label} sind nur .${sim.ext}-Dateien erlaubt.`, 'error');
+            if (file.size > 5 * 1024 * 1024) return showToast('Die Setup-Datei ist zu groß (höchstens 5 MB).', 'error');
+        } else {
+            if (!values && !shots.length) return showToast('Bitte trage die Werte ein oder lade mindestens einen Screenshot hoch.', 'error');
+            if (shots.length > MAX_SCREENSHOTS) return showToast(`Höchstens ${MAX_SCREENSHOTS} Screenshots.`, 'error');
+            const bad = shots.find(f => !IMAGE_EXT[f.type] || f.size > 5 * 1024 * 1024);
+            if (bad) return showToast(`„${bad.name}“ passt nicht: erlaubt sind JPG, PNG oder WebP bis 5 MB.`, 'error');
+        }
+
+        submit.disabled = true;
+        statusText.style.color = '#ffcc00';
+        statusText.textContent = 'Upload läuft …';
+        const bucket = isPro ? 'setups-pro' : 'setups';
+        const base = `${currentUser.id}/${storageName(simKey)}_${storageName(car)}_${storageName(track)}_${Date.now()}`;
+        const fail = (message) => {
+            statusText.style.color = '#ff4d4d';
+            statusText.textContent = message;
+            submit.disabled = false;
+        };
+        try {
+            const row = { simulation: simKey, car_model: car, track_name: track, uploader_id: currentUser.id, likes: 0, dislikes: 0 };
+            if (hubReady) Object.assign(row, { setup_type: setupType, description: description || null, is_pro: isPro });
+            let filePath = null;
+            if (sim.ext) {
+                filePath = `${base}.${sim.ext}`;
+                const { error: storageError } = await supabase.storage.from(bucket).upload(filePath, file);
+                if (storageError) return fail('Fehler beim Upload: ' + storageError.message);
+                row.file_name = file.name;
+                if (!isPro) row.file_url = supabase.storage.from('setups').getPublicUrl(filePath).data.publicUrl;
+            }
+            const { data: inserted, error: dbError } = await supabase.from('setups').insert([row]).select('id');
+            if (dbError) {
+                if (filePath) supabase.storage.from(bucket).remove([filePath]);
+                return fail('Fehler beim Speichern: ' + dbError.message);
+            }
+            const setupId = inserted?.[0]?.id;
+            // Werte, Screenshots bzw. Pfad der Pro-Datei
+            if (hubReady && setupId && (values || shots.length || (isPro && filePath))) {
+                const paths = [];
+                for (const [i, shot] of shots.entries()) {
+                    const path = `${base}_bild${i + 1}.${IMAGE_EXT[shot.type]}`;
+                    const { error } = await supabase.storage.from(bucket).upload(path, shot);
+                    if (!error) paths.push(path);
+                }
+                const { error: contentError } = await supabase.from('setup_contents').insert([{
+                    setup_id: setupId, manual_values: values || null, screenshots: paths, pro_file_path: isPro ? filePath : null
+                }]);
+                if (contentError) return fail('Setup gespeichert, aber die Inhalte fehlen: ' + contentError.message);
+            }
+            statusText.style.color = '#00ff88';
+            statusText.textContent = isPro ? 'Pro Setup veröffentlicht!' : 'Setup erfolgreich hochgeladen!';
+            showToast(isPro ? 'Pro Setup veröffentlicht.' : 'Setup veröffentlicht – danke fürs Teilen!', 'success');
+            form.reset();
+            updateFormatFields(document.getElementById('simSelect').value);
+            submit.disabled = false;
+            setTimeout(() => { document.getElementById('uploadModal').style.display = 'none'; statusText.textContent = ''; }, 900);
+            loadSetups();
+        } catch (err) {
+            fail('Unerwarteter Fehler: ' + err.message);
+        }
+    });
+    // Formular zurücksetzen setzt auch die Simulation zurück
+    form.addEventListener('reset', () => setTimeout(() => updateFormatFields(document.getElementById('simSelect').value), 0));
 }
 
 // Eigene Stimmen laden (jede Person sieht nur ihre eigenen)
 async function loadMyVotes() {
     myVotes = {};
     if (!currentUser) return;
-
-    const { data, error } = await supabase
-        .from('setup_votes')
-        .select('setup_id, vote')
-        .eq('user_id', currentUser.id);
-
+    const { data, error } = await supabase.from('setup_votes').select('setup_id, vote').eq('user_id', currentUser.id);
     if (error || !data) return;
     data.forEach(v => { myVotes[v.setup_id] = v.vote; });
 }
 
 async function voteSetup(setupId, type) {
-    if (!currentUser) {
-        showToast("Bitte melde dich an, um abstimmen zu können.", "error");
-        return;
-    }
-
+    if (!currentUser) return showToast("Bitte melde dich an, um abstimmen zu können.", "error");
     // Eine Stimme pro Person: dieselbe Stimme nochmal nimmt sie zurück, die andere wechselt sie
     const wanted = type === 'like' ? 1 : -1;
     const nextVote = myVotes[setupId] === wanted ? 0 : wanted;
-
-    let { error } = await supabase.rpc('vote_setup', { _setup_id: String(setupId), _vote: nextVote });
-
-    if (error && /could not find the function|schema cache/i.test(error.message || "")) {
-        // Datenbank-Funktion noch nicht eingerichtet: bisheriger Weg
-        const field = type === 'like' ? 'likes' : 'dislikes';
-        const setup = loadedSetups.find(s => String(s.id) === String(setupId));
-        const result = await supabase
-            .from('setups')
-            .update({ [field]: ((setup && Number(setup[field])) || 0) + 1 })
-            .eq('id', setupId);
-        error = result.error;
-    }
-
-    if (error) {
-        showToast("Fehler beim Abstimmen: " + error.message, "error");
-    } else {
-        loadSetups();
-    }
+    const { error } = await supabase.rpc('vote_setup', { _setup_id: String(setupId), _vote: nextVote });
+    if (error) showToast("Fehler beim Abstimmen: " + error.message, "error");
+    else loadSetups();
 }
 
-async function deleteSetup(setupId) {
+async function deleteSetup(setup) {
     const confirmed = await showDialog({
         icon: "fa-trash",
         title: "Setup löschen?",
-        message: "Möchtest du dieses Setup wirklich löschen?",
+        message: "Möchtest du dieses Setup wirklich löschen? Datei und Screenshots werden ebenfalls entfernt.",
         confirmText: "Löschen",
         cancelText: "Abbrechen",
         danger: true
     });
-    if (confirmed) {
-        const { error } = await supabase.from('setups').delete().eq('id', setupId);
-        if (error) {
-            showToast("Fehler beim Löschen: " + error.message, "error");
-        } else {
-            loadSetups();
-        }
-    }
+    if (!confirmed) return;
+    const contents = hubReady ? await loadContents(setup) : null;
+    const { error } = await supabase.from('setups').delete().eq('id', setup.id);
+    if (error) return showToast("Fehler beim Löschen: " + error.message, "error");
+    // Dateien aufräumen (nur eigene; Fehler hier sind nicht schlimm)
+    const publicPath = String(setup.file_url || '').split('/object/public/setups/')[1];
+    const bucket = setup.is_pro ? 'setups-pro' : 'setups';
+    const paths = [...(contents?.screenshots || []), contents?.pro_file_path, setup.is_pro ? null : publicPath].filter(Boolean).map(decodeURIComponent);
+    if (paths.length) supabase.storage.from(bucket).remove(paths).then(() => {}, () => {});
+    showToast("Setup gelöscht.", "success");
+    loadSetups();
 }
