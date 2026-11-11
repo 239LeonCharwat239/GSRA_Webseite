@@ -436,7 +436,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         hubReady = !creator.error;
         canSeePro = isAdmin || isProCreator || ['pole', 'alliance'].includes(plan.data);
     }
-    document.getElementById('proOption').hidden = !(hubReady && (isProCreator || isAdmin));
+    // Pro Setups veröffentlichen nur eingetragene Pro-Fahrer (Streamer, E-Sportler …) – auch Admins nicht
+    document.getElementById('proOption').hidden = !(hubReady && isProCreator);
     document.getElementById('proTeaser').hidden = canSeePro || !hubReady;
 
     renderSimChips();
