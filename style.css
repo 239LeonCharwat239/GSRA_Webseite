@@ -8580,3 +8580,9 @@ a.plan-badge:hover {
         color: #000 !important;
     }
 }
+
+/* Eigenes Abo direkt kündigen (Karte des aktuellen Abos) */
+.abo-plan-btn.ghost.cancel:hover {
+    --edge: #ff6b6b;
+    color: #ff6b6b;
+}

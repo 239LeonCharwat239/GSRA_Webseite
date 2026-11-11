@@ -22,6 +22,10 @@
         form.querySelectorAll(".kd-choice").forEach(label => label.classList.toggle("checked", label.querySelector("input").checked));
     };
     form.addEventListener("change", toggleFields);
+    // Aus dem Dashboard bzw. von der Abo-Seite: Vertrag schon ausgewählt (kuendigen.html?vertrag=pole)
+    const preset = new URLSearchParams(window.location.search).get("vertrag");
+    const presetRadio = preset && form.querySelector(`input[name="contract"][value="${preset === "alliance" ? "alliance" : "pole"}"]`);
+    if (presetRadio) presetRadio.checked = true;
     const dateInput = document.getElementById("kdDate");
     dateInput.min = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
     toggleFields();

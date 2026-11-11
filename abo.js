@@ -104,9 +104,23 @@
         document.querySelectorAll(".abo-plan-action").forEach(box => {
             const target = box.dataset.actionFor;
             box.replaceChildren();
-            const button = document.createElement(aboUser ? "button" : "a");
+            // Eigenes bezahltes Abo (Pole bzw. Alliance als Teamleitung): direkt kündigen statt „Dein aktuelles Abo“
+            const ownSub = target === plan && aboUser
+                ? (plan === "pole" ? aboMembership?.pole : plan === "alliance" && aboMembership?.team?.is_owner ? aboMembership.team : null)
+                : null;
+            const button = document.createElement(aboUser && !(ownSub && !ownSub.cancel_at_period_end) ? "button" : "a");
             button.className = "abo-plan-btn";
-            if (!aboUser) {
+            if (ownSub && ownSub.cancel_at_period_end) {
+                button.type = "button";
+                button.disabled = true;
+                button.classList.add("current");
+                button.innerHTML = `<i class="fa-solid fa-calendar-xmark"></i> Gekündigt zum ${formatDay(ownSub.current_period_end)}`;
+                button.title = "Bis dahin nutzt du alle Vorteile. Unter „Abo verwalten“ kannst du das Abo wieder fortsetzen.";
+            } else if (ownSub) {
+                button.href = `kuendigen.html?vertrag=${plan}`;
+                button.classList.add("ghost", "cancel");
+                button.innerHTML = '<i class="fa-solid fa-file-signature"></i> Abo kündigen';
+            } else if (!aboUser) {
                 button.href = loginLinkHere(target === "paddock" ? "registrieren=1&" : "");
                 button.innerHTML = target === "paddock" ? '<i class="fa-solid fa-user-plus"></i> Kostenlos registrieren'
                     : `<i class="fa-solid fa-right-to-bracket"></i> Anmelden und ${PLAN_NAMES[target]} buchen`;
@@ -116,15 +130,12 @@
                 button.classList.add("current");
                 button.innerHTML = '<i class="fa-solid fa-circle-check"></i> Dein aktuelles Abo';
             } else if (target === "paddock") {
-                // Zurück zu Paddock = Abo kündigen (im Stripe-Kundenportal)
+                // Paddock ist immer dabei – gekündigt wird direkt auf der Karte des eigenen Abos
                 button.type = "button";
+                button.disabled = true;
                 button.classList.add("ghost");
-                button.innerHTML = '<i class="fa-solid fa-gear"></i> Abo kündigen';
-                if (aboMembership?.has_customer && !isTeamMemberOnly()) button.addEventListener("click", () => openBillingPortal(button));
-                else {
-                    button.disabled = true;
-                    if (isTeamMemberOnly()) button.innerHTML = '<i class="fa-solid fa-people-group"></i> Über dein Team';
-                }
+                button.innerHTML = isTeamMemberOnly() ? '<i class="fa-solid fa-people-group"></i> Über dein Team'
+                    : '<i class="fa-solid fa-flag-checkered"></i> Immer inklusive';
             } else if (plan !== "paddock") {
                 // Wechsel zwischen Pole und Alliance: erst das laufende Abo kündigen bzw. das Team verlassen
                 button.type = "button";
@@ -134,8 +145,14 @@
                     button.innerHTML = '<i class="fa-solid fa-arrow-right-arrow-left"></i> Erst Team verlassen';
                     button.title = "Du nutzt Alliance über dein Team. Verlässt du das Team, kannst du ein eigenes Abo buchen.";
                 } else {
-                    button.innerHTML = '<i class="fa-solid fa-arrow-right-arrow-left"></i> Zum Wechseln erst kündigen';
-                    button.title = "Kündige dein aktuelles Abo unter „Abo verwalten“. Danach kannst du das andere Abo buchen.";
+                    const current = plan === "pole" ? aboMembership?.pole : aboMembership?.team;
+                    if (current?.cancel_at_period_end) {
+                        button.innerHTML = `<i class="fa-solid fa-calendar-check"></i> Buchbar ab ${formatDay(current.current_period_end)}`;
+                        button.title = "Sobald dein gekündigtes Abo ausgelaufen ist, kannst du hier wechseln.";
+                    } else {
+                        button.innerHTML = '<i class="fa-solid fa-arrow-right-arrow-left"></i> Zum Wechseln erst kündigen';
+                        button.title = "Kündige zuerst dein aktuelles Abo. Danach kannst du das andere Abo buchen.";
+                    }
                 }
             } else {
                 button.type = "button";
