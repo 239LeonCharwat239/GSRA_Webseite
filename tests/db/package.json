@@ -1,0 +1,12 @@
+{
+  "name": "gsra-datenbank-test",
+  "private": true,
+  "type": "module",
+  "description": "Nachbau-Test aller Skripte aus supabase/migrations mit PGlite (Postgres im Arbeitsspeicher)",
+  "scripts": {
+    "test": "node datenbank.test.mjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.2.17"
+  }
+}
