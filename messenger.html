@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GSRA - Messenger</title>
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@1/index.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@1.29.1/index.js" integrity="sha256-cTjVxoO7oD05h9JCsRtutTNWslWBu08vXhOeHZLpG8E=" crossorigin="anonymous"></script>
     <!-- Emoji-Auswahl auf Deutsch ("Suchen", Kategorien) – gilt auch für die Reaktions-Auswahl -->
     <script type="module">
-        import de from "https://cdn.jsdelivr.net/npm/emoji-picker-element@1/i18n/de.js";
+        import de from "https://cdn.jsdelivr.net/npm/emoji-picker-element@1.29.1/i18n/de.js";
         window.gsraEmojiI18n = de;
         document.querySelectorAll("emoji-picker").forEach(picker => { picker.i18n = de; });
     </script>
@@ -186,7 +186,7 @@
                     </div>
 
                     <div id="emojiPickerWrapper" class="emoji-picker-container">
-                        <emoji-picker class="dark" locale="de" data-source="https://cdn.jsdelivr.net/npm/emoji-picker-element-data@1/de/cldr/data.json"></emoji-picker>
+                        <emoji-picker class="dark" locale="de" data-source="https://cdn.jsdelivr.net/npm/emoji-picker-element-data@1.8.0/de/cldr/data.json"></emoji-picker>
                     </div>
 
                     <!-- Antwort-Vorschau Banner -->
@@ -282,7 +282,7 @@
         </div>
     </section>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha256-7jvo3hkrl8sdc9HpXWuCux9rZYwPl8TvdX/DMZlu09M=" crossorigin="anonymous"></script>
     <script src="supabase-client.js"></script>
     <script src="auth-nav.js"></script>
     <script src="ui-dialogs.js"></script>

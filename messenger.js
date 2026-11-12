@@ -50,7 +50,7 @@ const ADMIN_DELETED_TEXT = "Diese Nachricht wurde von einem Gruppenadmin gelösc
 const DELETED_TEXTS = ["Du hast diese Nachricht gelöscht", "Diese Nachricht wurde gelöscht", ADMIN_DELETED_TEXT];
 
 // Emoji-Auswahl auf Deutsch (Suche, Kategorien)
-const EMOJI_DATA_SOURCE_DE = "https://cdn.jsdelivr.net/npm/emoji-picker-element-data@1/de/cldr/data.json";
+const EMOJI_DATA_SOURCE_DE = "https://cdn.jsdelivr.net/npm/emoji-picker-element-data@1.8.0/de/cldr/data.json";
 
 // Persönliche Willkommensnachricht im offiziellen Forum: Sie wird nur im Browser des jeweiligen Mitglieds
 // erzeugt (nicht in der Datenbank gespeichert) und ist deshalb ausschließlich für dieses Mitglied sichtbar.
