@@ -289,3 +289,163 @@ function renderSocialLinks(container, links) {
         container.appendChild(a);
     });
 }
+
+/* =========================================
+   Auswahllisten im GSRA-Design
+   Das <select> bleibt das echte Bedienelement (Formulare, Tastatur und Skripte funktionieren unverändert);
+   ersetzt wird nur die aufklappende Liste des Browsers. Auf Touch-Geräten bleibt die Auswahl des Geräts,
+   weil sie dort am besten bedienbar ist.
+========================================= */
+(() => {
+    const desktop = window.matchMedia("(hover: hover) and (pointer: fine)");
+    let state = null; // { select, list, items: [{ el, option }], active }
+
+    const usable = (select) => select && desktop.matches && !select.multiple && !(select.size > 1) && !select.disabled;
+
+    function close(focus = false) {
+        if (!state) return;
+        const { select, list } = state;
+        state = null;
+        list.remove();
+        select.classList.remove("gsra-select-open");
+        if (focus) select.focus({ preventScroll: true });
+    }
+
+    function setActive(index, scroll = true) {
+        if (!state || !state.items.length) return;
+        const next = Math.max(0, Math.min(state.items.length - 1, index));
+        state.items.forEach((item, i) => item.el.classList.toggle("active", i === next));
+        state.active = next;
+        if (scroll) state.items[next].el.scrollIntoView({ block: "nearest" });
+    }
+
+    // Nächste wählbare Zeile in eine Richtung (deaktivierte werden übersprungen)
+    function step(direction) {
+        if (!state) return;
+        let i = state.active;
+        do { i += direction; } while (state.items[i] && state.items[i].option.disabled);
+        if (state.items[i]) setActive(i);
+    }
+
+    function choose(index) {
+        if (!state) return;
+        const item = state.items[index];
+        if (!item || item.option.disabled) return;
+        const select = state.select;
+        const changed = select.value !== item.option.value || select.selectedIndex !== item.option.index;
+        close(true);
+        if (!changed) return;
+        select.selectedIndex = item.option.index;
+        select.dispatchEvent(new Event("input", { bubbles: true }));
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+
+    function place(select, list) {
+        const rect = select.getBoundingClientRect();
+        const gap = 6;
+        const below = window.innerHeight - rect.bottom - gap - 8;
+        const above = rect.top - gap - 8;
+        const wanted = Math.min(340, list.scrollHeight + 2);
+        const openUp = below < Math.min(wanted, 180) && above > below;
+        const height = Math.max(120, Math.min(wanted, openUp ? above : below));
+        list.style.maxHeight = `${height}px`;
+        list.style.minWidth = `${Math.max(rect.width, 180)}px`;
+        list.style.maxWidth = `${Math.min(440, document.documentElement.clientWidth - 16)}px`;
+        const width = list.offsetWidth;
+        list.style.left = `${Math.max(8, Math.min(rect.left, document.documentElement.clientWidth - width - 8))}px`;
+        list.style.top = openUp ? `${rect.top - gap - Math.min(height, list.offsetHeight)}px` : `${rect.bottom + gap}px`;
+        list.classList.toggle("up", openUp);
+    }
+
+    function open(select) {
+        close();
+        const list = document.createElement("div");
+        list.className = "gsra-select-list";
+        list.setAttribute("role", "listbox");
+        const items = [];
+        const addOption = (option) => {
+            if (option.hidden || option.style.display === "none") return;
+            const el = document.createElement("div");
+            el.className = "gsra-select-option";
+            el.setAttribute("role", "option");
+            el.setAttribute("aria-selected", String(option.selected));
+            if (option.disabled) el.classList.add("disabled");
+            if (option.selected) el.classList.add("selected");
+            const label = document.createElement("span");
+            label.textContent = option.label || option.textContent;
+            el.appendChild(label);
+            if (option.selected) el.insertAdjacentHTML("beforeend", '<i class="fa-solid fa-check"></i>');
+            const index = items.length;
+            el.addEventListener("mousemove", () => { if (state && state.active !== index && !option.disabled) setActive(index, false); });
+            el.addEventListener("click", () => choose(index));
+            list.appendChild(el);
+            items.push({ el, option });
+        };
+        [...select.children].forEach(child => {
+            if (child.tagName === "OPTGROUP") {
+                const group = document.createElement("div");
+                group.className = "gsra-select-group";
+                group.textContent = child.label;
+                list.appendChild(group);
+                [...child.children].forEach(addOption);
+            } else if (child.tagName === "OPTION") addOption(child);
+        });
+        if (!items.length) return;
+        // Klicks in der Liste lassen den Fokus auf dem Auswahlfeld
+        list.addEventListener("mousedown", (e) => e.preventDefault());
+        document.body.appendChild(list);
+        state = { select, list, items, active: -1 };
+        select.classList.add("gsra-select-open");
+        place(select, list);
+        const selected = items.findIndex(item => item.option.selected);
+        setActive(selected >= 0 ? selected : 0);
+    }
+
+    // Maus: die Liste des Browsers unterdrücken und die eigene zeigen
+    document.addEventListener("mousedown", (e) => {
+        const select = e.target instanceof Element ? e.target.closest("select") : null;
+        if (state && !state.list.contains(e.target) && select !== state.select) close();
+        if (!select || e.button !== 0 || !usable(select)) return;
+        e.preventDefault();
+        select.focus({ preventScroll: true });
+        if (state && state.select === select) close();
+        else open(select);
+    }, true);
+
+    // Tastatur: Leertaste, Alt+Pfeil und F4 öffnen; in der Liste Pfeile, Pos1/Ende, Enter, Escape und Tippen
+    let typed = "";
+    let typedTimer = null;
+    document.addEventListener("keydown", (e) => {
+        const select = document.activeElement;
+        if (!(select instanceof HTMLSelectElement) || !usable(select)) return;
+        const isOpen = state && state.select === select;
+        if (!isOpen) {
+            if (e.key === " " || e.key === "F4" || (e.altKey && (e.key === "ArrowDown" || e.key === "ArrowUp"))) {
+                e.preventDefault();
+                open(select);
+            }
+            return;
+        }
+        if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); close(true); }
+        else if (e.key === "ArrowDown") { e.preventDefault(); step(1); }
+        else if (e.key === "ArrowUp") { e.preventDefault(); step(-1); }
+        else if (e.key === "Home") { e.preventDefault(); state.active = -1; step(1); }
+        else if (e.key === "End") { e.preventDefault(); state.active = state.items.length; step(-1); }
+        else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); choose(state.active); }
+        else if (e.key === "Tab") choose(state.active);
+        else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            // Tippen springt zum ersten passenden Eintrag
+            e.preventDefault();
+            clearTimeout(typedTimer);
+            typed += e.key.toLowerCase();
+            typedTimer = setTimeout(() => { typed = ""; }, 700);
+            const hit = state.items.findIndex(item => !item.option.disabled && item.el.textContent.trim().toLowerCase().startsWith(typed));
+            if (hit >= 0) setActive(hit);
+        }
+    }, true);
+
+    // Schließen, sobald sich darunter etwas bewegt oder das Feld den Fokus verliert
+    window.addEventListener("scroll", (e) => { if (state && !(e.target instanceof Node && state.list.contains(e.target))) close(); }, true);
+    window.addEventListener("resize", () => close());
+    document.addEventListener("focusout", (e) => { if (state && e.target === state.select) setTimeout(() => { if (state && document.activeElement !== state.select) close(); }, 0); });
+})();
