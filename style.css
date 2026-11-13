@@ -7339,10 +7339,19 @@ a.plan-badge:hover {
 /* =========================================
    ABO-SEITE (Paddock, Pole, Alliance)
 ========================================= */
+/* Abzeichen neben Text (z. B. „Abo:“ im Dashboard, Namen in Profilen): genau auf die Mitte der Schrift */
 .plan-badge-slot.inline {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
     margin: 0 8px 0 2px;
     vertical-align: middle;
+    position: relative;
+    top: -0.1em;
+    line-height: 1;
+}
+
+.plan-badge-slot.inline .plan-badge {
+    line-height: 1.5;
 }
 
 .dash-plan-row .dash-own-link {
@@ -8467,6 +8476,26 @@ a.plan-badge:hover {
     display: block;
     font-size: 12px;
     color: var(--text-muted);
+}
+
+/* Nicht gebuchte Verträge: sichtbar, aber nicht wählbar */
+.kd-choice.disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+.kd-choice.disabled:hover { border-color: rgba(255, 255, 255, 0.08); }
+.kd-choice .kd-not-booked {
+    display: inline-block;
+    margin: 2px 0 2px;
+    padding: 1px 8px;
+    font-size: 11px;
+    font-style: normal;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--text-muted);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 999px;
 }
 
 .kd-field {

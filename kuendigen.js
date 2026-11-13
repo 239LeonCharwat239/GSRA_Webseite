@@ -40,6 +40,28 @@
         if (profile) document.getElementById("kdAccount").value = profile.gsra_id ? `${profile.username || ""} (GSRA-ID #${profile.gsra_id})`.trim() : (profile.username || "");
         const { data: m, error } = await client.rpc("my_membership");
         if (error || !m) return;
+        // Nur gebuchte Verträge sind wählbar (der Server prüft das zusätzlich)
+        const owned = new Set();
+        if (m.plan === "pole" && m.pole) owned.add("pole");
+        if (m.plan === "alliance" && m.team?.is_owner) owned.add("alliance");
+        form.querySelectorAll('input[name="contract"]').forEach(radio => {
+            const label = radio.closest(".kd-choice");
+            const isOwned = owned.has(radio.value);
+            radio.disabled = !isOwned;
+            if (!isOwned) radio.checked = false;
+            label.classList.toggle("disabled", !isOwned);
+            label.querySelector(".kd-not-booked")?.remove();
+            if (!isOwned) {
+                const note = document.createElement("em");
+                note.className = "kd-not-booked";
+                note.textContent = "nicht gebucht";
+                label.querySelector("span strong").after(note);
+            }
+        });
+        if (!owned.size) {
+            submit.disabled = true;
+            submit.title = "Zu deinem Konto läuft kein kündbarer Vertrag.";
+        }
         const rows = [];
         if (m.plan === "pole" && m.pole) {
             rows.push(["pole", `GSRA Pole · ${m.pole.cancel_at_period_end ? `bereits gekündigt zum ${day(m.pole.current_period_end)}` : `läuft bis ${day(m.pole.current_period_end)} und verlängert sich monatlich`}`]);
@@ -51,7 +73,7 @@
             rows.push(["", `Du bist Mitglied im Alliance-Team von ${m.team.owner_name || "deiner Teamleitung"}. Kündigen kann nur die Teamleitung – du kannst das Team aber jederzeit auf der Abo-Seite verlassen.`]);
         }
         if (!rows.length) {
-            mine.innerHTML = '<i class="fa-solid fa-circle-info"></i> <span>Zu deinem Konto läuft derzeit kein kostenpflichtiges Abo. Du nutzt Paddock (kostenlos).</span>';
+            mine.innerHTML = '<i class="fa-solid fa-circle-info"></i> <span>Zu deinem Konto läuft derzeit kein kostenpflichtiges Abo. Du nutzt Paddock (kostenlos) – es gibt nichts zu kündigen.</span>';
         } else {
             mine.innerHTML = '<strong><i class="fa-solid fa-file-contract"></i> Deine Verträge</strong><ul></ul>';
             rows.forEach(([contract, text]) => {

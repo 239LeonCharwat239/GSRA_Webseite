@@ -1,6 +1,7 @@
 // GSRA – Supabase Edge Function „cancel-contract“ („Verträge hier kündigen“, § 312k BGB)
 // Nimmt Kündigungen auch ohne Anmeldung an, merkt sie bei Stripe zum Ende der Laufzeit vor, hält sie mit
 // Eingangszeitpunkt in der Tabelle „cancellations“ fest und schickt eine Eingangsbestätigung per E-Mail.
+// Gekündigt werden kann nur ein Vertrag, der zum Konto (angemeldet) bzw. zur E-Mail-Adresse des Kontos wirklich läuft.
 // Benötigte Secrets: STRIPE_SECRET_KEY, SMTP_USER und SMTP_PASS (z. B. Gmail-Adresse und App-Passwort),
 // optional SMTP_HOST (Standard smtp.gmail.com) und SMTP_PORT (Standard 465 – Port 587 ist bei Supabase gesperrt).
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -105,8 +106,29 @@ Deno.serve(async (req) => {
       }
     }
 
+    const receivedAt = new Date();
+    const reference = `K-${receivedAt.toISOString().slice(0, 10).replace(/-/g, "")}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
+
+    // Kündigen lassen sich nur Verträge, die wirklich laufen (z. B. nicht Alliance, wenn nur Pole gebucht ist)
+    if (!subscriptionId) {
+      const memberText = "Du bist Mitglied eines Alliance-Teams – kündigen kann nur die Teamleitung. Du kannst das Team jederzeit auf der Abo-Seite verlassen.";
+      if (auth?.user?.id) {
+        return json({ error: memberOnly ? memberText : `Zu deinem Konto läuft kein Vertrag „${CONTRACTS[contract].replace(/ \(.*\)$/, "")}“. Kündigen kannst du nur Verträge, die du gebucht hast.` }, 400);
+      }
+      // Ohne Anmeldung: Schutz vor dem Ausprobieren fremder E-Mail-Adressen (höchstens 30 erfolglose Versuche pro Stunde)
+      const { count: failed } = await db.from("cancellations").select("id", { count: "exact", head: true })
+        .eq("status", "kein_vertrag").gte("created_at", new Date(Date.now() - 3600_000).toISOString());
+      if ((failed || 0) >= 30) return json({ error: "Gerade sind sehr viele Anfragen eingegangen. Bitte versuche es später erneut oder melde dich an." }, 429);
+      // Versuch festhalten (zählt auch für das Limit pro E-Mail-Adresse), aber nichts kündigen und keine E-Mail schicken
+      await db.from("cancellations").insert({
+        reference, created_at: receivedAt.toISOString(), user_id: userId, name, email, account_hint: accountHint,
+        contract, kind, reason, requested_date: requestedDate, status: "kein_vertrag",
+      });
+      return json({ error: memberOnly ? memberText : `Zu diesen Angaben haben wir keinen laufenden Vertrag „${CONTRACTS[contract].replace(/ \(.*\)$/, "")}“ gefunden. Bitte gib die E-Mail-Adresse deines GSRA-Kontos an oder melde dich an – dann siehst du deine Verträge.` }, 404);
+    }
+
     // Bei Stripe zum Ende der Laufzeit (bzw. zum Wunschtermin, wenn er später liegt) vormerken
-    let status = subscriptionId ? "vorgemerkt" : "kein_vertrag";
+    let status = "vorgemerkt";
     let effectiveAt: string | null = null;
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (subscriptionId && stripeKey) {
@@ -129,13 +151,11 @@ Deno.serve(async (req) => {
         console.error("Stripe-Fehler:", sub?.error?.message);
         status = "fehler";
       }
-    } else if (subscriptionId) {
+    } else {
       status = "fehler";
     }
 
     // Festhalten (Eingangszeitpunkt und Referenznummer)
-    const receivedAt = new Date();
-    const reference = `K-${receivedAt.toISOString().slice(0, 10).replace(/-/g, "")}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
     const { error: insertError } = await db.from("cancellations").insert({
       reference, created_at: receivedAt.toISOString(), user_id: userId, name, email, account_hint: accountHint,
       contract, kind, reason, requested_date: requestedDate, status, effective_at: effectiveAt, stripe_subscription_id: subscriptionId,
