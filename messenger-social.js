@@ -1089,6 +1089,8 @@ async function uploadGroupImage(chat, file) {
         showToast("Bitte wähle ein Bild (PNG, JPG, WebP oder GIF).", "error");
         return;
     }
+    // Forenbilder klein speichern (höchstens 512 px, ohne Standortdaten)
+    if (window.gsraShrinkImage) file = await window.gsraShrinkImage(file, 512, 0.88);
     if (file.size > 5 * 1024 * 1024) {
         showToast("Das Bild darf höchstens 5 MB groß sein.", "error");
         return;

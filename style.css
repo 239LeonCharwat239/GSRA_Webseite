@@ -8904,6 +8904,19 @@ a.plan-badge:hover {
     gap: 16px;
 }
 
+/* „Weitere Setups anzeigen“ über die ganze Breite unter den Karten */
+.sh-more-wrap {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: center;
+    padding: 6px 0 4px;
+}
+.sh-more-wrap .sh-more {
+    width: auto;
+    padding-left: 22px;
+    padding-right: 22px;
+}
+
 .sh-card {
     display: flex;
     flex-direction: column;

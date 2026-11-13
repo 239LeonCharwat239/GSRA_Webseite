@@ -116,6 +116,34 @@ function showDialog({ icon = "fa-circle-info", title = "", message = "", input =
     });
 }
 
+// Bilder vor dem Hochladen verkleinern (längste Seite höchstens maxSize Pixel) und Metadaten entfernen –
+// z. B. den GPS-Standort, den Handyfotos mitspeichern. Das Dateiformat bleibt gleich (wichtig für die Speicher-Regeln).
+// GIF (Animation), Videos und alles andere bleiben unverändert; bei Fehlern wird das Original genutzt.
+async function gsraShrinkImage(file, maxSize = 1600, quality = 0.85) {
+    if (!file || !/^image\/(jpeg|png|webp)$/.test(file.type) || typeof createImageBitmap !== "function") return file;
+    try {
+        const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+        const scale = Math.min(1, maxSize / Math.max(bitmap.width, bitmap.height));
+        // Kleine PNG/WebP bleiben, wie sie sind; JPEG wird immer neu gespeichert (entfernt Standort und Kameradaten)
+        if (scale === 1 && file.type !== "image/jpeg") {
+            bitmap.close?.();
+            return file;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+        canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+        canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        bitmap.close?.();
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, file.type, quality));
+        if (!blob || blob.type !== file.type) return file;
+        const ext = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" }[file.type];
+        return new File([blob], `${file.name.replace(/\.[^.]+$/, "") || "bild"}.${ext}`, { type: file.type, lastModified: Date.now() });
+    } catch (err) {
+        return file;
+    }
+}
+window.gsraShrinkImage = gsraShrinkImage;
+
 // Kurze Hinweise unten rechts
 function showToast(message, type = "info") {
     let container = document.getElementById("toastContainer");

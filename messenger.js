@@ -3030,7 +3030,9 @@ if (chatForm) {
             }
 
             let mediaUrls = [];
-            for (const file of files) {
+            for (const original of files) {
+                // Fotos verkleinern (höchstens 1920 px, ohne Standortdaten); Videos bleiben unverändert
+                const file = window.gsraShrinkImage ? await window.gsraShrinkImage(original, 1920) : original;
                 const fileExt = file.name.split('.').pop();
                 const fileName = `chat_${Date.now()}_${Math.random().toString(36).substring(2,7)}.${fileExt}`;
                 const { error: uploadErr } = await supabase.storage.from("chat_attachments").upload(fileName, file);

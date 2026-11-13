@@ -510,10 +510,25 @@ function bindHubControls() {
     });
 }
 
+// Alle Setups in Blöcken zu je 1000 laden (Supabase liefert höchstens 1000 Zeilen pro Abfrage)
+async function fetchAllSetups() {
+    const all = [];
+    for (let from = 0; ; from += 1000) {
+        const { data, error } = await supabase.from('setups').select('*').order('created_at', { ascending: false }).range(from, from + 999);
+        if (error) return { data: null, error };
+        all.push(...(data || []));
+        if (!data || data.length < 1000) return { data: all, error: null };
+    }
+}
+
+// Seitenweise anzeigen: erst 24 Karten, dann jeweils 24 weitere
+const SETUP_PAGE = 24;
+let shownSetups = SETUP_PAGE;
+
 async function loadSetups() {
     const list = document.getElementById('setupList');
     if (!list) return;
-    const [{ data, error }] = await Promise.all([supabase.from('setups').select('*'), loadMyVotes()]);
+    const [{ data, error }] = await Promise.all([fetchAllSetups(), loadMyVotes()]);
     if (error || !data) {
         list.innerHTML = '<p class="sh-empty">Setups konnten nicht geladen werden.</p>';
         return;
@@ -524,10 +539,12 @@ async function loadSetups() {
         const { data: profiles } = await supabase.from('profiles').select('id, username').in('id', ids);
         uploaderNames = Object.fromEntries((profiles || []).map(p => [p.id, p.username]));
     }
-    renderSetups();
+    renderSetups(false);
 }
 
-function renderSetups() {
+// resetPaging: bei neuem Filter, neuer Suche oder Sortierung wieder oben mit 24 Karten beginnen
+function renderSetups(resetPaging = true) {
+    if (resetPaging) shownSetups = SETUP_PAGE;
     const list = document.getElementById('setupList');
     const score = (s) => (Number(s.likes) || 0) - (Number(s.dislikes) || 0);
     let items = loadedSetups.filter(s => {
@@ -545,7 +562,13 @@ function renderSetups() {
         list.innerHTML = `<div class="sh-empty"><i class="fa-solid fa-sliders"></i><strong>Keine passenden Setups</strong><span>${loadedSetups.length ? 'Probiere eine andere Simulation oder Suche.' : 'Sei der Erste und teile dein Setup mit der Community.'}</span></div>`;
         return;
     }
-    list.innerHTML = items.map(renderSetupCard).join('');
+    const rest = items.length - shownSetups;
+    list.innerHTML = items.slice(0, shownSetups).map(renderSetupCard).join('')
+        + (rest > 0 ? `<div class="sh-more-wrap"><button type="button" class="sh-btn sh-more" id="setupMore"><i class="fa-solid fa-angles-down"></i> Weitere Setups anzeigen (${rest})</button></div>` : '');
+    document.getElementById('setupMore')?.addEventListener('click', () => {
+        shownSetups += SETUP_PAGE;
+        renderSetups(false);
+    });
 }
 
 function renderSetupCard(item) {

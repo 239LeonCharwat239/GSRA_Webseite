@@ -1145,7 +1145,9 @@ if (createItemForm) {
         const location = locationInput ? locationInput.value : "";
         const description = descriptionInput ? descriptionInput.value : "";
 
-        const files = fileInput && fileInput.files ? Array.from(fileInput.files) : [];
+        // Bilder vor dem Hochladen verkleinern (höchstens 1600 px, ohne Standortdaten) – große Handyfotos passen so auch unter 8 MB
+        const files = await Promise.all((fileInput && fileInput.files ? Array.from(fileInput.files) : [])
+            .map(file => (window.gsraShrinkImage ? window.gsraShrinkImage(file, 1600) : file)));
 
         if (!isEditMode && files.length === 0) {
             showToast("Bitte wähle mindestens ein Bild aus.", "error");
