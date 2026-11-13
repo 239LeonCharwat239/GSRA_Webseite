@@ -92,14 +92,15 @@ Deno.serve(async (req) => {
     // Laufenden Vertrag suchen
     let subscriptionId: string | null = null;
     let periodEnd: string | null = null;
+    let alreadyCancelled = false;
     let memberOnly = false;
     if (userId && contract === "pole") {
-      const { data } = await db.from("user_plans").select("stripe_subscription_id, status, current_period_end").eq("user_id", userId).maybeSingle();
-      if (data && ACTIVE.includes(data.status)) ({ stripe_subscription_id: subscriptionId, current_period_end: periodEnd } = data);
+      const { data } = await db.from("user_plans").select("stripe_subscription_id, status, current_period_end, cancel_at_period_end").eq("user_id", userId).maybeSingle();
+      if (data && ACTIVE.includes(data.status)) ({ stripe_subscription_id: subscriptionId, current_period_end: periodEnd, cancel_at_period_end: alreadyCancelled } = data);
     } else if (userId && contract === "alliance") {
-      const { data } = await db.from("teams").select("stripe_subscription_id, status, current_period_end").eq("owner_id", userId)
+      const { data } = await db.from("teams").select("stripe_subscription_id, status, current_period_end, cancel_at_period_end").eq("owner_id", userId)
         .in("status", ACTIVE).maybeSingle();
-      if (data) ({ stripe_subscription_id: subscriptionId, current_period_end: periodEnd } = data);
+      if (data) ({ stripe_subscription_id: subscriptionId, current_period_end: periodEnd, cancel_at_period_end: alreadyCancelled } = data);
       else {
         const { data: membership } = await db.from("team_members").select("team_id").eq("user_id", userId).maybeSingle();
         memberOnly = Boolean(membership);
@@ -127,6 +128,11 @@ Deno.serve(async (req) => {
       return json({ error: memberOnly ? memberText : `Zu diesen Angaben haben wir keinen laufenden Vertrag „${CONTRACTS[contract].replace(/ \(.*\)$/, "")}“ gefunden. Bitte gib die E-Mail-Adresse deines GSRA-Kontos an oder melde dich an – dann siehst du deine Verträge.` }, 404);
     }
 
+    // Schon gekündigt: kein zweites Mal (auch nicht kurz hintereinander, bevor Stripe den Status zurückmeldet)
+    if (alreadyCancelled) {
+      return json({ error: `Dein Vertrag „${CONTRACTS[contract].replace(/ \(.*\)$/, "")}“ ist bereits gekündigt${periodEnd ? ` und endet zum ${berlin(new Date(periodEnd), false)}` : ""}. Eine weitere Kündigung ist nicht nötig.` }, 409);
+    }
+
     // Bei Stripe zum Ende der Laufzeit (bzw. zum Wunschtermin, wenn er später liegt) vormerken
     let status = "vorgemerkt";
     let effectiveAt: string | null = null;
@@ -147,6 +153,8 @@ Deno.serve(async (req) => {
         const seconds = sub.cancel_at ?? sub.current_period_end ?? sub.items?.data?.[0]?.current_period_end;
         effectiveAt = seconds ? new Date(seconds * 1000).toISOString() : periodEnd;
         if (kind === "ausserordentlich") status = "pruefung";
+        // Sofort als gekündigt markieren (die Bestätigung von Stripe per Webhook kommt einige Sekunden später)
+        await db.from(contract === "pole" ? "user_plans" : "teams").update({ cancel_at_period_end: true }).eq("stripe_subscription_id", subscriptionId);
       } else {
         console.error("Stripe-Fehler:", sub?.error?.message);
         status = "fehler";

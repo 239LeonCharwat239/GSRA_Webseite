@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rennkalender | GSRA</title>
-    
+
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha256-7jvo3hkrl8sdc9HpXWuCux9rZYwPl8TvdX/DMZlu09M=" crossorigin="anonymous"></script>
@@ -19,7 +19,7 @@
             <img src="GSRA_Logo_ohne Hintergrund.png" alt="GSRA Logo" class="logo">
         </a>
         <div class="header-slogan">
-            <span class="text-blue">UNITED BY SPEED.</span> 
+            <span class="text-blue">UNITED BY SPEED.</span>
             <span class="text-yellow">DRIVEN GLOBALLY.</span>
         </div>
     </div>
@@ -37,81 +37,70 @@
     </nav>
 </header>
 
-    <div class="container">
-        
-        <section class="hero-section">
+    <div class="container kal-page">
+
+        <section class="hero-section kal-hero">
             <h1 class="hero-title">OFFIZIELLER <span class="text-blue">RENNKALENDER</span></h1>
-            <p class="hero-subtitle text-yellow">Alle anstehenden Simulationsevents auf einen Blick.</p>
+            <p class="hero-subtitle text-yellow">Alle anstehenden Rennen und Events der GSRA-Community auf einen Blick.</p>
         </section>
 
-        <div id="admin-event-section" class="card" style="display: none; max-width: 800px; margin: 0 auto 40px auto; border-top-color: var(--gsra-yellow); text-align: left;">
-            <h3><i class="fa-solid fa-calendar-plus text-yellow"></i> NEUES EVENT EINTRAGEN (ADMIN)</h3>
-            <form id="create-event-form" style="margin-top: 15px;">
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                    <div>
-                        <label style="color: #fff; font-size: 13px;">Event-Titel</label>
-                        <input type="text" id="ev-title" required>
-                    </div>
-                    <div>
-                        <label style="color: #fff; font-size: 13px;">Simulation</label>
-                        <select id="ev-sim">
-                            <option value="iRacing">iRacing</option>
-                            <option value="ACC">Assetto Corsa Competizione</option>
-                            <option value="Assetto Corsa">Assetto Corsa</option>
-                            <option value="Le Mans Ultimate">Le Mans Ultimate</option>
-                            <option value="Automobilista 2">Automobilista 2</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label style="color: #fff; font-size: 13px;">Strecke</label>
-                        <input type="text" id="ev-track" required>
-                    </div>
-                    <div>
-                        <label style="color: #fff; font-size: 13px;">Datum & Uhrzeit</label>
-                        <input type="datetime-local" id="ev-date" required>
-                    </div>
-                </div>
-                <div style="margin-top: 15px;">
-                    <label style="color: #fff; font-size: 13px;">Server-Passwort (optional)</label>
-                    <input type="text" id="ev-password">
-                </div>
-                <button type="submit" class="login-btn" style="margin-top: 15px; cursor: pointer;">EVENT VERÖFFENTLICHEN</button>
-            </form>
-        </div>
+        <!-- Nächstes Rennen mit Countdown -->
+        <section id="kalNext" class="kal-next" hidden></section>
 
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h2 style="margin: 0;">RENNEN OVERVIEW</h2>
-            <div>
-                <label style="color: #fff; margin-right: 10px; font-weight: 600;">Filter:</label>
-                <select id="filter-sim" style="padding: 8px 12px; background: var(--bg-card); border: 1px solid var(--border-subtle); color: #fff; border-radius: 4px;">
-                    <option value="ALL">Alle Simulationen</option>
-                    <option value="iRacing">iRacing</option>
-                    <option value="ACC">ACC</option>
-                    <option value="Assetto Corsa">Assetto Corsa</option>
-                    <option value="Le Mans Ultimate">Le Mans Ultimate</option>
-                    <option value="Automobilista 2">Automobilista 2</option>
-                </select>
+        <!-- Filter nach Simulation, Anzahl, Event eintragen (Moderationsteam) -->
+        <div class="kal-toolbar">
+            <div id="kalSims" class="kal-sims" role="group" aria-label="Nach Simulation filtern"></div>
+            <div class="kal-toolbar-right">
+                <span id="kalCount" class="kal-count"></span>
+                <button type="button" id="kalCreateBtn" class="kal-create-btn" hidden><i class="fa-solid fa-calendar-plus"></i> Event eintragen</button>
             </div>
         </div>
 
-        <table class="event-table">
-            <thead>
-                <tr>
-                    <th>Datum & Zeit</th>
-                    <th>Event</th>
-                    <th>Simulation</th>
-                    <th>Strecke</th>
-                    <th>Server-PW</th>
-                    <th id="admin-header-action" style="display: none; text-align: right;">Aktion</th>
-                </tr>
-            </thead>
-            <tbody id="events-list">
-                <tr>
-                    <td colspan="6" style="text-align: center; color: var(--text-muted);">Lade Events...</td>
-                </tr>
-            </tbody>
-        </table>
+        <!-- Events nach Monat gruppiert -->
+        <div id="events-list" class="kal-list" aria-live="polite">
+            <div class="kal-empty"><i class="fa-solid fa-spinner fa-spin"></i> Lade Events …</div>
+        </div>
+    </div>
 
+    <!-- Event eintragen (nur Admins und Moderatoren) -->
+    <div id="kalModal" class="gsra-dialog-overlay" hidden>
+        <div class="gsra-dialog kal-dialog" role="dialog" aria-modal="true" aria-labelledby="kalModalTitle">
+            <button type="button" class="gsra-dialog-close" id="kalModalClose" title="Schließen"><i class="fa-solid fa-xmark"></i></button>
+            <div class="gsra-dialog-icon"><i class="fa-solid fa-calendar-plus"></i></div>
+            <h3 class="gsra-dialog-title" id="kalModalTitle">Neues Event eintragen</h3>
+            <form id="create-event-form" class="kal-form">
+                <label class="kal-field kal-wide">
+                    <span>Event-Titel</span>
+                    <input type="text" id="ev-title" maxlength="120" placeholder="z. B. GT3 Sprint Cup – Lauf 3" required>
+                </label>
+                <label class="kal-field">
+                    <span>Simulation</span>
+                    <select id="ev-sim">
+                        <option value="iRacing">iRacing</option>
+                        <option value="ACC">Assetto Corsa Competizione</option>
+                        <option value="Assetto Corsa">Assetto Corsa</option>
+                        <option value="Le Mans Ultimate">Le Mans Ultimate</option>
+                        <option value="Automobilista 2">Automobilista 2</option>
+                    </select>
+                </label>
+                <label class="kal-field">
+                    <span>Strecke</span>
+                    <input type="text" id="ev-track" maxlength="120" placeholder="z. B. Spa-Francorchamps" required>
+                </label>
+                <label class="kal-field">
+                    <span>Datum &amp; Uhrzeit</span>
+                    <input type="datetime-local" id="ev-date" required>
+                </label>
+                <label class="kal-field">
+                    <span>Server-Passwort <small>(optional)</small></span>
+                    <input type="text" id="ev-password" maxlength="80" autocomplete="off">
+                </label>
+                <div class="gsra-dialog-actions kal-wide">
+                    <button type="button" class="gsra-dialog-btn secondary" id="kalModalCancel">Abbrechen</button>
+                    <button type="submit" class="gsra-dialog-btn primary">Event veröffentlichen</button>
+                </div>
+            </form>
+        </div>
     </div>
 
     <script src="ui-dialogs.js"></script>

@@ -95,8 +95,15 @@ document.addEventListener("DOMContentLoaded", async () => {
                 showToast("Bitte wähle ein Bild (PNG, JPG, WebP oder GIF).", "error");
                 return;
             }
-            // Profilbilder werden höchstens 512 px groß angezeigt – kleiner hochladen spart Ladezeit und entfernt Standortdaten
-            if (window.gsraShrinkImage) file = await window.gsraShrinkImage(file, 512, 0.88);
+            // Ausschnitt wählen (nicht bei GIF, damit Animationen erhalten bleiben) – ergibt 512 × 512 px ohne Metadaten
+            if (file.type !== "image/gif" && window.gsraCropImage) {
+                const cropped = await window.gsraCropImage(file, { size: 512, title: "Profilbild zuschneiden" });
+                if (!cropped) return; // abgebrochen
+                file = cropped;
+            } else if (window.gsraShrinkImage) {
+                // Profilbilder werden höchstens 512 px groß angezeigt – kleiner hochladen spart Ladezeit und entfernt Standortdaten
+                file = await window.gsraShrinkImage(file, 512, 0.88);
+            }
             if (file.size > 5 * 1024 * 1024) {
                 showToast("Das Bild darf höchstens 5 MB groß sein.", "error");
                 return;
@@ -157,6 +164,19 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const items = [];
                 if (hasAvatar) items.push({ icon: "fa-expand", text: "Vergrößern", onClick: () => showImageLightbox(profile.avatar_url) });
                 items.push({ icon: "fa-upload", text: hasAvatar ? "Bild ändern" : "Bild hochladen", onClick: () => editAvatarFile.click() });
+                // Aktuelles Bild neu zuschneiden (z. B. anderer Ausschnitt in der Schnellanzeige)
+                if (hasAvatar && window.gsraCropImage && !/\.gif($|\?)/i.test(profile.avatar_url)) {
+                    items.push({ icon: "fa-crop-simple", text: "Ausschnitt ändern", onClick: async () => {
+                        try {
+                            const res = await fetch(profile.avatar_url, { cache: "no-store" });
+                            if (!res.ok) throw new Error(String(res.status));
+                            const blob = await res.blob();
+                            uploadAvatar(new File([blob], "profilbild", { type: blob.type || "image/jpeg" }));
+                        } catch (err) {
+                            showToast("Das aktuelle Profilbild konnte nicht geladen werden. Lade es bitte neu hoch.", "error");
+                        }
+                    } });
+                }
                 if (hasAvatar) items.push({ icon: "fa-trash", text: "Bild löschen", danger: true, onClick: deleteAvatar });
                 showActionMenu(dashAvatar, items);
             });

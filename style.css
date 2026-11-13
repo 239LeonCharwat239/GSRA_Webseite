@@ -1393,6 +1393,17 @@ nav a.nav-unread-glow::after {
     opacity: 1;
 }
 
+/* Eigenes Inserat: Hinweis an der Stelle von „Verkäufer kontaktieren“ */
+.mk-owner-note {
+    padding: 12px 14px;
+    border: 1px dashed rgba(255, 204, 0, 0.45);
+    border-radius: 6px;
+    color: var(--text-muted);
+    font-size: 13px;
+    text-align: center;
+}
+.mk-owner-note i { color: var(--gsra-yellow); margin-right: 4px; }
+
 .mk-detail-secondary {
     display: flex;
     flex-wrap: wrap;
@@ -4237,6 +4248,77 @@ textarea.gsra-dialog-input {
 .gsra-dialog-actions {
     display: flex;
     gap: 10px;
+}
+
+/* Bildausschnitt wählen (Profil- und Forenbilder) */
+.gsra-crop {
+    max-width: 400px;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+}
+.gsra-crop-hint {
+    margin: 0 0 14px;
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.45;
+}
+.gsra-crop-stage {
+    position: relative;
+    margin: 0 auto;
+    border-radius: 10px;
+    overflow: hidden;
+    background:
+        repeating-conic-gradient(#20232b 0% 25%, #191b21 0% 50%) 50% / 20px 20px;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    outline: none;
+}
+.gsra-crop-stage:focus-visible { box-shadow: 0 0 0 3px rgba(0, 85, 255, 0.45); }
+.gsra-crop-stage.dragging { cursor: grabbing; }
+.gsra-crop-stage canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+/* Abgedunkelt außerhalb des Kreises, gelber Rand = sichtbarer Ausschnitt */
+.gsra-crop-mask {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: 50%;
+    box-shadow: 0 0 0 999px rgba(5, 6, 9, 0.62);
+    outline: 2px solid var(--gsra-yellow);
+    outline-offset: -2px;
+}
+.gsra-crop-zoom {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 16px 4px 10px;
+    color: var(--text-muted);
+}
+.gsra-crop-zoom input[type="range"] {
+    flex: 1;
+    accent-color: var(--gsra-yellow);
+    cursor: pointer;
+}
+.gsra-crop-previews {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 18px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+.gsra-crop-previews canvas {
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    background: #0f1014;
 }
 
 .gsra-dialog-btn {
@@ -9493,4 +9575,360 @@ select option {
 .gsra-dialog {
     scrollbar-width: thin;
     scrollbar-color: #2a2e38 transparent;
+}
+
+/* Dialog-Hintergrund mit hidden-Attribut wirklich ausblenden */
+.gsra-dialog-overlay[hidden] {
+    display: none;
+}
+
+/* =========================================
+   RENNKALENDER
+========================================= */
+.kal-page {
+    max-width: 1000px;
+}
+
+.kal-hero {
+    margin-bottom: 10px;
+}
+
+/* Nächstes Rennen */
+.kal-next {
+    position: relative;
+    margin: 10px 0 26px;
+    padding: 22px 26px;
+    text-align: left;
+    background:
+        linear-gradient(120deg, rgba(0, 85, 255, 0.22) 0%, rgba(0, 85, 255, 0.04) 55%, rgba(255, 204, 0, 0.08) 100%),
+        #15161a;
+    border: 1px solid rgba(0, 85, 255, 0.45);
+    border-left: 4px solid var(--gsra-blue);
+    border-radius: 12px;
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
+}
+.kal-next.live {
+    border-color: rgba(255, 77, 77, 0.55);
+    border-left-color: #ff4d4d;
+}
+.kal-next-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--gsra-yellow);
+}
+.kal-next.live .kal-next-label { color: #ff6b6b; }
+.kal-next-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+/* Überschriften hier ohne die allgemeine h2-Formatierung (Großbuchstaben, blauer Strich) */
+.kal-next-title {
+    display: block;
+    margin: 10px 0 10px;
+    padding: 0;
+    border: none;
+    font-size: clamp(20px, 3.2vw, 28px);
+    letter-spacing: 0.3px;
+    text-transform: none;
+    color: #fff;
+    text-align: left;
+    overflow-wrap: anywhere;
+}
+.kal-next-info {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 22px;
+    color: #cfd3dc;
+    font-size: 14px;
+}
+.kal-next-info i { color: var(--gsra-blue); margin-right: 6px; }
+.kal-next-countdown {
+    padding: 6px 12px;
+    background: rgba(255, 204, 0, 0.12);
+    border: 1px solid rgba(255, 204, 0, 0.55);
+    border-radius: 6px;
+    color: var(--gsra-yellow);
+    font-weight: 800;
+    font-size: 15px;
+    white-space: nowrap;
+}
+.kal-next.live .kal-next-countdown {
+    background: rgba(255, 77, 77, 0.12);
+    border-color: rgba(255, 77, 77, 0.6);
+    color: #ff6b6b;
+}
+
+/* Filter-Leiste */
+.kal-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+.kal-sims {
+    display: flex;
+    gap: 8px;
+    min-width: 0;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+    scrollbar-color: #2a2e38 transparent;
+}
+.kal-toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-left: auto;
+}
+.kal-count {
+    color: var(--text-muted);
+    font-size: 13px;
+    white-space: nowrap;
+}
+.kal-create-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 16px;
+    background: var(--gsra-yellow);
+    border: none;
+    border-radius: 6px;
+    color: #111;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+.kal-create-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--yellow-glow);
+}
+.kal-create-btn[hidden] { display: none; }
+
+/* Monate und Events */
+.kal-month { margin-bottom: 26px; }
+.kal-month-title {
+    display: block;
+    margin: 0 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-subtle);
+    font-size: 15px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--gsra-blue);
+    text-align: left;
+}
+.kal-event {
+    display: grid;
+    grid-template-columns: 74px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 18px;
+    margin-bottom: 12px;
+    padding: 14px 18px 14px 14px;
+    background: #15161a;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 10px;
+    transition: border-color 0.2s ease, transform 0.2s ease;
+    text-align: left;
+}
+.kal-event:hover {
+    border-color: rgba(0, 85, 255, 0.5);
+    transform: translateY(-1px);
+}
+.kal-event.live { border-color: rgba(255, 77, 77, 0.55); }
+.kal-date {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 4px;
+    background: #0f1014;
+    border: 1px solid rgba(0, 85, 255, 0.35);
+    border-radius: 8px;
+    line-height: 1.1;
+}
+.kal-weekday, .kal-month-short {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+.kal-day {
+    font-size: 26px;
+    font-weight: 800;
+    color: #fff;
+}
+.kal-body { min-width: 0; }
+.kal-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 12px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+.kal-sim {
+    padding: 2px 8px;
+    background: rgba(0, 85, 255, 0.18);
+    border: 1px solid rgba(0, 85, 255, 0.45);
+    border-radius: 4px;
+    color: #6f9bff;
+    font-weight: 700;
+}
+.kal-time { color: var(--gsra-yellow); font-weight: 700; }
+.kal-countdown { display: inline-flex; align-items: center; gap: 6px; }
+.kal-countdown.live { color: #ff6b6b; font-weight: 700; }
+.kal-title {
+    margin: 6px 0 4px;
+    font-size: 17px;
+    color: #fff;
+    overflow-wrap: anywhere;
+}
+.kal-track {
+    font-size: 14px;
+    color: #cfd3dc;
+    overflow-wrap: anywhere;
+}
+.kal-track i { color: var(--text-muted); margin-right: 6px; }
+.kal-side {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+}
+.kal-password {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 220px;
+    padding: 7px 10px;
+    background: #0f1014;
+    border: 1px dashed rgba(255, 204, 0, 0.5);
+    border-radius: 6px;
+    color: var(--gsra-yellow);
+    font-family: inherit;
+    font-size: 13px;
+    cursor: pointer;
+}
+.kal-password code {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #fff;
+    font-size: 13px;
+}
+.kal-password:hover { border-style: solid; }
+.kal-open {
+    font-size: 12px;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+.kal-delete {
+    padding: 6px 10px;
+    background: transparent;
+    border: 1px solid rgba(255, 77, 77, 0.45);
+    border-radius: 6px;
+    color: #ff6b6b;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.kal-delete:hover { background: rgba(255, 77, 77, 0.12); }
+
+/* Live-Punkt */
+.kal-live-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ff4d4d;
+    box-shadow: 0 0 0 0 rgba(255, 77, 77, 0.6);
+    animation: kalPulse 1.6s infinite;
+}
+@keyframes kalPulse {
+    0% { box-shadow: 0 0 0 0 rgba(255, 77, 77, 0.6); }
+    70% { box-shadow: 0 0 0 8px rgba(255, 77, 77, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 77, 77, 0); }
+}
+
+.kal-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 44px 20px;
+    background: #15161a;
+    border: 1px dashed rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    color: var(--text-muted);
+    text-align: center;
+}
+.kal-empty i { font-size: 26px; color: var(--gsra-blue); }
+.kal-empty strong { color: #fff; }
+.kal-empty.error i { color: #ff4d4d; }
+
+/* Event eintragen */
+.kal-dialog { max-width: 520px; }
+.kal-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 14px;
+    text-align: left;
+}
+.kal-wide { grid-column: 1 / -1; }
+.kal-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    color: #cfd3dc;
+}
+.kal-field small { text-transform: none; font-weight: 400; color: var(--text-muted); }
+.kal-field input,
+.kal-field select {
+    width: 100%;
+    margin: 0;
+    font-size: 14px;
+    text-transform: none;
+    letter-spacing: normal;
+}
+.kal-form .gsra-dialog-actions { margin-top: 6px; }
+
+@media (max-width: 640px) {
+    .kal-next { padding: 18px 18px 16px; }
+    .kal-next-info { flex-direction: column; gap: 6px; }
+    .kal-toolbar-right { width: 100%; justify-content: space-between; margin-left: 0; }
+    .kal-event {
+        grid-template-columns: 58px minmax(0, 1fr);
+        gap: 12px;
+        padding: 12px;
+    }
+    .kal-day { font-size: 22px; }
+    .kal-side {
+        grid-column: 1 / -1;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .kal-password { max-width: 100%; }
+    .kal-delete span { display: none; }
+    .kal-form { grid-template-columns: 1fr; }
 }

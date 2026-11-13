@@ -40,10 +40,17 @@
         if (profile) document.getElementById("kdAccount").value = profile.gsra_id ? `${profile.username || ""} (GSRA-ID #${profile.gsra_id})`.trim() : (profile.username || "");
         const { data: m, error } = await client.rpc("my_membership");
         if (error || !m) return;
-        // Nur gebuchte Verträge sind wählbar (der Server prüft das zusätzlich)
+        // Nur gebuchte und noch nicht gekündigte Verträge sind wählbar (der Server prüft das zusätzlich)
         const owned = new Set();
-        if (m.plan === "pole" && m.pole) owned.add("pole");
-        if (m.plan === "alliance" && m.team?.is_owner) owned.add("alliance");
+        const notes = { pole: "nicht gebucht", alliance: "nicht gebucht" };
+        if (m.plan === "pole" && m.pole) {
+            if (m.pole.cancel_at_period_end) notes.pole = `bereits gekündigt zum ${day(m.pole.current_period_end)}`;
+            else owned.add("pole");
+        }
+        if (m.plan === "alliance" && m.team?.is_owner) {
+            if (m.team.cancel_at_period_end) notes.alliance = `bereits gekündigt zum ${day(m.team.current_period_end)}`;
+            else owned.add("alliance");
+        }
         form.querySelectorAll('input[name="contract"]').forEach(radio => {
             const label = radio.closest(".kd-choice");
             const isOwned = owned.has(radio.value);
@@ -54,13 +61,13 @@
             if (!isOwned) {
                 const note = document.createElement("em");
                 note.className = "kd-not-booked";
-                note.textContent = "nicht gebucht";
+                note.textContent = notes[radio.value] || "nicht gebucht";
                 label.querySelector("span strong").after(note);
             }
         });
         if (!owned.size) {
             submit.disabled = true;
-            submit.title = "Zu deinem Konto läuft kein kündbarer Vertrag.";
+            submit.title = "Zu deinem Konto läuft kein Vertrag, der sich noch kündigen lässt.";
         }
         const rows = [];
         if (m.plan === "pole" && m.pole) {
@@ -81,7 +88,7 @@
                 li.textContent = text;
                 mine.querySelector("ul").appendChild(li);
                 const radio = contract && form.querySelector(`input[name="contract"][value="${contract}"]`);
-                if (radio && !value("contract")) radio.checked = true;
+                if (radio && !radio.disabled && !value("contract")) radio.checked = true;
             });
             toggleFields();
         }

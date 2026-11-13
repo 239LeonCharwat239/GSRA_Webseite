@@ -850,6 +850,18 @@ function openDetailModal(item) {
         modalStatus.style.display = status === "aktiv" ? "none" : "";
     }
     if (modalContactBtn) modalContactBtn.style.display = status === "verkauft" || isOwner ? "none" : "";
+    // Eigenes Inserat: statt „Verkäufer kontaktieren“ (man kann sich nicht selbst schreiben) ein Hinweis an derselben Stelle
+    if (modalContactBtn) {
+        let ownerNote = document.getElementById("modalOwnerNote");
+        if (!ownerNote) {
+            ownerNote = document.createElement("div");
+            ownerNote.id = "modalOwnerNote";
+            ownerNote.className = "mk-owner-note";
+            ownerNote.innerHTML = '<i class="fa-solid fa-circle-info"></i> Das ist dein Angebot – Anfragen von Interessenten erreichen dich im Messenger.';
+            modalContactBtn.after(ownerNote);
+        }
+        ownerNote.style.display = isOwner ? "" : "none";
+    }
     if (modalReportBtn) {
         modalReportBtn.style.display = currentUser && !isOwner ? "" : "none";
         modalReportBtn.onclick = () => reportListing(item);
