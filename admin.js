@@ -35,6 +35,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         gate.innerHTML = '<i class="fa-solid fa-lock"></i> Kein Zugriff – dieser Bereich ist nur für Administratoren.';
         return;
     }
+    // Zweiter Faktor ist Pflicht: Einrichten bzw. Code bestätigen, erst dann gibt die Datenbank Admin-Rechte frei
+    if (!window.gsraMfa || !(await window.gsraMfa.requireForAdmin(client, gate))) return;
     gate.style.display = "none";
     content.style.display = "";
 

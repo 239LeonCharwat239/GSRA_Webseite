@@ -35,6 +35,8 @@ function showDialog({ icon = "fa-circle-info", title = "", message = "", input =
             inputEl.value = input.value || "";
             inputEl.maxLength = input.maxLength || 60;
             inputEl.readOnly = Boolean(input.readOnly);
+            if (input.inputMode) inputEl.inputMode = input.inputMode;
+            if (input.autocomplete) inputEl.autocomplete = input.autocomplete;
         }
         // Mehrere Auswahlknöpfe untereinander (z. B. „Für alle löschen“ / „Für mich löschen“), darunter Abbrechen
         if (choices) {

@@ -233,6 +233,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     showBanNotice(activeBan.banned_until || 'dauerhaft');
                     return;
                 }
+                // Mit eingerichteter Zwei-Faktor-Anmeldung: Code aus der App bestätigen
+                if (window.gsraMfa) await window.gsraMfa.promptAfterLogin(client);
                 window.location.href = nextPage;
             }
         }

@@ -4554,6 +4554,61 @@ textarea.gsra-dialog-input {
     color: var(--text-muted);
 }
 
+/* Zwei-Faktor-Anmeldung im Admin-Bereich */
+.mfa-box { text-align: left; color: var(--text-main, #e6e6e6); }
+.mfa-head {
+    font-weight: 800;
+    font-size: 1.1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+}
+.mfa-head i { color: var(--gsra-yellow); margin-right: 6px; }
+.mfa-intro p { margin: 0 0 10px; color: var(--text-muted); }
+.mfa-steps { margin: 0 0 14px; padding-left: 20px; color: var(--text-muted); line-height: 1.6; }
+.mfa-qr {
+    width: 200px;
+    height: 200px;
+    margin: 0 auto 12px;
+    padding: 10px;
+    background: #fff;
+    border-radius: 8px;
+}
+.mfa-qr img { width: 100%; height: 100%; display: block; }
+.mfa-secret { text-align: center; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px; overflow-wrap: anywhere; }
+.mfa-secret code {
+    color: var(--gsra-yellow);
+    background: rgba(255, 255, 255, 0.05);
+    padding: 2px 6px;
+    border-radius: 4px;
+    letter-spacing: 1px;
+    user-select: all;
+}
+.mfa-form { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.mfa-form .mfa-code {
+    width: 160px;
+    padding: 10px 12px;
+    font-size: 1.3rem;
+    letter-spacing: 6px;
+    text-align: center;
+    background: #0f1014;
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+}
+.mfa-form .mfa-code:focus { outline: none; border-color: var(--gsra-blue); box-shadow: 0 0 0 3px rgba(0, 85, 255, 0.25); }
+.mfa-form .mfa-submit {
+    padding: 10px 22px;
+    font-weight: 700;
+    color: #000;
+    background: var(--gsra-yellow);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+}
+.mfa-form .mfa-submit:disabled { opacity: 0.6; cursor: wait; }
+.mfa-error { min-height: 1.2em; margin-top: 10px; text-align: center; color: #ff4d4d; font-size: 0.9rem; }
+
 .admin-tabs {
     display: flex;
     gap: 8px;

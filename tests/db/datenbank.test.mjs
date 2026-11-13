@@ -9,9 +9,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL] =
-    Array.from({ length: 17 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 17);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL] =
+    Array.from({ length: 18 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 18);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -858,6 +858,44 @@ if (ADVISOR_SQL) {
     await as(U.admin, async () => {
         const all = await q(`select count(*) as n from storage.objects where bucket_id = 'marketplace' and name like '${U.tim}/%'`);
         check("Admin: sieht weiterhin alle Dateien (Moderation)", Number(all.rows[0]?.n) > 0, all.error || String(all.rows[0]?.n));
+    });
+}
+
+// --- 018: Admin-Rechte nur mit Zwei-Faktor-Anmeldung ---
+if (ADMIN_MFA_SQL) {
+    // Supabase-Tabelle der eingerichteten Faktoren (im Nachbau vereinfacht)
+    await db.exec(`create table if not exists auth.mfa_factors (id uuid primary key default gen_random_uuid(), user_id uuid, status text)`);
+    const withAal = async (uid, aal, fn) => as(uid, async () => {
+        await db.exec(`set request.jwt.claims = '${JSON.stringify({ sub: uid, aal })}'`);
+        try { return await fn(); } finally { await db.exec(`set request.jwt.claims = ''`); }
+    });
+    const before = await withAal(U.admin, "aal1", async () => (await q(`select public.is_site_admin() as a`)).rows[0]?.a);
+    check("Vorher: Admin hat Admin-Rechte auch ohne zweiten Faktor", before === true);
+    await db.exec(readFileSync(ADMIN_MFA_SQL, "utf8"));
+    const ctl = await db.exec(readFileSync(ADMIN_MFA_SQL, "utf8")); // zweiter Lauf
+    console.log("Kontrolle 018:\n  " + ctl[ctl.length - 1].rows.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+    check("Kontrolle 018: bereit, Gäste ausgeschlossen", ctl[ctl.length - 1].rows[0].ergebnis === "bereit" && ctl[ctl.length - 1].rows[2].ergebnis === "nein");
+
+    const allChat = Number((await one(`select count(*) as n from storage.objects where bucket_id = 'chat_attachments'`)).n);
+    await withAal(U.admin, "aal1", async () => {
+        const a = await q(`select public.is_site_admin() as a`);
+        check("Admin nur mit Passwort: keine Admin-Rechte", a.rows[0]?.a === false, a.error || String(a.rows[0]?.a));
+        const files = await q(`select count(*) as n from storage.objects where bucket_id = 'chat_attachments'`);
+        check("Admin nur mit Passwort: sieht keine fremden Chat-Anhänge", Number(files.rows[0]?.n) === 0, files.error || String(files.rows[0]?.n));
+    });
+    await withAal(U.admin, "aal2", async () => {
+        const a = await q(`select public.is_site_admin() as a`);
+        check("Admin mit zweitem Faktor: Admin-Rechte wie bisher", a.rows[0]?.a === true, a.error || String(a.rows[0]?.a));
+        const files = await q(`select count(*) as n from storage.objects where bucket_id = 'chat_attachments'`);
+        check("Admin mit zweitem Faktor: Moderation sieht alle Chat-Anhänge", Number(files.rows[0]?.n) === allChat, files.error || `${files.rows[0]?.n} von ${allChat}`);
+    });
+    await withAal(U.max, "aal2", async () => {
+        const a = await q(`select public.is_site_admin() as a`);
+        check("Normaler Nutzer mit zweitem Faktor: kein Admin", a.rows[0]?.a === false, a.error || String(a.rows[0]?.a));
+    });
+    await as(null, async () => {
+        const a = await q(`select public.is_site_admin()`);
+        check("Gast: is_site_admin() weiterhin nicht aufrufbar", a.error !== null, a.error || "durchgelassen!");
     });
 }
 
