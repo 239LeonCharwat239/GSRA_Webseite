@@ -36,7 +36,8 @@ async function checkAdminPermissions() {
             .eq('id', user.id)
             .single();
 
-        if (profile && profile.role === 'admin') {
+        // Events verwalten dürfen Admins und Moderatoren (die Datenbank prüft das zusätzlich, inkl. Zwei-Faktor-Code)
+        if (profile && ['admin', 'moderator'].includes(profile.role)) {
             isAdmin = true;
             const adminSection = document.getElementById('admin-event-section');
             const adminHeader = document.getElementById('admin-header-action');

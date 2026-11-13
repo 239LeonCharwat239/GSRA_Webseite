@@ -9,9 +9,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL] =
-    Array.from({ length: 21 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 21);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL] =
+    Array.from({ length: 22 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 22);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -1056,7 +1056,7 @@ if (MODERATION_SQL) {
         const log = await q(`select count(*) as n from public.moderation_log`);
         check("Moderator: sieht das Protokoll nicht", Number(log.rows[0]?.n) === 0, log.error || String(log.rows[0]?.n));
         const ev = await q(`insert into public.events (title) values ('Moderator-Event') returning id`);
-        check("Moderator: kann keine Events anlegen (bleibt Admin-Recht)", ev.error !== null, ev.error || "durchgelassen!");
+        check("Moderator: vor 022 noch keine Events", ev.error !== null, ev.error || "durchgelassen!");
     });
 
     await withClaims(U.admin, "aal2", async () => {
@@ -1100,6 +1100,38 @@ if (MODERATION_SQL) {
         const del = await q(`select public.delete_own_account()`);
         check("Admin ohne Code: kann sein Konto trotzdem nicht selbst löschen", /Admins und Moderatoren/.test(del.error || ""), del.error || "durchgelassen!");
     });
+
+    // --- 022: Moderatoren verwalten Events im Rennkalender ---
+    if (EVENTS_SQL) {
+        await db.exec(readFileSync(EVENTS_SQL, "utf8"));
+        const ctl22 = await db.exec(readFileSync(EVENTS_SQL, "utf8")); // zweiter Lauf
+        const r22 = ctl22[ctl22.length - 1].rows[0];
+        check("Kontrolle 022: alle Event-Regeln für das Moderationsteam", r22.ergebnis === "6 von 6", r22.ergebnis);
+        await withClaims(MOD, "aal1", async () => {
+            const ev = await q(`insert into public.events (title) values ('Ohne Code') returning id`);
+            check("Moderator ohne Code: kein Event anlegen", ev.error !== null, ev.error || "durchgelassen!");
+        });
+        let eventId = null;
+        await withClaims(MOD, "aal2", async () => {
+            const ev = await q(`insert into public.events (title, simulation, track, event_date) values ('GT3 Nachtrennen', 'iRacing', 'Spa', now() + interval '7 days') returning id`);
+            check("Moderator mit Code: legt Event an", ev.error === null, ev.error || "");
+            eventId = ev.rows[0]?.id;
+            const upd = await q(`update public.events set track = 'Monza' where id = '${eventId}' returning id`);
+            check("Moderator: ändert Event", upd.rows.length === 1, upd.error || "nichts geändert");
+            const del = await q(`delete from public.events where id = '${eventId}' returning id`);
+            check("Moderator: löscht Event", del.rows.length === 1, del.error || "nichts gelöscht");
+        });
+        await withClaims(U.max, "aal2", async () => {
+            const ev = await q(`insert into public.events (title) values ('Normales Mitglied') returning id`);
+            check("Normales Mitglied: kein Event anlegen", ev.error !== null, ev.error || "durchgelassen!");
+        });
+        await withClaims(U.admin, "aal2", async () => {
+            const ev = await q(`insert into public.events (title) values ('Admin-Event') returning id`);
+            check("Admin: legt weiterhin Events an", ev.error === null, ev.error || "");
+            const log = await q(`select count(*) as n from public.moderation_log where action like 'event_%' and actor_id = '${MOD}'`);
+            check("Event-Änderungen des Moderators stehen im Protokoll", Number(log.rows[0]?.n) === 3, log.error || String(log.rows[0]?.n));
+        });
+    }
 }
 
 // --- Konto löschen (Ausbau 3) funktioniert weiterhin, die Stimmen verschwinden mit ---
