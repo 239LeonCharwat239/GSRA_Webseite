@@ -228,7 +228,21 @@ const initAuthNav = async () => {
     // Login-Knopf in der Kopfzeile führt nach der Anmeldung zurück zur aktuellen Unterseite
     if (loginNavBtn && !PUBLIC_PAGES.includes(currentPageName())) loginNavBtn.href = loginLinkHere();
 
-    const { data: { session } } = await client.auth.getSession();
+    let { data: { session } } = await client.auth.getSession();
+
+    // Zwei-Faktor-Anmeldung eingerichtet, aber der Code wurde nie bestätigt (z. B. Code-Fenster abgebrochen):
+    // Diese Sitzung zählt nicht – sofort abmelden und zurück zum Login (dort wird der Code abgefragt)
+    if (session?.user?.id && client.auth.mfa) {
+        const { data: aal } = await client.auth.mfa.getAuthenticatorAssuranceLevel();
+        if (aal && aal.nextLevel === "aal2" && aal.currentLevel !== "aal2") {
+            await client.auth.signOut();
+            if (currentPageName() !== "login") {
+                window.location.href = loginLinkHere("zweifaktor=1&");
+                return;
+            }
+            session = null;
+        }
+    }
     updateUI(session);
 
     // Ohne Anmeldung: Hinweis über der ganzen Seite (außer Startseite und Login)

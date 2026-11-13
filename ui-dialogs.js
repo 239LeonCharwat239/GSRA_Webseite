@@ -5,7 +5,8 @@
 // Dialog im GSRA-Design. Ergebnis: eingegebener Text bzw. true – beim Abbrechen null (mit Eingabefeld) bzw. false.
 // input.multiline: mehrzeiliges Feld (Strg+Enter bestätigt). choices: mehrere Knöpfe [{ value, text, danger }],
 // Ergebnis ist dann der value des gewählten Knopfs (Abbrechen: null).
-function showDialog({ icon = "fa-circle-info", title = "", message = "", input = null, confirmText = "OK", cancelText = "", danger = false, choices = null }) {
+// closeOnBackdrop: false = ein Klick neben das Fenster schließt es nicht (z. B. bei der Code-Abfrage).
+function showDialog({ icon = "fa-circle-info", title = "", message = "", input = null, confirmText = "OK", cancelText = "", danger = false, choices = null, closeOnBackdrop = true }) {
     return new Promise((resolve) => {
         const overlay = document.createElement("div");
         overlay.className = "gsra-dialog-overlay";
@@ -97,7 +98,7 @@ function showDialog({ icon = "fa-circle-info", title = "", message = "", input =
         if (cancelBtn) cancelBtn.addEventListener("click", () => close(cancelResult));
         overlay.querySelector(".gsra-dialog-close").addEventListener("click", () => close(cancelResult));
         overlay.addEventListener("mousedown", (e) => {
-            if (e.target === overlay) close(cancelResult);
+            if (e.target === overlay && closeOnBackdrop) close(cancelResult);
         });
         if (inputEl) inputEl.addEventListener("input", () => inputEl.classList.remove("invalid"));
         document.addEventListener("keydown", onKey, true);

@@ -9,9 +9,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL] =
-    Array.from({ length: 18 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 18);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL] =
+    Array.from({ length: 19 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 19);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -897,6 +897,58 @@ if (ADMIN_MFA_SQL) {
         const a = await q(`select public.is_site_admin()`);
         check("Gast: is_site_admin() weiterhin nicht aufrufbar", a.error !== null, a.error || "durchgelassen!");
     });
+
+    // --- 019: Wer Zwei-Faktor eingerichtet hat, braucht den Code für JEDEN Zugriff ---
+    if (MFA_PFLICHT_SQL) {
+        await db.exec(`insert into auth.mfa_factors (user_id, status) values ('${U.admin}', 'verified'), ('${U.anna}', 'unverified')`);
+        const msgsAal1Before = await withAal(U.admin, "aal1", async () => (await q(`select count(*) as n from public.profiles`)).rows[0]?.n);
+        check("Vorher (Lücke): Admin ohne Code liest Profile", Number(msgsAal1Before) > 0, String(msgsAal1Before));
+        await db.exec(readFileSync(MFA_PFLICHT_SQL, "utf8"));
+        const ctl19 = await db.exec(readFileSync(MFA_PFLICHT_SQL, "utf8")); // zweiter Lauf
+        const rows19 = ctl19[ctl19.length - 1].rows;
+        console.log("Kontrolle 019:\n  " + rows19.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+        check("Kontrolle 019: alle Tabellen und der Speicher geschützt", rows19[0].ergebnis === "0" && rows19[1].ergebnis === "bereit" && rows19[2].ergebnis === "bereit", rows19.map(r => r.ergebnis).join(", "));
+
+        await withAal(U.admin, "aal1", async () => {
+            const prof = await q(`select count(*) as n from public.profiles`);
+            check("Admin ohne Code: liest keine Profile", prof.error !== null || Number(prof.rows[0]?.n) === 0, prof.error || String(prof.rows[0]?.n));
+            const chats = await q(`select count(*) as n from public.messages`);
+            check("Admin ohne Code: liest keine Nachrichten", chats.error !== null || Number(chats.rows[0]?.n) === 0, chats.error || String(chats.rows[0]?.n));
+            const send = await q(`insert into public.messages (chat_id, sender_id, text) values ('${FORUM}', '${U.admin}', 'Gefälscht')`);
+            check("Admin ohne Code: kann nichts schreiben", send.error !== null, send.error || "durchgelassen!");
+            const banned = await q(`select public.is_banned() as b`);
+            check("Admin ohne Code: Datenbank-Funktionen sehen ihn als gesperrt", banned.rows[0]?.b === true, banned.error || String(banned.rows[0]?.b));
+            const rpc = await q(`select public.start_direct_chat('${U.max}', 'Hallo, hier ist der GSRA Admin')`);
+            check("Admin ohne Code: kann keinen Chat starten", rpc.error !== null, rpc.error || "durchgelassen!");
+            const file = await q(`insert into storage.objects (bucket_id, name) values ('avatars', '${U.admin}/x.png')`);
+            check("Admin ohne Code: kann nichts hochladen", file.error !== null, file.error || "durchgelassen!");
+        });
+        await withAal(U.admin, "aal2", async () => {
+            const prof = await q(`select count(*) as n from public.profiles`);
+            check("Admin mit Code: liest Profile wie bisher", Number(prof.rows[0]?.n) > 0, prof.error || String(prof.rows[0]?.n));
+            const banned = await q(`select public.is_banned() as b, public.is_site_admin() as a`);
+            check("Admin mit Code: nicht gesperrt und Admin", banned.rows[0]?.b === false && banned.rows[0]?.a === true, banned.error || JSON.stringify(banned.rows[0]));
+            const send = await q(`insert into public.messages (chat_id, sender_id, text) values ('${FORUM}', '${U.admin}', 'Offizielle Info') returning id`);
+            check("Admin mit Code: schreibt im offiziellen Forum", send.error === null, send.error || "");
+        });
+        await withAal(U.max, "aal1", async () => {
+            const prof = await q(`select count(*) as n from public.profiles`);
+            check("Nutzer ohne Zwei-Faktor: unverändert alles wie bisher", Number(prof.rows[0]?.n) > 0, prof.error || String(prof.rows[0]?.n));
+            const banned = await q(`select public.is_banned() as b`);
+            check("Nutzer ohne Zwei-Faktor: nicht gesperrt", banned.rows[0]?.b === false, banned.error || String(banned.rows[0]?.b));
+        });
+        await withAal(U.anna, "aal1", async () => {
+            const prof = await q(`select count(*) as n from public.profiles`);
+            check("Einrichtung nur begonnen (nicht bestätigt): noch kein Code nötig", Number(prof.rows[0]?.n) > 0, prof.error || String(prof.rows[0]?.n));
+        });
+        await as(null, async () => {
+            const name = await q(`select public.username_available('Noch_Frei_019') as ok`);
+            check("Gast: Registrierung weiterhin möglich", name.error === null && name.rows[0]?.ok === true, name.error || "");
+            const setups = await q(`select count(*) as n from public.setups`);
+            check("Gast: Setups weiterhin lesbar", setups.error === null, setups.error || "");
+        });
+        await db.exec(`delete from auth.mfa_factors`);
+    }
 }
 
 // --- Konto löschen (Ausbau 3) funktioniert weiterhin, die Stimmen verschwinden mit ---

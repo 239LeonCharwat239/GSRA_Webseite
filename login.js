@@ -155,6 +155,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
     if (params.has('registrieren')) toggleModeBtn.click();
     if (params.has('gesperrt')) showBanNotice(params.get('gesperrt'));
+    if (params.has('zweifaktor')) showToast('Bitte melde dich erneut an und bestätige den Code aus deiner Authenticator-App.', 'info');
 
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -233,8 +234,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     showBanNotice(activeBan.banned_until || 'dauerhaft');
                     return;
                 }
-                // Mit eingerichteter Zwei-Faktor-Anmeldung: Code aus der App bestätigen
-                if (window.gsraMfa) await window.gsraMfa.promptAfterLogin(client);
+                // Mit eingerichteter Zwei-Faktor-Anmeldung: Code aus der App ist Pflicht (sonst wieder abgemeldet)
+                if (window.gsraMfa && !(await window.gsraMfa.promptAfterLogin(client))) return;
                 window.location.href = nextPage;
             }
         }

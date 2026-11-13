@@ -25,27 +25,37 @@ window.gsraMfa = (() => {
         return error;
     }
 
-    // Nach dem Login: Wer die Zwei-Faktor-Anmeldung eingerichtet hat, gibt den Code ein.
-    // „Später“ = normal angemeldet, aber ohne Admin-Rechte (der Admin-Bereich fragt dann erneut).
-    async function promptAfterLogin(client) {
+    // Anmeldung begonnen (Passwort ok), aber der Code fehlt noch: Diese Sitzung ist unvollständig
+    async function incomplete(client) {
         const aal = await level(client);
-        if (!aal || aal.nextLevel !== "aal2" || aal.currentLevel === "aal2") return true;
+        return Boolean(aal && aal.nextLevel === "aal2" && aal.currentLevel !== "aal2");
+    }
+
+    // Nach dem Login: Wer die Zwei-Faktor-Anmeldung eingerichtet hat, MUSS den Code eingeben.
+    // Ohne gültigen Code (Abbrechen, Schließen, 3 Fehlversuche) wird sofort wieder abgemeldet.
+    // Ergebnis: true = fertig angemeldet, false = abgemeldet.
+    async function promptAfterLogin(client) {
+        if (!(await incomplete(client))) return true;
         const { verified } = await factors(client);
-        if (!verified) return true;
-        for (let attempt = 0; attempt < 3; attempt++) {
-            const input = await showDialog({
-                icon: "fa-shield-halved",
-                title: "Bestätigungscode",
-                message: "Gib den 6-stelligen Code aus deiner Authenticator-App ein.",
-                input: { placeholder: "123456", maxLength: 7, inputMode: "numeric", autocomplete: "one-time-code" },
-                confirmText: "Bestätigen",
-                cancelText: "Später"
-            });
-            if (!input) return false;
-            const code = cleanCode(input);
-            if (validCode(code) && !(await verify(client, verified.id, code))) return true;
-            showToast("Der Code stimmt nicht. Bitte versuche es erneut.", "error");
+        if (verified) {
+            for (let attempt = 0; attempt < 3; attempt++) {
+                const input = await showDialog({
+                    icon: "fa-shield-halved",
+                    title: "Bestätigungscode",
+                    message: "Gib den 6-stelligen Code aus deiner Authenticator-App ein. Ohne Code wird die Anmeldung abgebrochen.",
+                    input: { placeholder: "123456", maxLength: 7, inputMode: "numeric", autocomplete: "one-time-code" },
+                    confirmText: "Bestätigen",
+                    cancelText: "Abbrechen",
+                    closeOnBackdrop: false
+                });
+                if (!input) break;
+                const code = cleanCode(input);
+                if (validCode(code) && !(await verify(client, verified.id, code))) return true;
+                showToast("Der Code stimmt nicht. Bitte versuche es erneut.", "error");
+            }
         }
+        await client.auth.signOut();
+        showToast("Anmeldung abgebrochen – ohne Bestätigungscode kein Zugang.", "error");
         return false;
     }
 
@@ -132,5 +142,5 @@ window.gsraMfa = (() => {
         return waitForCode(client, codeForm(gate, { intro, button: "Einrichten" }), data.id);
     }
 
-    return { promptAfterLogin, requireForAdmin, level };
+    return { promptAfterLogin, requireForAdmin, level, incomplete };
 })();
