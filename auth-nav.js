@@ -141,14 +141,16 @@ const initAuthNav = async () => {
     const showAdminLink = async (userId) => {
         const { data } = await client.from("profiles").select("role").eq("id", userId).maybeSingle();
         const nav = document.querySelector("header nav");
-        isAdmin = data?.role === "admin";
+        // Admins und Moderatoren sehen den Moderationsbereich
+        isAdmin = ["admin", "moderator"].includes(data?.role);
         if (!isAdmin || !nav) return;
-        if (!nav.querySelector('a[href="admin.html"]')) {
-            const link = document.createElement("a");
-            link.href = "admin.html";
-            link.textContent = "Admin";
-            nav.insertBefore(link, loginNavBtn || logoutBtn || null);
+        let adminLink = nav.querySelector('a[href="admin.html"]');
+        if (!adminLink) {
+            adminLink = document.createElement("a");
+            adminLink.href = "admin.html";
+            nav.insertBefore(adminLink, loginNavBtn || logoutBtn || null);
         }
+        adminLink.textContent = data.role === "admin" ? "Admin" : "Moderation";
         checkAdminNews();
         // Neue Meldungen live (wie beim Messenger) – auf der Admin-Seite wird die Liste gleich aufgefrischt
         client

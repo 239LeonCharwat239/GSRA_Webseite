@@ -4912,6 +4912,47 @@ textarea.gsra-dialog-input {
     color: var(--text-muted);
 }
 
+/* Team (Moderatoren ernennen) und Protokoll – nur für Admins */
+.admin-team-intro p { margin: 0 0 12px; color: var(--text-muted); line-height: 1.5; }
+.admin-team-intro strong { color: #fff; }
+.admin-team-form { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+.admin-team-form input {
+    flex: 1 1 200px;
+    min-width: 0;
+    padding: 10px 12px;
+    background: #0f1014;
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+}
+.admin-team-form input:focus { outline: none; border-color: var(--gsra-blue); }
+.admin-team-note { font-size: 12px; margin: 0 !important; }
+
+.admin-log {
+    background: var(--bg-card, #15161a);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    overflow: hidden;
+}
+.admin-log-row {
+    display: grid;
+    grid-template-columns: 150px minmax(0, 1fr);
+    gap: 12px;
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    font-size: 14px;
+}
+.admin-log-row:last-child { border-bottom: none; }
+.admin-log-time { color: var(--text-muted); font-size: 12px; padding-top: 2px; }
+.admin-log-text { min-width: 0; overflow-wrap: anywhere; color: var(--text-muted); }
+.admin-log-text i { color: var(--gsra-yellow); width: 16px; }
+.admin-log-text strong { color: #fff; }
+.admin-log-target { color: #fff; }
+.admin-log-extra { margin-top: 4px; font-size: 13px; font-style: italic; }
+@media (max-width: 600px) {
+    .admin-log-row { grid-template-columns: 1fr; gap: 2px; }
+}
+
 /* Zurück-Pfeil im Chat nur auf schmalen Bildschirmen */
 .chat-back-btn {
     display: none;

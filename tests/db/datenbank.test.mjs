@@ -9,9 +9,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL] =
-    Array.from({ length: 20 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 20);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL] =
+    Array.from({ length: 21 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 21);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -1004,6 +1004,101 @@ if (LIMITS_SQL) {
     await as(U.lena, async () => {
         const normal = await q(`select public.send_friend_request('${targets[24]}')`);
         check("Andere Nutzer sind nicht betroffen", normal.error === null, normal.error || "");
+    });
+}
+
+// --- 021: Moderator-Rolle und Protokoll ---
+if (MODERATION_SQL) {
+    const MOD = "80000000-0000-0000-0000-000000000001", MOD2 = "80000000-0000-0000-0000-000000000002";
+    const T1 = "80000000-0000-0000-0000-000000000011", T2 = "80000000-0000-0000-0000-000000000012", NEU = "80000000-0000-0000-0000-000000000099";
+    await db.exec(`insert into auth.users (id) values ('${MOD}'), ('${MOD2}'), ('${T1}'), ('${T2}'), ('${NEU}');
+      insert into public.profiles (id, username, gsra_id) values ('${MOD}', 'Moderator Mia', 900001), ('${MOD2}', 'Moderator Max', 900002),
+        ('${T1}', 'Störenfried 1', 900011), ('${T2}', 'Störenfried 2', 900012);`);
+    const report = async (reported) => (await one(`insert into public.reports (reporter_id, reported_id, reason) values ('${U.anna}', '${reported}', 'Beleidigung') returning id`)).id;
+    const R1 = await report(T1), R2 = await report(T1), R3 = await report(T2), R4 = await report(MOD2), R5 = await report(T2);
+    const adminGsra = (await one(`select gsra_id from public.profiles where id = '${U.admin}'`)).gsra_id;
+
+    await db.exec(readFileSync(MODERATION_SQL, "utf8"));
+    const ctl21 = await db.exec(readFileSync(MODERATION_SQL, "utf8")); // zweiter Lauf
+    const rows21 = ctl21[ctl21.length - 1].rows;
+    console.log("Kontrolle 021:\n  " + rows21.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+    check("Kontrolle 021: 5 Meldungs-Funktionen, 7 Tabellen mit Protokoll", rows21[0].ergebnis === "5 von 5" && rows21[1].ergebnis === "7 von 7", rows21.map(r => r.ergebnis).join(", "));
+    await db.exec(`update public.profiles set role = 'moderator' where id in ('${MOD}', '${MOD2}')`);
+
+    const withClaims = (uid, aal, fn) => as(uid, async () => {
+        await db.exec(`set request.jwt.claims = '${JSON.stringify({ sub: uid, aal })}'`);
+        try { return await fn(); } finally { await db.exec(`set request.jwt.claims = ''`); }
+    });
+
+    await withClaims(MOD, "aal1", async () => {
+        const r = await q(`select count(*) as n from public.reports`);
+        check("Moderator ohne Code: sieht keine Meldungen", Number(r.rows[0]?.n) === 0, r.error || String(r.rows[0]?.n));
+        const w = await q(`select public.admin_warn_user('${R1}', 'Bitte freundlich bleiben')`);
+        check("Moderator ohne Code: kann nicht verwarnen", w.error !== null, w.error || "durchgelassen!");
+    });
+    await withClaims(MOD, "aal2", async () => {
+        const r = await q(`select count(*) as n from public.reports where status = 'offen'`);
+        check("Moderator mit Code: sieht offene Meldungen", Number(r.rows[0]?.n) >= 5, r.error || String(r.rows[0]?.n));
+        const w = await q(`select public.admin_warn_user('${R1}', 'Bitte freundlich bleiben')`);
+        check("Moderator: verwarnt", w.error === null, w.error || "");
+        const perm = await q(`select public.admin_ban_user('${R2}', null)`);
+        check("Moderator: dauerhaft sperren verboten", /nur ein Administrator/.test(perm.error || ""), perm.error || "durchgelassen!");
+        const ban = await q(`select public.admin_ban_user('${R2}', 30)`);
+        check("Moderator: 30 Tage sperren erlaubt", ban.error === null, ban.error || "");
+        const lift = await q(`select public.admin_lift_ban('${T1}')`);
+        check("Moderator: befristete Sperre aufheben erlaubt", lift.error === null, lift.error || "");
+        const team = await q(`select public.admin_ban_user('${R4}', 30)`);
+        check("Moderator: kann keinen anderen Moderator sperren", /Moderationsteams/.test(team.error || ""), team.error || "durchgelassen!");
+        const dismiss = await q(`select public.admin_dismiss_report('${R3}')`);
+        check("Moderator: Meldung verwerfen", dismiss.error === null, dismiss.error || "");
+        const role = await q(`select public.admin_set_role(900011, 'moderator')`);
+        check("Moderator: kann keine Rollen vergeben", role.error !== null, role.error || "durchgelassen!");
+        const log = await q(`select count(*) as n from public.moderation_log`);
+        check("Moderator: sieht das Protokoll nicht", Number(log.rows[0]?.n) === 0, log.error || String(log.rows[0]?.n));
+        const ev = await q(`insert into public.events (title) values ('Moderator-Event') returning id`);
+        check("Moderator: kann keine Events anlegen (bleibt Admin-Recht)", ev.error !== null, ev.error || "durchgelassen!");
+    });
+
+    await withClaims(U.admin, "aal2", async () => {
+        const perm = await q(`select public.admin_ban_user('${R5}', null)`);
+        check("Admin: dauerhaft sperren erlaubt", perm.error === null, perm.error || "");
+        await withClaims(MOD, "aal2", async () => {
+            const lift = await q(`select public.admin_lift_ban('${T2}')`);
+            check("Moderator: dauerhafte Sperre aufheben verboten", /nur ein Administrator/.test(lift.error || ""), lift.error || "durchgelassen!");
+        });
+        await db.exec(`set request.jwt.claims = '${JSON.stringify({ sub: U.admin, aal: "aal2" })}'`);
+        await db.exec(`set request.jwt.claim.sub = '${U.admin}'; set role authenticated;`);
+        const lift = await q(`select public.admin_lift_ban('${T2}')`);
+        check("Admin: dauerhafte Sperre aufheben erlaubt", lift.error === null, lift.error || "");
+        const set = await q(`select public.admin_set_role(900011, 'moderator') as name`);
+        check("Admin: Moderator ernennen per GSRA-ID", set.error === null && set.rows[0]?.name === "Störenfried 1", set.error || JSON.stringify(set.rows[0]));
+        const back = await q(`select public.admin_set_role(900011, 'user')`);
+        check("Admin: Rolle wieder entziehen", back.error === null, back.error || "");
+        const self = await q(`select public.admin_set_role(${adminGsra}, 'user')`);
+        check("Admin: eigene Rolle nicht änderbar", self.error !== null, self.error || "durchgelassen!");
+        const makeAdmin = await q(`select public.admin_set_role(900011, 'admin')`);
+        check("Admin: über die Webseite keine neuen Admins", makeAdmin.error !== null, makeAdmin.error || "durchgelassen!");
+        const del = await q(`delete from public.marketplace where user_id = '${U.tim}' returning id`);
+        check("Admin: fremdes Inserat löschen (wird protokolliert)", del.error === null && del.rows.length > 0, del.error || "nichts gelöscht");
+        const log = await q(`select action, actor_id from public.moderation_log order by id`);
+        const actions = log.rows.map(r => r.action);
+        const expected = ["rolle", "verwarnung", "sperre", "sperre_aufgehoben", "meldung_verworfen", "inserat_geloescht"];
+        check("Protokoll enthält alle Aktionen", expected.every(a => actions.includes(a)), [...new Set(actions)].join(", "));
+        check("Protokoll nennt, wer gehandelt hat", log.rows.some(r => r.action === "verwarnung" && r.actor_id === MOD) && log.rows.some(r => r.action === "inserat_geloescht" && r.actor_id === U.admin),
+            JSON.stringify(log.rows.filter(r => ["verwarnung", "inserat_geloescht"].includes(r.action))));
+        const wipe = await q(`delete from public.moderation_log returning id`);
+        check("Protokoll lässt sich nicht löschen (auch nicht als Admin)", wipe.error !== null || wipe.rows.length === 0, wipe.error || `${wipe.rows.length} gelöscht!`);
+    });
+
+    await as(NEU, async () => {
+        const fake = await q(`insert into public.profiles (id, username, role) values ('${NEU}', 'Neu', 'moderator')`);
+        check("Neues Konto kann sich nicht selbst zum Moderator machen", fake.error !== null, fake.error || "durchgelassen!");
+        const forge = await q(`insert into public.moderation_log (action) values ('gefälscht')`);
+        check("Niemand kann Protokoll-Einträge fälschen", forge.error !== null, forge.error || "durchgelassen!");
+    });
+    await withClaims(U.admin, "aal1", async () => {
+        const del = await q(`select public.delete_own_account()`);
+        check("Admin ohne Code: kann sein Konto trotzdem nicht selbst löschen", /Admins und Moderatoren/.test(del.error || ""), del.error || "durchgelassen!");
     });
 }
 

@@ -43,7 +43,7 @@
     <main class="container">
         <section class="hero-section" style="margin-bottom: 10px; padding: 20px 0;">
             <h1 class="hero-title">GSRA <span class="text-blue">Moderation</span></h1>
-            <p class="hero-subtitle">Meldungen prüfen, verwarnen und sperren – nur für Administratoren.</p>
+            <p class="hero-subtitle">Meldungen prüfen, verwarnen und sperren – nur für das Moderationsteam.</p>
         </section>
 
         <!-- Zugangsprüfung: nur Administratoren sehen die Meldungen (zusätzlich schützt die Datenbank) -->
@@ -54,6 +54,9 @@
                 <button type="button" class="admin-tab active" data-tab="offen"><i class="fa-solid fa-inbox"></i> Offene Meldungen <span class="admin-count" id="countOpen">0</span></button>
                 <button type="button" class="admin-tab" data-tab="erledigt"><i class="fa-solid fa-check-double"></i> Erledigt</button>
                 <button type="button" class="admin-tab" data-tab="sperren"><i class="fa-solid fa-ban"></i> Gesperrte Konten <span class="admin-count" id="countBans">0</span></button>
+                <!-- Nur für Admins (blendet admin.js ein) -->
+                <button type="button" class="admin-tab" data-tab="team" hidden><i class="fa-solid fa-user-shield"></i> Team</button>
+                <button type="button" class="admin-tab" data-tab="protokoll" hidden><i class="fa-solid fa-clipboard-list"></i> Protokoll</button>
             </div>
             <div id="adminList" class="admin-list"></div>
         </div>

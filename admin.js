@@ -31,10 +31,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
     }
     const { data: me } = await client.from("profiles").select("role").eq("id", session.user.id).maybeSingle();
-    if (me?.role !== "admin") {
-        gate.innerHTML = '<i class="fa-solid fa-lock"></i> Kein Zugriff – dieser Bereich ist nur für Administratoren.';
+    if (!["admin", "moderator"].includes(me?.role)) {
+        gate.innerHTML = '<i class="fa-solid fa-lock"></i> Kein Zugriff – dieser Bereich ist nur für das Moderationsteam.';
         return;
     }
+    // Admins: alles; Moderatoren: Meldungen, Verwarnungen, Sperren bis 30 Tage (die Datenbank prüft das zusätzlich)
+    const isAdmin = me.role === "admin";
+    if (isAdmin) document.querySelectorAll('.admin-tab[data-tab="team"], .admin-tab[data-tab="protokoll"]').forEach(t => { t.hidden = false; });
     // Zweiter Faktor ist Pflicht: Einrichten bzw. Code bestätigen, erst dann gibt die Datenbank Admin-Rechte frei
     if (!window.gsraMfa || !(await window.gsraMfa.requireForAdmin(client, gate))) return;
     gate.style.display = "none";
@@ -248,6 +251,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         list.innerHTML = '<div class="admin-empty"><i class="fa-solid fa-spinner fa-spin"></i> Lade …</div>';
         updateCounts();
         if (currentTab === "sperren") return renderBans();
+        if (currentTab === "team" && isAdmin) return renderTeam();
+        if (currentTab === "protokoll" && isAdmin) return renderLog();
 
         const statuses = currentTab === "offen" ? ["offen"] : ["verwarnt", "gesperrt", "verworfen"];
         let query = client.from("reports").select("*").in("status", statuses);
@@ -310,7 +315,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 };
                 addAction("warn", '<i class="fa-solid fa-triangle-exclamation"></i> Verwarnung senden', sendWarning);
                 addAction("ban", '<i class="fa-solid fa-calendar-xmark"></i> 30 Tage sperren', (r) => banUser(r, 30));
-                addAction("ban-perm", '<i class="fa-solid fa-ban"></i> Permanent sperren', (r) => banUser(r, null));
+                if (isAdmin) addAction("ban-perm", '<i class="fa-solid fa-ban"></i> Permanent sperren', (r) => banUser(r, null));
                 addAction("dismiss", '<i class="fa-solid fa-xmark"></i> Meldung verwerfen', dismissReport);
             } else {
                 actions.innerHTML = `<span class="admin-resolved"><i class="fa-solid fa-check"></i> ${STATUS_LABELS[report.status]}${report.resolved_by ? ` von ${escapeHtml(nameOf(report.resolved_by))}` : ""}${report.resolved_at ? ` am ${formatDate(report.resolved_at)}` : ""}</span>`;
@@ -345,14 +350,115 @@ document.addEventListener("DOMContentLoaded", async () => {
                     <span><i class="fa-regular fa-clock"></i> ${formatDate(ban.created_at)}</span>
                 </div>
                 <footer class="admin-actions"></footer>`;
-            const lift = document.createElement("button");
-            lift.type = "button";
-            lift.className = "admin-btn dismiss";
-            lift.innerHTML = '<i class="fa-solid fa-unlock"></i> Sperre aufheben';
-            lift.addEventListener("click", () => liftBan(ban));
-            card.querySelector(".admin-actions").appendChild(lift);
+            // Dauerhafte Sperren hebt nur ein Admin auf
+            if (isAdmin || ban.banned_until) {
+                const lift = document.createElement("button");
+                lift.type = "button";
+                lift.className = "admin-btn dismiss";
+                lift.innerHTML = '<i class="fa-solid fa-unlock"></i> Sperre aufheben';
+                lift.addEventListener("click", () => liftBan(ban));
+                card.querySelector(".admin-actions").appendChild(lift);
+            } else {
+                card.querySelector(".admin-actions").innerHTML = '<span class="admin-resolved"><i class="fa-solid fa-lock"></i> Dauerhafte Sperre – aufheben kann nur ein Admin</span>';
+            }
             return card;
         }));
+    }
+
+    // --- Team (nur Admins): Moderatoren ernennen und entfernen ---
+    const ROLE_LABELS = { admin: "Admin", moderator: "Moderator", user: "Mitglied" };
+    async function renderTeam() {
+        const { data: team, error } = await client.from("profiles").select("id, username, gsra_id, role, avatar_url")
+            .in("role", ["admin", "moderator"]).order("role").order("username");
+        if (error) {
+            list.innerHTML = `<div class="admin-empty"><i class="fa-solid fa-database"></i> Das Team konnte nicht geladen werden. (${escapeHtml(error.message)})</div>`;
+            return;
+        }
+        (team || []).forEach(p => { profiles[p.id] = p; });
+        const intro = document.createElement("article");
+        intro.className = "admin-report admin-team-intro";
+        intro.innerHTML = `
+            <p><strong>Moderatoren</strong> bearbeiten Meldungen, verwarnen und sperren bis zu 30 Tage. Dauerhafte Sperren, Rollen, Events
+            und das Löschen fremder Inhalte bleiben Admins vorbehalten. Beim ersten Besuch richten Moderatoren die Zwei-Faktor-Anmeldung ein.</p>
+            <form class="admin-team-form" autocomplete="off">
+                <input type="text" inputmode="numeric" placeholder="GSRA-ID, z. B. 100123" maxlength="12" required>
+                <button type="submit" class="admin-btn warn"><i class="fa-solid fa-user-plus"></i> Zum Moderator ernennen</button>
+            </form>
+            <p class="admin-team-note">Neue Admins lassen sich aus Sicherheitsgründen nur im Supabase SQL Editor ernennen.</p>`;
+        intro.querySelector("form").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const id = Number(String(e.target.querySelector("input").value).replace(/[^\d]/g, ""));
+            if (!id) return showToast("Bitte gib eine GSRA-ID ein.", "error");
+            const { data: name, error } = await client.rpc("admin_set_role", { _gsra_id: id, _role: "moderator" });
+            if (error) return showToast(error.message, "error");
+            showToast(`${name || "Das Konto"} ist jetzt Moderator.`, "success");
+            render();
+        });
+        const cards = (team || []).map(p => {
+            const card = document.createElement("article");
+            card.className = "admin-report";
+            card.innerHTML = `
+                <div class="admin-report-head">
+                    ${personHtml(p.id, ROLE_LABELS[p.role] || p.role)}
+                    <span class="admin-status ${p.role === "admin" ? "gesperrt" : "verwarnt"}">${ROLE_LABELS[p.role] || p.role}</span>
+                </div>
+                <footer class="admin-actions"></footer>`;
+            if (p.role === "moderator" && p.id !== session.user.id) {
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = "admin-btn dismiss";
+                btn.innerHTML = '<i class="fa-solid fa-user-minus"></i> Moderator-Rolle entziehen';
+                btn.addEventListener("click", async () => {
+                    const ok = await showDialog({ icon: "fa-user-minus", title: `${p.username} die Moderator-Rolle entziehen?`,
+                        message: "Die Person ist danach wieder ein normales Mitglied ohne Zugang zur Moderation.", confirmText: "Rolle entziehen", cancelText: "Abbrechen" });
+                    if (!ok) return;
+                    runAction(client.rpc("admin_set_role", { _gsra_id: p.gsra_id, _role: "user" }), `${p.username} ist kein Moderator mehr.`);
+                });
+                card.querySelector(".admin-actions").appendChild(btn);
+            }
+            return card;
+        });
+        list.replaceChildren(intro, ...cards);
+    }
+
+    // --- Protokoll (nur Admins): wer hat wann was getan ---
+    async function renderLog() {
+        const { data: log, error } = await client.from("moderation_log").select("*").order("id", { ascending: false }).limit(200);
+        if (error) {
+            list.innerHTML = `<div class="admin-empty"><i class="fa-solid fa-database"></i> Das Protokoll fehlt noch – bitte 021_moderation.sql in Supabase ausführen. (${escapeHtml(error.message)})</div>`;
+            return;
+        }
+        if (!log?.length) {
+            list.innerHTML = '<div class="admin-empty"><i class="fa-solid fa-clipboard-check"></i> Noch keine Einträge im Protokoll.</div>';
+            return;
+        }
+        await loadProfiles(log.flatMap(e => [e.actor_id, e.target_user]));
+        const d = (e) => e.details || {};
+        const describe = (e) => ({
+            verwarnung: ["fa-triangle-exclamation", "hat verwarnt"],
+            sperre: ["fa-ban", d(e).bis ? `hat gesperrt bis ${formatDate(d(e).bis, false)}` : "hat dauerhaft gesperrt"],
+            sperre_aufgehoben: ["fa-unlock", "hat eine Sperre aufgehoben"],
+            meldung_verworfen: ["fa-xmark", "hat eine Meldung verworfen"],
+            rolle: ["fa-user-shield", `hat die Rolle geändert (${ROLE_LABELS[d(e).von] || d(e).von || "Mitglied"} → ${ROLE_LABELS[d(e).nach] || d(e).nach || "Mitglied"})`],
+            inserat_geloescht: ["fa-tags", `hat das Inserat „${d(e).titel || ""}“ gelöscht`],
+            setup_geloescht: ["fa-car", `hat das Setup „${[d(e).fahrzeug, d(e).strecke].filter(Boolean).join(" · ")}“ gelöscht`],
+            event_angelegt: ["fa-calendar-plus", `hat das Event „${d(e).titel || ""}“ angelegt`],
+            event_geaendert: ["fa-calendar-check", `hat das Event „${d(e).titel || ""}“ geändert`],
+            event_geloescht: ["fa-calendar-xmark", `hat das Event „${d(e).titel || ""}“ gelöscht`]
+        }[e.action] || ["fa-circle-info", e.action]);
+        const table = document.createElement("div");
+        table.className = "admin-log";
+        table.innerHTML = log.map(e => {
+            const [icon, text] = describe(e);
+            const actor = e.actor_id ? nameOf(e.actor_id) : "SQL Editor / System";
+            const target = e.target_user ? ` <span class="admin-log-target">→ ${escapeHtml(nameOf(e.target_user))}</span>` : "";
+            const extra = e.action === "verwarnung" && d(e).text ? `<div class="admin-log-extra">„${escapeHtml(d(e).text)}“</div>` : "";
+            return `<div class="admin-log-row">
+                <span class="admin-log-time">${formatDate(e.created_at)}</span>
+                <span class="admin-log-text"><i class="fa-solid ${icon}"></i> <strong>${escapeHtml(actor)}</strong> ${escapeHtml(text)}${target}${extra}</span>
+            </div>`;
+        }).join("");
+        list.replaceChildren(table);
     }
 
     // --- Aktionen ---
