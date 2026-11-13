@@ -1269,7 +1269,7 @@ if (createItemForm) {
             }
         } catch (error) {
             console.error("Fehler beim Speichern des Angebots:", error);
-            showToast(/höchstens 100/.test(error?.message || "") ? error.message : "Fehler beim Speichern des Angebots.", "error");
+            showToast(/höchstens 100|^Zu viele/.test(error?.message || "") ? error.message : "Fehler beim Speichern des Angebots.", "error");
         } finally {
             if (submitItemBtn) submitItemBtn.disabled = false;
             updateSubmitLabel();

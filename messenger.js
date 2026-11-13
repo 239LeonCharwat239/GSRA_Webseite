@@ -3041,13 +3041,15 @@ if (chatForm) {
 
             const finalMediaUrl = mediaUrls.length > 0 ? mediaUrls.join(",") : null;
 
-            await supabase.from("messages").insert([{
+            const { error: sendError } = await supabase.from("messages").insert([{
                 chat_id: activeChatId,
                 sender_id: currentUser.id,
                 text: text || (finalMediaUrl ? "[Medien]" : ""),
                 image_url: finalMediaUrl,
                 reply_to: replyingToId || null
             }]);
+            // Abgelehnt (z. B. Spam-Limit): Text bleibt im Eingabefeld, Hinweis statt stillem Verschwinden
+            if (sendError) throw sendError;
 
             await supabase.from("chats").update({
                 last_message: text || "[Medien]"
@@ -3065,7 +3067,7 @@ if (chatForm) {
             loadUserChats();
         } catch (err) {
             console.error("Fehler beim Senden:", err);
-            showToast("Fehler beim Verarbeiten der Nachricht. Bitte versuche es erneut.", "error");
+            showToast(/^Zu viele/.test(err?.message || "") ? err.message : "Fehler beim Verarbeiten der Nachricht. Bitte versuche es erneut.", "error");
         } finally {
             if (sendBtn) {
                 sendBtn.disabled = false;

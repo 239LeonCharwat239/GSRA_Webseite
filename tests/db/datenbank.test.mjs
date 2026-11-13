@@ -9,9 +9,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL] =
-    Array.from({ length: 19 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 19);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL] =
+    Array.from({ length: 20 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 20);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -949,6 +949,62 @@ if (ADMIN_MFA_SQL) {
         });
         await db.exec(`delete from auth.mfa_factors`);
     }
+}
+
+// --- 020: Limits gegen Spam ---
+if (LIMITS_SQL) {
+    await db.exec(readFileSync(LIMITS_SQL, "utf8"));
+    const ctl20 = await db.exec(readFileSync(LIMITS_SQL, "utf8")); // zweiter Lauf
+    const rows20 = ctl20[ctl20.length - 1].rows;
+    console.log("Kontrolle 020:\n  " + rows20.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+    check("Kontrolle 020: Limits auf 5 Tabellen, Funktion nicht direkt aufrufbar", rows20[0].ergebnis === "5 von 5" && rows20[1].ergebnis === "nein", rows20.map(r => r.ergebnis).join(", "));
+
+    // Füllt bis zur Grenze auf: erwartet genau „rest“ erfolgreiche Einfügungen, danach eine Ablehnung mit „Zu viele“
+    const untilLimit = async (sqlFor, rest) => {
+        let ok = 0, error = null;
+        for (let i = 0; i < rest + 5 && !error; i++) {
+            const r = await q(sqlFor(i));
+            if (r.error) error = r.error; else ok++;
+        }
+        return { ok, error };
+    };
+    const recent = async (sql) => Number((await one(sql)).n);
+
+    const msgPrior = await recent(`select count(*) as n from public.messages where sender_id = '${U.max}' and created_at > now() - interval '1 minute'`);
+    const msgs = await as(U.max, () => untilLimit(i => `insert into public.messages (chat_id, sender_id, text) values ('${D}', '${U.max}', 'Nachricht ${i}')`, 30 - msgPrior));
+    check("Nachrichten: 30 pro Minute erlaubt, dann gestoppt", msgs.ok === 30 - msgPrior && /Zu viele Nachrichten/.test(msgs.error || ""), `${msgs.ok} + ${msgPrior} vorher, ${msgs.error || "keine Grenze!"}`);
+
+    await as(U.admin, async () => {
+        await db.exec(`set request.jwt.claims = '${JSON.stringify({ sub: U.admin, aal: "aal2" })}'`);
+        try {
+            const adm = await untilLimit(i => `insert into public.messages (chat_id, sender_id, text) values ('${FORUM}', '${U.admin}', 'Ankündigung ${i}')`, 35);
+            check("Admin mit Code: keine Grenze (z. B. viele Ankündigungen)", adm.ok >= 35 && adm.error === null, adm.error || `${adm.ok} gesendet`);
+        } finally { await db.exec(`set request.jwt.claims = ''`); }
+    });
+
+    const targets = Array.from({ length: 25 }, (_, i) => `70000000-0000-0000-0000-0000000000${String(i).padStart(2, "0")}`);
+    await db.exec(`insert into auth.users (id) values ${targets.map(t => `('${t}')`).join(", ")};
+                   insert into public.profiles (id, username) values ${targets.map((t, i) => `('${t}', 'Zielperson ${i}')`).join(", ")};`);
+    const frPrior = await recent(`select count(*) as n from public.friendships where user_id = '${U.anna}' and created_at > now() - interval '1 hour'`);
+    const fr = await as(U.anna, () => untilLimit(i => `select public.send_friend_request('${targets[i]}')`, 20 - frPrior));
+    check("Freundschaftsanfragen: 20 pro Stunde, dann gestoppt", fr.ok === 20 - frPrior && /Zu viele Freundschaftsanfragen/.test(fr.error || ""), `${fr.ok} + ${frPrior} vorher, ${fr.error || "keine Grenze!"}`);
+
+    const grPrior = await recent(`select count(*) as n from public.chats where user1_id = '${U.max}' and user2_id = '${U.max}' and title is not null and created_at > now() - interval '1 hour'`);
+    const gr = await as(U.max, () => untilLimit(i => `insert into public.chats (user1_id, user2_id, title) values ('${U.max}', '${U.max}', 'Spam-Gruppe ${i}')`, 5 - grPrior));
+    check("Gruppen: 5 pro Stunde, dann gestoppt", gr.ok === 5 - grPrior && /Zu viele neue Gruppen/.test(gr.error || ""), `${gr.ok} + ${grPrior} vorher, ${gr.error || "keine Grenze!"}`);
+
+    const mkPrior = await recent(`select count(*) as n from public.marketplace where user_id = '${U.anna}' and created_at > now() - interval '1 hour'`);
+    const mk = await as(U.anna, () => untilLimit(i => `insert into public.marketplace (user_id, title, price) values ('${U.anna}', 'Spam ${i}', 1)`, 20 - mkPrior));
+    check("Inserate: 20 pro Stunde, dann gestoppt", mk.ok === 20 - mkPrior && /Zu viele neue Inserate/.test(mk.error || ""), `${mk.ok} + ${mkPrior} vorher, ${mk.error || "keine Grenze!"}`);
+
+    const stPrior = await recent(`select count(*) as n from public.setups where uploader_id::text = '${U.tim}' and created_at > now() - interval '1 hour'`);
+    const st = await as(U.tim, () => untilLimit(i => `insert into public.setups (simulation, car_model, track_name, file_name, file_url, uploader_id) values ('ACC', 'BMW M4 GT3', 'Monza ${i}', 'monza${i}.json', 'https://x.supabase.co/storage/v1/object/public/setups/${U.tim}/monza${i}.json', '${U.tim}')`, 20 - stPrior));
+    check("Setups: 20 pro Stunde, dann gestoppt", st.ok === 20 - stPrior && /Zu viele Setups/.test(st.error || ""), `${st.ok} + ${stPrior} vorher, ${st.error || "keine Grenze!"}`);
+
+    await as(U.lena, async () => {
+        const normal = await q(`select public.send_friend_request('${targets[24]}')`);
+        check("Andere Nutzer sind nicht betroffen", normal.error === null, normal.error || "");
+    });
 }
 
 // --- Konto löschen (Ausbau 3) funktioniert weiterhin, die Stimmen verschwinden mit ---
