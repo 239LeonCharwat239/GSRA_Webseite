@@ -638,7 +638,7 @@ function createListingCard(item, isTop = false) {
 
         card.innerHTML = `
             <div class="mk-card-media">
-                <img src="${escapeHtml(coverImage)}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.src='${DEFAULT_PLACEHOLDER}'">
+                <img src="${escapeHtml(coverImage)}" alt="${escapeHtml(item.title)}" loading="lazy">
                 ${item.status === "reserviert" ? '<span class="market-badge reserved">Reserviert</span>'
                     : isTop ? '<span class="market-badge top"><i class="fa-solid fa-crown"></i> Top</span>' : ""}
                 ${images.length > 1 ? `<span class="mk-card-photos"><i class="fa-solid fa-camera"></i> ${images.length}</span>` : ""}
@@ -656,6 +656,9 @@ function createListingCard(item, isTop = false) {
             </div>
         `;
 
+        // Bild nicht ladbar: Platzhalter zeigen (ohne „onerror“ im HTML, das die Sicherheitsregeln blockieren)
+        const cover = card.querySelector(".mk-card-media img");
+        cover.addEventListener("error", () => { if (cover.getAttribute("src") !== DEFAULT_PLACEHOLDER) cover.src = DEFAULT_PLACEHOLDER; });
         card.addEventListener("click", () => openDetailModal(item));
         card.addEventListener("keydown", (e) => { if (e.key === "Enter") openDetailModal(item); });
         return card;
