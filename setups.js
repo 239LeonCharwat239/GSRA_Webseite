@@ -3,8 +3,18 @@
 ========================================= */
 let currentUser = null;
 let isAdmin = false;
+let isModerator = false; // Admins und Moderatoren dürfen unpassende Kommentare entfernen
 let loadedSetups = [];
 let myVotes = {};
+let reviewStats = {};    // Setup-ID → { n: Anzahl Kommentare/Bewertungen }
+
+// Bewertungen der Community zu einem Setup
+const SETUP_VERDICTS = {
+    hilfreich: ['fa-thumbs-up', 'Hilfreich', 'good'],
+    okay: ['fa-hand', 'Okay', 'mid'],
+    nicht_hilfreich: ['fa-thumbs-down', 'Nicht hilfreich', 'bad'],
+    nicht_wie_beschrieben: ['fa-triangle-exclamation', 'Nicht wie beschrieben', 'bad']
+};
 
 function escapeHtml(str) {
     if (!str) return "";
@@ -432,6 +442,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             supabase.rpc('is_pro_creator', { _user: user.id })
         ]);
         isAdmin = profile?.role === 'admin';
+        isModerator = ['admin', 'moderator'].includes(profile?.role);
         isProCreator = !creator.error && creator.data === true;
         hubReady = !creator.error;
         canSeePro = isAdmin || isProCreator || ['pole', 'alliance'].includes(plan.data);
@@ -506,6 +517,7 @@ function bindHubControls() {
         if (btn.dataset.action === 'like' || btn.dataset.action === 'dislike') { if (!btn.disabled) voteSetup(setup.id, btn.dataset.action); }
         else if (btn.dataset.action === 'pro-download') downloadProFile(setup, btn);
         else if (btn.dataset.action === 'details') openSetupDetails(setup);
+        else if (btn.dataset.action === 'reviews') openSetupDetails(setup, { reviews: true });
         else if (btn.dataset.action === 'delete') deleteSetup(setup);
     });
 }
@@ -525,10 +537,22 @@ async function fetchAllSetups() {
 const SETUP_PAGE = 24;
 let shownSetups = SETUP_PAGE;
 
+// Anzahl der Kommentare je Setup (für den Knopf auf der Karte); fehlt die Tabelle noch, bleibt es bei 0
+async function loadReviewStats() {
+    const stats = {};
+    for (let from = 0; ; from += 1000) {
+        const { data, error } = await supabase.from('setup_reviews').select('setup_id').range(from, from + 999);
+        if (error || !data) break;
+        data.forEach(r => { stats[r.setup_id] = { n: (stats[r.setup_id]?.n || 0) + 1 }; });
+        if (data.length < 1000) break;
+    }
+    reviewStats = stats;
+}
+
 async function loadSetups() {
     const list = document.getElementById('setupList');
     if (!list) return;
-    const [{ data, error }] = await Promise.all([fetchAllSetups(), loadMyVotes()]);
+    const [{ data, error }] = await Promise.all([fetchAllSetups(), loadMyVotes(), currentUser ? loadReviewStats() : null]);
     if (error || !data) {
         list.innerHTML = '<p class="sh-empty">Setups konnten nicht geladen werden.</p>';
         return;
@@ -610,6 +634,7 @@ function renderSetupCard(item) {
                 <div class="sh-votes">
                     <button data-action="like" data-id="${id}" class="vote-btn like-btn${myVote === 1 ? ' voted' : ''}"${voteAttrs(1)}><i class="fa-solid fa-thumbs-up"></i> ${likes}</button>
                     <button data-action="dislike" data-id="${id}" class="vote-btn dislike-btn${myVote === -1 ? ' voted' : ''}"${voteAttrs(-1)}><i class="fa-solid fa-thumbs-down"></i> ${dislikes}</button>
+                    <button type="button" data-action="reviews" data-id="${id}" class="vote-btn sh-review-btn" title="Bewertungen und Kommentare"><i class="fa-regular fa-comments"></i> ${reviewStats[String(item.id)]?.n || 0}</button>
                 </div>
                 ${action}
                 ${isOwner || isAdmin ? `<button type="button" data-action="delete" data-id="${id}" class="btn-delete" title="Setup löschen"><i class="fa-solid fa-trash-can"></i></button>` : ''}
@@ -645,7 +670,7 @@ async function downloadProFile(setup, btn) {
     window.location.href = url;
 }
 
-async function openSetupDetails(setup) {
+async function openSetupDetails(setup, { reviews = false } = {}) {
     const modal = document.getElementById('detailModal');
     const body = document.getElementById('detailBody');
     document.getElementById('detailTitle').textContent = `${setup.car_model} – ${setup.track_name}`;
@@ -653,16 +678,20 @@ async function openSetupDetails(setup) {
     body.innerHTML = '<p class="sh-empty">Lade …</p>';
     modal.style.display = 'flex';
     const contents = await loadContents(setup);
-    if (!contents || (!contents.manual_values && !(contents.screenshots || []).length)) {
-        body.innerHTML = '<p class="sh-empty">Zu diesem Setup gibt es keine Werte.</p>';
-        return;
-    }
+    const hasValues = Boolean(contents && (contents.manual_values || (contents.screenshots || []).length));
     body.innerHTML = `
         ${setup.description ? `<p class="sh-detail-desc"></p>` : ''}
-        ${contents.manual_values ? '<h4><i class="fa-solid fa-list-check"></i> Werte</h4><pre class="sh-values"></pre>' : ''}
-        ${(contents.screenshots || []).length ? '<h4><i class="fa-solid fa-image"></i> Screenshots</h4><div class="sh-shots"></div>' : ''}`;
+        ${hasValues && contents.manual_values ? '<h4><i class="fa-solid fa-list-check"></i> Werte</h4><pre class="sh-values"></pre>' : ''}
+        ${hasValues && (contents.screenshots || []).length ? '<h4><i class="fa-solid fa-image"></i> Screenshots</h4><div class="sh-shots"></div>' : ''}
+        <section class="sh-reviews"></section>`;
     if (setup.description) body.querySelector('.sh-detail-desc').textContent = setup.description;
-    if (contents.manual_values) body.querySelector('.sh-values').textContent = contents.manual_values;
+    if (hasValues && contents.manual_values) body.querySelector('.sh-values').textContent = contents.manual_values;
+    // Bewertungen und Kommentare (für alle Setups – Community und Pro)
+    const reviewBox = body.querySelector('.sh-reviews');
+    renderReviews(setup, reviewBox).then(() => {
+        if (reviews) reviewBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    if (!hasValues) return;
     const shots = body.querySelector('.sh-shots');
     for (const path of contents.screenshots || []) {
         const url = await fileUrl(setup, path);
@@ -675,6 +704,131 @@ async function openSetupDetails(setup) {
         a.querySelector('img').src = url;
         shots.appendChild(a);
     }
+}
+
+// Bewertungen und Kommentare zu einem Setup: Zusammenfassung, eigenes Formular, Liste
+async function renderReviews(setup, box) {
+    const setupId = String(setup.id);
+    box.innerHTML = '<h4><i class="fa-regular fa-comments"></i> Bewertungen &amp; Kommentare</h4><p class="sh-empty">Lade …</p>';
+    const { data: reviews, error } = await supabase.from('setup_reviews').select('*').eq('setup_id', setupId).order('created_at', { ascending: false });
+    if (error) {
+        box.innerHTML = `<h4><i class="fa-regular fa-comments"></i> Bewertungen &amp; Kommentare</h4><p class="sh-empty">${/setup_reviews|schema cache|does not exist/i.test(error.message || '')
+            ? 'Bewertungen sind in der Datenbank noch nicht eingerichtet.' : 'Bewertungen konnten nicht geladen werden.'}</p>`;
+        return;
+    }
+    const missing = [...new Set(reviews.map(r => r.user_id))].filter(id => !uploaderNames[id]);
+    if (missing.length) {
+        const { data: profiles } = await supabase.from('profiles').select('id, username').in('id', missing);
+        (profiles || []).forEach(p => { uploaderNames[p.id] = p.username; });
+    }
+    reviewStats[setupId] = { n: reviews.length };
+
+    const isOwner = currentUser && currentUser.id === setup.uploader_id;
+    const locked = setup.is_pro && !canSeePro && !isOwner;
+    const mine = currentUser && reviews.find(r => r.user_id === currentUser.id);
+    const counts = Object.fromEntries(Object.keys(SETUP_VERDICTS).map(k => [k, reviews.filter(r => r.verdict === k).length]));
+
+    box.innerHTML = `
+        <h4><i class="fa-regular fa-comments"></i> Bewertungen &amp; Kommentare <span class="sh-rev-count">(${reviews.length})</span></h4>
+        <div class="sh-rev-summary">${Object.entries(SETUP_VERDICTS).filter(([k]) => counts[k]).map(([k, [icon, label, tone]]) =>
+            `<span class="sh-rev-chip ${tone}"><i class="fa-solid ${icon}"></i> ${label} <strong>${counts[k]}</strong></span>`).join('') || '<span class="sh-rev-none">Noch keine Bewertungen – sei der Erste.</span>'}</div>
+        <div class="sh-rev-form-wrap"></div>
+        <div class="sh-rev-list"></div>`;
+
+    // Formular: nicht beim eigenen Setup, bei Pro Setups nur mit Zugang
+    const wrap = box.querySelector('.sh-rev-form-wrap');
+    if (!currentUser) wrap.innerHTML = '<p class="sh-rev-note">Melde dich an, um Setups zu bewerten.</p>';
+    else if (isOwner) wrap.innerHTML = '<p class="sh-rev-note"><i class="fa-solid fa-circle-info"></i> Das ist dein Setup – hier siehst du, was die Community dazu sagt.</p>';
+    else if (locked) wrap.innerHTML = '<p class="sh-rev-note"><i class="fa-solid fa-lock"></i> Pro Setups bewerten Mitglieder mit Pole oder Alliance.</p>';
+    else {
+        let verdict = mine?.verdict || null;
+        wrap.innerHTML = `
+            <form class="sh-rev-form">
+                <div class="sh-rev-verdicts" role="radiogroup" aria-label="Deine Bewertung">
+                    ${Object.entries(SETUP_VERDICTS).map(([k, [icon, label, tone]]) =>
+                        `<button type="button" class="sh-rev-verdict ${tone}" data-verdict="${k}" role="radio"><i class="fa-solid ${icon}"></i> ${label}</button>`).join('')}
+                </div>
+                <textarea class="sh-rev-text" rows="3" maxlength="1000" placeholder="Dein Kommentar (optional), z. B. „3 Zehntel schneller in Sektor 2“"></textarea>
+                <div class="sh-rev-actions">
+                    ${mine ? '<button type="button" class="sh-rev-delete-own"><i class="fa-solid fa-trash"></i> Löschen</button>' : ''}
+                    <button type="submit" class="sh-btn sh-rev-submit" disabled>${mine ? 'Bewertung ändern' : 'Bewertung abgeben'}</button>
+                </div>
+            </form>`;
+        const form = wrap.querySelector('form');
+        const submit = form.querySelector('.sh-rev-submit');
+        const text = form.querySelector('.sh-rev-text');
+        text.value = mine?.comment || '';
+        const sync = () => {
+            form.querySelectorAll('.sh-rev-verdict').forEach(b => {
+                const on = b.dataset.verdict === verdict;
+                b.classList.toggle('active', on);
+                b.setAttribute('aria-checked', String(on));
+            });
+            submit.disabled = !verdict;
+        };
+        form.querySelectorAll('.sh-rev-verdict').forEach(b => b.addEventListener('click', () => { verdict = b.dataset.verdict; sync(); }));
+        sync();
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!verdict) return;
+            submit.disabled = true;
+            const { error: saveError } = await supabase.rpc('review_setup', { _setup_id: setupId, _verdict: verdict, _comment: text.value.trim() || null });
+            if (saveError) {
+                submit.disabled = false;
+                return showToast(saveError.message || 'Die Bewertung konnte nicht gespeichert werden.', 'error');
+            }
+            showToast(mine ? 'Deine Bewertung wurde geändert.' : 'Danke für deine Bewertung!', 'success');
+            await renderReviews(setup, box);
+            renderSetups(false);
+        });
+        form.querySelector('.sh-rev-delete-own')?.addEventListener('click', () => deleteReview(setup, box, mine));
+    }
+
+    // Liste
+    const list = box.querySelector('.sh-rev-list');
+    reviews.forEach(r => {
+        const [icon, label, tone] = SETUP_VERDICTS[r.verdict] || ['fa-comment', r.verdict, 'mid'];
+        const item = document.createElement('article');
+        item.className = 'sh-rev-item';
+        item.innerHTML = `
+            <div class="sh-rev-head">
+                <strong></strong>
+                <span class="sh-rev-chip ${tone}"><i class="fa-solid ${icon}"></i> ${label}</span>
+                <span class="sh-rev-date">${escapeHtml(new Date(r.updated_at || r.created_at).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }))}</span>
+            </div>
+            ${r.comment ? '<p class="sh-rev-comment"></p>' : ''}`;
+        item.querySelector('strong').textContent = currentUser && r.user_id === currentUser.id ? 'Du' : (uploaderNames[r.user_id] || 'GSRA-Mitglied');
+        if (r.comment) item.querySelector('.sh-rev-comment').textContent = r.comment;
+        // Moderationsteam entfernt unpassende Kommentare (wird protokolliert)
+        if (isModerator && currentUser && r.user_id !== currentUser.id) {
+            const del = document.createElement('button');
+            del.type = 'button';
+            del.className = 'sh-rev-mod-delete';
+            del.title = 'Kommentar entfernen (Moderation)';
+            del.innerHTML = '<i class="fa-solid fa-trash"></i>';
+            del.addEventListener('click', () => deleteReview(setup, box, r));
+            item.querySelector('.sh-rev-head').appendChild(del);
+        }
+        list.appendChild(item);
+    });
+}
+
+async function deleteReview(setup, box, review) {
+    const own = currentUser && review.user_id === currentUser.id;
+    const confirmed = await showDialog({
+        icon: 'fa-trash',
+        title: own ? 'Deine Bewertung löschen?' : 'Kommentar entfernen?',
+        message: own ? 'Deine Bewertung und dein Kommentar zu diesem Setup werden gelöscht.' : 'Der Kommentar wird für alle entfernt. Das steht im Moderations-Protokoll.',
+        confirmText: own ? 'Löschen' : 'Entfernen',
+        cancelText: 'Abbrechen',
+        danger: true
+    });
+    if (!confirmed) return;
+    const { data, error } = await supabase.from('setup_reviews').delete().eq('id', review.id).select('id');
+    if (error || !data?.length) return showToast('Der Kommentar konnte nicht gelöscht werden.', 'error');
+    showToast(own ? 'Deine Bewertung wurde gelöscht.' : 'Der Kommentar wurde entfernt.', 'success');
+    await renderReviews(setup, box);
+    renderSetups(false);
 }
 
 // Hochladen: Datei mit passender Endung oder Werte/Screenshots; Pro Setups im privaten Speicher

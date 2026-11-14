@@ -168,16 +168,25 @@ function eventCard(ev) {
         </div>
         <div class="kal-side"></div>`;
 
+    // Beschreibung (optional) unter der Strecke
+    if (ev.description) {
+        const desc = document.createElement('p');
+        desc.className = 'kal-desc';
+        desc.textContent = ev.description;
+        card.querySelector('.kal-body').appendChild(desc);
+    }
+
     const side = card.querySelector('.kal-side');
-    if (ev.password) {
+    const password = ev.server_password || ev.password;
+    if (password) {
         const pw = document.createElement('button');
         pw.type = 'button';
         pw.className = 'kal-password';
         pw.title = 'Server-Passwort kopieren';
         pw.innerHTML = '<i class="fa-solid fa-key"></i> <code></code> <i class="fa-regular fa-copy"></i>';
-        pw.querySelector('code').textContent = ev.password;
+        pw.querySelector('code').textContent = password;
         pw.addEventListener('click', () => {
-            navigator.clipboard.writeText(ev.password).then(
+            navigator.clipboard.writeText(password).then(
                 () => showToast('Server-Passwort kopiert.', 'success'),
                 () => showToast('Kopieren nicht möglich – bitte markieren und kopieren.', 'error'));
         });
@@ -259,7 +268,9 @@ async function handleCreateEvent(e) {
         const simulation = document.getElementById('ev-sim').value;
         const track = document.getElementById('ev-track').value.trim();
         const dateValue = document.getElementById('ev-date').value;
-        const password = document.getElementById('ev-password').value.trim() || null;
+        // Spaltenname in der Datenbank: server_password (nicht „password“)
+        const server_password = document.getElementById('ev-password').value.trim() || null;
+        const description = document.getElementById('ev-description')?.value.trim() || null;
         // Eingabe ist Ortszeit – als genauer Zeitpunkt speichern
         const event_date = dateValue ? new Date(dateValue).toISOString() : null;
         if (!event_date) {
@@ -269,7 +280,7 @@ async function handleCreateEvent(e) {
 
         const { error } = await supabaseClient
             .from('events')
-            .insert([{ title, simulation, track, event_date, password }]);
+            .insert([{ title, simulation, track, event_date, server_password, description }]);
 
         if (error) {
             showToast('Fehler beim Erstellen: ' + eventErrorText(error), 'error');

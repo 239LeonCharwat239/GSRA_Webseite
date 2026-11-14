@@ -31,9 +31,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         currentUser = session.user;
         dashEmail.textContent = currentUser.email || "";
-        dashCreated.textContent = new Date(currentUser.created_at).toLocaleDateString("de-DE");
+        // Immer zweistellig: 01.09.2026 statt 1.9.2026
+        dashCreated.textContent = new Date(currentUser.created_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
         // Abo-Stufe (Paddock, Pole oder Alliance) – Details und Verwaltung auf der Abo-Seite
         if (typeof window.showPlanBadge === "function") window.showPlanBadge(document.getElementById("dashPlan"), currentUser.id);
+        if (typeof window.gsraRenderReputation === "function") window.gsraRenderReputation(document.getElementById("dashReputation"), currentUser.id);
 
         // Profil aus Tabelle laden
         let { data: profile } = await client
@@ -52,7 +54,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const nextNameChange = profile?.username_changed_at ? new Date(new Date(profile.username_changed_at).getTime() + 30 * 86400000) : null;
         if (nextNameChange && nextNameChange > new Date() && profile?.role !== "admin") {
             if (editUsername) editUsername.readOnly = true;
-            if (usernameHint) usernameHint.textContent = `Du hast deinen Namen kürzlich geändert – die nächste Änderung ist ab dem ${nextNameChange.toLocaleDateString("de-DE")} möglich.`;
+            if (usernameHint) usernameHint.textContent = `Du hast deinen Namen kürzlich geändert – die nächste Änderung ist ab dem ${nextNameChange.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })} möglich.`;
         }
         const showAvatar = (url) => {
             if (!dashAvatar) return;

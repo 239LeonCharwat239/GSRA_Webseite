@@ -33,11 +33,6 @@ window.gsraCropImage = (file, { size = 512, title = "Bildausschnitt wählen" } =
                 <input type="range" min="1" max="4" step="0.01" value="1" aria-label="Zoom">
                 <i class="fa-solid fa-magnifying-glass-plus"></i>
             </div>
-            <div class="gsra-crop-previews">
-                <span>Vorschau</span>
-                <canvas class="big"></canvas>
-                <canvas class="small"></canvas>
-            </div>
             <div class="gsra-dialog-actions">
                 <button type="button" class="gsra-dialog-btn secondary">Abbrechen</button>
                 <button type="button" class="gsra-dialog-btn primary">Übernehmen</button>
@@ -47,15 +42,9 @@ window.gsraCropImage = (file, { size = 512, title = "Bildausschnitt wählen" } =
     const stage = overlay.querySelector(".gsra-crop-stage");
     const canvas = stage.querySelector("canvas");
     const zoomInput = overlay.querySelector('input[type="range"]');
-    const [bigPreview, smallPreview] = overlay.querySelectorAll(".gsra-crop-previews canvas");
     stage.style.width = stage.style.height = `${STAGE}px`;
     canvas.width = canvas.height = Math.round(STAGE * dpr);
     const ctx = canvas.getContext("2d");
-    const previews = [[bigPreview, 72], [smallPreview, 36]].map(([c, px]) => {
-        c.width = c.height = Math.round(px * dpr);
-        c.style.width = c.style.height = `${px}px`;
-        return [c.getContext("2d"), c.width];
-    });
 
     // Zustand: Zoom (1 = Bild füllt den Rahmen genau) und Verschiebung der Bildmitte in Bühnen-Pixeln
     const cover = Math.max(STAGE / bitmap.width, STAGE / bitmap.height);
@@ -67,7 +56,7 @@ window.gsraCropImage = (file, { size = 512, title = "Bildausschnitt wählen" } =
         offsetX = Math.min(maxX, Math.max(-maxX, offsetX));
         offsetY = Math.min(maxY, Math.max(-maxY, offsetY));
     };
-    // Ausschnitt in Bild-Koordinaten (für Bühne, Vorschau und Ergebnis gleich)
+    // Ausschnitt in Bild-Koordinaten (für Bühne und Ergebnis gleich)
     const sourceRect = () => {
         const k = scale();
         const x0 = STAGE / 2 - (bitmap.width * k) / 2 + offsetX;
@@ -79,10 +68,6 @@ window.gsraCropImage = (file, { size = 512, title = "Bildausschnitt wählen" } =
         const [sx, sy, sw, sh] = sourceRect();
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(bitmap, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
-        previews.forEach(([pctx, px]) => {
-            pctx.clearRect(0, 0, px, px);
-            pctx.drawImage(bitmap, sx, sy, sw, sh, 0, 0, px, px);
-        });
     };
     const setZoom = (value, anchorX = 0, anchorY = 0) => {
         const next = Math.min(4, Math.max(1, value));

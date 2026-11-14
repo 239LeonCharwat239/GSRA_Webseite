@@ -152,6 +152,7 @@ async function openUserProfile(userId, context = {}) {
             <div class="gsra-profile-presence"></div>
             <p class="gsra-profile-bio"></p>
             <div class="gsra-profile-links"></div>
+            <div class="gsra-profile-reputation"></div>
             <div class="gsra-profile-status"></div>
             <div class="gsra-profile-actions"></div>
             <div class="gsra-profile-forums"></div>
@@ -289,6 +290,9 @@ function renderProfileContent(overlay, userId, context) {
     bio.textContent = profile.bio || "";
     bio.style.display = profile.bio ? "" : "none";
     renderSocialLinks(overlay.querySelector(".gsra-profile-links"), profile.social_links);
+    // Zufriedenheit (Marktplatz, Setups, später Coaching)
+    const reputation = overlay.querySelector(".gsra-profile-reputation");
+    if (reputation && typeof window.gsraRenderReputation === "function" && !reputation.childElementCount) window.gsraRenderReputation(reputation, userId);
 
     const statusEl = overlay.querySelector(".gsra-profile-status");
     const statusText = isMe ? "Das ist dein Profil."

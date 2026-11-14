@@ -151,6 +151,7 @@
                             <small>Verkäufer</small>
                             <strong id="modalSeller"></strong>
                             <span id="modalSellerPlan" class="plan-badge-slot"></span>
+                            <span id="modalSellerRating" class="mk-seller-rating"></span>
                         </div>
                         <span class="mk-seller-open">Profil <i class="fa-solid fa-chevron-right"></i></span>
                     </div>
@@ -165,6 +166,9 @@
                             </button>
                             <button id="modalDeleteBtn" class="mk-detail-link danger" style="display: none;">
                                 <i class="fa-solid fa-trash"></i> Löschen
+                            </button>
+                            <button id="modalRateBtn" class="mk-detail-link" style="display: none;" title="Verkäufer bewerten">
+                                <i class="fa-solid fa-star"></i> Verkäufer bewerten
                             </button>
                             <button id="modalReportBtn" class="mk-detail-link danger" style="display: none;" title="Inserat melden">
                                 <i class="fa-solid fa-flag"></i> Melden
@@ -296,6 +300,7 @@
     <script src="supabase-client.js"></script>
     <script src="auth-nav.js"></script>
     <script src="ui-dialogs.js"></script>
+    <script src="bewertungen.js"></script>
     <script src="profil-karte.js"></script>
     <script src="marktplatz.js"></script>
 </body>

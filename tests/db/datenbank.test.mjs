@@ -9,9 +9,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL] =
-    Array.from({ length: 22 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 22);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL] =
+    Array.from({ length: 23 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 23);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -64,7 +64,8 @@ create table public.marketplace (id uuid primary key default gen_random_uuid(), 
 ${ALT_SETUPS
     ? "create table public.setups (id uuid primary key default gen_random_uuid(), car_model text, track_name text, file_url text, created_at timestamptz default now());"
     : "create table public.setups (id uuid primary key default gen_random_uuid(), simulation text, car_model text, track_name text, file_url text, file_name text, uploader_id uuid, likes integer default 0, dislikes integer default 0, created_at timestamptz default now());"}
-create table public.events (id uuid primary key default gen_random_uuid(), title text, simulation text, track text, event_date timestamptz, password text);
+create table public.events (id uuid primary key default gen_random_uuid(), title text, simulation text, track text, event_date timestamptz, password text,
+  server_password text, description text, created_at timestamptz default now());   -- server_password/description wie in der echten Datenbank
 
 CREATE OR REPLACE FUNCTION public.is_chat_participant(_chat_id uuid) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public' AS $f$
   select exists (select 1 from public.chats c where c.id = _chat_id and ((c.title is not null and c.user1_id = c.user2_id) or c.user1_id = auth.uid() or c.user2_id = auth.uid())); $f$;
@@ -1130,6 +1131,99 @@ if (MODERATION_SQL) {
             check("Admin: legt weiterhin Events an", ev.error === null, ev.error || "");
             const log = await q(`select count(*) as n from public.moderation_log where action like 'event_%' and actor_id = '${MOD}'`);
             check("Event-Änderungen des Moderators stehen im Protokoll", Number(log.rows[0]?.n) === 3, log.error || String(log.rows[0]?.n));
+        });
+    }
+
+    // --- 023: Verkäufer bewerten, Setups kommentieren, Zufriedenheit im Profil ---
+    if (BEWERTUNGEN_SQL) {
+        const V = "90000000-0000-0000-0000-000000000001", K = "90000000-0000-0000-0000-000000000002";
+        const K2 = "90000000-0000-0000-0000-000000000003", K3 = "90000000-0000-0000-0000-000000000004";
+        await db.exec(`insert into auth.users (id) values ('${V}'), ('${K}'), ('${K2}'), ('${K3}');
+          insert into public.profiles (id, username, gsra_id) values ('${V}', 'Verkäufer Vera', 910001), ('${K}', 'Käufer Kai', 910002),
+            ('${K2}', 'Käufer ohne Kontakt', 910003), ('${K3}', 'Käufer ohne Antwort', 910004);`);
+        const L = (await one(`insert into public.marketplace (user_id, title, price) values ('${V}', 'Fanatec CSL DD', 350) returning id::text as id`)).id;
+        // Kai und Vera haben geschrieben (beide Seiten), K3 hat nur selbst geschrieben
+        const chatKV = (await one(`insert into public.chats (user1_id, user2_id) values ('${K}', '${V}') returning id`)).id;
+        const chatK3 = (await one(`insert into public.chats (user1_id, user2_id) values ('${K3}', '${V}') returning id`)).id;
+        await db.exec(`insert into public.messages (chat_id, sender_id, text) values ('${chatKV}', '${K}', 'Ist das Lenkrad noch da?'),
+            ('${chatKV}', '${V}', 'Ja, gerne!'), ('${chatK3}', '${K3}', 'Hallo?')`);
+
+        await db.exec(readFileSync(BEWERTUNGEN_SQL, "utf8"));
+        const ctl23 = await db.exec(readFileSync(BEWERTUNGEN_SQL, "utf8")); // zweiter Lauf
+        const rows23 = ctl23[ctl23.length - 1].rows;
+        console.log("Kontrolle 023:\n  " + rows23.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+        check("Kontrolle 023: Tabellen geschützt, nur über Funktionen", rows23[0].ergebnis === "2 von 2" && rows23[1].ergebnis === "ja" && rows23[2].ergebnis === "ja", rows23.map(r => r.ergebnis).join(", "));
+
+        await as(K, async () => {
+            const r1 = await q(`select public.rate_seller('${L}', 1, array['freundlich', 'schnelle_antwort', 'spam'], 'Super Abwicklung!')`);
+            check("Käufer mit Kontakt: bewertet den Verkäufer", r1.error === null, r1.error || "");
+            const row = await q(`select rating, tags, comment, listing_title from public.seller_ratings where rater_id = '${K}'`);
+            check("Bewertung gespeichert, unbekannte Merkmale verworfen", row.rows[0]?.rating === 1 && JSON.stringify(row.rows[0]?.tags) === '["freundlich","schnelle_antwort"]' && row.rows[0]?.listing_title === "Fanatec CSL DD", JSON.stringify(row.rows[0]));
+            const r2 = await q(`select public.rate_seller('${L}', 0, array['zuverlaessig'], 'Doch nur okay')`);
+            const count = await q(`select count(*) as n, min(rating) as r from public.seller_ratings where rater_id = '${K}'`);
+            check("Erneut bewerten ändert die Bewertung (keine zweite)", r2.error === null && Number(count.rows[0]?.n) === 1 && Number(count.rows[0]?.r) === 0, r2.error || JSON.stringify(count.rows[0]));
+            const direct = await q(`insert into public.seller_ratings (listing_id, seller_id, rater_id, rating) values ('${L}', '${V}', '${K}', 1)`);
+            check("Direkt in die Tabelle schreiben verboten", direct.error !== null, direct.error || "durchgelassen!");
+            const fake = await q(`update public.seller_ratings set rating = 1`);
+            check("Bewertungen nicht direkt änderbar", fake.error !== null, fake.error || "durchgelassen!");
+            const rep = await q(`select public.profile_reputation('${V}') as r`);
+            const m = rep.rows[0]?.r?.marktplatz;
+            check("Zufriedenheit im Profil zählt die Bewertung", m?.anzahl === 1 && m?.ok === 1 && m?.zuverlaessig === 1, rep.error || JSON.stringify(m));
+        });
+        await as(K2, async () => {
+            const r = await q(`select public.rate_seller('${L}', -1)`);
+            check("Ohne Kontakt keine Bewertung", /sobald du mit dem Verkäufer/.test(r.error || ""), r.error || "durchgelassen!");
+            const del = await q(`delete from public.seller_ratings returning id`);
+            check("Fremde Bewertungen nicht löschbar", del.rows.length === 0, del.error || `${del.rows.length} gelöscht!`);
+        });
+        await as(K3, async () => {
+            const r = await q(`select public.rate_seller('${L}', -1)`);
+            check("Ohne Antwort des Verkäufers keine Bewertung", /sobald du mit dem Verkäufer/.test(r.error || ""), r.error || "durchgelassen!");
+        });
+        await as(V, async () => {
+            const r = await q(`select public.rate_seller('${L}', 1)`);
+            check("Eigenes Inserat nicht bewertbar", /eigenes Inserat/.test(r.error || ""), r.error || "durchgelassen!");
+        });
+        await as(null, async () => {
+            const r = await q(`select public.profile_reputation('${V}')`);
+            check("Gäste sehen keine Bewertungen", r.error !== null, r.error || "durchgelassen!");
+            const t = await q(`select count(*) as n from public.seller_ratings`);
+            check("Gäste lesen die Tabelle nicht", t.error !== null || Number(t.rows[0]?.n) === 0, t.error || String(t.rows[0]?.n));
+        });
+
+        // Setups: Community-Setup von Vera und ein Pro Setup von Vera (als Pro-Fahrerin)
+        await db.exec(`insert into public.pro_creators (user_id) values ('${V}')`);
+        const SV = (await one(`insert into public.setups (simulation, car_model, track_name, file_name, file_url, uploader_id) values ('ACC', 'Porsche 992', 'Monza', 'monza.json', 'https://x.supabase.co/storage/v1/object/public/setups/${V}/monza.json', '${V}') returning id::text as id`)).id;
+        const SP = (await one(`insert into public.setups (simulation, car_model, track_name, file_name, is_pro, uploader_id) values ('ACC', 'BMW M4 GT3', 'Spa', 'spa.json', true, '${V}') returning id::text as id`)).id;
+        await as(K, async () => {
+            const r = await q(`select public.review_setup('${SV}', 'hilfreich', 'Top Setup, 3 Zehntel schneller!')`);
+            check("Setup kommentieren und bewerten", r.error === null, r.error || "");
+            const again = await q(`select public.review_setup('${SV}', 'nicht_wie_beschrieben', 'Doch nicht wie beschrieben')`);
+            const n = await q(`select count(*) as n, max(verdict) as v from public.setup_reviews where user_id = '${K}'`);
+            check("Erneut kommentieren ändert den eigenen Kommentar", again.error === null && Number(n.rows[0]?.n) === 1 && n.rows[0]?.v === "nicht_wie_beschrieben", again.error || JSON.stringify(n.rows[0]));
+            const bad = await q(`select public.review_setup('${SV}', 'super')`);
+            check("Unbekannte Bewertung abgelehnt", bad.error !== null, bad.error || "durchgelassen!");
+            const pro = await q(`select public.review_setup('${SP}', 'hilfreich')`);
+            check("Pro Setup ohne Zugang nicht bewertbar", /Pro Setups bewerten nur/.test(pro.error || ""), pro.error || "durchgelassen!");
+            const rep = await q(`select public.profile_reputation('${V}') as r`);
+            check("Zufriedenheit mit Setups im Profil", rep.rows[0]?.r?.setups?.anzahl === 1 && rep.rows[0]?.r?.setups?.nicht_wie_beschrieben === 1, rep.error || JSON.stringify(rep.rows[0]?.r?.setups));
+        });
+        await as(V, async () => {
+            const r = await q(`select public.review_setup('${SV}', 'hilfreich')`);
+            check("Eigenes Setup nicht bewertbar", /eigenes Setup/.test(r.error || ""), r.error || "durchgelassen!");
+        });
+        await as(K2, async () => {
+            const r = await q(`select public.review_setup('${SV}', 'okay', 'Geht so')`);
+            const del = await q(`delete from public.setup_reviews where user_id = '${K2}' returning id`);
+            check("Eigenen Kommentar löschen", r.error === null && del.rows.length === 1, r.error || del.error || "nichts gelöscht");
+        });
+        await withClaims(MOD, "aal2", async () => {
+            const del = await q(`delete from public.seller_ratings where rater_id = '${K}' returning id`);
+            check("Moderator entfernt eine unpassende Bewertung", del.rows.length === 1, del.error || "nichts gelöscht");
+        });
+        await withClaims(U.admin, "aal2", async () => {
+            const log = await q(`select count(*) as n from public.moderation_log where action = 'bewertung_geloescht' and actor_id = '${MOD}'`);
+            check("Entfernte Bewertung steht im Protokoll", Number(log.rows[0]?.n) === 1, log.error || String(log.rows[0]?.n));
         });
     }
 }

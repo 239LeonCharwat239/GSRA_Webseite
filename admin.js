@@ -444,7 +444,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             setup_geloescht: ["fa-car", `hat das Setup „${[d(e).fahrzeug, d(e).strecke].filter(Boolean).join(" · ")}“ gelöscht`],
             event_angelegt: ["fa-calendar-plus", `hat das Event „${d(e).titel || ""}“ angelegt`],
             event_geaendert: ["fa-calendar-check", `hat das Event „${d(e).titel || ""}“ geändert`],
-            event_geloescht: ["fa-calendar-xmark", `hat das Event „${d(e).titel || ""}“ gelöscht`]
+            event_geloescht: ["fa-calendar-xmark", `hat das Event „${d(e).titel || ""}“ gelöscht`],
+            bewertung_geloescht: ["fa-star-half-stroke", `hat eine Verkäufer-Bewertung entfernt${d(e).inserat ? ` (Inserat „${d(e).inserat}“)` : ""}`],
+            kommentar_geloescht: ["fa-comment-slash", "hat einen Setup-Kommentar entfernt"]
         }[e.action] || ["fa-circle-info", e.action]);
         const table = document.createElement("div");
         table.className = "admin-log";

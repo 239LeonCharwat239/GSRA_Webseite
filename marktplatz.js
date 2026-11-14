@@ -830,6 +830,18 @@ function openDetailModal(item) {
             openSeller();
         };
     }
+    // Zufriedenheit des Verkäufers (TOP / OK / Na ja und Anzahl der Bewertungen)
+    const sellerRating = document.getElementById("modalSellerRating");
+    if (sellerRating) {
+        sellerRating.replaceChildren();
+        if (sellerId && typeof window.gsraRenderReputation === "function") window.gsraRenderReputation(sellerRating, sellerId, { compact: true });
+    }
+    // Verkäufer bewerten (nur nach Kontakt im Messenger – das prüft die Datenbank)
+    const modalRateBtn = document.getElementById("modalRateBtn");
+    if (modalRateBtn) {
+        modalRateBtn.style.display = currentUser && !isOwner && sellerId && window.gsraRateSellerDialog ? "" : "none";
+        modalRateBtn.onclick = () => rateSeller(item, sellerId, modalSeller?.textContent || sellerName);
+    }
     if (sellerId && supabase) {
         supabase.from("profiles").select("username, avatar_url").eq("id", sellerId).maybeSingle().then(({ data }) => {
             if (!data) return;
@@ -998,6 +1010,34 @@ async function setListingStatus(item, nextStatus) {
 }
 
 // Inserat melden: Grund wählen (bei „Sonstiges“ kurz beschreiben), landet im Admin-Bereich
+// Verkäufer bewerten: eigene Bewertung zu diesem Inserat laden, Dialog zeigen, speichern oder löschen
+async function rateSeller(item, sellerId, sellerName) {
+    const supabase = window.supabaseClient || window.supabase;
+    if (!currentUser || !supabase || !sellerId) return;
+    const listingId = String(item.id);
+    const { data: existing, error: loadError } = await supabase.from("seller_ratings")
+        .select("rating, tags, comment").eq("listing_id", listingId).eq("rater_id", currentUser.id).maybeSingle();
+    if (loadError && /seller_ratings|schema cache|does not exist/i.test(loadError.message || "")) {
+        showToast("Bewertungen sind in der Datenbank noch nicht eingerichtet.", "error");
+        return;
+    }
+    const result = await window.gsraRateSellerDialog({ sellerName, listingTitle: item.title, existing });
+    if (!result) return;
+    let error;
+    if (result.remove) {
+        ({ error } = await supabase.from("seller_ratings").delete().eq("listing_id", listingId).eq("rater_id", currentUser.id));
+    } else {
+        ({ error } = await supabase.rpc("rate_seller", { _listing_id: listingId, _rating: result.rating, _tags: result.tags, _comment: result.comment || null }));
+    }
+    if (error) {
+        showToast(error.message || "Die Bewertung konnte nicht gespeichert werden.", "error");
+        return;
+    }
+    showToast(result.remove ? "Deine Bewertung wurde gelöscht." : existing ? "Deine Bewertung wurde geändert." : "Danke für deine Bewertung!", "success");
+    const sellerRating = document.getElementById("modalSellerRating");
+    if (sellerRating && typeof window.gsraRenderReputation === "function") window.gsraRenderReputation(sellerRating, sellerId, { compact: true, fresh: true });
+}
+
 async function reportListing(item) {
     const supabase = window.supabaseClient || window.supabase;
     const reason = await showDialog({
