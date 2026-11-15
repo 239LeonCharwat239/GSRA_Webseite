@@ -24,6 +24,7 @@
             <a href="index.html">Home</a>
             <a href="marktplatz.html" class="active">Marktplatz</a>
             <a href="setups.html">Setups</a>
+            <a href="coaching.html">Coaching</a>
             <a href="nachschlagewerk.html">Nachschlagewerk</a>
             <a href="kalender.html">Rennkalender</a>
             <a href="dashboard.html">Dashboard</a>
@@ -110,7 +111,15 @@
         <section class="mk-results">
             <!-- Top-Anzeigen (bezahlter Bonus) über den normalen Angeboten -->
             <div id="marketplaceTop" class="mk-top" hidden>
-                <div class="mk-top-head"><i class="fa-solid fa-crown"></i> Top-Anzeigen</div>
+                <div class="mk-top-head">
+                    <span><i class="fa-solid fa-crown"></i> Top-Anzeigen <small id="topCount" class="mk-top-count"></small></span>
+                    <!-- Mehr Top-Anzeigen als Plätze: sie wechseln sich fair ab (blättern statt seitwärts scrollen) -->
+                    <div id="topPager" class="mk-top-pager" hidden>
+                        <button type="button" id="topPrev" class="mk-top-nav" aria-label="Vorherige Top-Anzeigen"><i class="fa-solid fa-chevron-left"></i></button>
+                        <span id="topPageInfo" class="mk-top-page" aria-live="polite"></span>
+                        <button type="button" id="topNext" class="mk-top-nav" aria-label="Weitere Top-Anzeigen"><i class="fa-solid fa-chevron-right"></i></button>
+                    </div>
+                </div>
                 <div id="marketplaceTopGrid" class="mk-grid mk-top-grid"></div>
             </div>
             <div id="marketplaceGrid" class="mk-grid">

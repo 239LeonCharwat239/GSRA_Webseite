@@ -254,6 +254,7 @@ const initAuthNav = async () => {
     if (session?.user?.id) showAdminLink(session.user.id);
 
     if (session?.user?.id) {
+        startVisibilityHeader(client);
         checkLiveUnreadMessages(session.user.id, session.user.created_at);
         touchPresence();
         markDelivered();
@@ -302,11 +303,63 @@ const initAuthNav = async () => {
     }
 };
 
+// Visibility-Header: Namen der Mitglieder mit Pole oder Alliance schweben hinter der Navigation von links nach rechts.
+// Fair: Alle Namen werden gemischt und nacheinander gezeigt, erst danach neu gemischt – jeder kommt gleich oft dran.
+// Wer das nicht möchte, schaltet es im Dashboard ab. Bei „Bewegung reduzieren“ (Systemeinstellung) bleibt es aus.
+async function startVisibilityHeader(client) {
+    const header = document.querySelector("header");
+    if (!header || header.querySelector(".gsra-visibility")) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const { data, error } = await client.rpc("visibility_names");
+    if (error || !Array.isArray(data) || !data.length) return;
+    const layer = document.createElement("div");
+    layer.className = "gsra-visibility";
+    layer.setAttribute("aria-hidden", "true");
+    header.prepend(layer);
+
+    let queue = [];
+    const nextName = () => {
+        if (!queue.length) {
+            queue = data.slice();
+            for (let i = queue.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [queue[i], queue[j]] = [queue[j], queue[i]];
+            }
+        }
+        return queue.pop();
+    };
+    // Feste Spuren übereinander: pro Spur schwebt immer nur ein Name, so überlappen sich keine Namen
+    const lanes = () => (window.innerWidth < 700 ? [18, 58] : [6, 28, 50, 72]);
+    const busy = new Set();
+    const spawn = () => {
+        if (document.hidden) return;
+        const free = lanes().filter(top => !busy.has(top));
+        if (!free.length) return;
+        const entry = nextName();
+        if (!entry?.username) return;
+        const top = free[Math.floor(Math.random() * free.length)];
+        busy.add(top);
+        const el = document.createElement("span");
+        el.className = `gsra-vis-name ${entry.plan === "alliance" ? "alliance" : "pole"}`;
+        el.textContent = entry.username;
+        el.style.top = `${top}%`;
+        el.style.animationDuration = `${16 + Math.random() * 8}s`;
+        el.addEventListener("animationend", () => {
+            busy.delete(top);
+            el.remove();
+        });
+        layer.appendChild(el);
+    };
+    spawn();
+    setInterval(spawn, 3800);
+}
+
 // Nicht angemeldet: Hinweis über der ganzen Seite im Design des Messengers – auf jeder Unterseite außer der Startseite
 const LOGIN_REQUIRED_TEXTS = {
     messenger: ["den Messenger", "Mit deinem GSRA-Konto chattest du mit Freunden, trittst Foren bei und bleibst im offiziellen GSRA-Forum auf dem Laufenden."],
     marktplatz: ["den Marktplatz", "Mit deinem GSRA-Konto kaufst und verkaufst du Sim-Racing-Hardware in der Community."],
     setups: ["die Setups", "Mit deinem GSRA-Konto lädst du Setups herunter und teilst deine eigenen mit der Community."],
+    coaching: ["das Coaching", "Mit deinem GSRA-Konto buchst du Coachings bei erfahrenen Fahrern – oder bietest mit Pole oder Alliance selbst welche an."],
     nachschlagewerk: ["das Nachschlagewerk", "Mit deinem GSRA-Konto hast du Zugriff auf das komplette Sim-Racing-Wissen der GSRA."],
     kalender: ["den Rennkalender", "Mit deinem GSRA-Konto siehst du alle Rennen und Events der GSRA-Community."],
     dashboard: ["dein Dashboard", "Im Dashboard verwaltest du dein Profil, dein Profilbild und deine GSRA-ID."],

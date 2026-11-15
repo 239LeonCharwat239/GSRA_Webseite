@@ -44,6 +44,23 @@ document.addEventListener("DOMContentLoaded", async () => {
             .eq("id", currentUser.id)
             .maybeSingle();
 
+        // Visibility-Header: eigenen Namen zeigen oder nicht (Standard: an; wirkt nur mit Pole oder Alliance)
+        const showInHeader = document.getElementById("dashShowInHeader");
+        if (showInHeader) {
+            const supported = profile && Object.prototype.hasOwnProperty.call(profile, "show_in_header");
+            showInHeader.closest(".dash-visibility-toggle").hidden = !supported;
+            showInHeader.checked = profile?.show_in_header !== false;
+            showInHeader.addEventListener("change", async () => {
+                const { error } = await client.from("profiles").update({ show_in_header: showInHeader.checked }).eq("id", currentUser.id);
+                if (error) {
+                    showInHeader.checked = !showInHeader.checked;
+                    showToast("Die Einstellung konnte nicht gespeichert werden.", "error");
+                    return;
+                }
+                showToast(showInHeader.checked ? "Dein Name schwebt jetzt im Visibility-Header mit (mit Pole oder Alliance)." : "Dein Name erscheint nicht mehr im Visibility-Header.", "success");
+            });
+        }
+
         let username = profile?.username || currentUser.user_metadata?.username || currentUser.email.split("@")[0];
         dashUsername.textContent = username;
         if (editUsername) editUsername.value = username;

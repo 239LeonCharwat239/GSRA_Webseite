@@ -235,21 +235,64 @@ function renderCreateBoosts(item = null) {
     updateSubmitLabel();
 }
 
-// Top-Anzeigen über den Angeboten (passend zu den aktuellen Filtern, zufällige Auswahl)
+// Top-Anzeigen über den Angeboten (passend zu den aktuellen Filtern).
+// Fair: Die Datenbank mischt alle passenden Top-Anzeigen zufällig; gezeigt werden 4 (Handy: 2) auf einmal,
+// danach wechseln sie automatisch – so kommt im Durchlauf jede Anzeige gleich oft und gleich lange dran.
 let topRequest = 0;
+let topAds = [];
+let topPage = 0;
+let topTimer = null;
+const TOP_ROTATE_MS = 8000;
+const topSlots = () => (window.matchMedia("(max-width: 600px)").matches ? 2 : 4);
+const topPageCount = () => Math.max(1, Math.ceil(topAds.length / topSlots()));
+
+function renderTopPage() {
+    const slots = topSlots();
+    const pages = topPageCount();
+    topPage = ((topPage % pages) + pages) % pages;
+    marketplaceTopGrid.classList.remove("mk-top-fade");
+    void marketplaceTopGrid.offsetWidth; // Einblenden neu starten
+    marketplaceTopGrid.classList.add("mk-top-fade");
+    marketplaceTopGrid.replaceChildren(...topAds.slice(topPage * slots, topPage * slots + slots).map(item => createListingCard(item, true)));
+    const pager = document.getElementById("topPager");
+    if (pager) pager.hidden = pages <= 1;
+    const info = document.getElementById("topPageInfo");
+    if (info) info.textContent = `${topPage + 1} / ${pages}`;
+    const count = document.getElementById("topCount");
+    if (count) count.textContent = topAds.length > slots ? `· ${topAds.length} im Wechsel` : "";
+}
+
+function scheduleTopRotation() {
+    clearInterval(topTimer);
+    if (topPageCount() <= 1) return;
+    topTimer = setInterval(() => {
+        // Pausieren, solange man hinschaut (Maus/Fokus), ein Inserat offen ist oder der Tab im Hintergrund liegt
+        const detailOpen = itemDetailModal && itemDetailModal.style.display === "flex";
+        if (document.hidden || detailOpen || marketplaceTop.matches(":hover") || marketplaceTop.contains(document.activeElement)) return;
+        topPage++;
+        renderTopPage();
+    }, TOP_ROTATE_MS);
+}
+
 async function loadTopAds(rpcArgs) {
     if (!marketplaceTop || !marketplaceTopGrid) return;
     const supabase = window.supabaseClient || window.supabase;
     const requestId = ++topRequest;
-    const { data, error } = await supabase.rpc("search_marketplace", { ...rpcArgs, _top_only: true, _limit: 4, _offset: 0 });
+    const { data, error } = await supabase.rpc("search_marketplace", { ...rpcArgs, _top_only: true, _limit: 60, _offset: 0 });
     // Klappt die Top-Suche, ist die Bezahlung in der Datenbank eingerichtet (Boni dann auch beim Erstellen anbieten)
     boostsReady = !error;
     if (requestId !== topRequest) return;
-    const rows = error ? [] : (data || []).map(row => ({ ...row.item, _distance: row.distance_km }));
-    marketplaceTop.hidden = rows.length === 0;
-    marketplaceTopGrid.innerHTML = "";
-    rows.forEach(item => marketplaceTopGrid.appendChild(createListingCard(item, true)));
+    topAds = error ? [] : (data || []).map(row => ({ ...row.item, _distance: row.distance_km }));
+    marketplaceTop.hidden = topAds.length === 0;
+    // Zufällige Startseite, damit auch beim Seitenaufruf niemand bevorzugt wird
+    topPage = Math.floor(Math.random() * topPageCount());
+    renderTopPage();
+    scheduleTopRotation();
 }
+
+document.getElementById("topPrev")?.addEventListener("click", () => { topPage--; renderTopPage(); scheduleTopRotation(); });
+document.getElementById("topNext")?.addEventListener("click", () => { topPage++; renderTopPage(); scheduleTopRotation(); });
+window.matchMedia("(max-width: 600px)").addEventListener?.("change", () => { if (topAds.length) { renderTopPage(); scheduleTopRotation(); } });
 const modalFacts = document.getElementById("modalFacts");
 const modalSeller = document.getElementById("modalSeller");
 const modalSellerAvatar = document.getElementById("modalSellerAvatar");

@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coaching | GSRA</title>
+
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha256-7jvo3hkrl8sdc9HpXWuCux9rZYwPl8TvdX/DMZlu09M=" crossorigin="anonymous"></script>
+    <script src="supabase-client.js"></script>
+    <script src="auth-nav.js"></script>
+</head>
+<body>
+
+<header>
+    <div class="logo-slogan-container">
+        <a href="index.html" class="logo-link">
+            <img src="GSRA_Logo_ohne Hintergrund.png" alt="GSRA Logo" class="logo">
+        </a>
+        <div class="header-slogan">
+            <span class="text-blue">UNITED BY SPEED.</span>
+            <span class="text-yellow">DRIVEN GLOBALLY.</span>
+        </div>
+    </div>
+
+    <nav>
+        <a href="index.html">Home</a>
+        <a href="marktplatz.html">Marktplatz</a>
+        <a href="setups.html">Setups</a>
+        <a href="coaching.html" class="active">Coaching</a>
+        <a href="nachschlagewerk.html">Nachschlagewerk</a>
+        <a href="kalender.html">Rennkalender</a>
+        <a href="dashboard.html">Dashboard</a>
+        <a href="messenger.html">Messenger</a>
+        <a href="login.html" class="login-btn" id="loginNavBtn">Login</a>
+        <button id="logoutBtn" class="login-btn" style="display: none;">Logout</button>
+    </nav>
+</header>
+
+    <div class="container co-page">
+
+        <section class="hero-section co-hero">
+            <h1 class="hero-title">GSRA <span class="text-blue">COACHING</span></h1>
+            <p class="hero-subtitle text-yellow">Lerne von erfahrenen Fahrern aus der Community – zu ihrem eigenen Preis.</p>
+        </section>
+
+        <!-- So funktioniert's -->
+        <div class="co-facts">
+            <div class="co-fact"><i class="fa-solid fa-chalkboard-user"></i><div><strong>Coaches mit Pole oder Alliance</strong><span>Wer ein Abo hat, kann eigene Coachings anbieten und den Preis selbst festlegen.</span></div></div>
+            <div class="co-fact"><i class="fa-solid fa-hand-holding-dollar"></i><div><strong>100 % für den Coach</strong><span>Der Coach erhält seinen vollen Preis – die GSRA behält davon nichts ein.</span></div></div>
+            <div class="co-fact"><i class="fa-solid fa-receipt"></i><div><strong>Servicegebühr nur mit Paddock</strong><span>Mit Paddock kommen 10 % Servicegebühr dazu, mit Pole oder Alliance zahlst du keine.</span></div></div>
+        </div>
+
+        <div class="co-tabs" role="tablist">
+            <button type="button" class="co-tab active" data-tab="angebote" role="tab"><i class="fa-solid fa-store"></i> Angebote</button>
+            <button type="button" class="co-tab" data-tab="anfragen" role="tab"><i class="fa-solid fa-paper-plane"></i> Meine Anfragen <span class="co-badge" id="coBadgeBuyer" hidden></span></button>
+            <button type="button" class="co-tab" data-tab="coach" role="tab"><i class="fa-solid fa-user-tie"></i> Als Coach <span class="co-badge" id="coBadgeCoach" hidden></span></button>
+        </div>
+
+        <!-- Angebote -->
+        <section class="co-panel" data-panel="angebote">
+            <div class="co-toolbar">
+                <div id="coCategories" class="co-cats" role="group" aria-label="Nach Kategorie filtern"></div>
+                <div class="co-toolbar-right">
+                    <input type="search" id="coSearch" class="co-search" placeholder="Suche: Coach, Thema …" title="Nach Coach, Thema, Simulation oder Strecke suchen" aria-label="Coachings durchsuchen" maxlength="80">
+                    <button type="button" id="coOfferBtn" class="co-primary-btn"><i class="fa-solid fa-plus"></i> Coaching anbieten</button>
+                </div>
+            </div>
+            <p id="coFeeHint" class="co-fee-hint" hidden></p>
+            <div id="coOffers" class="co-grid" aria-live="polite">
+                <div class="co-empty"><i class="fa-solid fa-spinner fa-spin"></i> Lade Coachings …</div>
+            </div>
+        </section>
+
+        <!-- Meine Anfragen (als Käufer) -->
+        <section class="co-panel" data-panel="anfragen" hidden>
+            <div id="coBuyerList" class="co-list"></div>
+        </section>
+
+        <!-- Als Coach: eigene Angebote und eingehende Anfragen -->
+        <section class="co-panel" data-panel="coach" hidden>
+            <h2 class="co-section-title"><i class="fa-solid fa-inbox"></i> Anfragen an dich</h2>
+            <div id="coCoachRequests" class="co-list"></div>
+            <h2 class="co-section-title"><i class="fa-solid fa-chalkboard-user"></i> Deine Angebote</h2>
+            <div id="coMyOffers" class="co-list"></div>
+        </section>
+    </div>
+
+    <!-- Angebot anlegen / bearbeiten -->
+    <div id="coOfferModal" class="gsra-dialog-overlay" hidden>
+        <div class="gsra-dialog co-dialog" role="dialog" aria-modal="true" aria-labelledby="coOfferTitle">
+            <button type="button" class="gsra-dialog-close" data-close="coOfferModal" title="Schließen"><i class="fa-solid fa-xmark"></i></button>
+            <div class="gsra-dialog-icon"><i class="fa-solid fa-chalkboard-user"></i></div>
+            <h3 class="gsra-dialog-title" id="coOfferTitle">Coaching anbieten</h3>
+            <form id="coOfferForm" class="co-form">
+                <label class="co-field co-wide"><span>Titel</span>
+                    <input type="text" id="coTitle" maxlength="100" placeholder="z. B. 2 Stunden gemeinsam fahren: Linien und Bremspunkte" required></label>
+                <label class="co-field"><span>Kategorie</span>
+                    <select id="coCategory">
+                        <option value="Fahrtechnik">Fahrtechnik</option>
+                        <option value="Setup">Setup</option>
+                        <option value="Rennstrategie">Rennstrategie</option>
+                        <option value="Einsteiger">Einsteiger</option>
+                        <option value="Datenanalyse">Datenanalyse</option>
+                        <option value="Sonstiges">Sonstiges</option>
+                    </select></label>
+                <label class="co-field"><span>Simulation <small>(optional)</small></span>
+                    <input type="text" id="coSim" maxlength="60" placeholder="z. B. iRacing"></label>
+                <label class="co-field"><span>Dauer</span>
+                    <select id="coDuration">
+                        <option value="30">30 Minuten</option>
+                        <option value="60" selected>1 Stunde</option>
+                        <option value="90">1,5 Stunden</option>
+                        <option value="120">2 Stunden</option>
+                        <option value="180">3 Stunden</option>
+                        <option value="240">4 Stunden</option>
+                    </select></label>
+                <label class="co-field"><span>Dein Preis in €</span>
+                    <input type="text" id="coPrice" inputmode="decimal" maxlength="8" placeholder="z. B. 40" required></label>
+                <label class="co-field co-wide"><span>Beschreibung <small>(optional)</small></span>
+                    <textarea id="coDescription" rows="4" maxlength="2000" placeholder="Was lernt man bei dir? Für wen ist das Coaching gedacht? Wie läuft es ab (z. B. Discord, gemeinsamer Server)?"></textarea></label>
+                <label class="co-check co-wide"><input type="checkbox" id="coActive" checked> <span>Angebot sichtbar (kann jederzeit pausiert werden)</span></label>
+                <p class="co-form-note co-wide">Du erhältst deinen Preis zu 100 %. Mitglieder mit Paddock zahlen 10 % Servicegebühr zusätzlich.</p>
+                <div class="gsra-dialog-actions co-wide">
+                    <button type="button" class="gsra-dialog-btn secondary" data-close="coOfferModal">Abbrechen</button>
+                    <button type="submit" class="gsra-dialog-btn primary">Speichern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Coaching anfragen -->
+    <div id="coBookModal" class="gsra-dialog-overlay" hidden>
+        <div class="gsra-dialog co-dialog" role="dialog" aria-modal="true" aria-labelledby="coBookTitle">
+            <button type="button" class="gsra-dialog-close" data-close="coBookModal" title="Schließen"><i class="fa-solid fa-xmark"></i></button>
+            <div class="gsra-dialog-icon"><i class="fa-solid fa-calendar-check"></i></div>
+            <h3 class="gsra-dialog-title" id="coBookTitle">Coaching anfragen</h3>
+            <p class="co-book-sub" id="coBookSub"></p>
+            <dl class="co-price-table" id="coBookPrice"></dl>
+            <form id="coBookForm" class="co-form">
+                <label class="co-field co-wide"><span>Wunschtermin <small>(optional)</small></span>
+                    <input type="text" id="coBookTime" maxlength="200" placeholder="z. B. Samstag ab 18 Uhr oder nächste Woche abends"></label>
+                <label class="co-field co-wide"><span>Nachricht an den Coach <small>(optional)</small></span>
+                    <textarea id="coBookMessage" rows="3" maxlength="1000" placeholder="Was möchtest du verbessern? Welches Auto, welche Strecke?"></textarea></label>
+                <p class="co-form-note co-wide"><i class="fa-solid fa-circle-info"></i> Der Coach bestätigt deine Anfrage. Die Bezahlung über die GSRA folgt in Kürze – bis dahin stimmt ihr euch im Messenger ab.</p>
+                <div class="gsra-dialog-actions co-wide">
+                    <button type="button" class="gsra-dialog-btn secondary" data-close="coBookModal">Abbrechen</button>
+                    <button type="submit" class="gsra-dialog-btn primary">Anfrage senden</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="ui-dialogs.js"></script>
+    <script src="bewertungen.js"></script>
+    <script src="profil-karte.js"></script>
+    <script src="coaching.js"></script>
+</body>
+</html>

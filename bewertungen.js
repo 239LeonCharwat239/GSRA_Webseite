@@ -13,17 +13,21 @@
         schnelle_antwort: ["fa-bolt", "Antwortet schnell"],
         wie_beschrieben: ["fa-circle-check", "Wie beschrieben"]
     };
+    // Einheitliche Skala für Marktplatz und Setups: Ideal, In Ordnung, Mangelhaft, Schlecht
     const LEVELS = {
-        top: ["fa-thumbs-up", "TOP Zufriedenheit"],
-        ok: ["fa-hand", "OK Zufriedenheit"],
-        naja: ["fa-thumbs-down", "Na ja Zufriedenheit"]
+        ideal: ["fa-star", "Ideal"],
+        in_ordnung: ["fa-thumbs-up", "In Ordnung"],
+        mangelhaft: ["fa-triangle-exclamation", "Mangelhaft"],
+        schlecht: ["fa-thumbs-down", "Schlecht"]
     };
+    window.GSRA_RATING_LEVELS = LEVELS;
 
-    // Anteil zufriedener Bewertungen (neutral zählt halb): ab 90 % TOP, ab 70 % OK, sonst „Na ja“
-    const level = (good, neutral, count) => {
-        if (!count) return null;
-        const share = (good + neutral * 0.5) / count;
-        return share >= 0.9 ? "top" : share >= 0.7 ? "ok" : "naja";
+    // Durchschnitt (Ideal 3, In Ordnung 2, Mangelhaft 1, Schlecht 0): ab 2,5 Ideal, ab 1,75 In Ordnung, ab 1 Mangelhaft
+    const level = (counts) => {
+        const n = counts?.anzahl || 0;
+        if (!n) return null;
+        const avg = (3 * (counts.ideal || 0) + 2 * (counts.in_ordnung || 0) + (counts.mangelhaft || 0)) / n;
+        return avg >= 2.5 ? "ideal" : avg >= 1.75 ? "in_ordnung" : avg >= 1 ? "mangelhaft" : "schlecht";
     };
 
     window.gsraReputation = async (userId, { fresh = false } = {}) => {
@@ -56,13 +60,14 @@
         const m = rep.marktplatz || {};
         const s = rep.setups || {};
         const v = rep.setup_stimmen || {};
-        const marketLevel = level(m.top || 0, m.ok || 0, m.anzahl || 0);
-        const setupLevel = level(s.hilfreich || 0, s.okay || 0, s.anzahl || 0);
+        const c = rep.coaching || {};
+        const marketLevel = level(m);
+        const setupLevel = level(s);
 
         if (compact) {
             const line = document.createElement("span");
             line.className = "rep-compact";
-            line.appendChild(marketLevel ? chip(marketLevel, LEVELS[marketLevel][1]) : chip(null, "Noch keine Bewertungen"));
+            line.appendChild(marketLevel ? chip(marketLevel, `Ø ${LEVELS[marketLevel][1]}`) : chip(null, "Noch keine Bewertungen"));
             if (m.anzahl) line.append(` ${plural(m.anzahl, "Bewertung", "Bewertungen")}`);
             target.replaceChildren(line);
             return;
@@ -82,7 +87,7 @@
 
         // Marktplatz: Stufe, Anzahl, häufige Merkmale (von mindestens der Hälfte genannt)
         const marketContent = marketLevel
-            ? [chip(marketLevel, LEVELS[marketLevel][1]), document.createTextNode(` ${plural(m.anzahl, "Bewertung", "Bewertungen")}`)]
+            ? [chip(marketLevel, `Ø ${LEVELS[marketLevel][1]}`), document.createTextNode(` ${plural(m.anzahl, "Bewertung", "Bewertungen")}`)]
             : [document.createTextNode("Noch keine Bewertungen")];
         const marketRow = row("fa-tags", "Marktplatz", marketContent);
         const tags = Object.entries(SELLER_TAGS).filter(([key]) => m.anzahl && (m[key] || 0) >= Math.max(1, Math.ceil(m.anzahl / 2)));
@@ -100,7 +105,7 @@
 
         // Setups: Stufe aus den Kommentaren, dazu Daumen
         const setupContent = setupLevel
-            ? [chip(setupLevel, LEVELS[setupLevel][1]), document.createTextNode(` ${plural(s.anzahl, "Bewertung", "Bewertungen")}`)]
+            ? [chip(setupLevel, `Ø ${LEVELS[setupLevel][1]}`), document.createTextNode(` ${plural(s.anzahl, "Bewertung", "Bewertungen")}`)]
             : [document.createTextNode(v.setups ? "Noch keine Bewertungen" : "Noch keine Setups")];
         if (v.setups && (v.likes || v.dislikes)) {
             const thumbs = document.createElement("span");
@@ -109,7 +114,10 @@
             setupContent.push(thumbs);
         }
         row("fa-sliders", "Setups", setupContent);
-        row("fa-chalkboard-user", "Coaching", [Object.assign(document.createElement("span"), { className: "rep-soon", textContent: "Folgt bald" })]);
+        // Coaching: Angebote (Bewertungen nach abgeschlossenen Coachings folgen mit der Bezahlung)
+        row("fa-chalkboard-user", "Coaching", [Object.assign(document.createElement("span"), c.angebote
+            ? { textContent: plural(Number(c.angebote), "Angebot", "Angebote") + (c.erledigt ? ` · ${plural(Number(c.erledigt), "Coaching", "Coachings")} gegeben` : "") }
+            : { className: "rep-soon", textContent: "Noch keine Angebote" })]);
         target.replaceChildren(box);
     };
 
@@ -124,9 +132,10 @@
                 <h3 class="gsra-dialog-title" id="rateTitle">Verkäufer bewerten</h3>
                 <p class="rate-sub"></p>
                 <div class="rate-levels" role="radiogroup" aria-label="Zufriedenheit">
-                    <button type="button" class="rate-level top" data-rating="1" role="radio"><i class="fa-solid fa-thumbs-up"></i><strong>TOP</strong><small>Alles bestens</small></button>
-                    <button type="button" class="rate-level ok" data-rating="0" role="radio"><i class="fa-solid fa-hand"></i><strong>OK</strong><small>In Ordnung</small></button>
-                    <button type="button" class="rate-level naja" data-rating="-1" role="radio"><i class="fa-solid fa-thumbs-down"></i><strong>Na ja</strong><small>Lief nicht gut</small></button>
+                    <button type="button" class="rate-level ideal" data-rating="1" role="radio"><i class="fa-solid fa-star"></i><strong>Ideal</strong><small>Alles bestens</small></button>
+                    <button type="button" class="rate-level in_ordnung" data-rating="0" role="radio"><i class="fa-solid fa-thumbs-up"></i><strong>In Ordnung</strong><small>Hat gepasst</small></button>
+                    <button type="button" class="rate-level mangelhaft" data-rating="-1" role="radio"><i class="fa-solid fa-triangle-exclamation"></i><strong>Mangelhaft</strong><small>Mit Problemen</small></button>
+                    <button type="button" class="rate-level schlecht" data-rating="-2" role="radio"><i class="fa-solid fa-thumbs-down"></i><strong>Schlecht</strong><small>Lief nicht gut</small></button>
                 </div>
                 <div class="rate-label">Was trifft zu? <small>(optional)</small></div>
                 <div class="rate-tags"></div>

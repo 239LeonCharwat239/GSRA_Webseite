@@ -9,9 +9,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL] =
-    Array.from({ length: 23 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 23);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL] =
+    Array.from({ length: 24 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 24);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -1225,6 +1225,136 @@ if (MODERATION_SQL) {
             const log = await q(`select count(*) as n from public.moderation_log where action = 'bewertung_geloescht' and actor_id = '${MOD}'`);
             check("Entfernte Bewertung steht im Protokoll", Number(log.rows[0]?.n) === 1, log.error || String(log.rows[0]?.n));
         });
+
+        // --- 024: Skala Ideal bis Schlecht, Visibility-Header, Coaching ---
+        if (COACHING_SQL) {
+            await db.exec(readFileSync(COACHING_SQL, "utf8"));
+            const ctl24 = await db.exec(readFileSync(COACHING_SQL, "utf8")); // zweiter Lauf
+            const rows24 = ctl24[ctl24.length - 1].rows;
+            console.log("Kontrolle 024:\n  " + rows24.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+            check("Kontrolle 024: Skala, Visibility, Coaching, Messenger", rows24.map(r => r.ergebnis).join(",") === "bereit,bereit,2 von 2,bereit", rows24.map(r => r.ergebnis).join(", "));
+            const migrated = await one(`select verdict from public.setup_reviews where user_id = '${K}'`);
+            check("Alte Setup-Bewertung übernommen (nicht wie beschrieben → Schlecht)", migrated?.verdict === "schlecht", JSON.stringify(migrated));
+
+            // Abos: Vera (Coach) und K2 mit Pole, Kai bleibt Paddock
+            await db.exec(`insert into public.user_plans (user_id, status, current_period_end) values ('${V}', 'active', now() + interval '20 days'), ('${K2}', 'active', now() + interval '20 days')`);
+
+            await as(K, async () => {
+                const r = await q(`select public.rate_seller('${L}', -2, array['zuverlaessig'], 'Leider schlecht')`);
+                check("Neue Skala: „Schlecht“ wird gespeichert", r.error === null, r.error || "");
+                const bad = await q(`select public.rate_seller('${L}', -3)`);
+                check("Werte außerhalb der Skala abgelehnt", bad.error !== null, bad.error || "durchgelassen!");
+                const sv = await q(`select public.review_setup('${SV}', 'ideal', 'Ideal!')`);
+                const old = await q(`select public.review_setup('${SV}', 'hilfreich')`);
+                check("Setups: neue Skala gilt, alte Werte abgelehnt", sv.error === null && old.error !== null, sv.error || old.error || "alter Wert durchgelassen!");
+                const rep = await q(`select public.profile_reputation('${V}') as r`);
+                const r2 = rep.rows[0]?.r;
+                check("Zufriedenheit zählt nach neuer Skala", r2?.marktplatz?.schlecht === 1 && r2?.setups?.ideal === 1, rep.error || JSON.stringify({ m: r2?.marktplatz, s: r2?.setups }));
+
+                const names = await q(`select username, plan from public.visibility_names()`);
+                const list = names.rows.map(x => x.username);
+                check("Visibility-Header: zahlende Mitglieder erscheinen", list.includes("Verkäufer Vera") && !list.includes("Käufer Kai"), names.error || list.join(", "));
+            });
+            await as(V, async () => {
+                const off = await q(`update public.profiles set show_in_header = false where id = '${V}' returning id`);
+                check("Eigenen Namen im Header abschalten", off.rows.length === 1, off.error || "nichts geändert");
+            });
+            await as(K, async () => {
+                const names = await q(`select username from public.visibility_names()`);
+                check("Abgeschaltet: Name erscheint nicht mehr", !names.rows.some(x => x.username === "Verkäufer Vera"), names.rows.map(x => x.username).join(", "));
+            });
+            await as(null, async () => {
+                const names = await q(`select * from public.visibility_names()`);
+                check("Gäste bekommen keine Namensliste", names.error !== null, names.error || "durchgelassen!");
+            });
+
+            // Coaching
+            let offerId = null;
+            await as(V, async () => {
+                const o = await q(`select public.coaching_save_offer(null, '2 Stunden mit mir fahren', 'Linien und Bremspunkte', 'Fahrtechnik', 'iRacing', 120, 4000, true) as id`);
+                check("Coach mit Pole legt ein Angebot an", o.error === null, o.error || "");
+                offerId = o.rows[0]?.id;
+                const cheap = await q(`select public.coaching_save_offer(null, 'Zu billig', null, 'Setup', null, 60, 100, true)`);
+                check("Preis unter 5 € abgelehnt", /zwischen 5 €/.test(cheap.error || ""), cheap.error || "durchgelassen!");
+                const direct = await q(`insert into public.coaching_offers (coach_id, title, duration_minutes, price_cents) values ('${V}', 'Direkt', 60, 1000)`);
+                check("Angebote nicht direkt in die Tabelle schreibbar", direct.error !== null, direct.error || "durchgelassen!");
+                const own = await q(`select public.coaching_book('${offerId}')`);
+                check("Eigenes Coaching nicht buchbar", /eigenes Coaching/.test(own.error || ""), own.error || "durchgelassen!");
+            });
+            await as(K, async () => {
+                const o = await q(`select public.coaching_save_offer(null, 'Paddock-Coaching', null, 'Setup', null, 60, 2000, true)`);
+                check("Mit Paddock keine Angebote", /Pole oder Alliance/.test(o.error || ""), o.error || "durchgelassen!");
+                const fee = await q(`select public.coaching_fee_percent() as p`);
+                check("Paddock: 10 % Servicegebühr", fee.rows[0]?.p === 10, fee.error || String(fee.rows[0]?.p));
+                const b = await q(`select public.coaching_book('${offerId}', 'Hallo, wann hast du Zeit?', 'Wochenende') as r`);
+                const r = b.rows[0]?.r;
+                check("Paddock bucht: Coach erhält 40 €, Käufer zahlt 44 €", b.error === null && r?.price_cents === 4000 && r?.fee_cents === 400 && r?.total_cents === 4400, b.error || JSON.stringify(r));
+                const twice = await q(`select public.coaching_book('${offerId}')`);
+                check("Gleiches Coaching nicht doppelt anfragen", /bereits angefragt/.test(twice.error || ""), twice.error || "durchgelassen!");
+                const hack = await q(`update public.coaching_bookings set fee_cents = 0, total_cents = price_cents`);
+                check("Preis und Gebühr nicht manipulierbar", hack.error !== null, hack.error || "durchgelassen!");
+                const fake = await q(`insert into public.coaching_bookings (coach_id, buyer_id, offer_title, duration_minutes, price_cents, fee_cents, total_cents) values ('${V}', '${K}', 'x', 60, 1, 0, 1)`);
+                check("Buchungen nicht direkt eintragbar", fake.error !== null, fake.error || "durchgelassen!");
+            });
+            await as(K2, async () => {
+                const b = await q(`select public.coaching_book('${offerId}') as r`);
+                check("Pole bucht: keine Servicegebühr", b.error === null && b.rows[0]?.r?.fee_cents === 0 && b.rows[0]?.r?.total_cents === 4000, b.error || JSON.stringify(b.rows[0]?.r));
+                const mine = await q(`select count(*) as n from public.coaching_bookings`);
+                check("Jeder sieht nur seine eigenen Anfragen", Number(mine.rows[0]?.n) === 1, mine.error || String(mine.rows[0]?.n));
+                const respond = await q(`select public.coaching_respond(b.id, true) from public.coaching_bookings b`);
+                check("Käufer kann seine Anfrage nicht selbst annehmen", respond.error !== null, respond.error || "durchgelassen!");
+                const offer2 = await q(`select public.coaching_save_offer(null, 'Setup-Beratung', null, 'Setup', 'ACC', 60, 2500, true) as id`);
+                check("Weiterer Coach mit Pole legt Angebot an", offer2.error === null, offer2.error || "");
+            });
+            await as(K3, async () => {
+                const chat = await q(`select public.start_direct_chat('${K2}', 'Hallo, ich interessiere mich für dein Coaching')`);
+                check("Interessenten können Coaches im Messenger anschreiben", chat.error === null, chat.error || "");
+            });
+            await as(V, async () => {
+                const list = await q(`select id, status, buyer_id from public.coaching_bookings order by created_at`);
+                check("Coach sieht die Anfragen zu seinen Angeboten", list.rows.length === 2, list.error || String(list.rows.length));
+                const kaiReq = list.rows.find(x => x.buyer_id === K);
+                const acc = await q(`select public.coaching_respond('${kaiReq?.id}', true)`);
+                const st = await q(`select status from public.coaching_bookings where id = '${kaiReq?.id}'`);
+                check("Coach nimmt an", acc.error === null && st.rows[0]?.status === "angenommen", acc.error || JSON.stringify(st.rows[0]));
+            });
+            await as(K, async () => {
+                const id = (await q(`select id from public.coaching_bookings`)).rows[0]?.id;
+                const c = await q(`select public.coaching_cancel('${id}')`);
+                check("Käufer storniert (vor der Bezahlung)", c.error === null, c.error || "");
+            });
+            await withClaims(MOD, "aal2", async () => {
+                const del = await q(`delete from public.coaching_offers where id = '${offerId}' returning id`);
+                check("Moderator entfernt ein Angebot", del.rows.length === 1, del.error || (del.rows.length ? "" : "nichts gelöscht"));
+            });
+            await withClaims(U.admin, "aal2", async () => {
+                const log = await q(`select count(*) as n from public.moderation_log where action = 'coaching_geloescht'`);
+                check("Entferntes Angebot steht im Protokoll", Number(log.rows[0]?.n) === 1, log.error || String(log.rows[0]?.n));
+            });
+            // Käufer erreicht den Coach auch dann, wenn der alle Angebote pausiert hat – Fremde dann aber nicht mehr
+            let offer2Id = null;
+            await as(K2, async () => { offer2Id = (await q(`select id from public.coaching_offers where coach_id = '${K2}'`)).rows[0]?.id; });
+            await as(K, async () => {
+                const b = await q(`select public.coaching_book('${offer2Id}') as r`);
+                check("Paddock fragt zweites Coaching an", b.error === null, b.error || "");
+            });
+            await as(K2, async () => {
+                const pause = await q(`select public.coaching_save_offer('${offer2Id}', 'Setup-Beratung', null, 'Setup', 'ACC', 60, 2500, false)`);
+                check("Coach pausiert sein Angebot", pause.error === null, pause.error || "");
+            });
+            await as(K, async () => {
+                const chat = await q(`select public.start_direct_chat('${K2}', 'Hallo, wann passt es dir?')`);
+                check("Käufer schreibt dem Coach trotz pausiertem Angebot", chat.error === null, chat.error || "");
+            });
+            await as(U.lena, async () => {
+                const chat = await q(`select public.start_direct_chat('${K2}', 'Hallo')`);
+                check("Fremde erreichen einen Coach ohne aktives Angebot nicht", /befreundet/.test(chat.error || ""), chat.error || "durchgelassen!");
+            });
+            await as(null, async () => {
+                const o = await q(`select count(*) as n from public.coaching_offers`);
+                check("Gäste sehen keine Coachings", o.error !== null || Number(o.rows[0]?.n) === 0, o.error || String(o.rows[0]?.n));
+            });
+        }
     }
 }
 

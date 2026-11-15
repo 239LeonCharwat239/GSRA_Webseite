@@ -8,12 +8,12 @@ let loadedSetups = [];
 let myVotes = {};
 let reviewStats = {};    // Setup-ID → { n: Anzahl Kommentare/Bewertungen }
 
-// Bewertungen der Community zu einem Setup
+// Bewertungen der Community zu einem Setup – gleiche Skala wie im Marktplatz
 const SETUP_VERDICTS = {
-    hilfreich: ['fa-thumbs-up', 'Hilfreich', 'good'],
-    okay: ['fa-hand', 'Okay', 'mid'],
-    nicht_hilfreich: ['fa-thumbs-down', 'Nicht hilfreich', 'bad'],
-    nicht_wie_beschrieben: ['fa-triangle-exclamation', 'Nicht wie beschrieben', 'bad']
+    ideal: ['fa-star', 'Ideal', 'good'],
+    in_ordnung: ['fa-thumbs-up', 'In Ordnung', 'mid'],
+    mangelhaft: ['fa-triangle-exclamation', 'Mangelhaft', 'warn'],
+    schlecht: ['fa-thumbs-down', 'Schlecht', 'bad']
 };
 
 function escapeHtml(str) {
