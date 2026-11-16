@@ -1,9 +1,12 @@
 /* =========================================
    GSRA - Coaching
    Mitglieder mit Pole oder Alliance bieten Coachings zu ihrem eigenen Preis an, jedes Mitglied kann anfragen.
-   Der Coach erhält 100 % seines Preises. Mit Paddock kommen 10 % Servicegebühr dazu, mit Pole/Alliance keine.
+   Der Preis geht an den Coach (die GSRA behält nichts ein; die Zahlungsgebühr von Stripe trägt der Coach).
+   Mit Paddock kommen 10 % Servicegebühr dazu, mit Pole/Alliance keine.
    Preis und Gebühr legt die Datenbank fest (coaching_book) – die Seite zeigt sie nur an.
-   Absprachen laufen über den Messenger; die Bezahlung über die GSRA folgt (Stripe Connect).
+   Ablauf: anfragen → Coach nimmt mit festem Termin an → Käufer bezahlt über Stripe (direkt an den Coach,
+   Server-Funktion coaching-checkout) → Coach meldet „erledigt“. Stornieren mit voller Erstattung: Käufer bis
+   24 Stunden vor dem Termin, Coach jederzeit (coaching-refund). Absprachen laufen über den Messenger.
 ========================================= */
 (() => {
     const client = window.supabaseClient || window.supabase;
@@ -18,8 +21,13 @@
         abgelehnt: ["fa-circle-xmark", "Abgelehnt", "bad"],
         storniert: ["fa-ban", "Storniert", "off"],
         bezahlt: ["fa-credit-card", "Bezahlt", "ok"],
-        erledigt: ["fa-flag-checkered", "Erledigt", "done"]
+        erledigt: ["fa-flag-checkered", "Erledigt", "done"],
+        erstattet: ["fa-rotate-left", "Erstattet", "off"]
     };
+    // Länder für das Stripe-Konto der Coaches (wie in der Server-Funktion coaching-connect)
+    const PAYOUT_COUNTRIES = [["DE", "Deutschland"], ["AT", "Österreich"], ["CH", "Schweiz"], ["NL", "Niederlande"], ["BE", "Belgien"],
+        ["LU", "Luxemburg"], ["FR", "Frankreich"], ["IT", "Italien"], ["ES", "Spanien"], ["PT", "Portugal"], ["IE", "Irland"],
+        ["PL", "Polen"], ["CZ", "Tschechien"], ["DK", "Dänemark"], ["SE", "Schweden"], ["FI", "Finnland"], ["NO", "Norwegen"]];
 
     let me = null;            // angemeldete Person
     let myPlan = "paddock";
@@ -30,6 +38,9 @@
     let filter = { category: "all", search: "" };
     let editingId = null;
     let bookingOffer = null;
+    let timeTarget = null;    // { booking, mode: "accept" | "move" }
+    let myPayoutReady = false; // eigenes Stripe-Konto fertig eingerichtet?
+    const coachReadyCache = new Map();
 
     const $ = (id) => document.getElementById(id);
     const canOffer = () => ["pole", "alliance"].includes(myPlan);
@@ -42,6 +53,31 @@
         return m ? `${hours} ${m} Min.` : hours;
     };
     const dateText = (iso) => new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+    const dateTime = (iso) => new Date(iso).toLocaleString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    const hoursUntil = (iso) => (new Date(iso).getTime() - Date.now()) / 3600000;
+    // Wert für <input type="datetime-local"> in Ortszeit
+    const localInput = (date) => {
+        const d = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+        return d.toISOString().slice(0, 16);
+    };
+    // Server-Funktionen (Stripe) aufrufen; Fehlermeldung des Servers weitergeben
+    async function invokeFn(name, body) {
+        const { data, error } = await client.functions.invoke(name, { body });
+        let message = data?.error;
+        if (error) {
+            try { message = (await error.context?.json())?.error || message; } catch (e) { /* keine Details */ }
+            message = message || "Die Bezahlung ist noch nicht eingerichtet oder gerade nicht erreichbar.";
+        }
+        if (error || data?.error) throw new Error(message);
+        return data;
+    }
+    // Kann der Coach schon Zahlungen annehmen? (Stripe-Konto eingerichtet)
+    const coachReady = (coachId) => {
+        if (!coachReadyCache.has(coachId)) {
+            coachReadyCache.set(coachId, client.rpc("coach_payment_ready", { _user: coachId }).then(({ data, error }) => !error && data === true, () => false));
+        }
+        return coachReadyCache.get(coachId);
+    };
     const errorText = (error, fallback) => {
         const msg = String(error?.message || "");
         // Eigene Meldungen der Datenbank (deutsch) weitergeben, technische nicht
@@ -99,13 +135,13 @@
         const btn = e.target.closest("[data-close]");
         if (btn) closeModal(btn.dataset.close);
     });
-    ["coOfferModal", "coBookModal"].forEach(id => {
+    ["coOfferModal", "coBookModal", "coTimeModal"].forEach(id => {
         // Nur ein Klick direkt auf den dunklen Hintergrund schließt (nicht beim Markieren von Text im Formular)
         $(id).addEventListener("mousedown", (e) => { if (e.target === e.currentTarget) closeModal(id); });
     });
     document.addEventListener("keydown", (e) => {
         if (e.key !== "Escape") return;
-        const open = ["coBookModal", "coOfferModal"].find(id => !$(id).hidden);
+        const open = ["coTimeModal", "coBookModal", "coOfferModal"].find(id => !$(id).hidden);
         if (open) closeModal(open);
     });
 
@@ -142,7 +178,7 @@
         const box = el("div", "co-price");
         box.appendChild(el("strong", "co-price-main", euro(offer.price_cents)));
         if (offer.coach_id === me) {
-            box.appendChild(el("small", "co-price-note", "Dein Angebot – du erhältst 100 %"));
+            box.appendChild(el("small", "co-price-note", "Dein Angebot – an dich, abzüglich Stripe-Gebühr"));
         } else if (feePercent > 0) {
             box.appendChild(el("small", "co-price-note", `Für dich ${euro(offer.price_cents + feeOf(offer.price_cents))} inkl. ${euro(feeOf(offer.price_cents))} Servicegebühr`));
         } else {
@@ -259,7 +295,7 @@
         if (!offer && !canOffer()) {
             showDialog({
                 icon: "fa-crown", title: "Coachings mit Pole oder Alliance",
-                message: "Eigene Coachings anbieten können Mitglieder mit dem Pole- oder Alliance-Abo. Du erhältst deinen Preis zu 100 %.",
+                message: "Eigene Coachings anbieten können Mitglieder mit dem Pole- oder Alliance-Abo. Die GSRA behält von deinem Preis nichts ein – abgezogen wird nur die Zahlungsgebühr von Stripe.",
                 confirmText: "Abos ansehen", cancelText: "Schließen"
             }).then(ok => { if (ok) window.location.href = "abo.html"; });
             return;
@@ -390,17 +426,25 @@
         card.appendChild(el("h3", "co-card-title", b.offer_title));
         const meta = el("div", "co-meta");
         meta.appendChild(iconText("span", "", "fa-clock", duration(b.duration_minutes)));
-        meta.appendChild(iconText("span", "", "fa-calendar", `angefragt am ${dateText(b.created_at)}`));
-        if (b.preferred_time) meta.appendChild(iconText("span", "", "fa-calendar-day", `Wunsch: ${b.preferred_time}`));
+        if (b.scheduled_at) {
+            meta.appendChild(iconText("span", "co-when", "fa-calendar-check", `Termin: ${dateTime(b.scheduled_at)} Uhr`));
+        } else {
+            meta.appendChild(iconText("span", "", "fa-calendar", `angefragt am ${dateText(b.created_at)}`));
+            if (b.preferred_time) meta.appendChild(iconText("span", "", "fa-calendar-day", `Wunsch: ${b.preferred_time}`));
+        }
         card.appendChild(meta);
         if (b.message) card.appendChild(el("p", "co-desc co-quote", b.message));
 
         const money = el("div", "co-money");
-        if (role === "buyer") {
-            money.append(`${euro(b.total_cents)} gesamt`);
+        const paid = ["bezahlt", "erledigt"].includes(b.status);
+        if (b.status === "erstattet") {
+            money.append(`${euro(b.total_cents)} erstattet`);
+        } else if (role === "buyer") {
+            money.append(paid ? `Bezahlt: ${euro(b.total_cents)}` : `${euro(b.total_cents)} gesamt`);
             if (b.fee_cents > 0) money.appendChild(el("small", "", ` (${euro(b.price_cents)} + ${euro(b.fee_cents)} Servicegebühr)`));
         } else {
-            money.append(`Du erhältst ${euro(b.price_cents)}`);
+            money.append(`${paid ? "Bezahlt – du erhältst" : "Du erhältst"} ${euro(b.price_cents)}`);
+            money.appendChild(el("small", "", " abzüglich Stripe-Gebühr"));
         }
         card.appendChild(money);
 
@@ -418,22 +462,215 @@
             add(msg);
         }
         if (role === "coach" && b.status === "angefragt") {
-            add(button("primary", "fa-check", "Annehmen", (btn) => respond(b, true, btn)));
+            add(button("primary", "fa-check", "Annehmen", () => openTimeModal(b, "accept")));
             add(button("danger", "fa-xmark", "Ablehnen", (btn) => respond(b, false, btn)));
         }
+        if (role === "coach" && b.status === "angenommen") {
+            add(button("", "fa-calendar-days", b.scheduled_at ? "Termin ändern" : "Termin festlegen", () => openTimeModal(b, "move")));
+        }
+        if (role === "coach" && b.status === "bezahlt" && b.scheduled_at && hoursUntil(b.scheduled_at) <= 0) {
+            add(button("primary", "fa-flag-checkered", "Als erledigt markieren", (btn) => markDone(b, btn)));
+        }
         if (role === "buyer" && b.status === "angenommen") {
-            const pay = iconText("button", "co-btn primary", "fa-lock", "Bezahlen – folgt in Kürze");
+            // Bezahlen erst, wenn ein Termin feststeht und der Coach sein Stripe-Konto eingerichtet hat
+            const pay = iconText("button", "co-btn primary", "fa-lock", `Bezahlen · ${euro(b.total_cents)}`);
             pay.type = "button";
             pay.disabled = true;
-            pay.title = "Die Bezahlung über die GSRA wird gerade eingerichtet. Bis dahin stimmt ihr euch im Messenger ab.";
+            if (!b.scheduled_at || hoursUntil(b.scheduled_at) <= 0) {
+                pay.title = "Der Coach legt noch einen Termin fest.";
+            } else {
+                pay.title = "Prüfe, ob der Coach Zahlungen annehmen kann …";
+                coachReady(b.coach_id).then(ready => {
+                    pay.disabled = !ready;
+                    pay.title = ready ? "Sicher bezahlen über Stripe" : "Der Coach richtet die Bezahlung gerade noch ein.";
+                    // Auf dem Handy gibt es keinen Hover-Hinweis: Grund sichtbar unter die Knöpfe schreiben
+                    if (!ready) actions.after(iconText("p", "co-pay-note", "fa-hourglass-half", "Bezahlen ist möglich, sobald der Coach sein Stripe-Konto eingerichtet hat."));
+                });
+            }
+            pay.addEventListener("click", () => startPayment(b, pay));
             add(pay);
         }
-        // Käufer ziehen offene Anfragen zurück; Coaches lehnen neue ab (oben) und sagen angenommene ab
+        // Unbezahlt: Käufer ziehen zurück, Coaches sagen angenommene ab (neue lehnen sie oben ab)
         if (role === "buyer" ? ["angefragt", "angenommen"].includes(b.status) : b.status === "angenommen") {
             add(button("ghost", "fa-ban", role === "buyer" ? "Zurückziehen" : "Absagen", (btn) => cancel(b, role, btn)));
         }
+        // Bezahlt: Käufer bis 24 Stunden vor dem Termin, Coach jederzeit – mit voller Erstattung
+        if (b.status === "bezahlt") {
+            const buyerLate = role === "buyer" && b.scheduled_at && hoursUntil(b.scheduled_at) < 24;
+            const refundBtn = button("ghost", "fa-rotate-left", role === "buyer" ? "Stornieren & erstatten" : "Absagen & erstatten", (btn) => refund(b, role, btn));
+            if (buyerLate) {
+                refundBtn.disabled = true;
+                refundBtn.title = "Kostenlos stornieren ging bis 24 Stunden vor dem Termin. Schreib dem Coach im Messenger.";
+            }
+            add(refundBtn);
+        }
         if (actions.childElementCount) card.appendChild(actions);
+        // Stornofrist für Käufer gut sichtbar
+        if (role === "buyer" && ["angenommen", "bezahlt"].includes(b.status) && b.scheduled_at) {
+            const until = new Date(new Date(b.scheduled_at).getTime() - 24 * 3600000);
+            card.appendChild(iconText("p", "co-refund-note", "fa-shield-halved",
+                until > new Date() ? `Kostenlos stornieren bis ${dateTime(until.toISOString())} Uhr – du bekommst alles zurück.`
+                    : "Die kostenlose Stornierung ist vorbei (bis 24 Stunden vor dem Termin)."));
+        }
         return card;
+    }
+
+    /* ---------- Termin, Bezahlen, Erstatten ---------- */
+    function openTimeModal(b, mode) {
+        timeTarget = { booking: b, mode };
+        $("coTimeTitle").textContent = mode === "accept" ? "Anfrage annehmen" : "Termin ändern";
+        $("coTimeSub").textContent = `${b.offer_title} · ${duration(b.duration_minutes)} mit ${nameOf(b.buyer_id)}`;
+        $("coTimeSubmit").textContent = mode === "accept" ? "Annehmen" : "Termin speichern";
+        const input = $("coTimeInput");
+        const min = new Date(Date.now() + 65 * 60000);
+        input.min = localInput(min);
+        input.max = localInput(new Date(Date.now() + 179 * 86400000));
+        // Vorschlag: bisheriger Termin, sonst morgen 18 Uhr
+        const suggestion = b.scheduled_at ? new Date(b.scheduled_at) : (() => { const d = new Date(Date.now() + 86400000); d.setHours(18, 0, 0, 0); return d; })();
+        input.value = localInput(suggestion < min ? min : suggestion);
+        openModal("coTimeModal");
+    }
+
+    $("coTimeForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        if (!timeTarget) return;
+        const when = new Date($("coTimeInput").value);
+        if (Number.isNaN(when.getTime()) || when.getTime() < Date.now() + 60 * 60000) {
+            showToast("Bitte wähle einen Termin, der mindestens 1 Stunde in der Zukunft liegt.", "error");
+            return;
+        }
+        const submit = $("coTimeSubmit");
+        submit.disabled = true;
+        const { booking, mode } = timeTarget;
+        const { error } = mode === "accept"
+            ? await client.rpc("coaching_respond", { _booking_id: booking.id, _accept: true, _scheduled_at: when.toISOString() })
+            : await client.rpc("coaching_set_time", { _booking_id: booking.id, _scheduled_at: when.toISOString() });
+        submit.disabled = false;
+        if (error) {
+            showToast(errorText(error, "Der Termin konnte nicht gespeichert werden."), "error");
+            return;
+        }
+        closeModal("coTimeModal");
+        showToast(mode === "accept"
+            ? `Angenommen für ${dateTime(when.toISOString())} Uhr. ${myPayoutReady ? "Dein Kunde kann jetzt bezahlen." : "Sobald dein Stripe-Konto eingerichtet ist, kann dein Kunde bezahlen."}`
+            : "Termin geändert.", "success");
+        loadCoachArea();
+    });
+
+    async function startPayment(b, btn) {
+        btn.disabled = true;
+        try {
+            const data = await invokeFn("coaching-checkout", { booking_id: b.id });
+            if (!data?.url) throw new Error("Die Bezahlseite konnte nicht geöffnet werden.");
+            window.location.href = data.url;
+        } catch (err) {
+            btn.disabled = false;
+            showToast(err.message, "error");
+        }
+    }
+
+    async function refund(b, role, btn) {
+        const ok = await showDialog({
+            icon: "fa-rotate-left", danger: true,
+            title: role === "buyer" ? "Coaching stornieren?" : "Coaching absagen?",
+            message: role === "buyer"
+                ? `Du bekommst ${euro(b.total_cents)} vollständig zurück (auch die Servicegebühr). Je nach Bank dauert es ein paar Tage, bis das Geld wieder da ist.`
+                : `${nameOf(b.buyer_id)} bekommt ${euro(b.total_cents)} vollständig zurück. Die Absage lässt sich nicht rückgängig machen.`,
+            confirmText: role === "buyer" ? "Stornieren" : "Absagen", cancelText: "Abbrechen"
+        });
+        if (!ok) return;
+        btn.disabled = true;
+        try {
+            await invokeFn("coaching-refund", { booking_id: b.id });
+            showToast("Storniert – das Geld wird vollständig erstattet.", "success");
+        } catch (err) {
+            btn.disabled = false;
+            showToast(err.message, "error");
+            return;
+        }
+        if (role === "buyer") loadBuyerBookings();
+        else loadCoachArea();
+    }
+
+    async function markDone(b, btn) {
+        btn.disabled = true;
+        const { error } = await client.rpc("coaching_mark_done", { _booking_id: b.id });
+        if (error) {
+            btn.disabled = false;
+            showToast(errorText(error, "Das hat nicht geklappt."), "error");
+            return;
+        }
+        showToast("Als erledigt markiert – danke fürs Coachen!", "success");
+        loadCoachArea();
+    }
+
+    /* ---------- Auszahlungen (Stripe-Konto des Coaches) ---------- */
+    async function loadPayout({ refresh = false } = {}) {
+        const box = $("coPayout");
+        if (refresh) {
+            try { await invokeFn("coaching-connect", { action: "status" }); } catch (e) { /* Stand bleibt wie gespeichert */ }
+        }
+        const { data, error } = await client.from("coach_payout_accounts").select("charges_enabled, details_submitted, country").eq("user_id", me).maybeSingle();
+        myPayoutReady = Boolean(data?.charges_enabled);
+        // Ohne SQL 025 oder ohne Abo und ohne Konto: nichts anzeigen
+        if (error || (!data && !canOffer())) {
+            box.hidden = true;
+            return;
+        }
+        box.hidden = false;
+        box.className = `co-payout ${data?.charges_enabled ? "ready" : data ? "pending" : ""}`;
+        box.replaceChildren();
+        const head = el("div", "co-payout-head");
+        head.innerHTML = `<i class="fa-brands fa-stripe"></i>`;
+        const text = el("div", "co-payout-text");
+        const actions = el("div", "co-actions");
+        if (data?.charges_enabled) {
+            text.appendChild(el("strong", "", "Auszahlungen aktiv"));
+            text.appendChild(el("span", "", "Deine Kunden bezahlen direkt auf dein Stripe-Konto. Die Stripe-Gebühren trägst du, die GSRA behält von deinem Preis nichts ein."));
+            const dash = iconText("a", "co-btn", "fa-arrow-up-right-from-square", "Stripe-Dashboard");
+            dash.href = "https://dashboard.stripe.com/";
+            dash.target = "_blank";
+            dash.rel = "noopener noreferrer";
+            actions.appendChild(dash);
+        } else {
+            text.appendChild(el("strong", "", data ? "Einrichtung bei Stripe noch nicht abgeschlossen" : "Auszahlungen einrichten"));
+            text.appendChild(el("span", "", data
+                ? "Sobald Stripe deine Angaben bestätigt hat, können deine Kunden bezahlen."
+                : "Damit Kunden bezahlen können, verbindest du einmalig ein Stripe-Konto. Das Geld geht direkt an dich; die Stripe-Gebühren trägst du, die GSRA behält von deinem Preis nichts ein."));
+            if (!data) {
+                const country = document.createElement("select");
+                country.id = "coPayoutCountry";
+                country.className = "co-payout-country";
+                country.setAttribute("aria-label", "Land deines Stripe-Kontos");
+                PAYOUT_COUNTRIES.forEach(([code, name]) => country.add(new Option(name, code)));
+                actions.appendChild(country);
+            }
+            const start = iconText("button", "co-btn primary", "fa-arrow-right", data ? "Weiter bei Stripe" : "Mit Stripe einrichten");
+            start.type = "button";
+            start.addEventListener("click", async () => {
+                start.disabled = true;
+                try {
+                    const res = await invokeFn("coaching-connect", { action: "onboarding", country: $("coPayoutCountry")?.value || data?.country || "DE" });
+                    if (!res?.url) throw new Error("Die Einrichtung bei Stripe konnte nicht geöffnet werden.");
+                    window.location.href = res.url;
+                } catch (err) {
+                    start.disabled = false;
+                    showToast(err.message, "error");
+                }
+            });
+            actions.appendChild(start);
+            if (data) {
+                const check = iconText("button", "co-btn ghost", "fa-rotate", "Stand prüfen");
+                check.type = "button";
+                check.addEventListener("click", async () => {
+                    check.disabled = true;
+                    await loadPayout({ refresh: true });
+                });
+                actions.appendChild(check);
+            }
+        }
+        head.appendChild(text);
+        box.append(head, actions);
     }
 
     function renderBookings(box, list, role) {
@@ -537,22 +774,21 @@
             renderBookings($("coCoachRequests"), list, "coach");
             setBadge("coBadgeCoach", list.filter(b => b.status === "angefragt").length);
         }
-        await loadMyOffers();
+        await Promise.all([loadMyOffers(), loadPayout()]);
     }
 
+    // Ablehnen (Annehmen läuft über das Termin-Fenster)
     async function respond(b, accept, btn) {
-        if (!accept) {
-            const ok = await showDialog({ icon: "fa-xmark", title: "Anfrage ablehnen?", message: `${nameOf(b.buyer_id)} erfährt, dass du „${b.offer_title}“ ablehnst.`, confirmText: "Ablehnen", cancelText: "Abbrechen", danger: true });
-            if (!ok) return;
-        }
+        const ok = await showDialog({ icon: "fa-xmark", title: "Anfrage ablehnen?", message: `${nameOf(b.buyer_id)} erfährt, dass du „${b.offer_title}“ ablehnst.`, confirmText: "Ablehnen", cancelText: "Abbrechen", danger: true });
+        if (!ok) return;
         btn.disabled = true;
-        const { error } = await client.rpc("coaching_respond", { _booking_id: b.id, _accept: accept });
+        const { error } = await client.rpc("coaching_respond", { _booking_id: b.id, _accept: false, _scheduled_at: null });
         if (error) {
             btn.disabled = false;
             showToast(errorText(error, "Das hat nicht geklappt."), "error");
             return;
         }
-        showToast(accept ? "Angenommen – schreib deinem Kunden im Messenger, um den Termin abzustimmen." : "Anfrage abgelehnt.", "success");
+        showToast("Anfrage abgelehnt.", "success");
         loadCoachArea();
     }
 
@@ -612,8 +848,27 @@
         // Zähler auf den Tabs gleich anzeigen
         loadBuyerBookings();
         fetchBookings("coach_id").then(list => list && setBadge("coBadgeCoach", list.filter(b => b.status === "angefragt").length));
-        const tab = new URLSearchParams(window.location.search).get("tab");
+        const params = new URLSearchParams(window.location.search);
+        const tab = params.get("tab");
         if (["anfragen", "coach"].includes(tab)) showTab(tab);
+
+        // Rückkehr von Stripe: Bezahlung bzw. Einrichtung des Stripe-Kontos
+        const payment = params.get("zahlung");
+        const stripeReturn = params.get("stripe");
+        if (payment || stripeReturn) history.replaceState(null, "", `coaching.html${tab ? `?tab=${tab}` : ""}`);
+        if (payment === "erfolg") {
+            showToast("Danke! Deine Zahlung wird gerade bestätigt.", "success");
+            // Die Bestätigung von Stripe kommt meist nach wenigen Sekunden
+            [2500, 6000, 12000].forEach(ms => setTimeout(loadBuyerBookings, ms));
+        } else if (payment === "abbruch") {
+            showToast("Bezahlung abgebrochen – du kannst es jederzeit erneut versuchen.", "info");
+        }
+        if (stripeReturn === "zurueck" || stripeReturn === "neu") {
+            await loadPayout({ refresh: true });
+            const { data } = await client.from("coach_payout_accounts").select("charges_enabled").eq("user_id", me).maybeSingle();
+            showToast(data?.charges_enabled ? "Stripe ist eingerichtet – deine Kunden können jetzt bezahlen."
+                : "Die Einrichtung bei Stripe ist noch nicht abgeschlossen. Du kannst sie jederzeit fortsetzen.", data?.charges_enabled ? "success" : "info");
+        }
     }
 
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);

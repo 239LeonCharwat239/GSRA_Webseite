@@ -9,9 +9,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL] =
-    Array.from({ length: 24 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 24);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL] =
+    Array.from({ length: 25 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 25);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -1354,6 +1354,115 @@ if (MODERATION_SQL) {
                 const o = await q(`select count(*) as n from public.coaching_offers`);
                 check("Gäste sehen keine Coachings", o.error !== null || Number(o.rows[0]?.n) === 0, o.error || String(o.rows[0]?.n));
             });
+
+            // --- 025: Coaching bezahlen (Stripe Connect, Coach trägt die Stripe-Gebühren) ---
+            // Aufrufe außerhalb von as(...) laufen wie die Server-Funktionen (service_role)
+            if (BEZAHLUNG_SQL) {
+                await db.exec(readFileSync(BEZAHLUNG_SQL, "utf8"));
+                const ctl25 = await db.exec(readFileSync(BEZAHLUNG_SQL, "utf8")); // zweiter Lauf
+                const rows25 = ctl25[ctl25.length - 1].rows;
+                console.log("Kontrolle 025:\n  " + rows25.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+                check("Kontrolle 025: Konten, Spalten, Server-Funktionen", rows25.map(r => r.ergebnis).join(",") === "bereit,3 von 3,bereit", rows25.map(r => r.ergebnis).join(", "));
+
+                const bk = (await one(`select id from public.coaching_bookings where buyer_id = '${K}' and offer_id = '${offer2Id}' and status = 'angefragt'`))?.id;
+                await as(K2, async () => {
+                    const soon = await q(`select public.coaching_respond('${bk}', true, now() + interval '30 minutes')`);
+                    check("Termin muss mindestens 1 Stunde in der Zukunft liegen", /mindestens 1 Stunde/.test(soon.error || ""), soon.error || "durchgelassen!");
+                    const none = await q(`select public.coaching_respond('${bk}', true, null)`);
+                    check("Annehmen nur mit Termin", none.error !== null, none.error || "durchgelassen!");
+                    const ok = await q(`select public.coaching_respond('${bk}', true, now() + interval '3 days')`);
+                    check("Coach nimmt mit festem Termin an", ok.error === null, ok.error || "");
+                });
+                await as(K, async () => {
+                    const ins = await q(`insert into public.coach_payout_accounts (user_id, stripe_account_id) values ('${K}', 'acct_fake')`);
+                    check("Auszahlungskonto nicht selbst eintragbar", ins.error !== null, ins.error || "durchgelassen!");
+                    const paid = await q(`select public.coaching_mark_paid('${bk}', 'cs_x', 'pi_x', 1, 'acct_x')`);
+                    check("Zahlung nicht selbst als bezahlt verbuchbar", paid.error !== null, paid.error || "durchgelassen!");
+                    const info = await q(`select public.coaching_checkout_info('${bk}', '${K}')`);
+                    const refund = await q(`select public.coaching_refund_info('${bk}', '${K}')`);
+                    check("Stripe-Funktionen nur für den Server", info.error !== null && refund.error !== null, info.error || refund.error || "durchgelassen!");
+                    const ready = await q(`select public.coach_payment_ready('${K2}') as r`);
+                    check("Coach ohne Stripe-Konto: Bezahlen noch nicht möglich", ready.rows[0]?.r === false, ready.error || String(ready.rows[0]?.r));
+                });
+                const notReady = await q(`select public.coaching_checkout_info('${bk}', '${K}')`);
+                check("Bezahlseite erst, wenn der Coach Stripe eingerichtet hat", /richtet die Bezahlung/.test(notReady.error || ""), notReady.error || "durchgelassen!");
+
+                await db.exec(`insert into public.coach_payout_accounts (user_id, stripe_account_id, country, charges_enabled, details_submitted) values ('${K2}', 'acct_k2test', 'DE', true, true)`);
+                await as(K, async () => {
+                    const ready = await q(`select public.coach_payment_ready('${K2}') as r`);
+                    const seen = await q(`select count(*) as n from public.coach_payout_accounts`);
+                    check("Käufer sieht nur „bereit“, nicht das Stripe-Konto des Coaches", ready.rows[0]?.r === true && Number(seen.rows[0]?.n) === 0, ready.error || seen.error || `${ready.rows[0]?.r}/${seen.rows[0]?.n}`);
+                });
+                await as(K2, async () => {
+                    const own = await q(`select stripe_account_id from public.coach_payout_accounts`);
+                    check("Coach sieht sein eigenes Auszahlungskonto", own.rows.length === 1 && own.rows[0].stripe_account_id === "acct_k2test", own.error || JSON.stringify(own.rows));
+                    const move = await q(`select public.coaching_set_time('${bk}', now() + interval '2 days')`);
+                    check("Coach verschiebt den Termin vor der Bezahlung", move.error === null, move.error || "");
+                });
+                const stranger = await q(`select public.coaching_checkout_info('${bk}', '${K2}')`);
+                check("Nur der Käufer bekommt die Bezahlseite", stranger.error !== null, stranger.error || "durchgelassen!");
+                const info = (await one(`select public.coaching_checkout_info('${bk}', '${K}') as r`)).r;
+                check("Bezahlseite: Betrag und Gebühr aus der Datenbank (25 € + 2,50 €)", info?.total_cents === 2750 && info?.fee_cents === 250 && info?.stripe_account_id === "acct_k2test", JSON.stringify(info));
+
+                await db.exec(`select public.coaching_checkout_started('${bk}', 'cs_gsra1')`);
+                const wrongAmount = (await one(`select public.coaching_mark_paid('${bk}', 'cs_gsra1', 'pi_1', 1000, 'acct_k2test') as r`)).r;
+                const wrongAccount = (await one(`select public.coaching_mark_paid('${bk}', 'cs_gsra1', 'pi_1', 2750, 'acct_fremd') as r`)).r;
+                check("Falscher Betrag oder falsches Konto: wird erstattet statt verbucht", wrongAmount === "erstatten" && wrongAccount === "erstatten", `${wrongAmount}/${wrongAccount}`);
+                const ownPage = (await one(`select public.coaching_mark_paid('${bk}', 'cs_vom_coach_gebaut', 'pi_1', 2750, 'acct_k2test') as r`)).r;
+                check("Selbst gebaute Bezahlseite des Coaches zählt nicht (Gebühr nicht umgehbar)", ownPage === "erstatten", ownPage);
+                const paid1 = (await one(`select public.coaching_mark_paid('${bk}', 'cs_gsra1', 'pi_1', 2750, 'acct_k2test') as r`)).r;
+                const paid2 = (await one(`select public.coaching_mark_paid('${bk}', 'cs_gsra1', 'pi_1', 2750, 'acct_k2test') as r`)).r;
+                check("Zahlung verbucht, doppelte Meldung nur einmal", paid1 === "bezahlt" && paid2 === "schon_verbucht", `${paid1}/${paid2}`);
+
+                await as(K, async () => {
+                    const c = await q(`select public.coaching_cancel('${bk}')`);
+                    check("Bezahltes Coaching nicht ohne Erstattung stornierbar", c.error !== null, c.error || "durchgelassen!");
+                });
+                await as(K2, async () => {
+                    const move = await q(`select public.coaching_set_time('${bk}', now() + interval '5 days')`);
+                    check("Nach der Bezahlung kein Verschieben (Stornofrist bleibt fair)", move.error !== null, move.error || "durchgelassen!");
+                    const done = await q(`select public.coaching_mark_done('${bk}')`);
+                    check("Erledigt erst ab dem Termin", done.error !== null, done.error || "durchgelassen!");
+                });
+                const early = await q(`select public.coaching_refund_info('${bk}', '${K}') as r`);
+                check("Käufer storniert 2 Tage vorher: Erstattung erlaubt", early.error === null && early.rows[0]?.r?.payment_intent === "pi_1", early.error || JSON.stringify(early.rows[0]?.r));
+                await db.exec(`update public.coaching_bookings set scheduled_at = now() + interval '10 hours' where id = '${bk}'`);
+                const late = await q(`select public.coaching_refund_info('${bk}', '${K}')`);
+                check("Weniger als 24 Stunden vorher: keine kostenlose Stornierung", /24 Stunden/.test(late.error || ""), late.error || "durchgelassen!");
+                const byCoach = await q(`select public.coaching_refund_info('${bk}', '${K2}') as r`);
+                check("Coach sagt ab: Erstattung immer möglich", byCoach.error === null && byCoach.rows[0]?.r?.by === "coach", byCoach.error || JSON.stringify(byCoach.rows[0]?.r));
+                const other = await q(`select public.coaching_refund_info('${bk}', '${U.lena}')`);
+                check("Fremde können nichts erstatten", other.error !== null, other.error || "durchgelassen!");
+                await db.exec(`select public.coaching_mark_refunded('pi_1', '${K2}')`);
+                const st = await one(`select status, refunded_at is not null as r from public.coaching_bookings where id = '${bk}'`);
+                check("Erstattung verbucht", st?.status === "erstattet" && st?.r === true, JSON.stringify(st));
+                const late2 = (await one(`select public.coaching_mark_paid('${bk}', 'cs_gsra1', 'pi_2', 2750, 'acct_k2test') as r`)).r;
+                check("Zahlung für eine erledigte/erstattete Anfrage wird zurückerstattet", late2 === "erstatten", late2);
+
+                // Erledigt: zweite Anfrage, bezahlt, Termin vorbei
+                await as(K2, async () => { await q(`select public.coaching_save_offer('${offer2Id}', 'Setup-Beratung', null, 'Setup', 'ACC', 60, 2500, true)`); });
+                await as(K3, async () => { await q(`select public.coaching_book('${offer2Id}')`); });
+                const bk3 = (await one(`select id, total_cents from public.coaching_bookings where buyer_id = '${K3}' and offer_id = '${offer2Id}'`));
+                await as(K2, async () => { await q(`select public.coaching_respond('${bk3?.id}', true, now() + interval '3 days')`); });
+                await db.exec(`select public.coaching_checkout_started('${bk3?.id}', 'cs_gsra3')`);
+                await db.exec(`select public.coaching_mark_paid('${bk3?.id}', 'cs_gsra3', 'pi_3', ${bk3?.total_cents}, 'acct_k2test')`);
+                await db.exec(`update public.coaching_bookings set scheduled_at = now() - interval '2 hours' where id = '${bk3?.id}'`);
+                await as(K3, async () => {
+                    const r = await q(`select public.coaching_mark_done('${bk3?.id}')`);
+                    check("Nur der Coach meldet „erledigt“", r.error !== null, r.error || "durchgelassen!");
+                });
+                await as(K2, async () => {
+                    const r = await q(`select public.coaching_mark_done('${bk3?.id}')`);
+                    check("Coach meldet nach dem Termin „erledigt“", r.error === null, r.error || "");
+                    const rep = await q(`select public.profile_reputation('${K2}') as r`);
+                    check("Profil zählt erledigte Coachings", rep.rows[0]?.r?.coaching?.erledigt === 1, rep.error || JSON.stringify(rep.rows[0]?.r?.coaching));
+                });
+                await as(null, async () => {
+                    const r = await q(`select count(*) as n from public.coach_payout_accounts`);
+                    const f = await q(`select public.coach_payment_ready('${K2}')`);
+                    check("Gäste: keine Auszahlungskonten, keine Abfrage", (r.error !== null || Number(r.rows[0]?.n) === 0) && f.error !== null, r.error || f.error || "durchgelassen!");
+                });
+            }
         }
     }
 }

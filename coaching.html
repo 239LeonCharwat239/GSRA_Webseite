@@ -48,7 +48,7 @@
         <!-- So funktioniert's -->
         <div class="co-facts">
             <div class="co-fact"><i class="fa-solid fa-chalkboard-user"></i><div><strong>Coaches mit Pole oder Alliance</strong><span>Wer ein Abo hat, kann eigene Coachings anbieten und den Preis selbst festlegen.</span></div></div>
-            <div class="co-fact"><i class="fa-solid fa-hand-holding-dollar"></i><div><strong>100 % für den Coach</strong><span>Der Coach erhält seinen vollen Preis – die GSRA behält davon nichts ein.</span></div></div>
+            <div class="co-fact"><i class="fa-solid fa-hand-holding-dollar"></i><div><strong>Der Preis geht an den Coach</strong><span>Die GSRA behält davon nichts ein. Abgezogen wird nur die Zahlungsgebühr von Stripe.</span></div></div>
             <div class="co-fact"><i class="fa-solid fa-receipt"></i><div><strong>Servicegebühr nur mit Paddock</strong><span>Mit Paddock kommen 10 % Servicegebühr dazu, mit Pole oder Alliance zahlst du keine.</span></div></div>
         </div>
 
@@ -80,6 +80,8 @@
 
         <!-- Als Coach: eigene Angebote und eingehende Anfragen -->
         <section class="co-panel" data-panel="coach" hidden>
+            <!-- Auszahlungen: Stripe-Konto des Coaches (füllt coaching.js) -->
+            <div id="coPayout" class="co-payout" hidden></div>
             <h2 class="co-section-title"><i class="fa-solid fa-inbox"></i> Anfragen an dich</h2>
             <div id="coCoachRequests" class="co-list"></div>
             <h2 class="co-section-title"><i class="fa-solid fa-chalkboard-user"></i> Deine Angebote</h2>
@@ -121,7 +123,7 @@
                 <label class="co-field co-wide"><span>Beschreibung <small>(optional)</small></span>
                     <textarea id="coDescription" rows="4" maxlength="2000" placeholder="Was lernt man bei dir? Für wen ist das Coaching gedacht? Wie läuft es ab (z. B. Discord, gemeinsamer Server)?"></textarea></label>
                 <label class="co-check co-wide"><input type="checkbox" id="coActive" checked> <span>Angebot sichtbar (kann jederzeit pausiert werden)</span></label>
-                <p class="co-form-note co-wide">Du erhältst deinen Preis zu 100 %. Mitglieder mit Paddock zahlen 10 % Servicegebühr zusätzlich.</p>
+                <p class="co-form-note co-wide">Die GSRA behält von deinem Preis nichts ein – abgezogen wird nur die Zahlungsgebühr von Stripe. Mitglieder mit Paddock zahlen 10 % Servicegebühr zusätzlich.</p>
                 <div class="gsra-dialog-actions co-wide">
                     <button type="button" class="gsra-dialog-btn secondary" data-close="coOfferModal">Abbrechen</button>
                     <button type="submit" class="gsra-dialog-btn primary">Speichern</button>
@@ -143,10 +145,29 @@
                     <input type="text" id="coBookTime" maxlength="200" placeholder="z. B. Samstag ab 18 Uhr oder nächste Woche abends"></label>
                 <label class="co-field co-wide"><span>Nachricht an den Coach <small>(optional)</small></span>
                     <textarea id="coBookMessage" rows="3" maxlength="1000" placeholder="Was möchtest du verbessern? Welches Auto, welche Strecke?"></textarea></label>
-                <p class="co-form-note co-wide"><i class="fa-solid fa-circle-info"></i> Der Coach bestätigt deine Anfrage. Die Bezahlung über die GSRA folgt in Kürze – bis dahin stimmt ihr euch im Messenger ab.</p>
+                <p class="co-form-note co-wide"><i class="fa-solid fa-circle-info"></i> Der Coach bestätigt deine Anfrage mit einem festen Termin. Danach bezahlst du sicher über Stripe. Kostenlos stornieren kannst du bis 24 Stunden vor dem Termin.</p>
                 <div class="gsra-dialog-actions co-wide">
                     <button type="button" class="gsra-dialog-btn secondary" data-close="coBookModal">Abbrechen</button>
                     <button type="submit" class="gsra-dialog-btn primary">Anfrage senden</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Termin festlegen (beim Annehmen) oder ändern (bis zur Bezahlung) -->
+    <div id="coTimeModal" class="gsra-dialog-overlay" hidden>
+        <div class="gsra-dialog co-dialog co-time-dialog" role="dialog" aria-modal="true" aria-labelledby="coTimeTitle">
+            <button type="button" class="gsra-dialog-close" data-close="coTimeModal" title="Schließen"><i class="fa-solid fa-xmark"></i></button>
+            <div class="gsra-dialog-icon"><i class="fa-solid fa-calendar-check"></i></div>
+            <h3 class="gsra-dialog-title" id="coTimeTitle">Termin festlegen</h3>
+            <p class="co-book-sub" id="coTimeSub"></p>
+            <form id="coTimeForm" class="co-form">
+                <label class="co-field co-wide"><span>Datum und Uhrzeit</span>
+                    <input type="datetime-local" id="coTimeInput" required></label>
+                <p class="co-form-note co-wide"><i class="fa-solid fa-circle-info"></i> Stimmt den Termin am besten vorher im Messenger ab. Dein Kunde kann bis 24 Stunden vorher kostenlos stornieren; bis zur Bezahlung kannst du den Termin noch ändern.</p>
+                <div class="gsra-dialog-actions co-wide">
+                    <button type="button" class="gsra-dialog-btn secondary" data-close="coTimeModal">Abbrechen</button>
+                    <button type="submit" class="gsra-dialog-btn primary" id="coTimeSubmit">Annehmen</button>
                 </div>
             </form>
         </div>

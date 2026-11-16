@@ -10631,6 +10631,68 @@ select option {
     box-shadow: 0 0 0 3px rgba(0, 85, 255, 0.22);
 }
 .co-check input { accent-color: var(--gsra-blue); }
+.co-field input[type="datetime-local"] {
+    box-sizing: border-box;
+    height: 42px;
+    padding: 10px 12px;
+    background: #0b0c10;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    color: #fff;
+    color-scheme: dark;
+    outline: none;
+}
+.co-field input[type="datetime-local"]:focus { border-color: var(--gsra-blue); box-shadow: 0 0 0 3px rgba(0, 85, 255, 0.22); }
+.co-time-dialog { max-width: 460px; }
+
+/* Coaching: Termin, Stornofrist und Auszahlungen */
+.co-meta .co-when { color: #fff; font-weight: 700; }
+.co-meta .co-when i { color: #00ff88; }
+.co-refund-note {
+    margin: 0;
+    padding: 8px 12px;
+    background: rgba(0, 255, 136, 0.06);
+    border: 1px solid rgba(0, 255, 136, 0.22);
+    border-radius: 8px;
+    color: #cfd3dc;
+    font-size: 13px;
+}
+.co-refund-note i { color: #00ff88; margin-right: 4px; }
+.co-pay-note { margin: 0; color: var(--text-muted); font-size: 13px; }
+.co-pay-note i { color: var(--gsra-yellow); margin-right: 4px; }
+.co-payout {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 20px;
+    padding: 16px 18px;
+    background: #15161a;
+    border: 1px solid rgba(99, 91, 255, 0.45);
+    border-left: 4px solid #635bff;
+    border-radius: 12px;
+    text-align: left;
+}
+.co-payout[hidden] { display: none; }
+.co-payout.pending { border-color: rgba(255, 204, 0, 0.45); border-left-color: var(--gsra-yellow); }
+.co-payout.ready { border-color: rgba(0, 255, 136, 0.35); border-left-color: #00ff88; }
+.co-payout-head { display: flex; gap: 14px; align-items: flex-start; flex: 1 1 320px; min-width: 0; }
+.co-payout-head > i { font-size: 30px; color: #8f88ff; }
+.co-payout-text { display: flex; flex-direction: column; gap: 4px; }
+.co-payout-text strong { color: #fff; font-size: 15px; }
+.co-payout-text span { color: var(--text-muted); font-size: 13px; line-height: 1.45; }
+.co-payout-country {
+    height: 38px;
+    margin: 0;
+    padding: 6px 10px;
+    background: #0b0c10;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 13px;
+}
 .co-check { display: flex; align-items: center; gap: 8px; color: #cfd3dc; font-size: 14px; cursor: pointer; }
 .co-check input { width: auto; margin: 0; }
 .co-form-note { margin: 0; color: var(--text-muted); font-size: 13px; line-height: 1.45; }
