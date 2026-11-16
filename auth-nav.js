@@ -359,7 +359,7 @@ const LOGIN_REQUIRED_TEXTS = {
     messenger: ["den Messenger", "Mit deinem GSRA-Konto chattest du mit Freunden, trittst Foren bei und bleibst im offiziellen GSRA-Forum auf dem Laufenden."],
     marktplatz: ["den Marktplatz", "Mit deinem GSRA-Konto kaufst und verkaufst du Sim-Racing-Hardware in der Community."],
     setups: ["die Setups", "Mit deinem GSRA-Konto lädst du Setups herunter und teilst deine eigenen mit der Community."],
-    coaching: ["das Coaching", "Mit deinem GSRA-Konto buchst du Coachings bei erfahrenen Fahrern – oder bietest mit Pole oder Alliance selbst welche an."],
+    coaching: ["das Coaching", "Mit deinem GSRA-Konto buchst du Coachings bei erfahrenen Fahrern – oder wirst mit der GSRA-Coach-Lizenz selbst Coach."],
     nachschlagewerk: ["das Nachschlagewerk", "Mit deinem GSRA-Konto hast du Zugriff auf das komplette Sim-Racing-Wissen der GSRA."],
     kalender: ["den Rennkalender", "Mit deinem GSRA-Konto siehst du alle Rennen und Events der GSRA-Community."],
     dashboard: ["dein Dashboard", "Im Dashboard verwaltest du dein Profil, dein Profilbild und deine GSRA-ID."],

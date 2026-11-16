@@ -47,7 +47,7 @@
 
         <!-- So funktioniert's -->
         <div class="co-facts">
-            <div class="co-fact"><i class="fa-solid fa-chalkboard-user"></i><div><strong>Coaches mit Pole oder Alliance</strong><span>Wer ein Abo hat, kann eigene Coachings anbieten und den Preis selbst festlegen.</span></div></div>
+            <div class="co-fact"><i class="fa-solid fa-award"></i><div><strong>Coach wird man durch Leistung</strong><span>Wer seit 3 Monaten dabei ist, mit Setups 25 Punkte gesammelt hat und im Schnitt „Ideal“ bewertet wird, holt sich die GSRA-Coach-Lizenz und legt seinen Preis selbst fest.</span></div></div>
             <div class="co-fact"><i class="fa-solid fa-hand-holding-dollar"></i><div><strong>Der Preis geht an den Coach</strong><span>Die GSRA behält davon nichts ein. Abgezogen wird nur die Zahlungsgebühr von Stripe.</span></div></div>
             <div class="co-fact"><i class="fa-solid fa-receipt"></i><div><strong>Servicegebühr nur mit Paddock</strong><span>Mit Paddock kommen 10 % Servicegebühr dazu, mit Pole oder Alliance zahlst du keine.</span></div></div>
         </div>
@@ -80,7 +80,8 @@
 
         <!-- Als Coach: eigene Angebote und eingehende Anfragen -->
         <section class="co-panel" data-panel="coach" hidden>
-            <!-- Auszahlungen: Stripe-Konto des Coaches (füllt coaching.js) -->
+            <!-- GSRA-Coach-Lizenz und Auszahlungen über Stripe (füllt coaching.js) -->
+            <div id="coLicense" class="co-license" hidden></div>
             <div id="coPayout" class="co-payout" hidden></div>
             <h2 class="co-section-title"><i class="fa-solid fa-inbox"></i> Anfragen an dich</h2>
             <div id="coCoachRequests" class="co-list"></div>

@@ -9,9 +9,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL] =
-    Array.from({ length: 25 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 25);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL] =
+    Array.from({ length: 26 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 26);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -1462,6 +1462,110 @@ if (MODERATION_SQL) {
                     const f = await q(`select public.coach_payment_ready('${K2}')`);
                     check("Gäste: keine Auszahlungskonten, keine Abfrage", (r.error !== null || Number(r.rows[0]?.n) === 0) && f.error !== null, r.error || f.error || "durchgelassen!");
                 });
+
+                // --- 026: Coach-Lizenz statt Abo (3 Monate, 25 Setup-Punkte, 5 Bewertungen mit Ø Ideal, sauberes Verhalten) ---
+                if (LIZENZ_SQL) {
+                    await db.exec(readFileSync(LIZENZ_SQL, "utf8"));
+                    const ctl26 = await db.exec(readFileSync(LIZENZ_SQL, "utf8")); // zweiter Lauf
+                    const rows26 = ctl26[ctl26.length - 1].rows;
+                    console.log("Kontrolle 026:\n  " + rows26.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+                    check("Kontrolle 026: Lizenzen, Angebote, automatischer Entzug", rows26.map(r => r.ergebnis).join(",") === "bereit,bereit,2 von 2", rows26.map(r => r.ergebnis).join(", "));
+
+                    await as(K, async () => {
+                        const seen = await q(`select count(*) as n from public.coaching_offers where coach_id = '${K2}'`);
+                        check("Ohne Lizenz: Angebote eines Pole-Coaches nicht mehr sichtbar", Number(seen.rows[0]?.n) === 0, seen.error || String(seen.rows[0]?.n));
+                        const book = await q(`select public.coaching_book('${offer2Id}')`);
+                        check("Ohne Lizenz nicht buchbar", /keine Coachings an/.test(book.error || ""), book.error || "durchgelassen!");
+                        const other = await q(`select public.coach_license_status('${K2}') as r`);
+                        check("Fremde sehen nur „Lizenz ja/nein“, keinen Fortschritt", other.rows[0]?.r?.aktiv === false && other.rows[0]?.r?.fortschritt === undefined, other.error || JSON.stringify(other.rows[0]?.r));
+                    });
+                    await as(K2, async () => {
+                        const save = await q(`select public.coaching_save_offer(null, 'Neues Angebot', null, 'Setup', null, 60, 2000, true)`);
+                        check("Pole allein reicht nicht mehr zum Anbieten", /Coach-Lizenz/.test(save.error || ""), save.error || "durchgelassen!");
+                        const st = await q(`select public.coach_license_status('${K2}') as r`);
+                        const r = st.rows[0]?.r;
+                        check("Eigener Fortschritt mit Regeln sichtbar", r?.fortschritt?.alle === false && r?.regeln?.setup_punkte === 25 && r?.regeln?.mitglied_tage === 90, st.error || JSON.stringify(r));
+                        const claim = await q(`select public.coach_claim_license()`);
+                        check("Lizenz erst, wenn alle Voraussetzungen erfüllt sind", /noch nicht alle/.test(claim.error || ""), claim.error || "durchgelassen!");
+                        const ins = await q(`insert into public.coach_licenses (user_id, granted_at) values ('${K2}', now())`);
+                        check("Lizenz nicht selbst eintragbar", ins.error !== null, ins.error || "durchgelassen!");
+                    });
+
+                    // K3 erfüllt alles: 100 Tage dabei, Setup mit 30 − 2 = 28 Punkten, 5 Bewertungen (4× Ideal, 1× In Ordnung → Ø 2,8)
+                    await db.exec(`update auth.users set created_at = now() - interval '100 days' where id = '${K3}'`);
+                    const S3 = (await one(`insert into public.setups (simulation, car_model, track_name, file_name, file_url, uploader_id, likes, dislikes) values ('ACC', 'Audi R8', 'Spa', 'k3.json', 'https://x.supabase.co/storage/v1/object/public/setups/${K3}/k3.json', '${K3}', 30, 2) returning id::text as id`)).id;
+                    const reviewers = [U.anna, U.max, U.lena, U.tim, U.seller];
+                    for (const [i, rid] of reviewers.entries()) {
+                        await db.exec(`insert into public.setup_reviews (setup_id, user_id, verdict) values ('${S3}', '${rid}', '${i === 4 ? "in_ordnung" : "ideal"}')`);
+                    }
+                    await as(K3, async () => {
+                        const st = (await q(`select public.coach_license_status('${K3}') as r`)).rows[0]?.r;
+                        check("Voraussetzungen erfüllt (Dauer, Punkte, Bewertungen, Verhalten)", st?.fortschritt?.alle === true && st?.fortschritt?.setup_punkte === 28 && Number(st?.fortschritt?.schnitt) === 2.8, JSON.stringify(st?.fortschritt));
+                        const claim = await q(`select public.coach_claim_license() as r`);
+                        check("Lizenz geholt – ohne Abo", claim.rows[0]?.r === "erteilt", claim.error || claim.rows[0]?.r);
+                        const offer = await q(`select public.coaching_save_offer(null, 'Spa ohne Abo', null, 'Fahrtechnik', 'ACC', 60, 3000, true) as id`);
+                        check("Mit Lizenz: Angebot anlegen", offer.error === null, offer.error || "");
+                    });
+                    const k3Offer = (await one(`select id from public.coaching_offers where coach_id = '${K3}'`))?.id;
+                    await as(K, async () => {
+                        const seen = await q(`select count(*) as n from public.coaching_offers where coach_id = '${K3}'`);
+                        const rep = await q(`select public.profile_reputation('${K3}') as r`);
+                        check("Angebot des lizenzierten Coaches sichtbar, Profil zeigt die Lizenz", Number(seen.rows[0]?.n) === 1 && rep.rows[0]?.r?.coaching?.lizenz === true, seen.error || rep.error || JSON.stringify(rep.rows[0]?.r?.coaching));
+                        const b = await q(`select public.coaching_book('${k3Offer}') as r`);
+                        check("Lizenzierter Coach ist buchbar", b.error === null, b.error || "");
+                    });
+
+                    // Automatischer Entzug bei einer Verwarnung: Angebote pausiert, Bezahlen gesperrt, Protokoll
+                    const kBooking = (await one(`select id from public.coaching_bookings where buyer_id = '${K}' and offer_id = '${k3Offer}'`))?.id;
+                    await as(K3, async () => { await q(`select public.coaching_respond('${kBooking}', true, now() + interval '3 days')`); });
+                    await db.exec(`insert into public.coach_payout_accounts (user_id, stripe_account_id, charges_enabled, details_submitted) values ('${K3}', 'acct_k3test', true, true)`);
+                    await db.exec(`insert into public.user_warnings (user_id, text) values ('${K3}', 'Bitte freundlich bleiben')`);
+                    const lic = await one(`select revoked_at is not null as weg, auto_revoked, revoked_reason from public.coach_licenses where user_id = '${K3}'`);
+                    const paused = await one(`select active from public.coaching_offers where id = '${k3Offer}'`);
+                    check("Verwarnung entzieht die Lizenz automatisch und pausiert die Angebote", lic?.weg === true && lic?.auto_revoked === true && paused?.active === false, JSON.stringify({ lic, paused }));
+                    const blocked = await q(`select public.coaching_checkout_info('${kBooking}', '${K}')`);
+                    check("Nach dem Entzug kein Bezahlen mehr", /keine Coachings an/.test(blocked.error || ""), blocked.error || "durchgelassen!");
+                    await as(K3, async () => {
+                        const again = await q(`select public.coach_claim_license()`);
+                        check("Nach Verwarnung erst nach 90 Tagen wieder erhältlich", /noch nicht alle/.test(again.error || ""), again.error || "durchgelassen!");
+                        const reactivate = await q(`select public.coaching_save_offer('${k3Offer}', 'Spa ohne Abo', null, 'Fahrtechnik', 'ACC', 60, 3000, true)`);
+                        check("Pausiertes Angebot ohne Lizenz nicht wieder aktivierbar", /Coach-Lizenz/.test(reactivate.error || ""), reactivate.error || "durchgelassen!");
+                    });
+
+                    // Moderation: wiederherstellen und mit Begründung entziehen (beides im Protokoll)
+                    await withClaims(K3, "aal2", async () => {
+                        const self = await q(`select public.coach_license_restore('${K3}')`);
+                        check("Nur das Moderationsteam stellt Lizenzen wieder her", /Moderationsteam/.test(self.error || ""), self.error || "durchgelassen!");
+                    });
+                    await withClaims(MOD, "aal2", async () => {
+                        const restore = await q(`select public.coach_license_restore('${K3}')`);
+                        const active = await q(`select public.coach_license_active('${K3}') as r`);
+                        check("Moderator stellt die Lizenz wieder her", restore.error === null && active.rows[0]?.r === true, restore.error || String(active.rows[0]?.r));
+                        const noReason = await q(`select public.coach_license_revoke('${K3}', '')`);
+                        check("Entzug nur mit Begründung", /Begründung/.test(noReason.error || ""), noReason.error || "durchgelassen!");
+                        const revoke = await q(`select public.coach_license_revoke('${K3}', 'Mehrfach Termine nicht eingehalten')`);
+                        check("Moderator entzieht die Lizenz mit Begründung", revoke.error === null, revoke.error || "");
+                    });
+                    await as(K3, async () => {
+                        const claim = await q(`select public.coach_claim_license()`);
+                        check("Von der Moderation entzogen: nicht selbst zurückholbar", /Moderationsteam entzogen/.test(claim.error || ""), claim.error || "durchgelassen!");
+                        const own = await q(`select revoked_reason from public.coach_licenses`);
+                        check("Coach sieht die Begründung", own.rows[0]?.revoked_reason === "Mehrfach Termine nicht eingehalten", own.error || JSON.stringify(own.rows));
+                    });
+                    const logged = await one(`select count(*) filter (where action = 'coach_lizenz_automatisch') as a, count(*) filter (where action = 'coach_lizenz_entzogen') as e,
+                        count(*) filter (where action = 'coach_lizenz_wiederhergestellt') as w, count(*) filter (where action = 'coach_lizenz_erteilt') as g from public.moderation_log`);
+                    check("Protokoll: erteilt, automatisch entzogen, wiederhergestellt, entzogen", [logged.g, logged.a, logged.w, logged.e].every(n => Number(n) === 1), JSON.stringify(logged));
+                    // Gesperrt = keine aktive Lizenz, auch wenn sie erteilt ist
+                    await withClaims(MOD, "aal2", async () => { await q(`select public.coach_license_restore('${K3}')`); });
+                    await db.exec(`insert into public.user_bans (user_id, banned_until, reason) values ('${K3}', now() + interval '7 days', 'Test')`);
+                    const banned = await one(`select public.coach_license_active('${K3}') as r`);
+                    check("Sperre beendet die Lizenz sofort", banned.r === false, String(banned.r));
+                    await as(null, async () => {
+                        const r = await q(`select count(*) as n from public.coach_licenses`);
+                        const f = await q(`select public.coach_license_status('${K3}')`);
+                        check("Gäste: keine Lizenzdaten", (r.error !== null || Number(r.rows[0]?.n) === 0) && f.error !== null, r.error || f.error || "durchgelassen!");
+                    });
+                }
             }
         }
     }

@@ -1,5 +1,5 @@
 // GSRA – Supabase Edge Function „coaching-connect“
-// Coaches (Pole oder Alliance) richten hier ihr Stripe-Konto für Auszahlungen ein.
+// Coaches mit GSRA-Coach-Lizenz richten hier ihr Stripe-Konto für Auszahlungen ein.
 // Kontoart wie „Standard“: eigenes Stripe-Dashboard, die Stripe-Gebühren trägt der Coach selbst (Entscheidung 16.11.).
 // Aktionen: "onboarding" (Konto anlegen bzw. Einrichtung fortsetzen → Link zu Stripe), "status" (Stand von Stripe holen).
 // Benötigte Secrets in Supabase: STRIPE_SECRET_KEY, optional SITE_URL. Stripe Connect muss im Stripe-Dashboard aktiviert sein.
@@ -55,9 +55,9 @@ Deno.serve(async (req) => {
       return json({ connected: true, ...state });
     }
 
-    // Einrichten: nur mit Pole oder Alliance (wie das Anbieten von Coachings)
-    const { data: plan } = await admin.rpc("plan_of", { _user: user.id });
-    if (!["pole", "alliance"].includes(plan)) return json({ error: "Coachings anbieten können Mitglieder mit Pole oder Alliance." }, 403);
+    // Einrichten: nur mit aktiver GSRA-Coach-Lizenz (wie das Anbieten von Coachings, siehe SQL 026)
+    const { data: licensed } = await admin.rpc("coach_license_active", { _user: user.id });
+    if (licensed !== true) return json({ error: "Auszahlungen einrichten können Mitglieder mit GSRA-Coach-Lizenz." }, 403);
 
     let accountId = existing?.stripe_account_id as string | undefined;
     if (!accountId) {

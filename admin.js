@@ -384,7 +384,31 @@ document.addEventListener("DOMContentLoaded", async () => {
                 <input type="text" inputmode="numeric" placeholder="GSRA-ID, z. B. 100123" maxlength="12" required>
                 <button type="submit" class="admin-btn warn"><i class="fa-solid fa-user-plus"></i> Zum Moderator ernennen</button>
             </form>
-            <p class="admin-team-note">Neue Admins lassen sich aus Sicherheitsgründen nur im Supabase SQL Editor ernennen.</p>`;
+            <p class="admin-team-note">Neue Admins lassen sich aus Sicherheitsgründen nur im Supabase SQL Editor ernennen.</p>
+            <p><strong>Coach-Lizenz</strong> entziehen (mit Begründung, Angebote werden pausiert) oder wiederherstellen.
+            Verwarnungen und Sperren entziehen die Lizenz automatisch.</p>
+            <form class="admin-team-form admin-license-form" autocomplete="off">
+                <input type="text" inputmode="numeric" placeholder="GSRA-ID" maxlength="12" required>
+                <input type="text" placeholder="Begründung (nur beim Entziehen)" maxlength="300">
+                <button type="submit" class="admin-btn warn" data-license="revoke"><i class="fa-solid fa-ban"></i> Lizenz entziehen</button>
+                <button type="submit" class="admin-btn dismiss" data-license="restore"><i class="fa-solid fa-rotate-left"></i> Wiederherstellen</button>
+            </form>`;
+        // Coach-Lizenz per GSRA-ID entziehen oder wiederherstellen
+        intro.querySelector(".admin-license-form").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const [idInput, reasonInput] = e.target.querySelectorAll("input");
+            const gsraId = Number(String(idInput.value).replace(/[^\d]/g, ""));
+            if (!gsraId) return showToast("Bitte gib eine GSRA-ID ein.", "error");
+            const { data: target } = await client.from("profiles").select("id, username").eq("gsra_id", gsraId).maybeSingle();
+            if (!target) return showToast("Zu dieser GSRA-ID gibt es kein Konto.", "error");
+            const restore = e.submitter?.dataset.license === "restore";
+            const { error } = restore
+                ? await client.rpc("coach_license_restore", { _user: target.id })
+                : await client.rpc("coach_license_revoke", { _user: target.id, _reason: reasonInput.value.trim() });
+            if (error) return showToast(error.message, "error");
+            showToast(restore ? `Coach-Lizenz von ${target.username} wiederhergestellt.` : `Coach-Lizenz von ${target.username} entzogen.`, "success");
+            e.target.reset();
+        });
         intro.querySelector("form").addEventListener("submit", async (e) => {
             e.preventDefault();
             const id = Number(String(e.target.querySelector("input").value).replace(/[^\d]/g, ""));
@@ -447,7 +471,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             event_geloescht: ["fa-calendar-xmark", `hat das Event „${d(e).titel || ""}“ gelöscht`],
             bewertung_geloescht: ["fa-star-half-stroke", `hat eine Verkäufer-Bewertung entfernt${d(e).inserat ? ` (Inserat „${d(e).inserat}“)` : ""}`],
             kommentar_geloescht: ["fa-comment-slash", "hat einen Setup-Kommentar entfernt"],
-            coaching_geloescht: ["fa-chalkboard-user", `hat das Coaching „${d(e).titel || ""}“ entfernt`]
+            coaching_geloescht: ["fa-chalkboard-user", `hat das Coaching „${d(e).titel || ""}“ entfernt`],
+            coach_lizenz_erteilt: ["fa-award", "hat die Coach-Lizenz erhalten (alle Voraussetzungen erfüllt)"],
+            coach_lizenz_entzogen: ["fa-ban", `hat die Coach-Lizenz entzogen${d(e).grund ? ` – Begründung: ${d(e).grund}` : ""}`],
+            coach_lizenz_automatisch: ["fa-robot", `Coach-Lizenz automatisch entzogen (${String(d(e).grund || "").replace(/^Automatisch:\s*/, "")})`],
+            coach_lizenz_wiederhergestellt: ["fa-rotate-left", "hat die Coach-Lizenz wiederhergestellt"]
         }[e.action] || ["fa-circle-info", e.action]);
         const table = document.createElement("div");
         table.className = "admin-log";

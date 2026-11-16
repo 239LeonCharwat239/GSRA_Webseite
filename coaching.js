@@ -1,6 +1,7 @@
 /* =========================================
    GSRA - Coaching
-   Mitglieder mit Pole oder Alliance bieten Coachings zu ihrem eigenen Preis an, jedes Mitglied kann anfragen.
+   Mitglieder mit GSRA-Coach-Lizenz (über Leistung, nicht über ein Abo – siehe SQL 026) bieten Coachings zu ihrem
+   eigenen Preis an, jedes Mitglied kann anfragen.
    Der Preis geht an den Coach (die GSRA behält nichts ein; die Zahlungsgebühr von Stripe trägt der Coach).
    Mit Paddock kommen 10 % Servicegebühr dazu, mit Pole/Alliance keine.
    Preis und Gebühr legt die Datenbank fest (coaching_book) – die Seite zeigt sie nur an.
@@ -30,7 +31,7 @@
         ["PL", "Polen"], ["CZ", "Tschechien"], ["DK", "Dänemark"], ["SE", "Schweden"], ["FI", "Finnland"], ["NO", "Norwegen"]];
 
     let me = null;            // angemeldete Person
-    let myPlan = "paddock";
+    let license = null;       // eigener Stand der Coach-Lizenz (coach_license_status)
     let feePercent = 10;      // nur für die Anzeige; berechnet wird in der Datenbank
     let isModerator = false;
     let offers = [];
@@ -43,7 +44,7 @@
     const coachReadyCache = new Map();
 
     const $ = (id) => document.getElementById(id);
-    const canOffer = () => ["pole", "alliance"].includes(myPlan);
+    const canOffer = () => license?.aktiv === true;
     const euro = (cents) => (Number(cents || 0) / 100).toLocaleString("de-DE", { style: "currency", currency: "EUR" });
     const feeOf = (cents) => Math.round(Number(cents || 0) * feePercent / 100);
     const duration = (min) => {
@@ -239,6 +240,11 @@
                 del.title = "Angebot als Moderation entfernen";
                 del.addEventListener("click", () => deleteOffer(offer, true));
                 actions.appendChild(del);
+                const revoke = iconText("button", "co-btn danger", "fa-ban", "Lizenz entziehen");
+                revoke.type = "button";
+                revoke.title = "Coach-Lizenz mit Begründung entziehen";
+                revoke.addEventListener("click", () => revokeLicense(offer));
+                actions.appendChild(revoke);
             }
         }
         foot.appendChild(actions);
@@ -293,11 +299,7 @@
     /* ---------- Angebot anlegen / bearbeiten ---------- */
     function openOfferForm(offer = null) {
         if (!offer && !canOffer()) {
-            showDialog({
-                icon: "fa-crown", title: "Coachings mit Pole oder Alliance",
-                message: "Eigene Coachings anbieten können Mitglieder mit dem Pole- oder Alliance-Abo. Die GSRA behält von deinem Preis nichts ein – abgezogen wird nur die Zahlungsgebühr von Stripe.",
-                confirmText: "Abos ansehen", cancelText: "Schließen"
-            }).then(ok => { if (ok) window.location.href = "abo.html"; });
+            openLicenseDialog();
             return;
         }
         editingId = offer?.id || null;
@@ -312,11 +314,185 @@
         $("coPrice").value = offer ? (offer.price_cents / 100).toLocaleString("de-DE", { maximumFractionDigits: 2 }) : "";
         $("coDescription").value = offer?.description || "";
         $("coActive").checked = offer ? offer.active : true;
-        // Ohne Abo lassen sich eigene Angebote nur noch pausieren, nicht wieder einschalten
+        // Ohne Lizenz lassen sich eigene Angebote nur noch pausieren, nicht wieder einschalten
         $("coActive").disabled = !canOffer() && !offer?.active;
         openModal("coOfferModal");
     }
     $("coOfferBtn").addEventListener("click", () => openOfferForm());
+
+    /* ---------- GSRA-Coach-Lizenz ---------- */
+    const LEVEL_NAMES = [[2.5, "Ideal"], [1.75, "In Ordnung"], [1, "Mangelhaft"], [0, "Schlecht"]];
+    const levelName = (avg) => (LEVEL_NAMES.find(([min]) => Number(avg) >= min) || LEVEL_NAMES[3])[1];
+
+    async function loadLicense() {
+        const { data, error } = await client.rpc("coach_license_status", { _user: me });
+        license = error ? null : data;
+        return license;
+    }
+
+    // Die vier Voraussetzungen mit Fortschritt (Regeln kommen aus der Datenbank)
+    function criteriaList(status) {
+        const r = status?.regeln || {};
+        const p = status?.fortschritt || {};
+        const ok = p.erfuellt || {};
+        const list = el("ul", "co-criteria");
+        const item = (done, title, detail) => {
+            const li = el("li", done ? "done" : "");
+            li.innerHTML = `<i class="fa-solid ${done ? "fa-circle-check" : "fa-circle"}"></i>`;
+            const text = el("span", "");
+            text.appendChild(el("strong", "", title));
+            text.appendChild(el("small", "", detail));
+            li.appendChild(text);
+            list.appendChild(li);
+        };
+        item(ok.dauer, `Mindestens ${Math.round((r.mitglied_tage || 90) / 30)} Monate Mitglied`,
+            `${Math.min(p.mitglied_tage || 0, r.mitglied_tage || 90)} von ${r.mitglied_tage || 90} Tagen`);
+        item(ok.setups, `${r.setup_punkte || 25} Setup-Punkte`, `${p.setup_punkte || 0} von ${r.setup_punkte || 25} Punkten (Likes minus Dislikes deiner Setups)`);
+        item(ok.bewertungen, `${r.bewertungen || 5} Bewertungen mit Ø „Ideal“`,
+            p.bewertungen ? `${p.bewertungen} Bewertung${p.bewertungen === 1 ? "" : "en"}, Ø „${levelName(p.schnitt)}“ (Marktplatz und Setups)` : "Noch keine Bewertungen (Marktplatz und Setups)");
+        item(ok.verhalten, "Faires Verhalten", `Keine Sperre und keine Verwarnung in den letzten ${r.ruhe_tage || 90} Tagen`);
+        return list;
+    }
+
+    function openLicenseDialog() {
+        document.getElementById("coLicenseDialog")?.remove();
+        const overlay = el("div", "gsra-dialog-overlay");
+        overlay.id = "coLicenseDialog";
+        const dialog = el("div", "gsra-dialog co-dialog co-license-dialog");
+        dialog.setAttribute("role", "dialog");
+        dialog.setAttribute("aria-modal", "true");
+        dialog.innerHTML = '<button type="button" class="gsra-dialog-close" title="Schließen"><i class="fa-solid fa-xmark"></i></button><div class="gsra-dialog-icon"><i class="fa-solid fa-award"></i></div>';
+        dialog.appendChild(el("h3", "gsra-dialog-title", "GSRA-Coach-Lizenz"));
+        const body = el("div", "co-license-body");
+        dialog.appendChild(body);
+        const actions = el("div", "gsra-dialog-actions");
+        dialog.appendChild(actions);
+        overlay.appendChild(dialog);
+        const close = () => {
+            document.removeEventListener("keydown", onKey, true);
+            overlay.remove();
+            if (!document.querySelector(".gsra-dialog-overlay:not([hidden])")) document.body.style.overflow = "";
+        };
+        const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); } };
+        dialog.querySelector(".gsra-dialog-close").addEventListener("click", close);
+        overlay.addEventListener("mousedown", (e) => { if (e.target === overlay) close(); });
+        document.addEventListener("keydown", onKey, true);
+        document.body.appendChild(overlay);
+        document.body.style.overflow = "hidden";
+
+        const render = () => {
+            body.replaceChildren();
+            actions.replaceChildren();
+            const closeBtn = el("button", "gsra-dialog-btn secondary", "Schließen");
+            closeBtn.type = "button";
+            closeBtn.addEventListener("click", close);
+            if (!license) {
+                body.appendChild(el("p", "co-license-intro", "Die Coach-Lizenz ist gerade nicht verfügbar. Bitte versuche es später erneut."));
+                actions.appendChild(closeBtn);
+                return;
+            }
+            if (license.aktiv) {
+                body.appendChild(el("p", "co-license-intro", `Deine Lizenz ist aktiv${license.erteilt_am ? ` seit ${dateText(license.erteilt_am)}` : ""}. Du kannst eigene Coachings anbieten.`));
+                const offerBtn = el("button", "gsra-dialog-btn primary", "Coaching anbieten");
+                offerBtn.type = "button";
+                offerBtn.addEventListener("click", () => { close(); openOfferForm(); });
+                actions.append(closeBtn, offerBtn);
+                return;
+            }
+            body.appendChild(el("p", "co-license-intro", "Coach wird man bei der GSRA über Leistung in der Community, nicht über ein Abo. Sind alle vier Punkte erfüllt, holst du dir die Lizenz hier."));
+            const revoked = license.entzogen;
+            if (revoked) {
+                const note = el("div", "co-license-revoked");
+                note.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> ';
+                note.append(revoked.automatisch
+                    ? `Deine Lizenz wurde am ${dateText(revoked.am)} automatisch entzogen (${String(revoked.grund || "").replace(/^Automatisch:\s*/, "")}). Sobald alle Punkte wieder erfüllt sind, kannst du sie erneut holen.`
+                    : `Das Moderationsteam hat deine Lizenz am ${dateText(revoked.am)} entzogen. Begründung: ${revoked.grund || "–"}`);
+                body.appendChild(note);
+            }
+            body.appendChild(criteriaList(license));
+            const blocked = revoked && !revoked.automatisch;
+            const ready = license.fortschritt?.alle === true && !blocked;
+            const claim = el("button", "gsra-dialog-btn primary", ready ? "Lizenz holen" : "Noch nicht alles erfüllt");
+            claim.type = "button";
+            claim.disabled = !ready;
+            claim.addEventListener("click", async () => {
+                claim.disabled = true;
+                const { error } = await client.rpc("coach_claim_license");
+                if (error) {
+                    claim.disabled = false;
+                    showToast(errorText(error, "Die Lizenz konnte nicht vergeben werden."), "error");
+                    return;
+                }
+                showToast("Glückwunsch – du bist jetzt GSRA-Coach!", "success");
+                await refreshLicenseUi();
+                render();
+            });
+            actions.append(closeBtn, claim);
+        };
+        render();
+        loadLicense().then(render);
+    }
+
+    // Lizenz-Box im Bereich „Als Coach“ und Knopf oben
+    function renderLicenseBox() {
+        const box = $("coLicense");
+        if (!box) return;
+        box.hidden = !license;
+        if (!license) return;
+        box.className = `co-license ${license.aktiv ? "active" : ""}`;
+        box.replaceChildren();
+        const head = el("div", "co-payout-head");
+        head.innerHTML = '<i class="fa-solid fa-award"></i>';
+        const text = el("div", "co-payout-text");
+        if (license.aktiv) {
+            text.appendChild(el("strong", "", "GSRA-Coach-Lizenz aktiv"));
+            text.appendChild(el("span", "", `Seit ${license.erteilt_am ? dateText(license.erteilt_am) : "–"}. Bleib fair und zuverlässig: Verwarnungen oder Sperren entziehen die Lizenz automatisch.`));
+        } else {
+            const done = Object.values(license.fortschritt?.erfuellt || {}).filter(Boolean).length;
+            text.appendChild(el("strong", "", license.entzogen ? "Coach-Lizenz entzogen" : "Noch keine Coach-Lizenz"));
+            text.appendChild(el("span", "", `${done} von 4 Voraussetzungen erfüllt. Coach wird man über Setups, gute Bewertungen und faires Verhalten.`));
+        }
+        head.appendChild(text);
+        const actions = el("div", "co-actions");
+        const btn = iconText("button", `co-btn ${license.aktiv ? "" : "primary"}`, "fa-list-check", license.aktiv ? "Details" : "Voraussetzungen ansehen");
+        btn.type = "button";
+        btn.addEventListener("click", openLicenseDialog);
+        actions.appendChild(btn);
+        box.append(head, actions);
+    }
+
+    function updateOfferButton() {
+        const btn = $("coOfferBtn");
+        btn.replaceChildren();
+        btn.insertAdjacentHTML("afterbegin", `<i class="fa-solid ${canOffer() ? "fa-plus" : "fa-award"}"></i> `);
+        btn.append(canOffer() ? "Coaching anbieten" : "Coach werden");
+        btn.title = canOffer() ? "" : "Coach wird man mit der GSRA-Coach-Lizenz – über Setups, Bewertungen und faires Verhalten.";
+    }
+
+    async function refreshLicenseUi() {
+        await loadLicense();
+        updateOfferButton();
+        renderLicenseBox();
+        if (!$("coMyOffers").closest(".co-panel").hidden) await Promise.all([loadMyOffers(), loadPayout()]);
+    }
+
+    // Moderation: Lizenz eines Coaches mit Begründung entziehen (Angebote werden pausiert, steht im Protokoll)
+    async function revokeLicense(offer) {
+        const reason = await showDialog({
+            icon: "fa-ban", danger: true, title: `${nameOf(offer.coach_id)} die Coach-Lizenz entziehen?`,
+            message: "Alle Angebote werden pausiert, bezahlte Coachings bleiben erstattbar. Die Begründung sieht der Coach und das Protokoll.",
+            input: { placeholder: "Begründung (mindestens 5 Zeichen)", maxLength: 300, multiline: true },
+            confirmText: "Lizenz entziehen", cancelText: "Abbrechen"
+        });
+        if (!reason) return;
+        const { error } = await client.rpc("coach_license_revoke", { _user: offer.coach_id, _reason: reason });
+        if (error) {
+            showToast(errorText(error, "Die Lizenz konnte nicht entzogen werden."), "error");
+            return;
+        }
+        showToast("Lizenz entzogen, Angebote pausiert.", "success");
+        loadOffers();
+    }
 
     $("coOfferForm").addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -720,10 +896,10 @@
         if (!data.length) {
             const empty = el("div", "co-empty");
             empty.innerHTML = '<i class="fa-solid fa-chalkboard-user"></i>';
-            empty.append(canOffer() ? " Du hast noch kein Coaching angeboten." : " Mit Pole oder Alliance kannst du eigene Coachings anbieten.");
-            const btn = iconText("button", "co-btn primary", canOffer() ? "fa-plus" : "fa-crown", canOffer() ? "Coaching anbieten" : "Abos ansehen");
+            empty.append(canOffer() ? " Du hast noch kein Coaching angeboten." : " Mit der GSRA-Coach-Lizenz kannst du eigene Coachings anbieten.");
+            const btn = iconText("button", "co-btn primary", canOffer() ? "fa-plus" : "fa-award", canOffer() ? "Coaching anbieten" : "Voraussetzungen ansehen");
             btn.type = "button";
-            btn.addEventListener("click", () => (canOffer() ? openOfferForm() : (window.location.href = "abo.html")));
+            btn.addEventListener("click", () => (canOffer() ? openOfferForm() : openLicenseDialog()));
             empty.appendChild(btn);
             box.appendChild(empty);
             return;
@@ -738,7 +914,7 @@
             const toggle = iconText("button", "co-btn", o.active ? "fa-pause" : "fa-play", o.active ? "Pausieren" : "Aktivieren");
             toggle.type = "button";
             toggle.disabled = !o.active && !canOffer();
-            if (toggle.disabled) toggle.title = "Zum Aktivieren brauchst du Pole oder Alliance.";
+            if (toggle.disabled) toggle.title = "Zum Aktivieren brauchst du die GSRA-Coach-Lizenz.";
             toggle.addEventListener("click", async () => {
                 toggle.disabled = true;
                 const { error: err } = await client.rpc("coaching_save_offer", {
@@ -774,6 +950,7 @@
             renderBookings($("coCoachRequests"), list, "coach");
             setBadge("coBadgeCoach", list.filter(b => b.status === "angefragt").length);
         }
+        renderLicenseBox();
         await Promise.all([loadMyOffers(), loadPayout()]);
     }
 
@@ -818,13 +995,12 @@
         const { data: { session } } = await client.auth.getSession();
         me = session?.user?.id || null;
         if (!me) return; // Gäste sehen den Anmelde-Hinweis (auth-nav.js)
-        const [plan, fee, profile] = await Promise.all([
-            client.rpc("plan_of", { _user: me }),
+        const [fee, profile] = await Promise.all([
             client.rpc("coaching_fee_percent"),
-            client.from("profiles").select("role").eq("id", me).maybeSingle()
+            client.from("profiles").select("role").eq("id", me).maybeSingle(),
+            loadLicense()
         ]);
-        myPlan = plan.data || "paddock";
-        feePercent = fee.error ? (canOffer() ? 0 : 10) : Number(fee.data);
+        feePercent = fee.error ? 10 : Number(fee.data);
         isModerator = ["admin", "moderator"].includes(profile.data?.role);
 
         const hint = $("coFeeHint");
@@ -836,12 +1012,8 @@
             ? "Mit Paddock zahlst du 10 % Servicegebühr auf den Preis des Coaches. Mit Pole oder Alliance entfällt sie."
             : "Mit deinem Abo zahlst du keine Servicegebühr – du zahlst genau den Preis des Coaches.");
         hint.classList.toggle("free", !feePercent);
-        if (!canOffer()) {
-            const btn = $("coOfferBtn");
-            btn.innerHTML = '<i class="fa-solid fa-crown"></i> ';
-            btn.append("Coach werden");
-            btn.title = "Coachings anbieten können Mitglieder mit Pole oder Alliance.";
-        }
+        updateOfferButton();
+        renderLicenseBox();
 
         renderCategories();
         await loadOffers();

@@ -114,10 +114,18 @@
             setupContent.push(thumbs);
         }
         row("fa-sliders", "Setups", setupContent);
-        // Coaching: Angebote (Bewertungen nach abgeschlossenen Coachings folgen mit der Bezahlung)
-        row("fa-chalkboard-user", "Coaching", [Object.assign(document.createElement("span"), c.angebote
+        // Coaching: GSRA-Coach-Lizenz, Angebote und gegebene Coachings
+        const coachContent = [];
+        if (c.lizenz) {
+            const badge = document.createElement("span");
+            badge.className = "rep-coach";
+            badge.innerHTML = '<i class="fa-solid fa-award"></i> GSRA-Coach';
+            coachContent.push(badge);
+        }
+        coachContent.push(Object.assign(document.createElement("span"), c.angebote
             ? { textContent: plural(Number(c.angebote), "Angebot", "Angebote") + (c.erledigt ? ` · ${plural(Number(c.erledigt), "Coaching", "Coachings")} gegeben` : "") }
-            : { className: "rep-soon", textContent: "Noch keine Angebote" })]);
+            : { className: "rep-soon", textContent: "Noch keine Angebote" }));
+        row("fa-chalkboard-user", "Coaching", coachContent);
         target.replaceChildren(box);
     };
 
