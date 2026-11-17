@@ -38,7 +38,22 @@
     let profiles = new Map(); // id → { username, avatar_url }
     // coach: nur Angebote eines Coaches (Link „Coachings von … ansehen“ im Profil)
     const coachParam = new URLSearchParams(window.location.search).get("coach");
-    let filter = { category: "all", search: "", coach: /^[\w-]{1,64}$/.test(coachParam || "") ? coachParam : null };
+    // Filter wie im Marktplatz: Simulation, Sprache und Nation des Coaches, Preis von–bis, Sortierung
+    const FILTER_DEFAULTS = { category: "all", search: "", sim: "", lang: "", country: "", min: "", max: "", sort: "empfohlen" };
+    let filter = { ...FILTER_DEFAULTS, coach: /^[\w-]{1,64}$/.test(coachParam || "") ? coachParam : null };
+    let currentTab = "angebote";
+    const coachScores = new Map(); // coach_id → { score, count } für „Beste Bewertung“
+    // Gleiche Simulation, verschiedene Schreibweisen (z. B. „ACC“) → ein Eintrag im Filter
+    const SIM_ALIASES = {
+        acc: "assetto corsa competizione", "assetto corsa comp": "assetto corsa competizione", ac: "assetto corsa",
+        ace: "assetto corsa evo", "ac evo": "assetto corsa evo", lmu: "le mans ultimate", ams2: "automobilista 2",
+        rf2: "rfactor 2", rfactor2: "rfactor 2", r3e: "raceroom", "raceroom racing experience": "raceroom",
+        gt7: "gran turismo 7", "i racing": "iracing", "f1 2025": "f1 25", beamng: "beamng.drive"
+    };
+    const simKey = (value) => {
+        const key = String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+        return SIM_ALIASES[key] || key;
+    };
     let editingId = null;
     let bookingOffer = null;
     let timeTarget = null;    // { booking, mode: "accept" | "move" }
@@ -151,13 +166,24 @@
     });
 
     /* ---------- Tabs ---------- */
-    function showTab(name) {
+    // Jeder Reiter hat eine eigene Adresse (z. B. coaching.html?tab=pro), damit man ihn verlinken kann
+    function tabUrl(name) {
+        const params = new URLSearchParams();
+        if (name !== "angebote") params.set("tab", name);
+        if (filter.coach && (name === "angebote" || name === "pro")) params.set("coach", filter.coach);
+        const query = params.toString();
+        return `coaching.html${query ? `?${query}` : ""}`;
+    }
+    function showTab(name, { updateUrl = true } = {}) {
+        currentTab = name;
         document.querySelectorAll(".co-tab").forEach(t => {
             const active = t.dataset.tab === name;
             t.classList.toggle("active", active);
             t.setAttribute("aria-selected", String(active));
         });
         document.querySelectorAll(".co-panel").forEach(p => { p.hidden = p.dataset.panel !== name; });
+        $("coFilterArea").hidden = !(name === "angebote" || name === "pro");
+        if (updateUrl) history.replaceState(null, "", tabUrl(name));
         if (name === "anfragen") loadBuyerBookings();
         if (name === "coach") loadCoachArea();
     }
@@ -270,50 +296,155 @@
         return card;
     }
 
-    // Pro-Coaches (von der GSRA ausgewählte Pro-Fahrer) oben im eigenen Bereich, alle anderen darunter
+    // Passt ein Angebot zu Suche und Filtern?
+    function matchesFilter(o) {
+        const term = filter.search.trim().toLowerCase();
+        const coach = profiles.get(o.coach_id) || {};
+        const min = filter.min === "" ? null : Number(filter.min) * 100;
+        const max = filter.max === "" ? null : Number(filter.max) * 100;
+        return (!filter.coach || o.coach_id === filter.coach)
+            && (filter.category === "all" || o.category === filter.category)
+            && (!filter.sim || simKey(o.simulation) === filter.sim)
+            && (!filter.lang || (Array.isArray(coach.languages) && coach.languages.includes(filter.lang)))
+            && (!filter.country || coach.country === filter.country)
+            && (min === null || !Number.isFinite(min) || o.price_cents >= min)
+            && (max === null || !Number.isFinite(max) || o.price_cents <= max)
+            && (!term || [o.title, o.description, o.simulation, o.category, nameOf(o.coach_id)].some(v => String(v || "").toLowerCase().includes(term)));
+    }
+
+    // Sortierung; „Empfohlen“ = neue Angebote zuerst, sonst zufällig je Besuch (gleiche Chance für alle Coaches)
+    function sortOffers(list) {
+        const sorted = [...list];
+        if (filter.sort === "preis-auf") sorted.sort((a, b) => a.price_cents - b.price_cents);
+        else if (filter.sort === "preis-ab") sorted.sort((a, b) => b.price_cents - a.price_cents);
+        else if (filter.sort === "neu") sorted.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        else if (filter.sort === "bewertung") {
+            const score = (o) => coachScores.get(o.coach_id) || { score: -1, count: 0 };
+            sorted.sort((a, b) => (score(b).score - score(a).score) || (score(b).count - score(a).count));
+        }
+        return sorted;
+    }
+
+    // Zufriedenheit aller Coaches laden (nur für „Beste Bewertung“), danach neu sortieren
+    async function loadCoachScores() {
+        if (typeof window.gsraReputation !== "function") return;
+        const missing = [...new Set(offers.map(o => o.coach_id))].filter(id => !coachScores.has(id));
+        if (!missing.length) return;
+        await Promise.all(missing.map(async (id) => {
+            const c = (await window.gsraReputation(id))?.coaching || {};
+            const n = Number(c.anzahl || 0);
+            // Schnitt wie in der Anzeige: Ideal 3, In Ordnung 2, Mangelhaft 1, Schlecht 0
+            const avg = n ? (3 * (c.ideal || 0) + 2 * (c.in_ordnung || 0) + (c.mangelhaft || 0)) / n : -1;
+            coachScores.set(id, { score: avg, count: n });
+        }));
+    }
+
+    const countText = (n) => n === 1 ? "1 Coaching" : `${n} Coachings`;
+    function emptyBox(text) {
+        const empty = el("div", "co-empty");
+        empty.innerHTML = '<i class="fa-solid fa-chalkboard-user"></i> ';
+        empty.append(text);
+        return empty;
+    }
+
+    // Zwei Bereiche: „Coaches“ (GSRA-Coach-Lizenz) und „Pro-Coaches“ (von der GSRA ausgewählte Pro-Fahrer)
     function renderOffers() {
         const box = $("coOffers");
-        const proSection = $("coProSection");
         const proBox = $("coProOffers");
-        const term = filter.search.trim().toLowerCase();
         renderCoachFilter();
-        const list = offers.filter(o => (!filter.coach || o.coach_id === filter.coach) && (filter.category === "all" || o.category === filter.category)
-            && (!term || [o.title, o.description, o.simulation, o.category, nameOf(o.coach_id)].some(v => String(v || "").toLowerCase().includes(term))));
+        updateResetButton();
+        const list = sortOffers(offers.filter(matchesFilter));
         const proList = list.filter(o => proIds.has(o.coach_id));
         const rest = list.filter(o => !proIds.has(o.coach_id));
+        const proTotal = offers.filter(o => proIds.has(o.coach_id)).length;
+        const filtered = filterActive();
+
         box.replaceChildren();
+        if (rest.length) rest.forEach(o => box.appendChild(offerCard(o)));
+        else box.appendChild(emptyBox(offers.some(o => !proIds.has(o.coach_id))
+            ? "Keine Coachings passen zu deiner Suche." : "Noch keine Coachings – sei der Erste!"));
+        $("coResultInfo").textContent = filtered ? `${countText(rest.length)} gefunden` : "";
+
         proBox.replaceChildren();
-        proSection.hidden = !proList.length;
-        proList.forEach(o => proBox.appendChild(offerCard(o, { pro: true })));
-        if (!rest.length) {
-            if (proList.length) return;
-            const empty = el("div", "co-empty");
-            empty.innerHTML = '<i class="fa-solid fa-chalkboard-user"></i>';
-            empty.append(offers.length ? " Keine Coachings passen zu deiner Suche." : " Noch keine Coachings – sei der Erste!");
-            box.appendChild(empty);
-            return;
+        if (proList.length) proList.forEach(o => proBox.appendChild(offerCard(o, { pro: true })));
+        else proBox.appendChild(emptyBox(proTotal ? "Keine Pro-Coachings passen zu deiner Suche."
+            : "Zurzeit bieten keine Pro-Coaches Coachings an. Schau bald wieder vorbei!"));
+        $("coProResultInfo").textContent = filtered ? `${countText(proList.length)} gefunden` : "";
+
+        // Hinweis im Bereich „Coaches“: Pro-Coaches gibt es auf einer eigenen Seite
+        const teaser = $("coProTeaser");
+        teaser.hidden = !proTotal;
+        if (proTotal) {
+            teaser.innerHTML = '<i class="fa-solid fa-crown"></i> ';
+            const text = el("span", "");
+            text.appendChild(el("strong", "", "Pro-Coaches"));
+            text.append(` – von der GSRA ausgewählte Pro-Fahrer: ${filtered ? `${proList.length} von ${proTotal}` : proTotal} ${proTotal === 1 ? "Coaching" : "Coachings"}`);
+            teaser.appendChild(text);
+            teaser.appendChild(iconText("span", "co-pro-teaser-go", "fa-arrow-right", "Ansehen"));
         }
-        rest.forEach(o => box.appendChild(offerCard(o)));
+    }
+
+    const filterActive = () => Object.keys(FILTER_DEFAULTS).some(k => k !== "sort" && filter[k] !== FILTER_DEFAULTS[k]);
+    function updateResetButton() {
+        $("coResetFilters").hidden = !filterActive() && filter.sort === FILTER_DEFAULTS.sort;
+    }
+
+    // Auswahllisten aus den vorhandenen Angeboten füllen (nur, was es wirklich gibt)
+    function fillFilterOptions() {
+        const fill = (select, entries, allLabel) => {
+            const keep = select.value;
+            select.replaceChildren(new Option(allLabel, ""));
+            entries.forEach(([value, label]) => select.add(new Option(label, value)));
+            select.value = entries.some(([v]) => v === keep) ? keep : "";
+        };
+        // Simulationen: häufigste Schreibweise je Simulation anzeigen
+        const sims = new Map();
+        offers.forEach(o => {
+            const key = simKey(o.simulation);
+            if (!key) return;
+            const entry = sims.get(key) || new Map();
+            const label = String(o.simulation).trim();
+            entry.set(label, (entry.get(label) || 0) + 1);
+            sims.set(key, entry);
+        });
+        // Bekannte Simulationen mit vollem Namen (Vorschlagsliste im Formular), sonst die häufigste Schreibweise
+        const known = new Map([...document.querySelectorAll("#coSimList option")].map(o => [simKey(o.value), o.value]));
+        const simEntries = [...sims].map(([key, labels]) => [key, known.get(key) || [...labels].sort((a, b) => b[1] - a[1])[0][0]])
+            .sort((a, b) => a[1].localeCompare(b[1], "de"));
+        fill($("coFilterSim"), simEntries, "Alle Simulationen");
+
+        const coaches = [...new Set(offers.map(o => o.coach_id))].map(id => profiles.get(id) || {});
+        const langs = new Set(coaches.flatMap(p => Array.isArray(p.languages) ? p.languages : []));
+        fill($("coFilterLang"), (window.GSRA_LANGUAGES || []).filter(([code]) => langs.has(code)), "Alle Sprachen");
+        const countries = new Set(coaches.map(p => p.country).filter(Boolean));
+        fill($("coFilterCountry"), (window.GSRA_COUNTRIES || []).filter(([code]) => countries.has(code))
+            .sort((a, b) => a[1].localeCompare(b[1], "de")), "Alle Nationen");
+        // Ohne Angaben (z. B. vor SQL 029) die leeren Listen ausblenden
+        $("coFilterSim").hidden = !simEntries.length;
+        $("coFilterLang").hidden = !langs.size;
+        $("coFilterCountry").hidden = !countries.size;
+        filter.sim = $("coFilterSim").value;
+        filter.lang = $("coFilterLang").value;
+        filter.country = $("coFilterCountry").value;
     }
 
     // „Coachings von …“ (Sprung aus dem Profil): Hinweis mit Knopf zum Aufheben
     function renderCoachFilter() {
-        let bar = document.getElementById("coCoachFilter");
-        if (!filter.coach) { bar?.remove(); return; }
-        if (!bar) {
-            bar = el("div", "co-coach-filter");
-            bar.id = "coCoachFilter";
-            $("coOffers").before(bar);
-        }
-        bar.replaceChildren(iconText("span", "", "fa-user", `Coachings von ${nameOf(filter.coach)}`));
-        const clear = iconText("button", "co-btn ghost", "fa-xmark", "Alle Coaches zeigen");
-        clear.type = "button";
-        clear.addEventListener("click", () => {
-            filter.coach = null;
-            history.replaceState(null, "", "coaching.html");
-            renderOffers();
+        document.querySelectorAll(".co-coach-filter").forEach(b => b.remove());
+        if (!filter.coach) return;
+        [$("coOffers"), $("coProOffers")].forEach(target => {
+            const bar = el("div", "co-coach-filter");
+            bar.appendChild(iconText("span", "", "fa-user", `Coachings von ${nameOf(filter.coach)}`));
+            const clear = iconText("button", "co-btn ghost", "fa-xmark", "Alle Coaches zeigen");
+            clear.type = "button";
+            clear.addEventListener("click", () => {
+                filter.coach = null;
+                history.replaceState(null, "", tabUrl(currentTab));
+                renderOffers();
+            });
+            bar.appendChild(clear);
+            target.before(bar);
         });
-        bar.appendChild(clear);
     }
 
     // Bewertungen eines Coaches lesen (neueste zuerst); das Moderationsteam kann unpassende entfernen
@@ -410,12 +541,50 @@
         await loadProfiles((data || []).map(o => o.coach_id));
         if (request !== offersRequest) return;
         offers = [...fresh, ...rest];
+        fillFilterOptions();
+        if (filter.sort === "bewertung") await loadCoachScores();
+        if (request !== offersRequest) return;
         renderOffers();
     }
 
     $("coSearch").addEventListener("input", (e) => {
         filter.search = e.target.value;
         renderOffers();
+    });
+    [["coFilterSim", "sim"], ["coFilterLang", "lang"], ["coFilterCountry", "country"]].forEach(([id, key]) => {
+        $(id).addEventListener("change", (e) => {
+            filter[key] = e.target.value;
+            renderOffers();
+        });
+    });
+    [["coMinPrice", "min"], ["coMaxPrice", "max"]].forEach(([id, key]) => {
+        $(id).addEventListener("input", (e) => {
+            const value = e.target.value.trim();
+            filter[key] = value !== "" && Number(value) >= 0 ? value : "";
+            renderOffers();
+        });
+    });
+    $("coSort").addEventListener("change", async (e) => {
+        filter.sort = e.target.value;
+        if (filter.sort === "bewertung") {
+            $("coResultInfo").textContent = "Lade Bewertungen …";
+            await loadCoachScores();
+        }
+        renderOffers();
+    });
+    $("coResetFilters").addEventListener("click", () => {
+        Object.assign(filter, FILTER_DEFAULTS);
+        ["coSearch", "coMinPrice", "coMaxPrice", "coFilterSim", "coFilterLang", "coFilterCountry"].forEach(id => { $(id).value = ""; });
+        $("coSort").value = FILTER_DEFAULTS.sort;
+        renderCategories();
+        renderOffers();
+    });
+    $("coProTeaser").addEventListener("click", () => {
+        showTab("pro");
+        // Reiter knapp unter der festen Kopfzeile zeigen
+        const header = document.querySelector("header");
+        const top = document.querySelector(".co-tabs").getBoundingClientRect().top + window.scrollY - (header?.offsetHeight || 0) - 12;
+        window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
     });
 
     /* ---------- Angebot anlegen / bearbeiten ---------- */
@@ -1247,7 +1416,9 @@
         fetchBookings("coach_id").then(list => list && setBadge("coBadgeCoach", list.filter(b => b.status === "angefragt").length));
         const params = new URLSearchParams(window.location.search);
         const tab = params.get("tab");
-        if (["anfragen", "coach"].includes(tab)) showTab(tab);
+        if (["pro", "anfragen", "coach"].includes(tab)) showTab(tab, { updateUrl: false });
+        // „Coachings von …“ eines Pro-Coaches: gleich im Bereich Pro-Coaches öffnen
+        else if (filter.coach && proIds.has(filter.coach)) showTab("pro");
 
         // Rückkehr von Stripe: Bezahlung bzw. Einrichtung des Stripe-Kontos
         const payment = params.get("zahlung");

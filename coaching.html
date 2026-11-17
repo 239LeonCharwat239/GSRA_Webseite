@@ -56,29 +56,63 @@
         <div id="coStripePrompt" class="co-payout prompt" hidden></div>
 
         <div class="co-tabs" role="tablist">
-            <button type="button" class="co-tab active" data-tab="angebote" role="tab"><i class="fa-solid fa-store"></i> Angebote</button>
+            <button type="button" class="co-tab active" data-tab="angebote" role="tab"><i class="fa-solid fa-store"></i> Coaches</button>
+            <button type="button" class="co-tab co-tab-pro" data-tab="pro" role="tab"><i class="fa-solid fa-crown"></i> Pro-Coaches</button>
             <button type="button" class="co-tab" data-tab="anfragen" role="tab"><i class="fa-solid fa-paper-plane"></i> Meine Anfragen <span class="co-badge" id="coBadgeBuyer" hidden></span></button>
             <button type="button" class="co-tab" data-tab="coach" role="tab"><i class="fa-solid fa-user-tie"></i> Als Coach <span class="co-badge" id="coBadgeCoach" hidden></span></button>
         </div>
 
-        <!-- Angebote -->
-        <section class="co-panel" data-panel="angebote">
+        <!-- Suche und Filter (gelten für „Coaches“ und „Pro-Coaches“) -->
+        <div id="coFilterArea" class="co-filter-area">
             <div class="co-toolbar">
                 <div id="coCategories" class="co-cats" role="group" aria-label="Nach Kategorie filtern"></div>
                 <div class="co-toolbar-right">
-                    <input type="search" id="coSearch" class="co-search" placeholder="Suche: Coach, Thema …" title="Nach Coach, Thema, Simulation oder Strecke suchen" aria-label="Coachings durchsuchen" maxlength="80">
+                    <input type="search" id="coSearch" class="co-search" placeholder="Suche: Coach, Thema, Strecke …" title="Nach Coach, Thema, Simulation oder Strecke suchen" aria-label="Coachings durchsuchen" maxlength="80">
                     <button type="button" id="coOfferBtn" class="co-primary-btn"><i class="fa-solid fa-plus"></i> Coaching anbieten</button>
                 </div>
             </div>
-            <p id="coFeeHint" class="co-fee-hint" hidden></p>
-            <!-- Pro-Coaches: von der GSRA ausgewählte Pro-Fahrer (füllt coaching.js) -->
-            <section id="coProSection" class="co-pro" hidden>
-                <h2 class="co-section-title co-pro-title"><i class="fa-solid fa-crown"></i> Pro-Coaches <small>von der GSRA ausgewählt</small></h2>
-                <div id="coProOffers" class="co-grid"></div>
+            <section class="mk-toolbar co-filters" aria-label="Coachings filtern und sortieren">
+                <select id="coFilterSim" title="Simulation" aria-label="Simulation"><option value="">Alle Simulationen</option></select>
+                <select id="coFilterLang" title="Sprache des Coaches" aria-label="Sprache des Coaches"><option value="">Alle Sprachen</option></select>
+                <select id="coFilterCountry" title="Nation des Coaches" aria-label="Nation des Coaches"><option value="">Alle Nationen</option></select>
+                <div class="mk-price">
+                    <input type="number" id="coMinPrice" min="0" step="1" placeholder="Preis von" aria-label="Preis von (Euro)">
+                    <span>–</span>
+                    <input type="number" id="coMaxPrice" min="0" step="1" placeholder="bis €" aria-label="Preis bis (Euro)">
+                </div>
+                <select id="coSort" title="Sortierung" aria-label="Sortierung">
+                    <option value="empfohlen">Empfohlen</option>
+                    <option value="bewertung">Beste Bewertung</option>
+                    <option value="preis-auf">Preis aufsteigend</option>
+                    <option value="preis-ab">Preis absteigend</option>
+                    <option value="neu">Neueste zuerst</option>
+                </select>
+                <button type="button" id="coResetFilters" class="mk-reset"><i class="fa-solid fa-rotate-left"></i> Zurücksetzen</button>
             </section>
-            <div id="coOffers" class="co-grid" aria-live="polite">
+            <p id="coFeeHint" class="co-fee-hint" hidden></p>
+        </div>
+
+        <!-- Coaches mit GSRA-Coach-Lizenz -->
+        <section class="co-panel" data-panel="angebote">
+            <!-- Hinweis auf die Pro-Coaches (füllt coaching.js) -->
+            <button type="button" id="coProTeaser" class="co-pro-teaser" hidden></button>
+            <p id="coResultInfo" class="co-result-info" aria-live="polite"></p>
+            <div id="coOffers" class="co-grid">
                 <div class="co-empty"><i class="fa-solid fa-spinner fa-spin"></i> Lade Coachings …</div>
             </div>
+        </section>
+
+        <!-- Pro-Coaches: von der GSRA ausgewählte Pro-Fahrer (eigene Unterseite: coaching.html?tab=pro) -->
+        <section class="co-panel co-pro" data-panel="pro" hidden>
+            <div class="co-pro-intro">
+                <i class="fa-solid fa-crown"></i>
+                <div>
+                    <h2>Pro-Coaches</h2>
+                    <p>Pro-Fahrer, die die GSRA persönlich ausgewählt hat. Gebucht und bezahlt wird genauso wie bei allen Coaches – mit festem Termin und kostenloser Stornierung bis 24 Stunden vorher.</p>
+                </div>
+            </div>
+            <p id="coProResultInfo" class="co-result-info" aria-live="polite"></p>
+            <div id="coProOffers" class="co-grid"></div>
         </section>
 
         <!-- Meine Anfragen (als Käufer) -->
@@ -117,7 +151,22 @@
                         <option value="Sonstiges">Sonstiges</option>
                     </select></label>
                 <label class="co-field"><span>Simulation <small>(optional)</small></span>
-                    <input type="text" id="coSim" maxlength="60" placeholder="z. B. iRacing"></label>
+                    <input type="text" id="coSim" maxlength="60" placeholder="z. B. iRacing" list="coSimList" autocomplete="off"></label>
+                <!-- Vorschläge, damit gleiche Simulationen gleich heißen (wichtig für den Filter) -->
+                <datalist id="coSimList">
+                    <option value="iRacing"></option>
+                    <option value="Assetto Corsa Competizione"></option>
+                    <option value="Assetto Corsa EVO"></option>
+                    <option value="Assetto Corsa"></option>
+                    <option value="Le Mans Ultimate"></option>
+                    <option value="rFactor 2"></option>
+                    <option value="Automobilista 2"></option>
+                    <option value="RaceRoom"></option>
+                    <option value="F1 25"></option>
+                    <option value="Gran Turismo 7"></option>
+                    <option value="Forza Motorsport"></option>
+                    <option value="BeamNG.drive"></option>
+                </datalist>
                 <label class="co-field"><span>Dauer</span>
                     <select id="coDuration">
                         <option value="30">30 Minuten</option>
