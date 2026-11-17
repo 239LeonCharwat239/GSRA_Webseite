@@ -41,6 +41,8 @@
     let bookingOffer = null;
     let timeTarget = null;    // { booking, mode: "accept" | "move" }
     let myPayoutReady = false; // eigenes Stripe-Konto fertig eingerichtet?
+    let proIds = new Set();    // Pro-Fahrer der GSRA (eigener Bereich oben)
+    let reviewsByBooking = new Map(); // Coach-Bewertungen zu den eigenen Anfragen
     const coachReadyCache = new Map();
 
     const $ = (id) => document.getElementById(id);
@@ -188,8 +190,9 @@
         return box;
     }
 
-    function offerCard(offer) {
-        const card = el("article", "co-card");
+    function offerCard(offer, { pro = false } = {}) {
+        const card = el("article", `co-card${pro ? " pro" : ""}`);
+        if (pro) card.appendChild(iconText("span", "co-pro-ribbon", "fa-crown", "Pro-Coach"));
         const head = el("div", "co-card-head");
         const coach = el("button", "co-coach");
         coach.type = "button";
@@ -214,9 +217,19 @@
         card.appendChild(meta);
         if (offer.description) card.appendChild(el("p", "co-desc", offer.description));
 
+        // Zufriedenheit mit dem Coach (Bewertungen nach Coachings), dazu „Bewertungen lesen“
         const rep = el("div", "co-rep");
         card.appendChild(rep);
-        if (typeof window.gsraRenderReputation === "function") window.gsraRenderReputation(rep, offer.coach_id, { compact: true });
+        if (typeof window.gsraRenderReputation === "function") window.gsraRenderReputation(rep, offer.coach_id, { compact: true, area: "coaching" });
+        if (typeof window.gsraReputation === "function") {
+            window.gsraReputation(offer.coach_id).then(r => {
+                if (!r?.coaching?.anzahl) return;
+                const read = iconText("button", "co-link", "fa-comments", "Bewertungen lesen");
+                read.type = "button";
+                read.addEventListener("click", () => openReviews(offer.coach_id));
+                rep.after(read);
+            });
+        }
 
         const foot = el("div", "co-card-foot");
         foot.appendChild(priceBlock(offer));
@@ -252,28 +265,111 @@
         return card;
     }
 
+    // Pro-Coaches (von der GSRA ausgewählte Pro-Fahrer) oben im eigenen Bereich, alle anderen darunter
     function renderOffers() {
         const box = $("coOffers");
+        const proSection = $("coProSection");
+        const proBox = $("coProOffers");
         const term = filter.search.trim().toLowerCase();
         const list = offers.filter(o => (filter.category === "all" || o.category === filter.category)
             && (!term || [o.title, o.description, o.simulation, o.category, nameOf(o.coach_id)].some(v => String(v || "").toLowerCase().includes(term))));
+        const proList = list.filter(o => proIds.has(o.coach_id));
+        const rest = list.filter(o => !proIds.has(o.coach_id));
         box.replaceChildren();
-        if (!list.length) {
+        proBox.replaceChildren();
+        proSection.hidden = !proList.length;
+        proList.forEach(o => proBox.appendChild(offerCard(o, { pro: true })));
+        if (!rest.length) {
+            if (proList.length) return;
             const empty = el("div", "co-empty");
             empty.innerHTML = '<i class="fa-solid fa-chalkboard-user"></i>';
             empty.append(offers.length ? " Keine Coachings passen zu deiner Suche." : " Noch keine Coachings – sei der Erste!");
             box.appendChild(empty);
             return;
         }
-        list.forEach(o => box.appendChild(offerCard(o)));
+        rest.forEach(o => box.appendChild(offerCard(o)));
+    }
+
+    // Bewertungen eines Coaches lesen (neueste zuerst); das Moderationsteam kann unpassende entfernen
+    async function openReviews(coachId) {
+        document.getElementById("coReviewsDialog")?.remove();
+        const overlay = el("div", "gsra-dialog-overlay");
+        overlay.id = "coReviewsDialog";
+        const dialog = el("div", "gsra-dialog co-dialog co-reviews-dialog");
+        dialog.setAttribute("role", "dialog");
+        dialog.setAttribute("aria-modal", "true");
+        dialog.innerHTML = '<button type="button" class="gsra-dialog-close" title="Schließen"><i class="fa-solid fa-xmark"></i></button><div class="gsra-dialog-icon"><i class="fa-solid fa-comments"></i></div>';
+        dialog.appendChild(el("h3", "gsra-dialog-title", `Bewertungen für ${nameOf(coachId)}`));
+        const summary = el("div", "co-reviews-summary");
+        const listBox = el("div", "co-reviews-list");
+        listBox.appendChild(el("p", "co-empty-inline", "Lade …"));
+        dialog.append(summary, listBox);
+        overlay.appendChild(dialog);
+        const close = () => {
+            document.removeEventListener("keydown", onKey, true);
+            overlay.remove();
+            if (!document.querySelector(".gsra-dialog-overlay:not([hidden])")) document.body.style.overflow = "";
+        };
+        const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); } };
+        dialog.querySelector(".gsra-dialog-close").addEventListener("click", close);
+        overlay.addEventListener("mousedown", (e) => { if (e.target === overlay) close(); });
+        document.addEventListener("keydown", onKey, true);
+        document.body.appendChild(overlay);
+        document.body.style.overflow = "hidden";
+        if (typeof window.gsraRenderReputation === "function") window.gsraRenderReputation(summary, coachId, { compact: true, area: "coaching" });
+
+        const { data, error } = await client.from("coaching_reviews").select("*").eq("coach_id", coachId)
+            .order("created_at", { ascending: false }).limit(30);
+        listBox.replaceChildren();
+        if (error || !data?.length) {
+            listBox.appendChild(el("p", "co-empty-inline", error ? "Bewertungen konnten nicht geladen werden." : "Noch keine Bewertungen."));
+            return;
+        }
+        await loadProfiles(data.map(r => r.buyer_id));
+        const LEVEL_OF = { 1: "ideal", 0: "in_ordnung", "-1": "mangelhaft", "-2": "schlecht" };
+        const levels = window.GSRA_RATING_LEVELS || {};
+        const tagsInfo = window.GSRA_COACH_TAGS || {};
+        data.forEach(r => {
+            const item = el("article", "co-review");
+            const head = el("div", "co-review-head");
+            const lvl = LEVEL_OF[r.rating];
+            head.appendChild(iconText("span", `rep-chip ${lvl}`, levels[lvl]?.[0] || "fa-star", levels[lvl]?.[1] || ""));
+            head.appendChild(el("strong", "", nameOf(r.buyer_id)));
+            head.appendChild(el("small", "", dateText(r.updated_at || r.created_at)));
+            item.appendChild(head);
+            if (r.tags?.length) {
+                const tags = el("div", "rep-tags");
+                r.tags.filter(t => tagsInfo[t]).forEach(t => tags.appendChild(iconText("span", "rep-tag", tagsInfo[t][0], tagsInfo[t][1])));
+                item.appendChild(tags);
+            }
+            if (r.comment) item.appendChild(el("p", "co-review-text", r.comment));
+            if (isModerator && r.buyer_id !== me) {
+                const del = iconText("button", "co-btn danger", "fa-trash", "Entfernen");
+                del.type = "button";
+                del.addEventListener("click", async () => {
+                    const ok = await showDialog({ icon: "fa-trash", danger: true, title: "Bewertung entfernen?", message: "Das steht im Moderationsprotokoll.", confirmText: "Entfernen", cancelText: "Abbrechen" });
+                    if (!ok) return;
+                    const { error: delError } = await client.from("coaching_reviews").delete().eq("id", r.id);
+                    if (delError) return showToast("Die Bewertung konnte nicht entfernt werden.", "error");
+                    item.remove();
+                    window.gsraReputation?.(coachId, { fresh: true });
+                    showToast("Bewertung entfernt.", "success");
+                });
+                item.appendChild(del);
+            }
+            listBox.appendChild(item);
+        });
     }
 
     let offersRequest = 0; // nur die neueste Abfrage zählt (eine ältere, langsamere überschreibt nichts)
     async function loadOffers() {
         const request = ++offersRequest;
-        const { data, error } = await client.from("coaching_offers").select("*").eq("active", true)
-            .order("created_at", { ascending: false }).limit(300);
+        const [{ data, error }, pros] = await Promise.all([
+            client.from("coaching_offers").select("*").eq("active", true).order("created_at", { ascending: false }).limit(300),
+            client.from("pro_creators").select("user_id")
+        ]);
         if (request !== offersRequest) return;
+        proIds = new Set((pros.data || []).map(p => p.user_id));
         if (error) {
             $("coOffers").replaceChildren(el("div", "co-empty", "Coachings konnten nicht geladen werden. Bitte lade die Seite neu."));
             return;
@@ -444,8 +540,11 @@
         const head = el("div", "co-payout-head");
         head.innerHTML = '<i class="fa-solid fa-award"></i>';
         const text = el("div", "co-payout-text");
-        if (license.aktiv) {
-            text.appendChild(el("strong", "", "GSRA-Coach-Lizenz aktiv"));
+        if (license.aktiv && license.pro && !license.erteilt_am) {
+            text.appendChild(el("strong", "", "Pro-Coach der GSRA"));
+            text.appendChild(el("span", "", "Die GSRA hat dich als Pro-Fahrer ausgewählt: Du coachst ohne Lizenz und erscheinst oben im Pro-Bereich. Verwarnungen oder Sperren stoppen das Coaching automatisch."));
+        } else if (license.aktiv) {
+            text.appendChild(el("strong", "", license.pro ? "Pro-Coach der GSRA" : "GSRA-Coach-Lizenz aktiv"));
             text.appendChild(el("span", "", `Seit ${license.erteilt_am ? dateText(license.erteilt_am) : "–"}. Bleib fair und zuverlässig: Verwarnungen oder Sperren entziehen die Lizenz automatisch.`));
         } else {
             const done = Object.values(license.fortschritt?.erfuellt || {}).filter(Boolean).length;
@@ -680,6 +779,20 @@
             }
             add(refundBtn);
         }
+        // Nach dem Coaching: Käufer bewertet den Coach; der Coach sieht die erhaltene Bewertung
+        const review = reviewsByBooking.get(b.id);
+        if (role === "buyer" && canReview(b)) {
+            add(button(review ? "" : "primary", "fa-star", review ? "Bewertung ändern" : "Coach bewerten", () => rateCoach(b)));
+        }
+        if (review && (role === "coach" || b.status !== "erstattet")) {
+            const lvl = { 1: "ideal", 0: "in_ordnung", "-1": "mangelhaft", "-2": "schlecht" }[review.rating];
+            const levels = window.GSRA_RATING_LEVELS || {};
+            const line = el("div", "co-review-line");
+            line.appendChild(iconText("span", `rep-chip ${lvl}`, levels[lvl]?.[0] || "fa-star", levels[lvl]?.[1] || ""));
+            line.append(role === "coach" ? " Bewertung deines Kunden" : " Deine Bewertung");
+            if (review.comment) line.appendChild(el("small", "", `„${review.comment}“`));
+            card.appendChild(line);
+        }
         if (actions.childElementCount) card.appendChild(actions);
         // Stornofrist für Käufer gut sichtbar
         if (role === "buyer" && ["angenommen", "bezahlt"].includes(b.status) && b.scheduled_at) {
@@ -868,11 +981,36 @@
     }
 
     async function fetchBookings(column) {
-        const { data, error } = await client.from("coaching_bookings").select("*").eq(column, me)
-            .order("created_at", { ascending: false }).limit(100);
+        const [{ data, error }, reviews] = await Promise.all([
+            client.from("coaching_bookings").select("*").eq(column, me).order("created_at", { ascending: false }).limit(100),
+            client.from("coaching_reviews").select("*").eq(column, me).limit(200)
+        ]);
         if (error) return null;
+        (reviews.data || []).forEach(r => reviewsByBooking.set(r.booking_id, r));
         await loadProfiles(data.map(b => (column === "buyer_id" ? b.coach_id : b.buyer_id)));
         return data;
+    }
+
+    // Bewerten nach dem Coaching: bezahlt und Termin vorbei oder vom Coach als erledigt gemeldet
+    const canReview = (b) => b.status === "erledigt"
+        || (b.status === "bezahlt" && b.scheduled_at && new Date(b.scheduled_at).getTime() + b.duration_minutes * 60000 < Date.now());
+
+    async function rateCoach(b) {
+        const existing = reviewsByBooking.get(b.id) || null;
+        const result = await window.gsraRateCoachDialog({ coachName: nameOf(b.coach_id), title: b.offer_title, existing });
+        if (!result) return;
+        if (result.remove) {
+            const { error } = await client.from("coaching_reviews").delete().eq("booking_id", b.id);
+            if (error) return showToast("Die Bewertung konnte nicht gelöscht werden.", "error");
+            reviewsByBooking.delete(b.id);
+            showToast("Bewertung gelöscht.", "success");
+        } else {
+            const { error } = await client.rpc("review_coaching", { _booking_id: b.id, _rating: result.rating, _tags: result.tags, _comment: result.comment });
+            if (error) return showToast(errorText(error, "Die Bewertung konnte nicht gespeichert werden."), "error");
+            showToast(existing ? "Bewertung geändert." : "Danke für deine Bewertung!", "success");
+        }
+        window.gsraReputation?.(b.coach_id, { fresh: true });
+        loadBuyerBookings();
     }
 
     async function loadBuyerBookings() {

@@ -13,7 +13,15 @@
         schnelle_antwort: ["fa-bolt", "Antwortet schnell"],
         wie_beschrieben: ["fa-circle-check", "Wie beschrieben"]
     };
-    // Einheitliche Skala für Marktplatz und Setups: Ideal, In Ordnung, Mangelhaft, Schlecht
+    // Merkmale für Coaches (nach dem Coaching)
+    const COACH_TAGS = {
+        kompetent: ["fa-graduation-cap", "Kompetent"],
+        erklaert_gut: ["fa-chalkboard", "Erklärt verständlich"],
+        puenktlich: ["fa-clock", "Pünktlich"],
+        hat_geholfen: ["fa-arrow-trend-up", "Hat mich schneller gemacht"]
+    };
+    window.GSRA_COACH_TAGS = COACH_TAGS;
+    // Einheitliche Skala für Marktplatz, Setups und Coaching: Ideal, In Ordnung, Mangelhaft, Schlecht
     const LEVELS = {
         ideal: ["fa-star", "Ideal"],
         in_ordnung: ["fa-thumbs-up", "In Ordnung"],
@@ -50,7 +58,7 @@
 
     // Kompakt (z. B. beim Verkäufer im Inserat): „TOP Zufriedenheit · 5 Bewertungen“
     // Ausführlich (Profil): je Bereich eine Zeile, beim Marktplatz zusätzlich häufige Merkmale
-    window.gsraRenderReputation = async (target, userId, { compact = false, fresh = false } = {}) => {
+    window.gsraRenderReputation = async (target, userId, { compact = false, fresh = false, area = "marktplatz" } = {}) => {
         if (!target || !userId) return;
         const rep = await window.gsraReputation(userId, { fresh });
         if (!rep) {
@@ -63,6 +71,18 @@
         const c = rep.coaching || {};
         const marketLevel = level(m);
         const setupLevel = level(s);
+        const coachLevel = level(c);
+
+        // Kompakt auf der Coach-Karte: „Ø Ideal · 8 Bewertungen · 12 Coachings“
+        if (compact && area === "coaching") {
+            const line = document.createElement("span");
+            line.className = "rep-compact";
+            line.appendChild(coachLevel ? chip(coachLevel, `Ø ${LEVELS[coachLevel][1]}`) : chip(null, "Noch keine Coach-Bewertungen"));
+            const extra = [c.anzahl ? plural(Number(c.anzahl), "Bewertung", "Bewertungen") : "", c.erledigt ? plural(Number(c.erledigt), "Coaching", "Coachings") : ""].filter(Boolean);
+            if (extra.length) line.append(` ${extra.join(" · ")}`);
+            target.replaceChildren(line);
+            return;
+        }
 
         if (compact) {
             const line = document.createElement("span");
@@ -114,23 +134,42 @@
             setupContent.push(thumbs);
         }
         row("fa-sliders", "Setups", setupContent);
-        // Coaching: GSRA-Coach-Lizenz, Angebote und gegebene Coachings
+        // Coaching: Pro-Coach bzw. GSRA-Coach, Zufriedenheit, Angebote, gegebene Coachings, häufige Merkmale
         const coachContent = [];
-        if (c.lizenz) {
+        if (c.pro || c.lizenz) {
             const badge = document.createElement("span");
-            badge.className = "rep-coach";
-            badge.innerHTML = '<i class="fa-solid fa-award"></i> GSRA-Coach';
+            badge.className = `rep-coach${c.pro ? " pro" : ""}`;
+            badge.innerHTML = c.pro ? '<i class="fa-solid fa-crown"></i> Pro-Coach' : '<i class="fa-solid fa-award"></i> GSRA-Coach';
             coachContent.push(badge);
         }
+        if (coachLevel) coachContent.push(chip(coachLevel, `Ø ${LEVELS[coachLevel][1]}`), document.createTextNode(` ${plural(Number(c.anzahl), "Bewertung", "Bewertungen")} · `));
         coachContent.push(Object.assign(document.createElement("span"), c.angebote
             ? { textContent: plural(Number(c.angebote), "Angebot", "Angebote") + (c.erledigt ? ` · ${plural(Number(c.erledigt), "Coaching", "Coachings")} gegeben` : "") }
             : { className: "rep-soon", textContent: "Noch keine Angebote" }));
-        row("fa-chalkboard-user", "Coaching", coachContent);
+        const coachRow = row("fa-chalkboard-user", "Coaching", coachContent);
+        const coachTags = Object.entries(COACH_TAGS).filter(([key]) => c.anzahl && (c[key] || 0) >= Math.max(1, Math.ceil(c.anzahl / 2)));
+        if (coachTags.length) {
+            const list = document.createElement("div");
+            list.className = "rep-tags";
+            coachTags.forEach(([, [icon, text]]) => {
+                const t = document.createElement("span");
+                t.className = "rep-tag";
+                t.innerHTML = `<i class="fa-solid ${icon}"></i> ${text}`;
+                list.appendChild(t);
+            });
+            coachRow.appendChild(list);
+        }
         target.replaceChildren(box);
     };
 
+    // Dialog „Coach bewerten“: gleicher Aufbau, eigene Merkmale
+    window.gsraRateCoachDialog = ({ coachName = "", title = "", existing = null } = {}) =>
+        window.gsraRateSellerDialog({ sellerName: coachName, listingTitle: title, existing, kind: "coach" });
+
     // Dialog „Verkäufer bewerten“ – Ergebnis: { rating, tags, comment } | { remove: true } | null
-    window.gsraRateSellerDialog = ({ sellerName = "", listingTitle = "", existing = null } = {}) => new Promise((resolve) => {
+    window.gsraRateSellerDialog = ({ sellerName = "", listingTitle = "", existing = null, kind = "seller" } = {}) => new Promise((resolve) => {
+        const coach = kind === "coach";
+        const TAGS = coach ? COACH_TAGS : SELLER_TAGS;
         const overlay = document.createElement("div");
         overlay.className = "gsra-dialog-overlay";
         overlay.innerHTML = `
@@ -155,9 +194,14 @@
                 </div>
             </div>`;
         overlay.querySelector(".rate-sub").textContent = [sellerName, listingTitle].filter(Boolean).join(" · ");
+        if (coach) {
+            overlay.querySelector(".gsra-dialog-title").textContent = "Coach bewerten";
+            overlay.querySelector(".rate-comment").placeholder = "z. B. Super erklärt, ich bin in Spa eine Sekunde schneller.";
+            overlay.querySelector(".rate-comment").maxLength = 1000;
+        }
         const tagBox = overlay.querySelector(".rate-tags");
         const chosen = new Set(existing?.tags || []);
-        Object.entries(SELLER_TAGS).forEach(([key, [icon, text]]) => {
+        Object.entries(TAGS).forEach(([key, [icon, text]]) => {
             const b = document.createElement("button");
             b.type = "button";
             b.className = `rate-tag-btn${chosen.has(key) ? " active" : ""}`;

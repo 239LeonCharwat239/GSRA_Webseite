@@ -392,7 +392,50 @@ document.addEventListener("DOMContentLoaded", async () => {
                 <input type="text" placeholder="Begründung (nur beim Entziehen)" maxlength="300">
                 <button type="submit" class="admin-btn warn" data-license="revoke"><i class="fa-solid fa-ban"></i> Lizenz entziehen</button>
                 <button type="submit" class="admin-btn dismiss" data-license="restore"><i class="fa-solid fa-rotate-left"></i> Wiederherstellen</button>
-            </form>`;
+            </form>
+            <p><strong>Pro-Fahrer</strong> veröffentlichen Pro Setups und erscheinen im Coaching oben als Pro-Coaches (ohne Lizenz).</p>
+            <form class="admin-team-form admin-pro-form" autocomplete="off">
+                <input type="text" inputmode="numeric" placeholder="GSRA-ID" maxlength="12" required>
+                <button type="submit" class="admin-btn warn"><i class="fa-solid fa-crown"></i> Zum Pro-Fahrer machen</button>
+            </form>
+            <div class="admin-pro-list"></div>`;
+        // Pro-Fahrer: Liste mit Entfernen, Hinzufügen per GSRA-ID (Änderungen stehen im Protokoll)
+        const proList = intro.querySelector(".admin-pro-list");
+        const renderPros = async () => {
+            const { data: pros, error: proError } = await client.from("pro_creators").select("user_id, added_at").order("added_at");
+            if (proError) { proList.textContent = "Die Pro-Fahrer konnten nicht geladen werden."; return; }
+            await loadProfiles((pros || []).map(p => p.user_id));
+            proList.replaceChildren();
+            if (!pros?.length) { proList.innerHTML = '<p class="admin-team-note">Noch keine Pro-Fahrer.</p>'; return; }
+            pros.forEach(p => {
+                const row = document.createElement("div");
+                row.className = "admin-pro-row";
+                row.innerHTML = `${personHtml(p.user_id, "Pro-Fahrer")}<button type="button" class="admin-btn dismiss"><i class="fa-solid fa-user-minus"></i> Entfernen</button>`;
+                row.querySelector("button").addEventListener("click", async () => {
+                    const ok = await showDialog({ icon: "fa-user-minus", title: `${nameOf(p.user_id)} als Pro-Fahrer entfernen?`,
+                        message: "Pro Setups und der Pro-Bereich im Coaching entfallen. Mit eigener Coach-Lizenz bleiben normale Coachings möglich.", confirmText: "Entfernen", cancelText: "Abbrechen" });
+                    if (!ok) return;
+                    const { error: delError } = await client.from("pro_creators").delete().eq("user_id", p.user_id);
+                    if (delError) return showToast(delError.message, "error");
+                    showToast(`${nameOf(p.user_id)} ist kein Pro-Fahrer mehr.`, "success");
+                    renderPros();
+                });
+                proList.appendChild(row);
+            });
+        };
+        intro.querySelector(".admin-pro-form").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const gsraId = Number(String(e.target.querySelector("input").value).replace(/[^\d]/g, ""));
+            if (!gsraId) return showToast("Bitte gib eine GSRA-ID ein.", "error");
+            const { data: target } = await client.from("profiles").select("id, username").eq("gsra_id", gsraId).maybeSingle();
+            if (!target) return showToast("Zu dieser GSRA-ID gibt es kein Konto.", "error");
+            const { error: addError } = await client.from("pro_creators").insert({ user_id: target.id });
+            if (addError) return showToast(/duplicate|unique/i.test(addError.message) ? `${target.username} ist bereits Pro-Fahrer.` : addError.message, "error");
+            showToast(`${target.username} ist jetzt Pro-Fahrer.`, "success");
+            e.target.reset();
+            renderPros();
+        });
+        renderPros();
         // Coach-Lizenz per GSRA-ID entziehen oder wiederherstellen
         intro.querySelector(".admin-license-form").addEventListener("submit", async (e) => {
             e.preventDefault();
@@ -475,7 +518,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             coach_lizenz_erteilt: ["fa-award", "hat die Coach-Lizenz erhalten (alle Voraussetzungen erfüllt)"],
             coach_lizenz_entzogen: ["fa-ban", `hat die Coach-Lizenz entzogen${d(e).grund ? ` – Begründung: ${d(e).grund}` : ""}`],
             coach_lizenz_automatisch: ["fa-robot", `Coach-Lizenz automatisch entzogen (${String(d(e).grund || "").replace(/^Automatisch:\s*/, "")})`],
-            coach_lizenz_wiederhergestellt: ["fa-rotate-left", "hat die Coach-Lizenz wiederhergestellt"]
+            coach_lizenz_wiederhergestellt: ["fa-rotate-left", "hat die Coach-Lizenz wiederhergestellt"],
+            coaching_bewertung_geloescht: ["fa-comment-slash", "hat eine Coach-Bewertung entfernt"],
+            pro_fahrer_hinzugefuegt: ["fa-crown", "hat einen Pro-Fahrer hinzugefügt (Setups und Coaching)"],
+            pro_fahrer_entfernt: ["fa-user-minus", "hat einen Pro-Fahrer entfernt"]
         }[e.action] || ["fa-circle-info", e.action]);
         const table = document.createElement("div");
         table.className = "admin-log";

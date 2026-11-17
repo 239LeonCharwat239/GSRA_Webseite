@@ -339,11 +339,20 @@ async function startVisibilityHeader(client) {
         if (!entry?.username) return;
         const top = free[Math.floor(Math.random() * free.length)];
         busy.add(top);
+        // „Rennstrecke“: außen fährt der Name von links nach rechts (gleichmäßig, mit Schwung oder als Überholer),
+        // innen wippt er sanft, ein Lichtreflex läuft über die Schrift, Fahrtwind-Streifen ziehen hinterher
         const el = document.createElement("span");
         el.className = `gsra-vis-name ${entry.plan === "alliance" ? "alliance" : "pole"}`;
-        el.textContent = entry.username;
+        const inner = document.createElement("span");
+        inner.className = "gsra-vis-inner";
+        inner.textContent = entry.username;
+        el.appendChild(inner);
         el.style.top = `${top}%`;
-        el.style.animationDuration = `${16 + Math.random() * 8}s`;
+        el.style.animationDuration = `${14 + Math.random() * 10}s`;
+        el.style.animationTimingFunction = ["linear", "cubic-bezier(.55, .05, .45, .95)", "cubic-bezier(.25, .7, .35, 1)", "cubic-bezier(.7, 0, .85, .6)"][Math.floor(Math.random() * 4)];
+        inner.style.setProperty("--bob", `${2.2 + Math.random() * 1.8}s`);
+        inner.style.setProperty("--amp", `${2 + Math.random() * 3}px`);
+        inner.style.animationDelay = `${(-Math.random() * 3).toFixed(2)}s, ${(-Math.random() * 3).toFixed(2)}s`;
         el.addEventListener("animationend", () => {
             busy.delete(top);
             el.remove();

@@ -9,9 +9,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL] =
-    Array.from({ length: 26 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 26);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL] =
+    Array.from({ length: 27 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 27);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -1565,6 +1565,83 @@ if (MODERATION_SQL) {
                         const f = await q(`select public.coach_license_status('${K3}')`);
                         check("Gäste: keine Lizenzdaten", (r.error !== null || Number(r.rows[0]?.n) === 0) && f.error !== null, r.error || f.error || "durchgelassen!");
                     });
+
+                    // --- 027: Coach-Bewertungen und Pro-Coaches ---
+                    if (PRO_SQL) {
+                        await db.exec(readFileSync(PRO_SQL, "utf8"));
+                        const ctl27 = await db.exec(readFileSync(PRO_SQL, "utf8")); // zweiter Lauf
+                        const rows27 = ctl27[ctl27.length - 1].rows;
+                        console.log("Kontrolle 027:\n  " + rows27.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+                        check("Kontrolle 027: Bewertungen, Pro-Coaches, Protokoll", rows27.map(r => r.ergebnis).join(",") === "bereit,bereit,2 von 2", rows27.map(r => r.ergebnis).join(", "));
+
+                        // K3 hat bei K2 ein erledigtes Coaching (bk3), K hat bei K3 ein nur angenommenes (kBooking)
+                        await as(K3, async () => {
+                            const banned = await q(`select public.review_coaching('${bk3?.id}', 1)`);
+                            check("Gesperrte Konten bewerten nicht", /gesperrt/.test(banned.error || ""), banned.error || "durchgelassen!");
+                        });
+                        await db.exec(`update public.user_bans set lifted_at = now() where user_id = '${K3}'`); // Testsperre aus 026 aufheben
+                        await as(K3, async () => {
+                            const r = await q(`select public.review_coaching('${bk3?.id}', 1, array['kompetent', 'puenktlich', 'unsinn'], 'Sehr hilfreich, endlich schneller in Eau Rouge')`);
+                            check("Käufer bewertet sein erledigtes Coaching", r.error === null, r.error || "");
+                            const again = await q(`select public.review_coaching('${bk3?.id}', 0, array['puenktlich'], 'Doch eher solide')`);
+                            const n = await q(`select count(*) as n, max(rating) as r, max(array_to_string(tags, ',')) as t from public.coaching_reviews where booking_id = '${bk3?.id}'`);
+                            check("Eine Bewertung pro Coaching, änderbar; unbekannte Merkmale verworfen", again.error === null && Number(n.rows[0]?.n) === 1 && Number(n.rows[0]?.r) === 0 && n.rows[0]?.t === "puenktlich", again.error || JSON.stringify(n.rows[0]));
+                            const direct = await q(`insert into public.coaching_reviews (booking_id, coach_id, buyer_id, rating) values ('${bk3?.id}', '${K2}', '${K3}', 1)`);
+                            check("Bewertungen nicht direkt eintragbar", direct.error !== null, direct.error || "durchgelassen!");
+                        });
+                        await as(K, async () => {
+                            const foreign = await q(`select public.review_coaching('${bk3?.id}', -2)`);
+                            check("Fremde Coachings nicht bewertbar", /selbst gebucht/.test(foreign.error || ""), foreign.error || "durchgelassen!");
+                            const early = await q(`select public.review_coaching('${kBooking}', 1)`);
+                            check("Erst nach dem Termin eines bezahlten Coachings bewertbar", /Termin vorbei/.test(early.error || ""), early.error || "durchgelassen!");
+                            const read = await q(`select count(*) as n from public.coaching_reviews where coach_id = '${K2}'`);
+                            const rep = await q(`select public.profile_reputation('${K2}') as r`);
+                            const c = rep.rows[0]?.r?.coaching;
+                            check("Mitglieder sehen die Coach-Zufriedenheit (Profil und Karte)", Number(read.rows[0]?.n) === 1 && c?.anzahl === 1 && c?.in_ordnung === 1 && c?.puenktlich === 1, read.error || rep.error || JSON.stringify(c));
+                        });
+                        await withClaims(MOD, "aal2", async () => {
+                            const del = await q(`delete from public.coaching_reviews where booking_id = '${bk3?.id}' returning id`);
+                            check("Moderator entfernt eine Bewertung", del.rows.length === 1, del.error || "nichts gelöscht");
+                        });
+                        const reviewLog = await one(`select count(*) as n from public.moderation_log where action = 'coaching_bewertung_geloescht'`);
+                        check("Protokolleintrag zur entfernten Bewertung", Number(reviewLog.n) === 1, String(reviewLog.n));
+
+                        // Pro-Coach: Anna wird von einem Admin zur Pro-Fahrerin gemacht
+                        const before = (await one(`select public.coach_license_active('${U.anna}') as r`)).r;
+                        await as(K, async () => {
+                            const self = await q(`insert into public.pro_creators (user_id) values ('${K}')`);
+                            check("Mitglieder machen sich nicht selbst zum Pro", self.error !== null, self.error || "durchgelassen!");
+                        });
+                        await withClaims(U.admin, "aal2", async () => {
+                            const add = await q(`insert into public.pro_creators (user_id, added_by) values ('${U.anna}', '${K}') returning added_by`);
+                            check("Admin trägt Pro-Fahrerin ein (eintragende Person setzt die Datenbank)", add.error === null && add.rows[0]?.added_by === U.admin, add.error || JSON.stringify(add.rows[0]));
+                        });
+                        const after = (await one(`select public.coach_license_active('${U.anna}') as r`)).r;
+                        check("Pro-Fahrer coachen ohne Lizenz", before === false && after === true, `${before} → ${after}`);
+                        await as(U.anna, async () => {
+                            const o = await q(`select public.coaching_save_offer(null, 'Pro-Coaching Nordschleife', null, 'Fahrtechnik', 'iRacing', 120, 9900, true)`);
+                            const st = await q(`select public.coach_license_status('${U.anna}') as r`);
+                            check("Pro-Coach legt Angebot an und sieht „Pro“", o.error === null && st.rows[0]?.r?.pro === true && st.rows[0]?.r?.aktiv === true, o.error || st.error || JSON.stringify(st.rows[0]?.r));
+                        });
+                        await db.exec(`insert into public.user_warnings (user_id, text) values ('${U.anna}', 'Test')`);
+                        const stopped = await one(`select public.coach_license_active('${U.anna}') as r, (select count(*) from public.coaching_offers where coach_id = '${U.anna}' and active) as n`);
+                        check("Verwarnung stoppt auch Pro-Coaches (Angebote pausiert)", stopped.r === false && Number(stopped.n) === 0, JSON.stringify(stopped));
+                        await withClaims(MOD, "aal2", async () => { await q(`select public.coach_license_restore('${U.anna}')`); });
+                        const back = (await one(`select public.coach_license_active('${U.anna}') as r`)).r;
+                        check("Moderation hebt den Stopp auf", back === true, String(back));
+                        await withClaims(U.admin, "aal2", async () => {
+                            const rm = await q(`delete from public.pro_creators where user_id = '${U.anna}' returning user_id`);
+                            check("Admin entfernt Pro-Fahrerin", rm.rows.length === 1, rm.error || "nichts entfernt");
+                        });
+                        const proLog = await one(`select count(*) filter (where action = 'pro_fahrer_hinzugefuegt') as a, count(*) filter (where action = 'pro_fahrer_entfernt') as e from public.moderation_log where target_user = '${U.anna}'`);
+                        const gone = (await one(`select public.coach_license_active('${U.anna}') as r`)).r;
+                        check("Pro-Liste im Protokoll, ohne Pro und Lizenz kein Coaching", Number(proLog.a) === 1 && Number(proLog.e) === 1 && gone === false, JSON.stringify({ proLog, gone }));
+                        await as(null, async () => {
+                            const r = await q(`select count(*) as n from public.coaching_reviews`);
+                            const f = await q(`select public.review_coaching('${bk3?.id}', 1)`);
+                            check("Gäste: keine Coach-Bewertungen", (r.error !== null || Number(r.rows[0]?.n) === 0) && f.error !== null, r.error || f.error || "durchgelassen!");
+                        });
+                    }
                 }
             }
         }

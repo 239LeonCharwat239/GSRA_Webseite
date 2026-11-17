@@ -159,6 +159,18 @@ nav a:hover, nav a.active {
     color: var(--gsra-blue);
 }
 
+/* Mittlere Bildschirme: Menü (inkl. Coaching und ggf. Admin) bleibt einzeilig */
+@media (min-width: 901px) and (max-width: 1440px) {
+    header { padding: 10px 20px; }
+    nav { gap: 12px; }
+    nav a { font-size: 12px; letter-spacing: 0.4px; }
+    .login-btn, #logoutBtn { padding: 7px 12px !important; font-size: 12px !important; }
+    .header-slogan { display: flex; flex-direction: column; gap: 2px; line-height: 1.15; }
+}
+@media (min-width: 901px) and (max-width: 1100px) {
+    .header-slogan { display: none; }
+}
+
 nav a:hover::after, nav a.active::after {
     width: 100%;
 }
@@ -9613,34 +9625,68 @@ select option {
     overflow: hidden;
     pointer-events: none;
 }
+/* „Rennstrecke“: außen fahren (unterschiedliche Fahrstile), innen wippen, Lichtreflex und Fahrtwind */
 .gsra-vis-name {
+    --vis-color: var(--gsra-yellow);
     position: absolute;
     left: 0;
     white-space: nowrap;
-    font-size: 13px;
-    font-weight: 800;
-    letter-spacing: 1px;
-    text-transform: uppercase;
     opacity: 0;
-    animation-name: gsraVisFloat;
+    animation-name: gsraVisDrive;
     animation-timing-function: linear;
     animation-fill-mode: forwards;
     will-change: transform, opacity;
 }
-.gsra-vis-name.pole { color: var(--gsra-yellow); }
-.gsra-vis-name.alliance { color: #6f9bff; }
-.gsra-vis-name::before {
-    content: "\f005";
-    font-family: "Font Awesome 6 Free";
+.gsra-vis-name.pole { --vis-color: var(--gsra-yellow); }
+.gsra-vis-name.alliance { --vis-color: #6f9bff; }
+.gsra-vis-inner {
+    position: relative;
+    display: inline-block;
+    padding: 0 4px;
+    font-size: 13px;
     font-weight: 900;
-    margin-right: 6px;
-    font-size: 10px;
+    font-style: italic;
+    letter-spacing: 1.6px;
+    text-transform: uppercase;
+    color: var(--vis-color);
+    background: linear-gradient(100deg, var(--vis-color) 0%, var(--vis-color) 38%, #ffffff 50%, var(--vis-color) 62%, var(--vis-color) 100%);
+    background-size: 260% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 6px var(--vis-color));
+    animation: gsraVisBob var(--bob, 3s) ease-in-out infinite alternate, gsraVisShine 3.4s linear infinite;
 }
-@keyframes gsraVisFloat {
-    0% { transform: translateX(-110%); opacity: 0; }
-    8% { opacity: 0.32; }
-    92% { opacity: 0.32; }
+/* Fahrtwind-Streifen hinter dem Namen */
+.gsra-vis-inner::before,
+.gsra-vis-inner::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    height: 2px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, transparent, var(--vis-color));
+}
+.gsra-vis-inner::before { right: calc(100% + 6px); width: 64px; margin-top: -1px; opacity: 0.85; }
+.gsra-vis-inner::after { right: calc(100% + 14px); width: 34px; margin-top: -7px; height: 1px; opacity: 0.55; }
+@keyframes gsraVisDrive {
+    0% { transform: translateX(-130%); opacity: 0; }
+    7% { opacity: 0.38; }
+    93% { opacity: 0.38; }
     100% { transform: translateX(100vw); opacity: 0; }
+}
+@keyframes gsraVisBob {
+    0% { transform: translateY(calc(var(--amp, 3px) * -1)) skewX(-12deg) rotate(-1deg); }
+    100% { transform: translateY(var(--amp, 3px)) skewX(-12deg) rotate(1deg); }
+}
+@keyframes gsraVisShine {
+    0% { background-position: 160% 0; }
+    100% { background-position: -60% 0; }
+}
+@media (max-width: 700px) {
+    .gsra-vis-inner { font-size: 11px; letter-spacing: 1.2px; }
+    .gsra-vis-inner::before { width: 40px; }
+    .gsra-vis-inner::after { width: 22px; }
 }
 
 /* Dialog-Hintergrund mit hidden-Attribut wirklich ausblenden */
@@ -10707,8 +10753,62 @@ select option {
 .co-criteria li span { display: flex; flex-direction: column; gap: 2px; }
 .co-criteria li strong { color: #fff; font-size: 14px; }
 .co-criteria li small { color: var(--text-muted); font-size: 12px; }
-.admin-team-intro .admin-team-note + p { margin-top: 20px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+.admin-team-intro .admin-team-note + p,
+.admin-team-intro .admin-license-form + p { margin-top: 20px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+.admin-pro-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.admin-pro-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; background: #0f1014; border: 1px solid rgba(255, 204, 0, 0.25); border-radius: 8px; }
 .rep-coach { display: inline-flex; align-items: center; gap: 5px; margin-right: 8px; color: var(--gsra-yellow); font-weight: 700; }
+/* Pro-Coaches und Coach-Bewertungen */
+.co-pro { margin-bottom: 26px; }
+.co-pro[hidden] { display: none; }
+.co-pro-title { color: var(--gsra-yellow); border-bottom-color: rgba(255, 204, 0, 0.35); }
+.co-pro-title small { margin-left: 6px; color: var(--text-muted); font-size: 12px; font-weight: 400; letter-spacing: 0; text-transform: none; }
+.co-card.pro {
+    position: relative;
+    background: linear-gradient(160deg, rgba(255, 204, 0, 0.09) 0%, rgba(255, 204, 0, 0) 45%), #15161a;
+    border-color: rgba(255, 204, 0, 0.45);
+    box-shadow: 0 0 0 1px rgba(255, 204, 0, 0.12), 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+.co-card.pro:hover { border-color: var(--gsra-yellow); }
+.co-pro-ribbon {
+    align-self: flex-start;
+    padding: 3px 10px;
+    background: var(--gsra-yellow);
+    border-radius: 12px;
+    color: #111;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+}
+.rep-coach.pro { color: var(--gsra-yellow); }
+.co-link {
+    align-self: flex-start;
+    margin-top: -4px;
+    padding: 0;
+    background: none;
+    border: none;
+    color: #6f9bff;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.co-link:hover { color: #fff; text-decoration: underline; }
+.co-reviews-dialog { max-width: 560px; text-align: left; }
+.co-reviews-dialog .gsra-dialog-title, .co-reviews-dialog .gsra-dialog-icon { text-align: center; }
+.co-reviews-summary { margin: -4px 0 12px; text-align: center; }
+.co-reviews-list { display: flex; flex-direction: column; gap: 10px; max-height: 55vh; overflow-y: auto; }
+.co-review { padding: 12px; background: #0f1014; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; }
+.co-review-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.co-review-head strong { color: #fff; font-size: 14px; }
+.co-review-head small { margin-left: auto; color: var(--text-muted); font-size: 12px; }
+.co-review .rep-tags { margin-top: 8px; }
+.co-review-text { margin: 8px 0 0; color: #cfd3dc; font-size: 14px; line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere; }
+.co-review .co-btn { margin-top: 8px; }
+.co-empty-inline { margin: 6px 0; color: var(--text-muted); text-align: center; }
+.co-review-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: #cfd3dc; font-size: 13px; }
+.co-review-line small { flex-basis: 100%; color: var(--text-muted); overflow-wrap: anywhere; }
 .co-pay-note { margin: 0; color: var(--text-muted); font-size: 13px; }
 .co-pay-note i { color: var(--gsra-yellow); margin-right: 4px; }
 .co-payout {
