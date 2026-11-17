@@ -15,6 +15,11 @@ const cors = {
 };
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
+// Grund von Stripe an die Meldung hängen (enthält keine Schlüssel), damit Fehler sofort erkennbar sind
+const stripeReason = (result: any) => {
+  const msg = String(result?.error?.message || "").replace(/\s+/g, " ").trim().slice(0, 240);
+  return msg ? ` Stripe meldet: ${msg}` : "";
+};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -76,7 +81,7 @@ Deno.serve(async (req) => {
       const account = await res.json();
       if (!res.ok) {
         console.error("Stripe-Fehler:", account?.error?.message);
-        return json({ error: "Das Stripe-Konto konnte nicht angelegt werden. Bitte versuche es später erneut." }, 502);
+        return json({ error: `Das Stripe-Konto konnte nicht angelegt werden.${stripeReason(account)}` }, 502);
       }
       // Bei zwei gleichzeitigen Klicks gilt das zuerst gespeicherte Konto
       await admin.from("coach_payout_accounts").upsert({ user_id: user.id, stripe_account_id: account.id, country }, { onConflict: "user_id", ignoreDuplicates: true });
@@ -93,7 +98,7 @@ Deno.serve(async (req) => {
     const accountLink = await res.json();
     if (!res.ok) {
       console.error("Stripe-Fehler:", accountLink?.error?.message);
-      return json({ error: "Die Einrichtung bei Stripe konnte nicht geöffnet werden. Bitte versuche es später erneut." }, 502);
+      return json({ error: `Die Einrichtung bei Stripe konnte nicht geöffnet werden.${stripeReason(accountLink)}` }, 502);
     }
     return json({ url: accountLink.url });
   } catch (err) {

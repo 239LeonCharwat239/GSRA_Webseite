@@ -9,9 +9,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL] =
-    Array.from({ length: 27 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 27);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL] =
+    Array.from({ length: 28 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 28);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -1641,6 +1641,36 @@ if (MODERATION_SQL) {
                             const f = await q(`select public.review_coaching('${bk3?.id}', 1)`);
                             check("Gäste: keine Coach-Bewertungen", (r.error !== null || Number(r.rows[0]?.n) === 0) && f.error !== null, r.error || f.error || "durchgelassen!");
                         });
+
+                        // --- 028: Rolle „moderator“ in der alten Rollen-Regel der echten Datenbank ---
+                        if (ROLLE_SQL) {
+                            // Nachbau der alten Regel (nur user/admin), die live den Fehler auslöste
+                            await db.exec(`alter table public.profiles drop constraint if exists profiles_role_check;
+                                alter table public.profiles add constraint profiles_role_check check (role in ('user', 'admin')) not valid`);
+                            await withClaims(U.admin, "aal2", async () => {
+                                const broken = await q(`select public.admin_set_role(900011, 'moderator')`);
+                                check("Vorher: Moderator ernennen scheitert an profiles_role_check (wie live)", /profiles_role_check/.test(broken.error || ""), broken.error || "kein Fehler");
+                            });
+                            await db.exec(readFileSync(ROLLE_SQL, "utf8"));
+                            const ctl28 = await db.exec(readFileSync(ROLLE_SQL, "utf8")); // zweiter Lauf
+                            const rows28 = ctl28[ctl28.length - 1].rows;
+                            console.log("Kontrolle 028:\n  " + rows28.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+                            check("Kontrolle 028: Rolle „moderator“ erlaubt", rows28[0]?.ergebnis === "bereit", rows28.map(r => r.ergebnis).join(", "));
+                            await withClaims(U.admin, "aal2", async () => {
+                                const set = await q(`select public.admin_set_role(900011, 'moderator') as name`);
+                                const role = await q(`select role from public.profiles where gsra_id = 900011`);
+                                const back = await q(`select public.admin_set_role(900011, 'user')`);
+                                const role2 = await q(`select role from public.profiles where gsra_id = 900011`);
+                                check("Nachher: Admin ernennt Moderator und entzieht die Rolle wieder", set.error === null && role.rows[0]?.role === "moderator" && back.error === null && role2.rows[0]?.role === "user",
+                                    set.error || back.error || `${role.rows[0]?.role} → ${role2.rows[0]?.role}`);
+                            });
+                            await withClaims(MOD, "aal2", async () => {
+                                const r = await q(`select public.admin_set_role(900011, 'moderator')`);
+                                check("Moderatoren ernennen keine Moderatoren", /Nur für Administratoren/.test(r.error || ""), r.error || "durchgelassen!");
+                            });
+                            const bogus = await q(`update public.profiles set role = 'superheld' where gsra_id = 900011`);
+                            check("Unbekannte Rollen bleiben ausgeschlossen", /profiles_role_check/.test(bogus.error || ""), bogus.error || "durchgelassen!");
+                        }
                     }
                 }
             }
