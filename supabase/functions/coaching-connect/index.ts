@@ -1,6 +1,8 @@
 // GSRA – Supabase Edge Function „coaching-connect“
 // Coaches mit GSRA-Coach-Lizenz richten hier ihr Stripe-Konto für Auszahlungen ein.
 // Kontoart wie „Standard“: eigenes Stripe-Dashboard, die Stripe-Gebühren trägt der Coach selbst (Entscheidung 16.11.).
+// Seit 17.11. über Stripes Accounts v2 (für neue Plattformen vorgeschrieben); Status, Bezahlen und Erstatten
+// nutzen weiter die v1-Schnittstellen, die laut Stripe mit v2-Konten funktionieren.
 // Aktionen: "onboarding" (Konto anlegen bzw. Einrichtung fortsetzen → Link zu Stripe), "status" (Stand von Stripe holen).
 // Benötigte Secrets in Supabase: STRIPE_SECRET_KEY, optional SITE_URL. Stripe Connect muss im Stripe-Dashboard aktiviert sein.
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -32,6 +34,15 @@ Deno.serve(async (req) => {
     const stripe = (path: string, init: RequestInit = {}) => fetch(`https://api.stripe.com/v1/${path}`, {
       ...init,
       headers: { Authorization: `Bearer ${stripeKey}`, "Content-Type": "application/x-www-form-urlencoded", ...(init.headers || {}) },
+    });
+    // Stripe-API v2 (JSON, feste Version laut Stripe-Referenz); Konten und Einrichtungsseiten laufen hierüber
+    const stripeV2 = (path: string, body: unknown, idempotencyKey?: string) => fetch(`https://api.stripe.com/v2/core/${path}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${stripeKey}`, "Content-Type": "application/json", "Stripe-Version": "2026-10-28.endive",
+        ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+      },
+      body: JSON.stringify(body),
     });
 
     const body = await req.json().catch(() => ({}));
@@ -68,16 +79,20 @@ Deno.serve(async (req) => {
     if (!accountId) {
       const country = String(body.country || "DE").toUpperCase();
       if (!COUNTRIES.includes(country)) return json({ error: "Für dieses Land ist die Auszahlung noch nicht möglich." }, 400);
-      const params = new URLSearchParams();
-      params.set("country", country);
-      if (user.email) params.set("email", user.email);
-      params.set("controller[fees][payer]", "account");                 // Stripe-Gebühren zahlt der Coach
-      params.set("controller[losses][payments]", "stripe");
-      params.set("controller[requirement_collection]", "stripe");       // Stripe fragt alle Angaben selbst ab
-      params.set("controller[stripe_dashboard][type]", "full");         // eigenes Stripe-Dashboard für den Coach
-      params.set("business_profile[product_description]", "Sim-Racing-Coaching über die Global Simracing Alliance (GSRA)");
-      params.set("metadata[gsra_user_id]", user.id);
-      const res = await stripe("accounts", { method: "POST", body: params, headers: { "Idempotency-Key": `gsra-coach-${user.id}-${country}` } });
+      // Accounts v2 (Stripe legt neue Plattformen darauf fest; v1 ist für neue Konten gesperrt).
+      // fees_collector "stripe": Stripe zieht die Zahlungsgebühr direkt beim Coach ab (Entscheidung 16.11.),
+      // losses_collector "stripe": Stripe haftet für negative Salden, dashboard "full": eigenes Stripe-Dashboard.
+      // Die Angaben zur Person bzw. Firma fragt Stripe auf seiner Einrichtungsseite selbst ab.
+      const { data: profile } = await admin.from("profiles").select("username").eq("id", user.id).maybeSingle();
+      const res = await stripeV2("accounts", {
+        ...(user.email ? { contact_email: user.email } : {}),
+        display_name: String(profile?.username || "GSRA-Coach").slice(0, 100),
+        identity: { country: country.toLowerCase() },
+        configuration: { merchant: { capabilities: { card_payments: { requested: true } } } },
+        defaults: { responsibilities: { fees_collector: "stripe", losses_collector: "stripe" } },
+        dashboard: "full",
+        metadata: { gsra_user_id: user.id },
+      }, `gsra-coach-v2-${user.id}-${country}`);
       const account = await res.json();
       if (!res.ok) {
         console.error("Stripe-Fehler:", account?.error?.message);
@@ -89,12 +104,17 @@ Deno.serve(async (req) => {
       accountId = saved?.stripe_account_id || account.id;
     }
 
-    const link = new URLSearchParams();
-    link.set("account", accountId!);
-    link.set("type", "account_onboarding");
-    link.set("refresh_url", `${site}/coaching.html?tab=coach&stripe=neu`);
-    link.set("return_url", `${site}/coaching.html?tab=coach&stripe=zurueck`);
-    const res = await stripe("account_links", { method: "POST", body: link });
+    // Einrichtungsseite von Stripe (Accounts v2)
+    const res = await stripeV2("account_links", {
+      account: accountId,
+      use_case: {
+        type: "account_onboarding",
+        account_onboarding: {
+          refresh_url: `${site}/coaching.html?tab=coach&stripe=neu`,
+          return_url: `${site}/coaching.html?tab=coach&stripe=zurueck`,
+        },
+      },
+    });
     const accountLink = await res.json();
     if (!res.ok) {
       console.error("Stripe-Fehler:", accountLink?.error?.message);
