@@ -38,6 +38,120 @@
         return avg >= 2.5 ? "ideal" : avg >= 1.75 ? "in_ordnung" : avg >= 1 ? "mangelhaft" : "schlecht";
     };
 
+    // Nation und Sprachen (Profil, Dashboard, Coaching) – Codes wie in der Datenbank (029)
+    const COUNTRIES = [["DE", "Deutschland"], ["AT", "Österreich"], ["CH", "Schweiz"], ["NL", "Niederlande"], ["BE", "Belgien"],
+        ["LU", "Luxemburg"], ["FR", "Frankreich"], ["IT", "Italien"], ["ES", "Spanien"], ["PT", "Portugal"], ["GB", "Vereinigtes Königreich"],
+        ["IE", "Irland"], ["PL", "Polen"], ["CZ", "Tschechien"], ["SK", "Slowakei"], ["HU", "Ungarn"], ["SI", "Slowenien"], ["HR", "Kroatien"],
+        ["RO", "Rumänien"], ["BG", "Bulgarien"], ["GR", "Griechenland"], ["DK", "Dänemark"], ["SE", "Schweden"], ["NO", "Norwegen"],
+        ["FI", "Finnland"], ["EE", "Estland"], ["LV", "Lettland"], ["LT", "Litauen"], ["TR", "Türkei"], ["UA", "Ukraine"], ["US", "USA"],
+        ["CA", "Kanada"], ["BR", "Brasilien"], ["MX", "Mexiko"], ["AR", "Argentinien"], ["AU", "Australien"], ["NZ", "Neuseeland"],
+        ["JP", "Japan"], ["KR", "Südkorea"], ["CN", "China"], ["IN", "Indien"], ["ZA", "Südafrika"], ["AE", "Vereinigte Arabische Emirate"]];
+    const LANGUAGES = [["de", "Deutsch"], ["en", "Englisch"], ["fr", "Französisch"], ["es", "Spanisch"], ["it", "Italienisch"],
+        ["nl", "Niederländisch"], ["pl", "Polnisch"], ["pt", "Portugiesisch"], ["tr", "Türkisch"], ["cs", "Tschechisch"], ["sk", "Slowakisch"],
+        ["da", "Dänisch"], ["sv", "Schwedisch"], ["no", "Norwegisch"], ["fi", "Finnisch"], ["hu", "Ungarisch"], ["ro", "Rumänisch"],
+        ["bg", "Bulgarisch"], ["hr", "Kroatisch"], ["sl", "Slowenisch"], ["el", "Griechisch"], ["uk", "Ukrainisch"], ["ru", "Russisch"],
+        ["ar", "Arabisch"], ["ja", "Japanisch"], ["zh", "Chinesisch"], ["ko", "Koreanisch"]];
+    window.GSRA_COUNTRIES = COUNTRIES;
+    window.GSRA_LANGUAGES = LANGUAGES;
+    const countryName = (code) => (COUNTRIES.find(([k]) => k === code) || [null, code])[1];
+    const languageName = (code) => (LANGUAGES.find(([k]) => k === code) || [null, code])[1];
+    window.gsraCountryName = countryName;
+    window.gsraLanguageName = languageName;
+
+    // „Deutschland · spricht Deutsch, Englisch“ (leer, wenn nichts angegeben)
+    window.gsraOriginLine = (profile) => {
+        const langs = Array.isArray(profile?.languages) ? profile.languages : [];
+        if (!profile?.country && !langs.length) return null;
+        const line = document.createElement("div");
+        line.className = "gsra-origin";
+        if (profile.country) {
+            const c = document.createElement("span");
+            c.innerHTML = '<i class="fa-solid fa-location-dot"></i> ';
+            c.append(countryName(profile.country));
+            line.appendChild(c);
+        }
+        if (langs.length) {
+            const l = document.createElement("span");
+            l.innerHTML = '<i class="fa-solid fa-language"></i> ';
+            l.append(`spricht ${langs.map(languageName).join(", ")}`);
+            line.appendChild(l);
+        }
+        return line;
+    };
+
+    // Abzeichen im Profil: Rolle (Admin, Moderator) und Coach (Pro-Coach bzw. GSRA-Coach)
+    window.gsraProfileBadges = async (meta, userId, profile) => {
+        if (!meta || !userId) return;
+        meta.querySelectorAll(".gsra-role-badge, .gsra-coach-badge").forEach(b => b.remove());
+        const first = meta.firstChild;
+        if (profile?.role === "admin" || profile?.role === "moderator") {
+            const badge = document.createElement("span");
+            badge.className = `gsra-role-badge ${profile.role === "admin" ? "gsra-admin-badge" : "gsra-mod-badge"}`;
+            badge.innerHTML = profile.role === "admin" ? '<i class="fa-solid fa-shield-halved"></i> GSRA-Admin' : '<i class="fa-solid fa-user-shield"></i> GSRA-Moderator';
+            meta.insertBefore(badge, first);
+        }
+        const rep = await window.gsraReputation(userId);
+        const c = rep?.coaching;
+        if (!c?.pro && !c?.lizenz) return;
+        const coach = document.createElement("span");
+        coach.className = `gsra-coach-badge${c.pro ? " pro" : ""}`;
+        coach.innerHTML = c.pro ? '<i class="fa-solid fa-crown"></i> Pro-Coach' : '<i class="fa-solid fa-award"></i> GSRA-Coach';
+        const after = meta.querySelector(".gsra-role-badge");
+        meta.insertBefore(coach, after ? after.nextSibling : meta.firstChild);
+    };
+
+    // Coach-Bereich im Profil: neueste Bewertungen mit Kommentar und Link zu den Coachings
+    window.gsraRenderCoachReviews = async (target, userId, name = "") => {
+        if (!target || !userId) return;
+        const rep = await window.gsraReputation(userId);
+        const c = rep?.coaching;
+        if (!c || (!c.angebote && !c.anzahl && !c.pro && !c.lizenz)) {
+            target.replaceChildren();
+            return;
+        }
+        const box = document.createElement("div");
+        box.className = "rep-box gsra-coach-box";
+        box.innerHTML = '<div class="rep-title"><i class="fa-solid fa-chalkboard-user"></i> Coaching</div>';
+        const coachLvl = level(c);
+        const head = document.createElement("div");
+        head.className = "gsra-coach-head";
+        head.appendChild(coachLvl ? chip(coachLvl, `Ø ${LEVELS[coachLvl][1]}`) : chip(null, "Noch keine Coach-Bewertungen"));
+        const facts = [c.anzahl ? plural(Number(c.anzahl), "Bewertung", "Bewertungen") : "", plural(Number(c.angebote || 0), "Angebot", "Angebote"),
+            c.erledigt ? plural(Number(c.erledigt), "Coaching", "Coachings") + " gegeben" : ""].filter(Boolean);
+        head.append(` ${facts.join(" · ")}`);
+        box.appendChild(head);
+        if (c.anzahl) {
+            const { data } = await db().from("coaching_reviews").select("buyer_id, rating, tags, comment, created_at")
+                .eq("coach_id", userId).order("created_at", { ascending: false }).limit(3);
+            const ids = [...new Set((data || []).map(r => r.buyer_id))];
+            const { data: people } = ids.length ? await db().from("profiles").select("id, username").in("id", ids) : { data: [] };
+            const nameOf = (id) => (people || []).find(p => p.id === id)?.username || "GSRA-Mitglied";
+            const LEVEL_OF = { 1: "ideal", 0: "in_ordnung", "-1": "mangelhaft", "-2": "schlecht" };
+            (data || []).forEach(r => {
+                const item = document.createElement("div");
+                item.className = "gsra-coach-review";
+                const lvl = LEVEL_OF[r.rating];
+                item.appendChild(chip(lvl, LEVELS[lvl]?.[1] || ""));
+                const who = document.createElement("strong");
+                who.textContent = ` ${nameOf(r.buyer_id)}`;
+                item.appendChild(who);
+                const tagText = (r.tags || []).filter(t => COACH_TAGS[t]).map(t => COACH_TAGS[t][1]).join(" · ");
+                if (tagText) item.appendChild(Object.assign(document.createElement("small"), { textContent: tagText }));
+                if (r.comment) item.appendChild(Object.assign(document.createElement("p"), { textContent: `„${r.comment}“` }));
+                box.appendChild(item);
+            });
+        }
+        if (c.angebote) {
+            const link = document.createElement("a");
+            link.className = "gsra-dialog-btn secondary gsra-coach-link";
+            link.href = `coaching.html?coach=${encodeURIComponent(userId)}`;
+            link.innerHTML = '<i class="fa-solid fa-chalkboard-user"></i> ';
+            link.append(name ? `Coachings von ${name} ansehen` : "Coachings ansehen");
+            box.appendChild(link);
+        }
+        target.replaceChildren(box);
+    };
+
     window.gsraReputation = async (userId, { fresh = false } = {}) => {
         if (!userId) return null;
         if (fresh) cache.delete(userId);

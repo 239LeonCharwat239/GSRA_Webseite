@@ -9,9 +9,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL] =
-    Array.from({ length: 28 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 28);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL] =
+    Array.from({ length: 29 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 29);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -1670,6 +1670,30 @@ if (MODERATION_SQL) {
                             });
                             const bogus = await q(`update public.profiles set role = 'superheld' where gsra_id = 900011`);
                             check("Unbekannte Rollen bleiben ausgeschlossen", /profiles_role_check/.test(bogus.error || ""), bogus.error || "durchgelassen!");
+                        }
+
+                        // --- 029: Nation und Sprachen im Profil ---
+                        if (SPRACHEN_SQL) {
+                            await db.exec(readFileSync(SPRACHEN_SQL, "utf8"));
+                            const ctl29 = await db.exec(readFileSync(SPRACHEN_SQL, "utf8")); // zweiter Lauf
+                            const rows29 = ctl29[ctl29.length - 1].rows;
+                            console.log("Kontrolle 029:\n  " + rows29.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+                            check("Kontrolle 029: Spalten und Prüfregeln", rows29.map(r => r.ergebnis).join(",") === "2 von 2,2 von 2", rows29.map(r => r.ergebnis).join(", "));
+                            await as(K3, async () => {
+                                const ok = await q(`update public.profiles set country = 'DE', languages = array['de', 'en'] where id = '${K3}' returning country, languages`);
+                                check("Eigene Nation und Sprachen speichern", ok.error === null && ok.rows[0]?.country === "DE" && ok.rows[0]?.languages?.join(",") === "de,en", ok.error || JSON.stringify(ok.rows[0]));
+                                const badCountry = await q(`update public.profiles set country = 'Deutschland' where id = '${K3}'`);
+                                const badLang = await q(`update public.profiles set languages = array['klingonisch'] where id = '${K3}'`);
+                                check("Nur gültige Ländercodes und bekannte Sprachen", badCountry.error !== null && badLang.error !== null, badCountry.error || badLang.error || "durchgelassen!");
+                                const other = await q(`update public.profiles set country = 'FR' where id = '${K2}' returning id`);
+                                check("Fremde Profile nicht änderbar", other.error !== null || other.rows.length === 0, other.error || (other.rows.length ? "geändert!" : "0 Zeilen geändert"));
+                                const role = await q(`update public.profiles set role = 'admin', country = 'AT' where id = '${K3}' returning role, country`);
+                                check("Rolle bleibt beim Speichern geschützt", role.rows[0]?.role !== "admin", role.error || JSON.stringify(role.rows[0]));
+                            });
+                            await as(K, async () => {
+                                const seen = await q(`select country, languages from public.profiles where id = '${K3}'`);
+                                check("Mitglieder sehen Nation und Sprachen", seen.rows[0]?.country === "AT" && seen.rows[0]?.languages?.length === 2, seen.error || JSON.stringify(seen.rows[0]));
+                            });
                         }
                     }
                 }

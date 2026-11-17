@@ -98,6 +98,16 @@ document.addEventListener("DOMContentLoaded", async () => {
             });
         }
 
+        // Rolle, Coach-Abzeichen und Herkunft wie im Profil für andere
+        const dashBadges = document.getElementById("dashBadges");
+        if (dashBadges && typeof window.gsraProfileBadges === "function") window.gsraProfileBadges(dashBadges, currentUser.id, profile);
+        const dashOrigin = document.getElementById("dashOrigin");
+        if (dashOrigin) {
+            const origin = typeof window.gsraOriginLine === "function" ? window.gsraOriginLine(profile) : null;
+            if (origin) dashOrigin.replaceChildren(origin);
+            else dashOrigin.innerHTML = '<span class="dash-origin-empty"><i class="fa-solid fa-location-dot"></i> Nation und Sprachen kannst du unter „Profil bearbeiten“ angeben.</span>';
+        }
+
         // Profil aktualisieren (Rolle und GSRA-ID schützt die Datenbank); fehlt es noch, wird es angelegt
         const saveProfile = async (changes) => {
             let { data: updatedRows, error: saveErr } = await client.from("profiles").update(changes).eq("id", currentUser.id).select("id");
@@ -249,6 +259,35 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (savedLinks.length === 0) addSocialRow();
         if (addSocialLinkBtn) addSocialLinkBtn.addEventListener("click", () => addSocialRow()?.focus());
 
+        // Nation und Sprachen (029): Auswahlliste und Sprach-Chips (höchstens 8)
+        const countrySelect = document.getElementById("editCountry");
+        const languageBox = document.getElementById("editLanguages");
+        const chosenLanguages = new Set(Array.isArray(profile?.languages) ? profile.languages : []);
+        const profileHasOrigin = profile && Object.prototype.hasOwnProperty.call(profile, "languages");
+        if (countrySelect) {
+            (window.GSRA_COUNTRIES || []).forEach(([code, label]) => countrySelect.add(new Option(label, code)));
+            countrySelect.value = profile?.country || "";
+        }
+        if (languageBox) {
+            (window.GSRA_LANGUAGES || []).forEach(([code, label]) => {
+                const chip = document.createElement("button");
+                chip.type = "button";
+                chip.className = `dash-lang-chip${chosenLanguages.has(code) ? " active" : ""}`;
+                chip.setAttribute("aria-pressed", String(chosenLanguages.has(code)));
+                chip.textContent = label;
+                chip.addEventListener("click", () => {
+                    if (!chosenLanguages.has(code) && chosenLanguages.size >= 8) {
+                        showToast("Du kannst höchstens 8 Sprachen auswählen.", "error");
+                        return;
+                    }
+                    if (chosenLanguages.has(code)) chosenLanguages.delete(code); else chosenLanguages.add(code);
+                    chip.classList.toggle("active", chosenLanguages.has(code));
+                    chip.setAttribute("aria-pressed", String(chosenLanguages.has(code)));
+                });
+                languageBox.appendChild(chip);
+            });
+        }
+
         if (userContent) userContent.style.display = "block";
 
         // Profil speichern
@@ -287,6 +326,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }
 
                 const changes = { username: newUsername, bio: newBio };
+                // Nation und Sprachen nur mitschicken, wenn die Datenbank sie schon kennt (SQL 029)
+                if (profileHasOrigin) {
+                    changes.country = countrySelect?.value || null;
+                    changes.languages = [...chosenLanguages];
+                }
                 let upsertErr = await saveProfile({ ...changes, social_links: socialLinks });
                 // Social-Media-Links noch nicht in der Datenbank eingerichtet: Rest trotzdem speichern
                 if (upsertErr && /social_links/i.test(upsertErr.message || "")) {

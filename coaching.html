@@ -52,6 +52,9 @@
             <div class="co-fact"><i class="fa-solid fa-receipt"></i><div><strong>Servicegebühr nur mit Paddock</strong><span>Mit Paddock kommen 10 % Servicegebühr dazu, mit Pole oder Alliance zahlst du keine.</span></div></div>
         </div>
 
+        <!-- Hinweis für Coaches ohne fertiges Stripe-Konto (füllt coaching.js) -->
+        <div id="coStripePrompt" class="co-payout prompt" hidden></div>
+
         <div class="co-tabs" role="tablist">
             <button type="button" class="co-tab active" data-tab="angebote" role="tab"><i class="fa-solid fa-store"></i> Angebote</button>
             <button type="button" class="co-tab" data-tab="anfragen" role="tab"><i class="fa-solid fa-paper-plane"></i> Meine Anfragen <span class="co-badge" id="coBadgeBuyer" hidden></span></button>

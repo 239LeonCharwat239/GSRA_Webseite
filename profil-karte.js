@@ -26,6 +26,7 @@ async function openProfileCard(userId, { sellerName = "", itemTitle = "" } = {})
             <p class="gsra-profile-bio" style="display: none;"></p>
             <div class="gsra-profile-links" style="display: none;"></div>
             <div class="gsra-profile-reputation"></div>
+            <div class="gsra-profile-coach"></div>
             <div class="gsra-profile-status profile-card-listings" style="display: none;"></div>
             <div class="gsra-profile-actions"></div>
         </div>`;
@@ -60,14 +61,8 @@ async function openProfileCard(userId, { sellerName = "", itemTitle = "" } = {})
     }
     overlay.querySelector(".gsra-dialog-title").textContent = isMe ? `${name} (Du)` : name;
 
-    // Admin-Kennzeichnung, Abo-Stufe, GSRA-ID, Mitglied seit
+    // Abzeichen (Admin/Moderator, Pro-Coach/GSRA-Coach), Abo-Stufe, GSRA-ID, Mitglied seit
     const meta = overlay.querySelector(".gsra-profile-meta");
-    if (profile?.role === "admin") {
-        const badge = document.createElement("span");
-        badge.className = "gsra-admin-badge";
-        badge.innerHTML = '<i class="fa-solid fa-shield-halved"></i> GSRA-Admin';
-        meta.appendChild(badge);
-    }
     if (typeof window.showPlanBadge === "function") {
         const slot = document.createElement("span");
         slot.className = "plan-badge-slot inline";
@@ -89,6 +84,10 @@ async function openProfileCard(userId, { sellerName = "", itemTitle = "" } = {})
         since.textContent = `Mitglied seit ${new Date(profile.created_at).toLocaleDateString("de-DE", { month: "long", year: "numeric" })}`;
         meta.appendChild(since);
     }
+    if (typeof window.gsraProfileBadges === "function") window.gsraProfileBadges(meta, userId, profile);
+    // Nation und Sprachen
+    const origin = typeof window.gsraOriginLine === "function" ? window.gsraOriginLine(profile) : null;
+    if (origin) meta.after(origin);
 
     // Zuletzt online (auf allen GSRA-Seiten gemessen)
     const presence = overlay.querySelector(".gsra-profile-presence");
@@ -105,6 +104,8 @@ async function openProfileCard(userId, { sellerName = "", itemTitle = "" } = {})
     if (typeof renderSocialLinks === "function") renderSocialLinks(overlay.querySelector(".gsra-profile-links"), profile?.social_links);
     // Zufriedenheit (Marktplatz, Setups, später Coaching)
     if (typeof window.gsraRenderReputation === "function") window.gsraRenderReputation(overlay.querySelector(".gsra-profile-reputation"), userId);
+    // Coaching: Bewertungen mit Kommentaren und Link zu den Coachings
+    if (typeof window.gsraRenderCoachReviews === "function") window.gsraRenderCoachReviews(overlay.querySelector(".gsra-profile-coach"), userId, name);
 
     const listingsEl = overlay.querySelector(".profile-card-listings");
     if (typeof listings === "number") {

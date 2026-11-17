@@ -36,7 +36,9 @@
     let isModerator = false;
     let offers = [];
     let profiles = new Map(); // id → { username, avatar_url }
-    let filter = { category: "all", search: "" };
+    // coach: nur Angebote eines Coaches (Link „Coachings von … ansehen“ im Profil)
+    const coachParam = new URLSearchParams(window.location.search).get("coach");
+    let filter = { category: "all", search: "", coach: /^[\w-]{1,64}$/.test(coachParam || "") ? coachParam : null };
     let editingId = null;
     let bookingOffer = null;
     let timeTarget = null;    // { booking, mode: "accept" | "move" }
@@ -119,7 +121,7 @@
     async function loadProfiles(ids) {
         const missing = [...new Set(ids)].filter(id => id && !profiles.has(id));
         if (!missing.length) return;
-        const { data } = await client.from("profiles").select("id, username, avatar_url").in("id", missing);
+        const { data } = await client.from("profiles").select("*").in("id", missing);
         (data || []).forEach(p => profiles.set(p.id, p));
     }
 
@@ -209,6 +211,9 @@
         head.appendChild(coach);
         head.appendChild(iconText("span", "co-cat", CATEGORY_ICONS[offer.category] || "fa-tag", offer.category));
         card.appendChild(head);
+        // Nation und Sprachen des Coaches („Deutschland · spricht Deutsch, Englisch“)
+        const origin = typeof window.gsraOriginLine === "function" ? window.gsraOriginLine(profiles.get(offer.coach_id)) : null;
+        if (origin) card.appendChild(origin);
 
         card.appendChild(el("h3", "co-card-title", offer.title));
         const meta = el("div", "co-meta");
@@ -271,7 +276,8 @@
         const proSection = $("coProSection");
         const proBox = $("coProOffers");
         const term = filter.search.trim().toLowerCase();
-        const list = offers.filter(o => (filter.category === "all" || o.category === filter.category)
+        renderCoachFilter();
+        const list = offers.filter(o => (!filter.coach || o.coach_id === filter.coach) && (filter.category === "all" || o.category === filter.category)
             && (!term || [o.title, o.description, o.simulation, o.category, nameOf(o.coach_id)].some(v => String(v || "").toLowerCase().includes(term))));
         const proList = list.filter(o => proIds.has(o.coach_id));
         const rest = list.filter(o => !proIds.has(o.coach_id));
@@ -288,6 +294,26 @@
             return;
         }
         rest.forEach(o => box.appendChild(offerCard(o)));
+    }
+
+    // „Coachings von …“ (Sprung aus dem Profil): Hinweis mit Knopf zum Aufheben
+    function renderCoachFilter() {
+        let bar = document.getElementById("coCoachFilter");
+        if (!filter.coach) { bar?.remove(); return; }
+        if (!bar) {
+            bar = el("div", "co-coach-filter");
+            bar.id = "coCoachFilter";
+            $("coOffers").before(bar);
+        }
+        bar.replaceChildren(iconText("span", "", "fa-user", `Coachings von ${nameOf(filter.coach)}`));
+        const clear = iconText("button", "co-btn ghost", "fa-xmark", "Alle Coaches zeigen");
+        clear.type = "button";
+        clear.addEventListener("click", () => {
+            filter.coach = null;
+            history.replaceState(null, "", "coaching.html");
+            renderOffers();
+        });
+        bar.appendChild(clear);
     }
 
     // Bewertungen eines Coaches lesen (neueste zuerst); das Moderationsteam kann unpassende entfernen
@@ -412,6 +438,13 @@
         $("coActive").checked = offer ? offer.active : true;
         // Ohne Lizenz lassen sich eigene Angebote nur noch pausieren, nicht wieder einschalten
         $("coActive").disabled = !canOffer() && !offer?.active;
+        // Hinweis im Formular, solange Kunden noch nicht bezahlen können
+        $("coOfferForm").querySelector(".co-stripe-note")?.remove();
+        if (canOffer() && !myPayoutReady) {
+            const note = iconText("p", "co-form-note co-wide co-stripe-note", "fa-credit-card",
+                "Noch nicht mit Stripe verbunden: Dein Angebot ist sichtbar, bezahlen können Kunden aber erst, wenn du Stripe eingerichtet hast.");
+            $("coOfferForm").querySelector(".gsra-dialog-actions").before(note);
+        }
         openModal("coOfferModal");
     }
     $("coOfferBtn").addEventListener("click", () => openOfferForm());
@@ -488,7 +521,26 @@
                 return;
             }
             if (license.aktiv) {
-                body.appendChild(el("p", "co-license-intro", `Deine Lizenz ist aktiv${license.erteilt_am ? ` seit ${dateText(license.erteilt_am)}` : ""}. Du kannst eigene Coachings anbieten.`));
+                body.appendChild(el("p", "co-license-intro", license.pro && !license.erteilt_am
+                    ? "Die GSRA hat dich als Pro-Coach ausgewählt. Du kannst eigene Coachings anbieten."
+                    : `Deine Lizenz ist aktiv${license.erteilt_am ? ` seit ${dateText(license.erteilt_am)}` : ""}. Du kannst eigene Coachings anbieten.`));
+                // Nächster Schritt direkt hier: ohne Stripe-Konto können Kunden nicht bezahlen
+                if (!myPayoutReady) {
+                    body.appendChild(iconText("p", "co-license-revoked co-license-next", "fa-credit-card",
+                        "Nächster Schritt: Verbinde dich mit Stripe, damit Kunden bezahlen können. Das dauert nur ein paar Minuten."));
+                    const stripeBtn = el("button", "gsra-dialog-btn primary", "Jetzt mit Stripe verbinden");
+                    stripeBtn.type = "button";
+                    stripeBtn.addEventListener("click", () => {
+                        close();
+                        const prompt = $("coStripePrompt");
+                        const btn = prompt.querySelector(".co-btn.primary");
+                        if (payoutData && btn) return startStripeOnboarding(btn);
+                        prompt.scrollIntoView({ behavior: "smooth", block: "center" });
+                        prompt.querySelector("select, .co-btn.primary")?.focus();
+                    });
+                    actions.append(closeBtn, stripeBtn);
+                    return;
+                }
                 const offerBtn = el("button", "gsra-dialog-btn primary", "Coaching anbieten");
                 offerBtn.type = "button";
                 offerBtn.addEventListener("click", () => { close(); openOfferForm(); });
@@ -572,7 +624,8 @@
         await loadLicense();
         updateOfferButton();
         renderLicenseBox();
-        if (!$("coMyOffers").closest(".co-panel").hidden) await Promise.all([loadMyOffers(), loadPayout()]);
+        await loadPayout();
+        if (!$("coMyOffers").closest(".co-panel").hidden) await loadMyOffers();
     }
 
     // Moderation: Lizenz eines Coaches mit Begründung entziehen (Angebote werden pausiert, steht im Protokoll)
@@ -620,8 +673,11 @@
             return;
         }
         closeModal("coOfferModal");
-        showToast(editingId ? "Angebot gespeichert." : "Dein Coaching ist online.", "success");
+        const isNew = !editingId;
+        showToast(isNew ? "Dein Coaching ist online." : "Angebot gespeichert.", "success");
         await Promise.all([loadOffers(), loadMyOffers()]);
+        // Neues Angebot ohne Stripe-Konto: gleich auf die Verbindung hinweisen
+        if (isNew) promptStripeConnect("Dein Coaching ist online.");
     });
 
     async function deleteOffer(offer, asModerator = false) {
@@ -894,20 +950,56 @@
     }
 
     /* ---------- Auszahlungen (Stripe-Konto des Coaches) ---------- */
+    let payoutData = null;     // eigenes Stripe-Konto (null = noch keins)
     async function loadPayout({ refresh = false } = {}) {
-        const box = $("coPayout");
         if (refresh) {
             try { await invokeFn("coaching-connect", { action: "status" }); } catch (e) { /* Stand bleibt wie gespeichert */ }
         }
         const { data, error } = await client.from("coach_payout_accounts").select("charges_enabled, details_submitted, country").eq("user_id", me).maybeSingle();
+        payoutData = error ? null : data;
         myPayoutReady = Boolean(data?.charges_enabled);
-        // Ohne SQL 025 oder ohne Abo und ohne Konto: nichts anzeigen
-        if (error || (!data && !canOffer())) {
-            box.hidden = true;
-            return;
+        // Box im Bereich „Als Coach“ (ohne SQL 025 oder ohne Lizenz und ohne Konto: nichts)
+        fillStripeBox($("coPayout"), data, !error && (data || canOffer()), false);
+        // Deutlicher Hinweis oben auf der Seite, solange ein Coach noch nicht mit Stripe verbunden ist
+        fillStripeBox($("coStripePrompt"), data, !error && canOffer() && !data?.charges_enabled, true);
+    }
+
+    // Stripe jetzt einrichten bzw. fortsetzen (Land nur beim ersten Mal)
+    async function startStripeOnboarding(btn, country) {
+        btn.disabled = true;
+        try {
+            const res = await invokeFn("coaching-connect", { action: "onboarding", country: country || payoutData?.country || "DE" });
+            if (!res?.url) throw new Error("Die Einrichtung bei Stripe konnte nicht geöffnet werden.");
+            window.location.href = res.url;
+        } catch (err) {
+            btn.disabled = false;
+            showToast(err.message, "error");
         }
-        box.hidden = false;
-        box.className = `co-payout ${data?.charges_enabled ? "ready" : data ? "pending" : ""}`;
+    }
+
+    // Nach Lizenz oder erstem Angebot: direkt auf die Stripe-Verbindung hinweisen
+    async function promptStripeConnect(reason) {
+        if (myPayoutReady || !canOffer()) return;
+        const ok = await showDialog({
+            icon: "fa-credit-card", title: "Jetzt mit Stripe verbinden",
+            message: `${reason} Damit Kunden bezahlen können, verbindest du einmalig ein Stripe-Konto – das dauert nur ein paar Minuten. Das Geld geht direkt an dich.`,
+            confirmText: "Jetzt verbinden", cancelText: "Später"
+        });
+        if (!ok) return;
+        const prompt = $("coStripePrompt");
+        if (payoutData) {
+            const btn = prompt.querySelector(".co-btn.primary");
+            if (btn) return startStripeOnboarding(btn);
+        }
+        prompt.scrollIntoView({ behavior: "smooth", block: "center" });
+        prompt.querySelector("select, .co-btn.primary")?.focus();
+    }
+
+    function fillStripeBox(box, data, visible, prominent) {
+        if (!box) return;
+        box.hidden = !visible;
+        if (!visible) return;
+        box.className = `co-payout ${data?.charges_enabled ? "ready" : data ? "pending" : ""}${prominent ? " prompt" : ""}`;
         box.replaceChildren();
         const head = el("div", "co-payout-head");
         head.innerHTML = `<i class="fa-brands fa-stripe"></i>`;
@@ -922,31 +1014,25 @@
             dash.rel = "noopener noreferrer";
             actions.appendChild(dash);
         } else {
-            text.appendChild(el("strong", "", data ? "Einrichtung bei Stripe noch nicht abgeschlossen" : "Auszahlungen einrichten"));
+            text.appendChild(el("strong", "", prominent
+                ? (data ? "Fast geschafft: Stripe-Einrichtung abschließen" : "Wichtig: Verbinde dich mit Stripe")
+                : (data ? "Einrichtung bei Stripe noch nicht abgeschlossen" : "Auszahlungen einrichten")));
             text.appendChild(el("span", "", data
                 ? "Sobald Stripe deine Angaben bestätigt hat, können deine Kunden bezahlen."
-                : "Damit Kunden bezahlen können, verbindest du einmalig ein Stripe-Konto. Das Geld geht direkt an dich; die Stripe-Gebühren trägst du, die GSRA behält von deinem Preis nichts ein."));
+                : prominent
+                    ? "Ohne Stripe-Konto können Kunden deine Coachings nicht bezahlen. Einmal verbinden, ein paar Minuten – das Geld geht direkt an dich."
+                    : "Damit Kunden bezahlen können, verbindest du einmalig ein Stripe-Konto. Das Geld geht direkt an dich; die Stripe-Gebühren trägst du, die GSRA behält von deinem Preis nichts ein."));
+            let country = null;
             if (!data) {
-                const country = document.createElement("select");
-                country.id = "coPayoutCountry";
+                country = document.createElement("select");
                 country.className = "co-payout-country";
                 country.setAttribute("aria-label", "Land deines Stripe-Kontos");
                 PAYOUT_COUNTRIES.forEach(([code, name]) => country.add(new Option(name, code)));
                 actions.appendChild(country);
             }
-            const start = iconText("button", "co-btn primary", "fa-arrow-right", data ? "Weiter bei Stripe" : "Mit Stripe einrichten");
+            const start = iconText("button", "co-btn primary", "fa-arrow-right", data ? "Weiter bei Stripe" : prominent ? "Jetzt mit Stripe verbinden" : "Mit Stripe einrichten");
             start.type = "button";
-            start.addEventListener("click", async () => {
-                start.disabled = true;
-                try {
-                    const res = await invokeFn("coaching-connect", { action: "onboarding", country: $("coPayoutCountry")?.value || data?.country || "DE" });
-                    if (!res?.url) throw new Error("Die Einrichtung bei Stripe konnte nicht geöffnet werden.");
-                    window.location.href = res.url;
-                } catch (err) {
-                    start.disabled = false;
-                    showToast(err.message, "error");
-                }
-            });
+            start.addEventListener("click", () => startStripeOnboarding(start, country?.value));
             actions.appendChild(start);
             if (data) {
                 const check = iconText("button", "co-btn ghost", "fa-rotate", "Stand prüfen");
@@ -1152,6 +1238,7 @@
         hint.classList.toggle("free", !feePercent);
         updateOfferButton();
         renderLicenseBox();
+        if (canOffer()) loadPayout(); // Stripe-Hinweis oben, falls noch nicht verbunden
 
         renderCategories();
         await loadOffers();

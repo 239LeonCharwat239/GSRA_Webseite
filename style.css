@@ -4586,8 +4586,28 @@ textarea.gsra-dialog-input {
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+.dash-form select {
+    width: 100%;
+    padding: 10px 36px 10px 12px;
+    margin-bottom: 8px;
+    background: var(--bg-main) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%230055ff' stroke-width='2'/%3E%3C/svg%3E") no-repeat right 12px center;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 14px;
+    outline: none;
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dash-form select option { background: #0b0f17; color: #fff; }
+
 .dash-form input[type="text"]:focus,
-.dash-form textarea:focus {
+.dash-form textarea:focus,
+.dash-form select:focus {
     border-color: var(--gsra-blue);
     box-shadow: 0 0 0 3px rgba(0, 85, 255, 0.2);
 }
@@ -4713,6 +4733,8 @@ textarea.gsra-dialog-input {
     border-color: var(--gsra-blue);
     color: #fff;
 }
+/* Reiter nur für Admins (Team, Protokoll) bei Moderatoren wirklich ausblenden */
+.admin-tab[hidden] { display: none; }
 
 .admin-tab.active {
     background: var(--gsra-blue);
@@ -5584,6 +5606,71 @@ textarea.gsra-dialog-input {
     letter-spacing: 0.3px;
     box-shadow: var(--yellow-glow);
 }
+
+/* Rollen- und Coach-Abzeichen, Nation und Sprachen, Coach-Bereich im Profil */
+.gsra-mod-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 11px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #0055ff 0%, #6f9bff 100%);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.3px;
+    box-shadow: var(--blue-glow);
+}
+.gsra-coach-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 11px;
+    border: 1px solid rgba(255, 204, 0, 0.55);
+    border-radius: 999px;
+    background: rgba(255, 204, 0, 0.1);
+    color: var(--gsra-yellow);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.3px;
+}
+.gsra-coach-badge.pro { background: var(--gsra-yellow); color: #111; border-color: var(--gsra-yellow); }
+.gsra-origin {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px 14px;
+    margin: 8px 0 2px;
+    color: #cfd3dc;
+    font-size: 13px;
+}
+.gsra-origin i { margin-right: 4px; color: var(--gsra-blue); }
+.co-card .gsra-origin { justify-content: flex-start; margin: -2px 0 0; font-size: 12px; color: var(--text-muted); }
+.dash-profile-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.dash-profile-badges:empty { display: none; }
+.dash-origin { margin: 4px 0 14px; text-align: left; }
+.dash-origin .gsra-origin { justify-content: flex-start; margin: 0; }
+.dash-origin-empty { color: var(--text-muted); font-size: 12px; }
+.dash-origin-empty i { margin-right: 4px; color: var(--gsra-blue); }
+.gsra-coach-box { margin-top: 12px; text-align: left; }
+.gsra-coach-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0 4px; color: #cfd3dc; font-size: 13px; }
+.gsra-coach-review { padding: 8px 0; border-top: 1px solid rgba(255, 255, 255, 0.06); font-size: 13px; color: #cfd3dc; }
+.gsra-coach-review small { display: block; margin-top: 3px; color: var(--text-muted); font-size: 12px; }
+.gsra-coach-review p { margin: 4px 0 0; color: #cfd3dc; line-height: 1.45; overflow-wrap: anywhere; }
+.gsra-coach-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; text-decoration: none; }
+.dash-lang-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.dash-lang-chip {
+    padding: 6px 11px;
+    background: #0b0c10;
+    border: 1px solid var(--border-subtle);
+    border-radius: 16px;
+    color: #cfd3dc;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+}
+.dash-lang-chip:hover { border-color: var(--gsra-blue); color: #fff; }
+.dash-lang-chip.active { background: rgba(0, 85, 255, 0.2); border-color: var(--gsra-blue); color: #fff; font-weight: 700; }
 
 .gsra-profile-presence {
     display: flex;
@@ -10826,6 +10913,17 @@ select option {
     text-align: left;
 }
 .co-payout[hidden] { display: none; }
+/* Hinweis oben auf der Coaching-Seite: deutlich, aber im GSRA-Stil */
+.co-payout.prompt {
+    margin: 0 0 18px;
+    background: linear-gradient(120deg, rgba(99, 91, 255, 0.18) 0%, rgba(99, 91, 255, 0.04) 60%), #15161a;
+    border-color: rgba(99, 91, 255, 0.6);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+.co-payout.prompt.pending { background: linear-gradient(120deg, rgba(255, 204, 0, 0.14) 0%, rgba(255, 204, 0, 0.03) 60%), #15161a; }
+.co-coach-filter { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; padding: 10px 14px; background: rgba(0, 85, 255, 0.1); border: 1px solid rgba(0, 85, 255, 0.4); border-radius: 10px; color: #fff; font-weight: 700; }
+.co-coach-filter i { color: var(--gsra-blue); margin-right: 6px; }
+.co-license-next { border-color: rgba(99, 91, 255, 0.5); background: rgba(99, 91, 255, 0.1); color: #d9d6ff; }
 .co-payout.pending { border-color: rgba(255, 204, 0, 0.45); border-left-color: var(--gsra-yellow); }
 .co-payout.ready { border-color: rgba(0, 255, 136, 0.35); border-left-color: #00ff88; }
 .co-payout-head { display: flex; gap: 14px; align-items: flex-start; flex: 1 1 320px; min-width: 0; }

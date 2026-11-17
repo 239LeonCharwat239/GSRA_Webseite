@@ -216,13 +216,6 @@ function renderProfileContent(overlay, userId, context) {
 
     const meta = overlay.querySelector(".gsra-profile-meta");
     meta.replaceChildren();
-    // GSRA-Admins (Projektteam) sind im Profil gekennzeichnet
-    if (profile.role === "admin") {
-        const badge = document.createElement("span");
-        badge.className = "gsra-admin-badge";
-        badge.innerHTML = '<i class="fa-solid fa-shield-halved"></i> GSRA-Admin';
-        meta.appendChild(badge);
-    }
     // Abo-Stufe (Paddock, Pole oder Alliance) – erscheint, sobald die Datenbank geantwortet hat
     if (typeof window.showPlanBadge === "function") {
         const planSlot = document.createElement("span");
@@ -244,6 +237,19 @@ function renderProfileContent(overlay, userId, context) {
         since.textContent = `Mitglied seit ${new Date(profile.created_at).toLocaleDateString("de-DE", { month: "long", year: "numeric" })}`;
         meta.appendChild(since);
     }
+    // Abzeichen: GSRA-Admin bzw. -Moderator (Team) und Pro-Coach bzw. GSRA-Coach
+    if (typeof window.gsraProfileBadges === "function") {
+        window.gsraProfileBadges(meta, userId, profile);
+    } else if (profile.role === "admin") {
+        const badge = document.createElement("span");
+        badge.className = "gsra-admin-badge";
+        badge.innerHTML = '<i class="fa-solid fa-shield-halved"></i> GSRA-Admin';
+        meta.prepend(badge);
+    }
+    // Nation und Sprachen
+    overlay.querySelector(".gsra-origin")?.remove();
+    const origin = typeof window.gsraOriginLine === "function" ? window.gsraOriginLine(profile) : null;
+    if (origin) meta.after(origin);
 
     // Online-Status auf allen GSRA-Seiten gemessen. Freunde (und du selbst) sehen die Uhrzeit und „Spielt gerade …“,
     // alle anderen nur den Tag, an dem die Person zuletzt online war
@@ -293,6 +299,16 @@ function renderProfileContent(overlay, userId, context) {
     // Zufriedenheit (Marktplatz, Setups, später Coaching)
     const reputation = overlay.querySelector(".gsra-profile-reputation");
     if (reputation && typeof window.gsraRenderReputation === "function" && !reputation.childElementCount) window.gsraRenderReputation(reputation, userId);
+    // Coaching: Bewertungen mit Kommentaren und Link zu den Coachings
+    if (reputation && typeof window.gsraRenderCoachReviews === "function") {
+        let coachBox = overlay.querySelector(".gsra-profile-coach");
+        if (!coachBox) {
+            coachBox = document.createElement("div");
+            coachBox.className = "gsra-profile-coach";
+            reputation.after(coachBox);
+        }
+        if (!coachBox.childElementCount) window.gsraRenderCoachReviews(coachBox, userId, name);
+    }
 
     const statusEl = overlay.querySelector(".gsra-profile-status");
     const statusText = isMe ? "Das ist dein Profil."

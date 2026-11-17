@@ -253,6 +253,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (currentTab === "sperren") return renderBans();
         if (currentTab === "team" && isAdmin) return renderTeam();
         if (currentTab === "protokoll" && isAdmin) return renderLog();
+        // Team und Protokoll sind Admin-Bereiche – nie stattdessen die Meldungen zeigen
+        if (currentTab === "team" || currentTab === "protokoll") {
+            list.innerHTML = '<div class="admin-empty"><i class="fa-solid fa-lock"></i> Dieser Bereich ist nur für Administratoren.</div>';
+            return;
+        }
 
         const statuses = currentTab === "offen" ? ["offen"] : ["verwarnt", "gesperrt", "verworfen"];
         let query = client.from("reports").select("*").in("status", statuses);
