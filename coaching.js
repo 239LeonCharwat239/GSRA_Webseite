@@ -59,6 +59,9 @@
     let timeTarget = null;    // { booking, mode: "accept" | "move" }
     let myPayoutReady = false; // eigenes Stripe-Konto fertig eingerichtet?
     let proIds = new Set();    // Pro-Fahrer der GSRA (eigener Bereich oben)
+    let calendarCoaches = new Set(); // Coaches mit freien Zeiten im Kalender (Termin direkt wählen)
+    let slotState = null;      // Terminauswahl beim Anfragen: { offer, slots: [Date], day, daysLoaded }
+    let selectedSlot = null;
     let reviewsByBooking = new Map(); // Coach-Bewertungen zu den eigenen Anfragen
     const coachReadyCache = new Map();
 
@@ -101,7 +104,7 @@
     const errorText = (error, fallback) => {
         const msg = String(error?.message || "");
         // Eigene Meldungen der Datenbank (deutsch) weitergeben, technische nicht
-        return /[äöüß]|Bitte|Coaching|Anfrage|Angebot|Preis|Dauer|Titel|Konto|Coach/.test(msg) && msg.length < 200 ? msg : fallback;
+        return /[äöüß]|Bitte|Coaching|Anfrage|Angebot|Preis|Dauer|Titel|Konto|Coach|Zeit|Termin|Kalender/.test(msg) && msg.length < 200 ? msg : fallback;
     };
     const nameOf = (id) => profiles.get(id)?.username || "GSRA-Mitglied";
     const chatLink = (userId, title) => `messenger.html?sellerId=${encodeURIComponent(userId)}&sellerName=${encodeURIComponent(nameOf(userId))}&itemTitle=${encodeURIComponent(`Coaching: ${title}`)}`;
@@ -245,6 +248,7 @@
         const meta = el("div", "co-meta");
         meta.appendChild(iconText("span", "", "fa-clock", duration(offer.duration_minutes)));
         if (offer.simulation) meta.appendChild(iconText("span", "", "fa-gamepad", offer.simulation));
+        if (calendarCoaches.has(offer.coach_id)) meta.appendChild(iconText("span", "co-cal-badge", "fa-calendar-check", "Termin direkt wählen"));
         card.appendChild(meta);
         if (offer.description) card.appendChild(el("p", "co-desc", offer.description));
 
@@ -521,12 +525,15 @@
     let offersRequest = 0; // nur die neueste Abfrage zählt (eine ältere, langsamere überschreibt nichts)
     async function loadOffers() {
         const request = ++offersRequest;
-        const [{ data, error }, pros] = await Promise.all([
+        const [{ data, error }, pros, cal] = await Promise.all([
             client.from("coaching_offers").select("*").eq("active", true).order("created_at", { ascending: false }).limit(300),
-            client.from("pro_creators").select("user_id")
+            client.from("pro_creators").select("user_id"),
+            client.rpc("coaching_calendar_coaches")
         ]);
         if (request !== offersRequest) return;
         proIds = new Set((pros.data || []).map(p => p.user_id));
+        // Ohne SQL 030 gibt es die Funktion noch nicht: dann einfach ohne Kalender-Hinweis
+        calendarCoaches = new Set(cal.error ? [] : (cal.data || []).map(r => (typeof r === "string" ? r : r?.coaching_calendar_coaches)).filter(Boolean));
         if (error) {
             $("coOffers").replaceChildren(el("div", "co-empty", "Coachings konnten nicht geladen werden. Bitte lade die Seite neu."));
             return;
@@ -794,7 +801,7 @@
         updateOfferButton();
         renderLicenseBox();
         await loadPayout();
-        if (!$("coMyOffers").closest(".co-panel").hidden) await loadMyOffers();
+        if (!$("coMyOffers").closest(".co-panel").hidden) await Promise.all([loadMyOffers(), loadCalendar()]);
     }
 
     // Moderation: Lizenz eines Coaches mit Begründung entziehen (Angebote werden pausiert, steht im Protokoll)
@@ -845,8 +852,11 @@
         const isNew = !editingId;
         showToast(isNew ? "Dein Coaching ist online." : "Angebot gespeichert.", "success");
         await Promise.all([loadOffers(), loadMyOffers()]);
-        // Neues Angebot ohne Stripe-Konto: gleich auf die Verbindung hinweisen
-        if (isNew) promptStripeConnect("Dein Coaching ist online.");
+        // Neues Angebot ohne Stripe-Konto: gleich auf die Verbindung hinweisen; danach auf den Kalender
+        if (isNew) {
+            await promptStripeConnect("Dein Coaching ist online.");
+            if (calendarState && !calendarState.saved) showToast("Tipp: Trag unter „Als Coach“ deine freien Zeiten ein – dann wählen Kunden direkt einen Termin.", "info");
+        }
     });
 
     async function deleteOffer(offer, asModerator = false) {
@@ -884,24 +894,171 @@
         row("Gesamt", euro(offer.price_cents + fee), "total");
         $("coBookTime").value = "";
         $("coBookMessage").value = "";
+        // Hat der Coach einen Kalender, wählt man einen freien Termin; sonst Wunschtermin als Text
+        slotState = null;
+        selectedSlot = null;
+        const picker = $("coSlotPicker");
+        const withCalendar = calendarCoaches.has(offer.coach_id);
+        picker.hidden = !withCalendar;
+        picker.replaceChildren(iconText("p", "co-slots-loading", "fa-spinner fa-spin", "Lade freie Termine …"));
+        $("coBookTimeField").hidden = withCalendar;
+        setBookNote(withCalendar);
         openModal("coBookModal");
+        if (withCalendar) loadSlots(offer);
+    }
+
+    function setBookNote(withCalendar) {
+        const note = $("coBookNote");
+        note.innerHTML = '<i class="fa-solid fa-circle-info"></i> ';
+        note.append(withCalendar
+            ? "Du wählst einen freien Termin aus dem Kalender des Coaches, er bestätigt ihn mit einem Klick. Danach bezahlst du sicher über Stripe. Kostenlos stornieren kannst du bis 24 Stunden vor dem Termin."
+            : "Der Coach bestätigt deine Anfrage mit einem festen Termin. Danach bezahlst du sicher über Stripe. Kostenlos stornieren kannst du bis 24 Stunden vor dem Termin.");
+    }
+
+    // Freie Termine laden (zuerst 4 Wochen, auf Wunsch weitere); ohne Kalender zurück zum Wunschtermin
+    async function loadSlots(offer, more = false) {
+        const from = more && slotState ? isoDay(new Date(Date.now() + slotState.daysLoaded * 86400000)) : null;
+        const { data, error } = await client.rpc("coaching_free_slots", { _offer_id: offer.id, _from: from, _days: 28 });
+        if (bookingOffer !== offer) return; // Fenster inzwischen für ein anderes Angebot geöffnet
+        if (error || !data?.kalender) {
+            if (more) return showToast(errorText(error, "Weitere Termine konnten nicht geladen werden."), "error");
+            slotState = null;
+            $("coSlotPicker").hidden = true;
+            $("coBookTimeField").hidden = false;
+            setBookNote(false);
+            return;
+        }
+        const fresh = (data.slots || []).map(s => new Date(s)).filter(d => !Number.isNaN(d.getTime()));
+        if (more && slotState) {
+            const known = new Set(slotState.slots.map(d => d.getTime()));
+            slotState.slots = [...slotState.slots, ...fresh.filter(d => !known.has(d.getTime()))].sort((a, b) => a - b);
+            slotState.daysLoaded += 28;
+        } else {
+            slotState = { offer, slots: fresh, day: null, daysLoaded: 28 };
+        }
+        renderSlots();
+    }
+
+    function renderSlots() {
+        const picker = $("coSlotPicker");
+        const st = slotState;
+        if (!st) return;
+        const scroll = picker.querySelector(".co-slot-days")?.scrollLeft || 0;
+        picker.replaceChildren();
+        const head = el("div", "co-slots-head");
+        head.appendChild(iconText("strong", "", "fa-calendar-days", "Freien Termin wählen"));
+        head.appendChild(el("small", "", `Uhrzeiten in deiner Zeitzone (${myTimeZone})`));
+        picker.appendChild(head);
+        const moreBtn = () => {
+            if (st.daysLoaded >= 56) return null;
+            const more = iconText("button", "co-link co-slots-more", "fa-angles-right", "Spätere Termine anzeigen");
+            more.type = "button";
+            more.addEventListener("click", () => {
+                more.disabled = true;
+                loadSlots(st.offer, true);
+            });
+            return more;
+        };
+        if (!st.slots.length) {
+            const empty = el("div", "co-slots-empty");
+            empty.appendChild(iconText("p", "", "fa-calendar-xmark", "In den nächsten Wochen ist kein Termin frei."));
+            const msg = iconText("a", "co-btn", "fa-comment", "Coach schreiben");
+            msg.href = chatLink(st.offer.coach_id, st.offer.title);
+            empty.appendChild(msg);
+            const more = moreBtn();
+            if (more) empty.appendChild(more);
+            picker.appendChild(empty);
+            return;
+        }
+        // Nach Tagen gruppieren (in der Zeitzone des Kunden)
+        const byDay = new Map();
+        st.slots.forEach(d => {
+            const key = isoDay(d);
+            if (!byDay.has(key)) byDay.set(key, []);
+            byDay.get(key).push(d);
+        });
+        if (!st.day || !byDay.has(st.day)) st.day = byDay.keys().next().value;
+        const days = el("div", "co-slot-days");
+        days.setAttribute("role", "group");
+        days.setAttribute("aria-label", "Tag wählen");
+        byDay.forEach((list, key) => {
+            const d = list[0];
+            const btn = el("button", `co-slot-day${key === st.day ? " active" : ""}`);
+            btn.type = "button";
+            btn.setAttribute("aria-pressed", String(key === st.day));
+            btn.appendChild(el("span", "", d.toLocaleDateString("de-DE", { weekday: "short" })));
+            btn.appendChild(el("strong", "", d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })));
+            btn.appendChild(el("small", "", `${list.length} frei`));
+            btn.addEventListener("click", () => {
+                st.day = key;
+                renderSlots();
+            });
+            days.appendChild(btn);
+        });
+        picker.appendChild(days);
+        days.scrollLeft = scroll;
+        const times = el("div", "co-slot-times");
+        times.setAttribute("role", "group");
+        times.setAttribute("aria-label", "Uhrzeit wählen");
+        byDay.get(st.day).forEach(d => {
+            const active = selectedSlot?.getTime() === d.getTime();
+            const btn = el("button", `co-slot-time${active ? " active" : ""}`, d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }));
+            btn.type = "button";
+            btn.setAttribute("aria-pressed", String(active));
+            btn.addEventListener("click", () => {
+                selectedSlot = d;
+                renderSlots();
+            });
+            times.appendChild(btn);
+        });
+        picker.appendChild(times);
+        const more = moreBtn();
+        if (more) picker.appendChild(more);
+        const chosen = el("p", `co-slot-chosen${selectedSlot ? " ok" : ""}`);
+        if (selectedSlot) {
+            const end = new Date(selectedSlot.getTime() + st.offer.duration_minutes * 60000);
+            chosen.appendChild(iconText("span", "", "fa-circle-check", `Dein Termin: ${dateTime(selectedSlot.toISOString())} – ${end.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })} Uhr`));
+        } else {
+            chosen.appendChild(iconText("span", "", "fa-hand-pointer", "Wähle einen Tag und eine Uhrzeit."));
+        }
+        picker.appendChild(chosen);
     }
 
     $("coBookForm").addEventListener("submit", async (e) => {
         e.preventDefault();
         if (!bookingOffer) return;
+        if (slotState && !selectedSlot) {
+            showToast("Bitte wähle zuerst einen freien Termin.", "error");
+            return;
+        }
         const submit = e.submitter || $("coBookForm").querySelector("[type=submit]");
         submit.disabled = true;
-        const { data, error } = await client.rpc("coaching_book", {
-            _offer_id: bookingOffer.id, _message: $("coBookMessage").value.trim(), _preferred_time: $("coBookTime").value.trim()
-        });
+        const message = $("coBookMessage").value.trim();
+        const { data, error } = slotState
+            ? await client.rpc("coaching_book_at", { _offer_id: bookingOffer.id, _scheduled_at: selectedSlot.toISOString(), _message: message })
+            : await client.rpc("coaching_book", { _offer_id: bookingOffer.id, _message: message, _preferred_time: $("coBookTime").value.trim() });
         submit.disabled = false;
         if (error) {
             showToast(errorText(error, "Die Anfrage konnte nicht gesendet werden."), "error");
+            // Termin inzwischen vergeben: Liste neu laden
+            if (slotState && /nicht mehr frei/.test(error.message || "")) {
+                selectedSlot = null;
+                loadSlots(bookingOffer);
+            }
+            // Coach hat gerade erst einen Kalender eingerichtet: Terminauswahl zeigen
+            if (!slotState && /aus dem Kalender/.test(error.message || "")) {
+                calendarCoaches.add(bookingOffer.coach_id);
+                $("coSlotPicker").hidden = false;
+                $("coBookTimeField").hidden = true;
+                setBookNote(true);
+                loadSlots(bookingOffer);
+            }
             return;
         }
         closeModal("coBookModal");
-        showToast(`Anfrage gesendet (${euro(data?.total_cents)}). Der Coach meldet sich bei dir.`, "success");
+        showToast(slotState
+            ? `Anfrage für ${dateTime(selectedSlot.toISOString())} Uhr gesendet (${euro(data?.total_cents)}). Der Coach bestätigt sie mit einem Klick.`
+            : `Anfrage gesendet (${euro(data?.total_cents)}). Der Coach meldet sich bei dir.`, "success");
         showTab("anfragen");
     });
 
@@ -926,7 +1083,11 @@
         card.appendChild(el("h3", "co-card-title", b.offer_title));
         const meta = el("div", "co-meta");
         meta.appendChild(iconText("span", "", "fa-clock", duration(b.duration_minutes)));
-        if (b.scheduled_at) {
+        if (b.scheduled_at && b.status === "angefragt") {
+            // Termin aus dem Kalender, vom Coach noch nicht bestätigt
+            meta.appendChild(iconText("span", "co-when pending", "fa-calendar-day",
+                `${role === "coach" ? "Gewählter Termin" : "Dein Termin (wartet auf Bestätigung)"}: ${dateTime(b.scheduled_at)} Uhr`));
+        } else if (b.scheduled_at) {
             meta.appendChild(iconText("span", "co-when", "fa-calendar-check", `Termin: ${dateTime(b.scheduled_at)} Uhr`));
         } else {
             meta.appendChild(iconText("span", "", "fa-calendar", `angefragt am ${dateText(b.created_at)}`));
@@ -962,7 +1123,13 @@
             add(msg);
         }
         if (role === "coach" && b.status === "angefragt") {
-            add(button("primary", "fa-check", "Annehmen", () => openTimeModal(b, "accept")));
+            if (b.scheduled_at && hoursUntil(b.scheduled_at) > 1) {
+                // Termin kommt aus deinem Kalender: mit einem Klick bestätigen, oder eine andere Zeit vorschlagen
+                add(button("primary", "fa-check", "Termin bestätigen", (btn) => confirmSlot(b, btn)));
+                add(button("", "fa-calendar-days", "Andere Zeit", () => openTimeModal(b, "accept")));
+            } else {
+                add(button("primary", "fa-check", "Annehmen", () => openTimeModal(b, "accept")));
+            }
             add(button("danger", "fa-xmark", "Ablehnen", (btn) => respond(b, false, btn)));
         }
         if (role === "coach" && b.status === "angenommen") {
@@ -1116,6 +1283,249 @@
         }
         showToast("Als erledigt markiert – danke fürs Coachen!", "success");
         loadCoachArea();
+    }
+
+    /* ---------- Verfügbarkeitskalender (SQL 030): Coach trägt freie Zeiten ein, Kunden buchen nur dort ---------- */
+    const WEEKDAYS = [[1, "Montag"], [2, "Dienstag"], [3, "Mittwoch"], [4, "Donnerstag"], [5, "Freitag"], [6, "Samstag"], [7, "Sonntag"]];
+    const CAL_PRESETS = [
+        ["fa-briefcase", "Werktags abends", "Mo–Fr 18–22 Uhr", [1, 2, 3, 4, 5], 1080, 1320],
+        ["fa-sun", "Wochenende", "Sa + So 10–18 Uhr", [6, 7], 600, 1080],
+        ["fa-moon", "Jeden Abend", "Mo–So 19–23 Uhr", [1, 2, 3, 4, 5, 6, 7], 1140, 1380]
+    ];
+    const myTimeZone = (() => {
+        try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Berlin"; } catch (e) { return "Europe/Berlin"; }
+    })();
+    let calendarState = null;   // eigener Kalender: { timezone, windows: [{ tag, von, bis }], blocked: ["JJJJ-MM-TT"], dirty }
+    const pad2 = (n) => String(n).padStart(2, "0");
+    const minutesToTime = (m) => `${pad2(Math.floor(m / 60) % 24)}:${pad2(m % 60)}`;
+    const timeToMinutes = (value, isEnd) => {
+        const match = /^(\d{2}):(\d{2})/.exec(value || "");
+        if (!match) return null;
+        const m = Number(match[1]) * 60 + Number(match[2]);
+        return isEnd && m === 0 ? 1440 : m; // Ende „00:00“ = Mitternacht
+    };
+    const isoDay = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+    const dayLabel = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" });
+
+    async function loadCalendar() {
+        const box = $("coCalendar");
+        if (!box) return;
+        if (!canOffer()) {
+            box.hidden = true;
+            return;
+        }
+        const [cal, win, blocked] = await Promise.all([
+            client.from("coach_calendars").select("timezone").eq("coach_id", me).maybeSingle(),
+            client.from("coach_availability").select("weekday, start_min, end_min").eq("coach_id", me),
+            client.from("coach_blocked_days").select("day").eq("coach_id", me)
+        ]);
+        // SQL 030 noch nicht ausgeführt: Bereich nicht zeigen
+        if (cal.error || win.error || blocked.error) {
+            box.hidden = true;
+            return;
+        }
+        const today = isoDay(new Date());
+        calendarState = {
+            timezone: cal.data?.timezone || myTimeZone,
+            windows: (win.data || []).map(w => ({ tag: w.weekday, von: w.start_min, bis: w.end_min })),
+            blocked: (blocked.data || []).map(b => b.day).filter(d => d >= today).sort(),
+            saved: (win.data || []).length,
+            dirty: false
+        };
+        renderCalendar();
+    }
+
+    function markCalendarDirty() {
+        if (!calendarState) return;
+        calendarState.dirty = true;
+        const status = document.querySelector("#coCalendar .co-cal-status");
+        if (status) {
+            status.className = "co-cal-status dirty";
+            status.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> Noch nicht gespeichert';
+        }
+    }
+
+    function renderCalendar() {
+        const box = $("coCalendar");
+        const st = calendarState;
+        if (!box || !st) return;
+        box.hidden = false;
+        box.className = `co-calendar${st.saved ? " active" : " empty"}`;
+        box.replaceChildren();
+
+        const head = el("div", "co-payout-head");
+        head.innerHTML = '<i class="fa-solid fa-calendar-days"></i>';
+        const text = el("div", "co-payout-text");
+        text.appendChild(el("strong", "", st.saved ? "Deine freien Zeiten" : "Neu: Trag deine freien Zeiten ein"));
+        text.appendChild(el("span", "", st.saved
+            ? "Kunden wählen direkt einen freien Termin daraus – frühestens 24 Stunden vorher und nie doppelt belegt. Du bestätigst jede Anfrage mit einem Klick."
+            : "Dann wählen Kunden selbst einen passenden Termin und du bestätigst nur noch mit einem Klick. Solange keine Zeiten eingetragen sind, schreiben sie dir einen Wunschtermin."));
+        head.appendChild(text);
+        box.appendChild(head);
+
+        // Schnell ausfüllen: setzt die Zeiten der betroffenen Tage
+        const presets = el("div", "co-cal-presets");
+        presets.appendChild(el("span", "co-cal-label", "Schnell ausfüllen:"));
+        CAL_PRESETS.forEach(([icon, label, hint, days, von, bis]) => {
+            const btn = iconText("button", "co-chip", icon, label);
+            btn.type = "button";
+            btn.title = hint;
+            btn.appendChild(el("small", "", ` ${hint}`));
+            btn.addEventListener("click", () => {
+                st.windows = st.windows.filter(w => !days.includes(w.tag)).concat(days.map(tag => ({ tag, von, bis })));
+                st.dirty = true;
+                renderCalendar();
+            });
+            presets.appendChild(btn);
+        });
+        if (st.windows.length) {
+            const clear = iconText("button", "co-chip", "fa-eraser", "Alle Zeiten entfernen");
+            clear.type = "button";
+            clear.addEventListener("click", () => {
+                st.windows = [];
+                st.dirty = true;
+                renderCalendar();
+            });
+            presets.appendChild(clear);
+        }
+        box.appendChild(presets);
+
+        // Wochentage mit ihren Zeitfenstern
+        const week = el("div", "co-cal-week");
+        WEEKDAYS.forEach(([tag, name]) => {
+            const row = el("div", `co-cal-day${st.windows.some(w => w.tag === tag) ? "" : " off"}`);
+            row.appendChild(el("strong", "co-cal-dayname", name));
+            const list = el("div", "co-cal-windows");
+            const mine = st.windows.filter(w => w.tag === tag).sort((a, b) => a.von - b.von);
+            if (!mine.length) list.appendChild(el("span", "co-cal-none", "keine Zeiten"));
+            mine.forEach(w => {
+                const item = el("span", "co-cal-window");
+                const timeInput = (minutes, isEnd, label) => {
+                    const input = document.createElement("input");
+                    input.type = "time";
+                    input.step = 900;
+                    input.value = minutesToTime(minutes);
+                    input.setAttribute("aria-label", `${name} ${label}`);
+                    input.addEventListener("change", () => {
+                        const v = timeToMinutes(input.value, isEnd);
+                        if (v === null) return;
+                        if (isEnd) w.bis = v; else w.von = v;
+                        markCalendarDirty();
+                    });
+                    return input;
+                };
+                item.append(timeInput(w.von, false, "von"), el("span", "co-cal-dash", "–"), timeInput(w.bis, true, "bis"));
+                const rm = el("button", "co-cal-remove");
+                rm.type = "button";
+                rm.title = "Zeitfenster entfernen";
+                rm.setAttribute("aria-label", `${name}: Zeitfenster entfernen`);
+                rm.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+                rm.addEventListener("click", () => {
+                    st.windows = st.windows.filter(x => x !== w);
+                    st.dirty = true;
+                    renderCalendar();
+                });
+                item.appendChild(rm);
+                list.appendChild(item);
+            });
+            row.appendChild(list);
+            const add = iconText("button", "co-cal-add", "fa-plus", "Zeit");
+            add.type = "button";
+            add.title = `${name}: Zeitfenster hinzufügen`;
+            add.addEventListener("click", () => {
+                if (mine.length >= 6) return showToast("Höchstens 6 Zeitfenster pro Tag.", "error");
+                // Nach dem letzten Fenster weitermachen, sonst 18–22 Uhr
+                const last = mine[mine.length - 1];
+                const von = last ? Math.min(last.bis + 60, 1380) : 1080;
+                st.windows.push({ tag, von, bis: Math.min(von + 120, 1440) });
+                st.dirty = true;
+                renderCalendar();
+            });
+            row.appendChild(add);
+            week.appendChild(row);
+        });
+        box.appendChild(week);
+
+        // Einzelne Tage sperren (Urlaub, Rennwochenende …)
+        const blocked = el("div", "co-cal-blocked");
+        blocked.appendChild(el("span", "co-cal-label", "Tage sperren (z. B. Urlaub):"));
+        const dateInput = document.createElement("input");
+        dateInput.type = "date";
+        dateInput.min = isoDay(new Date());
+        dateInput.max = isoDay(new Date(Date.now() + 365 * 86400000));
+        dateInput.setAttribute("aria-label", "Tag sperren");
+        const block = iconText("button", "co-chip", "fa-ban", "Sperren");
+        block.type = "button";
+        block.addEventListener("click", () => {
+            const day = dateInput.value;
+            if (!day || day < dateInput.min || day > dateInput.max) return showToast("Bitte wähle einen Tag zwischen heute und in einem Jahr.", "error");
+            if (st.blocked.includes(day)) return;
+            if (st.blocked.length >= 100) return showToast("Höchstens 100 gesperrte Tage.", "error");
+            st.blocked = [...st.blocked, day].sort();
+            st.dirty = true;
+            renderCalendar();
+        });
+        blocked.append(dateInput, block);
+        const chips = el("div", "co-cal-chips");
+        st.blocked.forEach(day => {
+            const chip = el("span", "co-cal-chip", dayLabel(day));
+            const rm = el("button", "co-cal-remove");
+            rm.type = "button";
+            rm.title = "Sperre aufheben";
+            rm.setAttribute("aria-label", `Sperre für ${dayLabel(day)} aufheben`);
+            rm.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+            rm.addEventListener("click", () => {
+                st.blocked = st.blocked.filter(d => d !== day);
+                st.dirty = true;
+                renderCalendar();
+            });
+            chip.appendChild(rm);
+            chips.appendChild(chip);
+        });
+        blocked.appendChild(chips);
+        box.appendChild(blocked);
+
+        // Speichern
+        const foot = el("div", "co-cal-foot");
+        const zone = iconText("small", "co-cal-zone", "fa-globe", `Zeiten in deiner Zeitzone: ${myTimeZone}`);
+        if (st.saved && st.timezone !== myTimeZone) zone.append(` (bisher ${st.timezone} – wird beim Speichern übernommen)`);
+        foot.appendChild(zone);
+        const status = el("span", `co-cal-status${st.dirty ? " dirty" : ""}`);
+        status.innerHTML = st.dirty ? '<i class="fa-solid fa-circle-exclamation"></i> Noch nicht gespeichert'
+            : st.saved ? '<i class="fa-solid fa-circle-check"></i> Gespeichert – Kunden buchen direkt' : "";
+        foot.appendChild(status);
+        const save = iconText("button", "co-btn primary", "fa-floppy-disk", "Zeiten speichern");
+        save.type = "button";
+        save.addEventListener("click", () => saveCalendar(save));
+        foot.appendChild(save);
+        box.appendChild(foot);
+    }
+
+    async function saveCalendar(btn) {
+        const st = calendarState;
+        if (!st) return;
+        // Gleiche Regeln wie die Datenbank, mit verständlichem Hinweis vor dem Speichern
+        const name = (tag) => WEEKDAYS.find(([t]) => t === tag)[1];
+        for (const w of st.windows) {
+            if (w.von % 15 || w.bis % 15) return showToast(`${name(w.tag)}: Bitte Uhrzeiten in Viertelstunden wählen (z. B. 18:00 oder 18:15).`, "error");
+            if (w.bis - w.von < 30) return showToast(`${name(w.tag)}: Ein Zeitfenster braucht mindestens 30 Minuten (Ende nach dem Beginn).`, "error");
+        }
+        const clash = st.windows.find((a, i) => st.windows.some((b, j) => i < j && a.tag === b.tag && a.von < b.bis && b.von < a.bis));
+        if (clash) return showToast(`${name(clash.tag)}: Zwei Zeitfenster überschneiden sich.`, "error");
+        btn.disabled = true;
+        const { data, error } = await client.rpc("coach_save_calendar", {
+            _timezone: myTimeZone, _windows: st.windows.map(w => ({ tag: w.tag, von: w.von, bis: w.bis })), _blocked: st.blocked
+        });
+        btn.disabled = false;
+        if (error) {
+            showToast(errorText(error, "Die Zeiten konnten nicht gespeichert werden."), "error");
+            return;
+        }
+        showToast(data?.fenster
+            ? "Gespeichert! Kunden wählen jetzt direkt einen freien Termin bei dir."
+            : "Kalender ausgeschaltet – Kunden schreiben dir wieder einen Wunschtermin.", "success");
+        await loadCalendar();
+        loadOffers();
     }
 
     /* ---------- Auszahlungen (Stripe-Konto des Coaches) ---------- */
@@ -1344,7 +1754,27 @@
             setBadge("coBadgeCoach", list.filter(b => b.status === "angefragt").length);
         }
         renderLicenseBox();
-        await Promise.all([loadMyOffers(), loadPayout()]);
+        // Ungespeicherte Änderungen am Kalender nicht beim Neuladen der Anfragen verwerfen
+        await Promise.all([loadMyOffers(), loadPayout(), calendarState?.dirty ? null : loadCalendar()]);
+    }
+
+    // Termin aus dem Kalender bestätigen (ein Klick, die Datenbank prüft erneut auf Überschneidungen)
+    async function confirmSlot(b, btn) {
+        const ok = await showDialog({
+            icon: "fa-calendar-check", title: "Termin bestätigen?",
+            message: `${nameOf(b.buyer_id)} hat „${b.offer_title}“ für ${dateTime(b.scheduled_at)} Uhr gewählt.`,
+            confirmText: "Bestätigen", cancelText: "Abbrechen"
+        });
+        if (!ok) return;
+        btn.disabled = true;
+        const { error } = await client.rpc("coaching_respond", { _booking_id: b.id, _accept: true, _scheduled_at: null });
+        if (error) {
+            btn.disabled = false;
+            showToast(errorText(error, "Das hat nicht geklappt."), "error");
+            return;
+        }
+        showToast(`Bestätigt für ${dateTime(b.scheduled_at)} Uhr. ${myPayoutReady ? "Dein Kunde kann jetzt bezahlen." : "Sobald dein Stripe-Konto eingerichtet ist, kann dein Kunde bezahlen."}`, "success");
+        loadCoachArea();
     }
 
     // Ablehnen (Annehmen läuft über das Termin-Fenster)
@@ -1407,7 +1837,10 @@
         hint.classList.toggle("free", !feePercent);
         updateOfferButton();
         renderLicenseBox();
-        if (canOffer()) loadPayout(); // Stripe-Hinweis oben, falls noch nicht verbunden
+        if (canOffer()) {
+            loadPayout();   // Stripe-Hinweis oben, falls noch nicht verbunden
+            loadCalendar(); // eigene freie Zeiten (Bereich „Als Coach“)
+        }
 
         renderCategories();
         await loadOffers();

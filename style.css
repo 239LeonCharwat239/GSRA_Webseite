@@ -10967,6 +10967,184 @@ select option {
 .co-coach-filter i { color: var(--gsra-blue); margin-right: 6px; }
 .co-coach-filter .co-btn i { color: inherit; margin-right: 0; }
 
+/* Coaching: Verfügbarkeitskalender des Coaches (Als Coach) */
+.co-calendar {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-bottom: 20px;
+    padding: 16px 18px;
+    background: #15161a;
+    border: 1px solid rgba(0, 85, 255, 0.45);
+    border-left: 4px solid var(--gsra-blue);
+    border-radius: 12px;
+    text-align: left;
+}
+.co-calendar[hidden] { display: none; }
+.co-calendar .co-payout-head { flex: 0 0 auto; }
+.co-calendar .co-payout-head > i { color: var(--gsra-blue); }
+.co-calendar.empty {
+    background: linear-gradient(120deg, rgba(255, 204, 0, 0.12) 0%, rgba(255, 204, 0, 0.02) 60%), #15161a;
+    border-color: rgba(255, 204, 0, 0.5);
+    border-left-color: var(--gsra-yellow);
+}
+.co-calendar.empty .co-payout-head > i { color: var(--gsra-yellow); }
+.co-cal-label { color: #cfd3dc; font-size: 13px; font-weight: 700; }
+.co-cal-presets { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.co-cal-presets .co-chip small { color: var(--text-muted); font-weight: 400; }
+.co-cal-week { display: flex; flex-direction: column; border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 10px; overflow: hidden; }
+.co-cal-day {
+    display: grid;
+    grid-template-columns: 110px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: #101116;
+}
+.co-cal-day + .co-cal-day { border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.co-cal-dayname { color: #fff; font-size: 14px; }
+.co-cal-day.off .co-cal-dayname { color: var(--text-muted); font-weight: 600; }
+.co-cal-windows { display: flex; flex-wrap: wrap; gap: 8px; }
+.co-cal-none { color: var(--text-muted); font-size: 13px; font-style: italic; }
+.co-cal-window {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px 4px 8px;
+    background: rgba(0, 85, 255, 0.12);
+    border: 1px solid rgba(0, 85, 255, 0.45);
+    border-radius: 8px;
+}
+.co-cal-window input[type="time"] {
+    width: auto;
+    margin: 0;
+    padding: 4px 6px;
+    background: #0b0c10;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 14px;
+    color-scheme: dark;
+}
+.co-cal-window input[type="time"]:focus { border-color: var(--gsra-blue); outline: none; }
+.co-cal-dash { color: var(--text-muted); }
+.co-cal-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    background: none;
+    border: none;
+    border-radius: 50%;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+.co-cal-remove:hover, .co-cal-remove:focus-visible { background: rgba(255, 77, 77, 0.15); color: #ff6b6b; outline: none; }
+.co-cal-add {
+    padding: 6px 10px;
+    background: none;
+    border: 1px dashed rgba(0, 85, 255, 0.6);
+    border-radius: 8px;
+    color: #6f9bff;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.co-cal-add:hover, .co-cal-add:focus-visible { background: rgba(0, 85, 255, 0.12); color: #fff; outline: none; }
+.co-cal-blocked { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.co-cal-blocked input[type="date"] {
+    width: auto;
+    height: 36px;
+    margin: 0;
+    padding: 0 10px;
+    background: #0b0c10;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    color: #fff;
+    font-family: inherit;
+    color-scheme: dark;
+}
+.co-cal-chips { display: flex; flex-wrap: wrap; gap: 6px; flex-basis: 100%; }
+.co-cal-chips:empty { display: none; }
+.co-cal-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 4px 2px 10px;
+    background: rgba(255, 77, 77, 0.1);
+    border: 1px solid rgba(255, 77, 77, 0.4);
+    border-radius: 14px;
+    color: #ffb3b3;
+    font-size: 13px;
+}
+.co-cal-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.co-cal-zone { flex: 1 1 260px; color: var(--text-muted); font-size: 12px; }
+.co-cal-zone i { color: var(--gsra-blue); margin-right: 4px; }
+.co-cal-status { color: #00ff88; font-size: 13px; font-weight: 700; }
+.co-cal-status.dirty { color: var(--gsra-yellow); }
+.co-cal-badge { color: #00ff88; font-weight: 700; }
+.co-when.pending { color: var(--gsra-yellow); }
+
+/* Coaching: Terminauswahl beim Anfragen */
+.co-slots { display: flex; flex-direction: column; gap: 10px; min-width: 0; max-width: 100%; padding: 12px; background: #0f1014; border: 1px solid rgba(0, 85, 255, 0.35); border-radius: 10px; text-align: left; }
+.co-slots[hidden], #coBookTimeField[hidden] { display: none; }
+.co-slots-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 10px; }
+.co-slots-head strong { color: #fff; font-size: 14px; }
+.co-slots-head strong i { color: var(--gsra-blue); margin-right: 4px; }
+.co-slots-head small { color: var(--text-muted); font-size: 12px; }
+.co-slots-loading, .co-slots-empty p { margin: 0; color: var(--text-muted); font-size: 13px; }
+.co-slots-empty { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.co-slot-days { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+.co-slot-day {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    min-width: 64px;
+    padding: 6px 8px;
+    background: #15161a;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: #cfd3dc;
+    font-family: inherit;
+    cursor: pointer;
+}
+.co-slot-day span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+.co-slot-day strong { color: #fff; font-size: 14px; }
+.co-slot-day small { color: var(--text-muted); font-size: 10px; }
+.co-slot-day:hover, .co-slot-day:focus-visible { border-color: rgba(0, 85, 255, 0.7); outline: none; }
+.co-slot-day.active { background: rgba(0, 85, 255, 0.2); border-color: var(--gsra-blue); }
+.co-slot-day.active small { color: #cfd3dc; }
+.co-slot-times { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 6px; }
+.co-slot-time {
+    padding: 8px 0;
+    background: #15161a;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.co-slot-time:hover, .co-slot-time:focus-visible { border-color: var(--gsra-blue); outline: none; }
+.co-slot-time.active { background: var(--gsra-yellow); border-color: var(--gsra-yellow); color: #111; }
+.co-slots-more { margin-top: 0; font-size: 13px; }
+.co-slot-chosen { margin: 0; color: var(--text-muted); font-size: 13px; }
+.co-slot-chosen i { margin-right: 4px; }
+.co-slot-chosen.ok { color: #00ff88; font-weight: 700; }
+@media (max-width: 600px) {
+    .co-cal-day { grid-template-columns: 1fr auto; }
+    .co-cal-windows { grid-column: 1 / -1; grid-row: 2; }
+    .co-cal-foot .co-btn { flex: 1 1 100%; }
+}
+
 /* Coaching: Filterleiste wie im Marktplatz, eigener Reiter für Pro-Coaches */
 .co-filter-area[hidden], .co-panel[hidden] { display: none; }
 .co-filters { padding-top: 4px; margin-bottom: 14px; }

@@ -9,9 +9,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL] =
-    Array.from({ length: 29 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 29);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL] =
+    Array.from({ length: 30 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 30);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -1693,6 +1693,122 @@ if (MODERATION_SQL) {
                             await as(K, async () => {
                                 const seen = await q(`select country, languages from public.profiles where id = '${K3}'`);
                                 check("Mitglieder sehen Nation und Sprachen", seen.rows[0]?.country === "AT" && seen.rows[0]?.languages?.length === 2, seen.error || JSON.stringify(seen.rows[0]));
+                            });
+                        }
+
+                        // --- 030: Verfügbarkeitskalender für Coaches ---
+                        if (KALENDER_SQL) {
+                            await db.exec(readFileSync(KALENDER_SQL, "utf8"));
+                            const ctl30 = await db.exec(readFileSync(KALENDER_SQL, "utf8")); // zweiter Lauf
+                            const rows30 = ctl30[ctl30.length - 1].rows;
+                            console.log("Kontrolle 030:\n  " + rows30.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+                            check("Kontrolle 030: Tabellen geschützt, Funktionen bereit, Internes nicht aufrufbar", rows30.map(r => r.ergebnis).join(",") === "3 von 3,bereit,ja", rows30.map(r => r.ergebnis).join(", "));
+
+                            // Max wird Pro-Coach und bietet 60 Minuten an; Zeiten: jeden Tag 18–22 Uhr (Berlin), ein Tag gesperrt
+                            await withClaims(U.admin, "aal2", async () => { await q(`insert into public.pro_creators (user_id) values ('${U.max}')`); });
+                            let maxOffer = null;
+                            await as(U.max, async () => {
+                                maxOffer = (await q(`select public.coaching_save_offer(null, 'Kalender-Coaching Spa', null, 'Fahrtechnik', 'iRacing', 60, 3000, true) as id`)).rows[0]?.id;
+                            });
+                            check("Kalender-Test: Coach mit Angebot", Boolean(maxOffer), String(maxOffer));
+                            const WIN = JSON.stringify([1, 2, 3, 4, 5, 6, 7].map(t => ({ tag: t, von: 1080, bis: 1320 })));
+                            const BLOCKED = `(now() at time zone 'Europe/Berlin')::date + 3`;
+                            await as(K, async () => {
+                                const r = await q(`select public.coach_save_calendar('Europe/Berlin', '${WIN}'::jsonb)`);
+                                check("Ohne Coach-Lizenz kein Kalender", /Coach-Lizenz/.test(r.error || ""), r.error || "durchgelassen!");
+                            });
+                            await as(U.max, async () => {
+                                const overlap = await q(`select public.coach_save_calendar('Europe/Berlin', '[{"tag":1,"von":1080,"bis":1200},{"tag":1,"von":1140,"bis":1260}]'::jsonb)`);
+                                const tz = await q(`select public.coach_save_calendar('Mars/Olympus', '${WIN}'::jsonb)`);
+                                const odd = await q(`select public.coach_save_calendar('Europe/Berlin', '[{"tag":1,"von":1081,"bis":1200}]'::jsonb)`);
+                                const day = await q(`select public.coach_save_calendar('Europe/Berlin', '[{"tag":8,"von":1080,"bis":1200}]'::jsonb)`);
+                                check("Ungültige Zeiten abgelehnt (Überschneidung, Zeitzone, Viertelstunden, Wochentag)",
+                                    /überschneiden/.test(overlap.error || "") && /Zeitzone/.test(tz.error || "") && /30 Minuten/.test(odd.error || "") && /ungültig/.test(day.error || ""),
+                                    [overlap.error, tz.error, odd.error, day.error].join(" | "));
+                                const ok = await q(`select public.coach_save_calendar('Europe/Berlin', '${WIN}'::jsonb, array[${BLOCKED}]) as r`);
+                                check("Coach speichert Zeiten und einen gesperrten Tag", ok.rows[0]?.r?.fenster === 7 && ok.rows[0]?.r?.gesperrt === 1, ok.error || JSON.stringify(ok.rows[0]?.r));
+                                const direct = await q(`insert into public.coach_availability (coach_id, weekday, start_min, end_min) values ('${U.max}', 1, 0, 60)`);
+                                check("Zeiten nicht direkt eintragbar", direct.error !== null, direct.error || "durchgelassen!");
+                                const own = await q(`select count(*) as n from public.coach_availability`);
+                                check("Coach sieht seine Zeiten", Number(own.rows[0]?.n) === 7, own.error || String(own.rows[0]?.n));
+                            });
+
+                            let slots = [];
+                            await as(K, async () => {
+                                const seen = await q(`select count(*) as n from public.coach_availability`);
+                                check("Andere sehen die Zeiten nicht direkt", Number(seen.rows[0]?.n) === 0, seen.error || String(seen.rows[0]?.n));
+                                const fs = await q(`select public.coaching_free_slots('${maxOffer}') as r`);
+                                slots = fs.rows[0]?.r?.slots || [];
+                                check("Kunde sieht freie Termine", fs.rows[0]?.r?.kalender === true && slots.length > 20, fs.error || JSON.stringify(fs.rows[0]?.r).slice(0, 200));
+                                const v = await q(`select count(*) filter (where s < now() + interval '24 hours') as zu_frueh,
+                                        count(*) filter (where (s at time zone 'Europe/Berlin')::time not between '18:00' and '21:00'
+                                                           or extract(minute from (s at time zone 'Europe/Berlin')) not in (0, 30)) as ausserhalb,
+                                        count(*) filter (where (s at time zone 'Europe/Berlin')::date = ${BLOCKED}) as gesperrt
+                                    from jsonb_array_elements_text((public.coaching_free_slots('${maxOffer}'))->'slots') t(v), lateral (select v::timestamptz as s) x`);
+                                const r = v.rows[0] || {};
+                                check("Termine nur 24 h voraus, im Zeitfenster (60 Min. passen bis 21 Uhr), nicht am gesperrten Tag",
+                                    Number(r.zu_frueh) === 0 && Number(r.ausserhalb) === 0 && Number(r.gesperrt) === 0, v.error || JSON.stringify(r));
+                                const old = await q(`select public.coaching_book('${maxOffer}', 'Hallo', 'Samstag abends')`);
+                                check("Mit Kalender kein Wunschtermin per Text", /freien Termin/.test(old.error || ""), old.error || "durchgelassen!");
+                                const wrong = await q(`select public.coaching_book_at('${maxOffer}', date_trunc('day', now() + interval '3 days') + interval '10 hours')`);
+                                check("Termin außerhalb der Zeiten abgelehnt", /nicht mehr frei/.test(wrong.error || ""), wrong.error || "durchgelassen!");
+                                const ok = await q(`select public.coaching_book_at('${maxOffer}', '${slots[0]}'::timestamptz, 'Bitte Spa') as r`);
+                                check("Kunde bucht einen freien Termin", ok.error === null && new Date(ok.rows[0]?.r?.scheduled_at).getTime() === new Date(slots[0]).getTime(), ok.error || JSON.stringify(ok.rows[0]?.r));
+                            });
+                            let slot2 = null;
+                            await as(U.tim, async () => {
+                                const same = await q(`select public.coaching_book_at('${maxOffer}', '${slots[0]}'::timestamptz)`);
+                                const half = await q(`select public.coaching_book_at('${maxOffer}', '${slots[0]}'::timestamptz + interval '30 minutes')`);
+                                check("Keine Doppelbelegung (gleiche oder überlappende Zeit)", /nicht mehr frei/.test(same.error || "") && /nicht mehr frei/.test(half.error || ""), same.error || half.error || "durchgelassen!");
+                                const fs = await q(`select public.coaching_free_slots('${maxOffer}') as r`);
+                                const left = (fs.rows[0]?.r?.slots || []).map(s => new Date(s).getTime());
+                                const t0 = new Date(slots[0]).getTime();
+                                check("Belegte Zeit verschwindet aus den freien Terminen", !left.includes(t0) && !left.includes(t0 + 30 * 60000) && !left.includes(t0 - 30 * 60000), fs.error || "");
+                                slot2 = (fs.rows[0]?.r?.slots || [])[0];
+                                const ok = await q(`select public.coaching_book_at('${maxOffer}', '${slot2}'::timestamptz)`);
+                                check("Zweiter Kunde bucht einen anderen freien Termin", ok.error === null, ok.error || "");
+                            });
+                            const kb = await one(`select id from public.coaching_bookings where buyer_id = '${K}' and offer_id = '${maxOffer}'`);
+                            const tb = await one(`select id from public.coaching_bookings where buyer_id = '${U.tim}' and offer_id = '${maxOffer}'`);
+                            await as(U.max, async () => {
+                                const clash = await q(`select public.coaching_respond('${tb?.id}', true, '${slots[0]}'::timestamptz)`);
+                                check("Annehmen zu einer schon belegten Zeit abgelehnt", /schon ein anderes Coaching/.test(clash.error || ""), clash.error || "durchgelassen!");
+                                const acc = await q(`select public.coaching_respond('${kb?.id}', true)`);
+                                check("Coach nimmt den gewählten Termin mit einem Klick an", acc.error === null, acc.error || "");
+                                const acc2 = await q(`select public.coaching_respond('${tb?.id}', true)`);
+                                check("Zweite Anfrage ebenfalls angenommen", acc2.error === null, acc2.error || "");
+                                const move = await q(`select public.coaching_set_time('${kb?.id}', '${slot2}'::timestamptz)`);
+                                check("Verschieben auf eine belegte Zeit abgelehnt", /schon ein anderes Coaching/.test(move.error || ""), move.error || "durchgelassen!");
+                            });
+                            const kept = await one(`select scheduled_at = '${slots[0]}'::timestamptz as same, status from public.coaching_bookings where id = '${kb?.id}'`);
+                            check("Termin aus dem Kalender bleibt erhalten", kept?.same === true && kept?.status === "angenommen", JSON.stringify(kept));
+                            await as(K, async () => {
+                                const list = await q(`select public.coaching_calendar_coaches() as id`);
+                                check("Seite erkennt Coaches mit Kalender", list.rows.some(r => r.id === U.max), list.error || JSON.stringify(list.rows));
+                            });
+
+                            // Kalender aus: wieder Wunschtermin per Text
+                            await as(U.max, async () => {
+                                const off = await q(`select public.coach_save_calendar('Europe/Berlin', '[]'::jsonb) as r`);
+                                check("Coach schaltet den Kalender aus (keine Zeiten)", off.rows[0]?.r?.fenster === 0, off.error || JSON.stringify(off.rows[0]?.r));
+                            });
+                            await as(K3, async () => {
+                                const fs = await q(`select public.coaching_free_slots('${maxOffer}') as r`);
+                                const at = await q(`select public.coaching_book_at('${maxOffer}', now() + interval '3 days')`);
+                                const old = await q(`select public.coaching_book('${maxOffer}', null, 'Sonntag')`);
+                                check("Ohne Kalender: Anfrage mit Wunschtermin wie bisher", fs.rows[0]?.r?.kalender === false && /keinen Kalender/.test(at.error || "") && old.error === null,
+                                    fs.error || at.error || old.error || JSON.stringify(fs.rows[0]?.r));
+                            });
+                            await as(null, async () => {
+                                const fs = await q(`select public.coaching_free_slots('${maxOffer}')`);
+                                const save = await q(`select public.coach_save_calendar('Europe/Berlin', '[]'::jsonb)`);
+                                const slotsFn = await q(`select * from public.coach_slots('${U.max}', 60, current_date, 7)`);
+                                check("Gäste: keine Termine, kein Kalender, keine internen Funktionen", fs.error !== null && save.error !== null && slotsFn.error !== null, fs.error || save.error || slotsFn.error || "durchgelassen!");
+                            });
+                            await as(K, async () => {
+                                const slotsFn = await q(`select * from public.coach_slots('${U.max}', 60, current_date, 7)`);
+                                const free = await q(`select public.coach_time_free('${U.max}', now(), 60)`);
+                                check("Mitglieder: interne Kalender-Funktionen gesperrt", slotsFn.error !== null && free.error !== null, slotsFn.error || free.error || "durchgelassen!");
                             });
                         }
                     }

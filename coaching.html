@@ -125,6 +125,8 @@
             <!-- GSRA-Coach-Lizenz und Auszahlungen über Stripe (füllt coaching.js) -->
             <div id="coLicense" class="co-license" hidden></div>
             <div id="coPayout" class="co-payout" hidden></div>
+            <!-- Freie Zeiten: Kunden buchen nur dort (füllt coaching.js, SQL 030) -->
+            <section id="coCalendar" class="co-calendar" hidden></section>
             <h2 class="co-section-title"><i class="fa-solid fa-inbox"></i> Anfragen an dich</h2>
             <div id="coCoachRequests" class="co-list"></div>
             <h2 class="co-section-title"><i class="fa-solid fa-chalkboard-user"></i> Deine Angebote</h2>
@@ -199,11 +201,13 @@
             <p class="co-book-sub" id="coBookSub"></p>
             <dl class="co-price-table" id="coBookPrice"></dl>
             <form id="coBookForm" class="co-form">
-                <label class="co-field co-wide"><span>Wunschtermin <small>(optional)</small></span>
+                <!-- Coach mit Kalender: freien Termin wählen (füllt coaching.js) -->
+                <div id="coSlotPicker" class="co-slots co-wide" hidden></div>
+                <label class="co-field co-wide" id="coBookTimeField"><span>Wunschtermin <small>(optional)</small></span>
                     <input type="text" id="coBookTime" maxlength="200" placeholder="z. B. Samstag ab 18 Uhr oder nächste Woche abends"></label>
                 <label class="co-field co-wide"><span>Nachricht an den Coach <small>(optional)</small></span>
                     <textarea id="coBookMessage" rows="3" maxlength="1000" placeholder="Was möchtest du verbessern? Welches Auto, welche Strecke?"></textarea></label>
-                <p class="co-form-note co-wide"><i class="fa-solid fa-circle-info"></i> Der Coach bestätigt deine Anfrage mit einem festen Termin. Danach bezahlst du sicher über Stripe. Kostenlos stornieren kannst du bis 24 Stunden vor dem Termin.</p>
+                <p class="co-form-note co-wide" id="coBookNote"><i class="fa-solid fa-circle-info"></i> Der Coach bestätigt deine Anfrage mit einem festen Termin. Danach bezahlst du sicher über Stripe. Kostenlos stornieren kannst du bis 24 Stunden vor dem Termin.</p>
                 <div class="gsra-dialog-actions co-wide">
                     <button type="button" class="gsra-dialog-btn secondary" data-close="coBookModal">Abbrechen</button>
                     <button type="submit" class="gsra-dialog-btn primary">Anfrage senden</button>
