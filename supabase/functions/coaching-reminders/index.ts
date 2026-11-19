@@ -5,6 +5,8 @@
 // sind, entscheidet die Datenbank (coaching_reminder_run); jede wird genau einmal vermerkt und verschickt, und es
 // gibt höchstens alle 4 Minuten einen Lauf – egal, wer die Funktion wie oft aufruft. Sie gibt keine Daten zurück.
 // Benötigte Secrets (wie bei cancel-contract): SMTP_USER und SMTP_PASS, optional SMTP_HOST, SMTP_PORT, SITE_URL.
+// Seit 19.11. (SQL 035) auch E-Mails zu Reklamationen: neue Meldung → Coach (mit Frist) und Eingangsbestätigung an
+// den Kunden; Ergebnis (erstattet, teilweise erstattet, abgelehnt) → beide.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import nodemailer from "npm:nodemailer@6.9.16";
 
@@ -61,6 +63,49 @@ function mails(r: Due, site: string) {
   };
 }
 
+type Case = {
+  id: string; art: "neu" | "ergebnis"; status: string; grund: string; titel: string; termin: string; frist: string;
+  betrag: number; entscheidung: string | null; coach_id: string; kunde_id: string; coach_name: string; kunde_name: string;
+};
+const GRUND: Record<string, string> = {
+  nicht_erschienen: "Coach ist nicht erschienen", mangelhaft: "Coaching war mangelhaft", sonstiges: "Etwas anderes",
+};
+const euro = (cents: number) => (Number(cents || 0) / 100).toLocaleString("de-DE", { style: "currency", currency: "EUR" });
+
+// Texte zu Reklamationen für Kunde bzw. Coach
+function caseMails(c: Case, site: string) {
+  const kundeLink = `${site}/coaching.html?tab=anfragen`;
+  const coachLink = `${site}/coaching.html?tab=coach`;
+  const gruss = "\n\nDein GSRA-Team\nGlobal Simracing Alliance";
+  const fall = `„${c.titel}“ am ${when(c.termin)}`;
+  if (c.art === "neu") {
+    return {
+      kunde: {
+        subject: `Deine Meldung zum Coaching „${c.titel}“ ist eingegangen`,
+        text: `Hallo ${c.kunde_name},\n\nwir haben deine Meldung zu ${fall} erhalten (${GRUND[c.grund] || c.grund}).\n\n${c.coach_name} kann bis ${when(c.frist)} erstatten oder widersprechen. ${c.grund === "nicht_erschienen" ? "Antwortet der Coach nicht, bekommst du dein Geld automatisch zurück." : "Kommt keine Einigung zustande, entscheidet die GSRA-Moderation."}\n\nDeine Coachings: ${kundeLink}${gruss}`,
+      },
+      coach: {
+        subject: `Reklamation zu deinem Coaching „${c.titel}“ – bitte bis ${when(c.frist)} reagieren`,
+        text: `Hallo ${c.coach_name},\n\n${c.kunde_name} hat ein Problem mit ${fall} gemeldet: ${GRUND[c.grund] || c.grund}.\n\nBitte reagiere bis ${when(c.frist)} (deutsche Zeit) auf der Coaching-Seite unter „Als Coach“: Erstatte das Coaching oder widersprich mit einer kurzen Begründung. ${c.grund === "nicht_erschienen" ? "Ohne Antwort wird das Coaching automatisch voll erstattet." : "Ohne Einigung entscheidet die GSRA-Moderation."}\n\nZur Reklamation: ${coachLink}${gruss}`,
+      },
+    };
+  }
+  const ergebnis = c.status === "erstattet" ? `Das Coaching wurde voll erstattet (${euro(c.betrag)}).`
+    : c.status === "teilweise_erstattet" ? `Es wurden ${euro(c.betrag)} erstattet.`
+    : "Die Reklamation wurde abgelehnt, es gibt keine Erstattung.";
+  const begruendung = c.entscheidung ? `\nBegründung: ${c.entscheidung}` : "";
+  return {
+    kunde: {
+      subject: `Ergebnis deiner Meldung zum Coaching „${c.titel}“`,
+      text: `Hallo ${c.kunde_name},\n\nzu deiner Meldung zu ${fall}: ${ergebnis}${begruendung}\n\n${c.status === "abgelehnt" ? "" : "Die Gutschrift erscheint je nach Bank in wenigen Tagen auf deinem Konto.\n\n"}Deine Coachings: ${kundeLink}${gruss}`,
+    },
+    coach: {
+      subject: `Ergebnis der Reklamation zu „${c.titel}“`,
+      text: `Hallo ${c.coach_name},\n\nzur Reklamation von ${c.kunde_name} zu ${fall}: ${ergebnis}${begruendung}\n\nDeine Coachings: ${coachLink}${gruss}`,
+    },
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "Nur POST erlaubt." }, 405);
   try {
@@ -71,7 +116,8 @@ Deno.serve(async (req) => {
       return json({ ok: false }, 500);
     }
     const due: Due[] = data?.erinnerungen || [];
-    if (!data?.lauf || !due.length) return json({ ok: true, gesendet: 0 });
+    const cases: Case[] = data?.reklamationen || [];
+    if (!data?.lauf || (!due.length && !cases.length)) return json({ ok: true, gesendet: 0 });
 
     const user = Deno.env.get("SMTP_USER");
     const pass = Deno.env.get("SMTP_PASS");
@@ -87,20 +133,21 @@ Deno.serve(async (req) => {
     const emailOf = async (id: string) => (await admin.auth.admin.getUserById(id)).data?.user?.email || null;
 
     let sent = 0;
-    for (const r of due) {
-      const texts = mails(r, site);
-      for (const [who, id] of [["kunde", r.kunde_id], ["coach", r.coach_id]] as const) {
+    const send = async (label: string, texts: Record<"kunde" | "coach", { subject: string; text: string }>, kundeId: string, coachId: string) => {
+      for (const [who, id] of [["kunde", kundeId], ["coach", coachId]] as const) {
         try {
           const to = await emailOf(id);
           if (!to) continue;
           await transporter.sendMail({ from: `"GSRA Coaching" <${user}>`, to, subject: texts[who].subject, text: texts[who].text });
           sent++;
         } catch (err) {
-          // Vermerkt ist die Erinnerung schon: lieber eine verpasste als doppelte E-Mails
-          console.error(`Erinnerung ${r.id} (${who}) nicht verschickt:`, err);
+          // Vermerkt ist die E-Mail schon: lieber eine verpasste als doppelte E-Mails
+          console.error(`${label} (${who}) nicht verschickt:`, err);
         }
       }
-    }
+    };
+    for (const r of due) await send(`Erinnerung ${r.id}`, mails(r, site), r.kunde_id, r.coach_id);
+    for (const c of cases) await send(`Reklamation ${c.id}`, caseMails(c, site), c.kunde_id, c.coach_id);
     return json({ ok: true, gesendet: sent });
   } catch (err) {
     console.error(err);

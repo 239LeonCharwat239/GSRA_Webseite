@@ -9,9 +9,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL] =
-    Array.from({ length: 34 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 34);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL] =
+    Array.from({ length: 35 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 35);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -1994,6 +1994,126 @@ if (MODERATION_SQL) {
                             await as(null, async () => { await q(`select public.log_client_error('/index.html', 'Noch ein Fehler')`); });
                             const old = await one(`select count(*) as n from public.client_errors where message = 'TypeError: x is undefined'`);
                             check("Nach 30 Tagen automatisch gelöscht", Number(old.n) === 0, String(old.n));
+                        }
+
+                        // --- 035: Coaching-Reklamation („Problem melden“) ---
+                        if (REKLAMATION_SQL) {
+                            await db.exec(readFileSync(REKLAMATION_SQL, "utf8"));
+                            const ctl35 = await db.exec(readFileSync(REKLAMATION_SQL, "utf8")); // zweiter Lauf
+                            const rows35 = ctl35[ctl35.length - 1].rows;
+                            console.log("Kontrolle 035:\n  " + rows35.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+                            check("Kontrolle 035: Tabelle, Funktionen, Erstattung nur Server (Zeitplan braucht pg_cron)",
+                                rows35.slice(0, 3).map(r => r.ergebnis).join(",") === "bereit,bereit,ja" && /^fehlt/.test(rows35[3]?.ergebnis || ""), rows35.map(r => r.ergebnis).join(", "));
+
+                            // Bezahlte Coachings bei Max: vier vergangene (Reklamation möglich), eines in der Zukunft, eines vor 8 Tagen
+                            const R = (n) => `35000000-0000-0000-0000-00000000000${n}`;
+                            const paid = (n, buyer, at) => `('${R(n)}', '${U.max}', '${buyer}', 'Reklamationstest ${n}', 60, 3000, 300, 3300, 'bezahlt', ${at}, 'pi_035_${n}', now() - interval '9 days')`;
+                            await db.exec(`insert into public.coaching_bookings (id, coach_id, buyer_id, offer_title, duration_minutes, price_cents, fee_cents, total_cents, status, scheduled_at, stripe_payment_intent, paid_at) values
+                                ${paid(1, U.tim, "now() - interval '2 hours'")}, ${paid(2, K3, "now() - interval '3 hours'")},
+                                ${paid(3, U.anna, "now() - interval '1 hour'")}, ${paid(4, K, "now() - interval '30 minutes'")},
+                                ${paid(5, U.tim, "now() + interval '2 days'")}, ${paid(6, U.tim, "now() - interval '8 days'")}`);
+                            const report = (bk, reason, text) => q(`select public.coaching_report_problem('${R(bk)}', '${reason}', '${text}') as id`);
+                            await as(U.anna, async () => {
+                                const foreign = await report(1, "nicht_erschienen", "Nicht mein Coaching, aber ich melde trotzdem.");
+                                check("Nur der Kunde selbst meldet ein Problem", /eigenen Coaching/.test(foreign.error || ""), foreign.error || "durchgelassen!");
+                            });
+                            let d1 = null;
+                            await as(U.tim, async () => {
+                                const early = await report(5, "nicht_erschienen", "Der Termin ist erst übermorgen.");
+                                const late = await report(6, "nicht_erschienen", "Das ist schon über eine Woche her.");
+                                const short = await report(1, "nicht_erschienen", "kurz");
+                                const wrong = await report(1, "zu_teuer", "Das war mir einfach zu teuer.");
+                                check("Abgelehnt: vor dem Termin, nach 7 Tagen, zu kurze Beschreibung, unbekannter Grund",
+                                    /ab Beginn/.test(early.error || "") && /7 Tage/.test(late.error || "") && /10 Zeichen/.test(short.error || "") && /wähle aus/.test(wrong.error || ""),
+                                    [early.error, late.error, short.error, wrong.error].join(" | "));
+                                const ok = await report(1, "nicht_erschienen", "Der Coach ist nicht im Discord erschienen und hat nicht geantwortet.");
+                                d1 = ok.rows[0]?.id;
+                                check("Kunde meldet: Coach nicht erschienen", ok.error === null && Boolean(d1), ok.error || "");
+                                const twice = await report(1, "mangelhaft", "Und außerdem war es auch noch schlecht.");
+                                check("Nur eine Meldung pro Coaching", /schon ein Problem/.test(twice.error || ""), twice.error || "durchgelassen!");
+                                const direct = await q(`insert into public.coaching_disputes (booking_id, buyer_id, coach_id, reason, description, respond_until) values ('${R(1)}', '${U.tim}', '${U.max}', 'sonstiges', 'Direkt eingetragen', now())`);
+                                check("Reklamationen nicht direkt eintragbar", direct.error !== null, direct.error || "durchgelassen!");
+                            });
+                            let d2 = null, d3 = null, d4 = null;
+                            await as(K3, async () => { d2 = (await report(2, "mangelhaft", "Er hat nur über sein eigenes Setup geredet.")).rows[0]?.id; });
+                            await as(U.anna, async () => { d3 = (await report(3, "nicht_erschienen", "Niemand da, keine Antwort im Messenger.")).rows[0]?.id; });
+                            await as(K, async () => { d4 = (await report(4, "sonstiges", "Die Verbindung war die ganze Zeit sehr schlecht.")).rows[0]?.id; });
+                            check("Weitere Meldungen angelegt (mangelhaft, nicht erschienen, sonstiges)", Boolean(d2 && d3 && d4), JSON.stringify({ d2, d3, d4 }));
+                            await db.exec(`update public.coaching_reminder_runs set last_run = '-infinity'`);
+                            const run1 = (await one(`select public.coaching_reminder_run() as r`)).r;
+                            const neu = (run1?.reklamationen || []).filter(x => x.art === "neu").map(x => x.id);
+                            check("Coach wird über neue Meldungen informiert (E-Mail-Liste)", [d1, d2, d3, d4].every(id => neu.includes(id)), JSON.stringify(neu));
+
+                            await as(U.lena, async () => {
+                                const seen = await q(`select count(*) as n from public.coaching_disputes`);
+                                check("Fremde sehen keine Reklamationen", Number(seen.rows[0]?.n || 0) === 0, seen.error || String(seen.rows[0]?.n));
+                            });
+                            await as(null, async () => {
+                                const seen = await q(`select count(*) as n from public.coaching_disputes`);
+                                check("Gäste sehen keine Reklamationen", seen.error !== null || Number(seen.rows[0]?.n) === 0, seen.error || String(seen.rows[0]?.n));
+                            });
+                            await as(U.anna, async () => {
+                                const r = await q(`select public.coaching_dispute_answer('${d1}', false, 'Ich bin gar nicht der Coach hier.')`);
+                                check("Nur der Coach antwortet", /nicht dein Coaching/.test(r.error || ""), r.error || "durchgelassen!");
+                            });
+                            await as(U.max, async () => {
+                                const seen = await q(`select count(*) as n from public.coaching_disputes where coach_id = '${U.max}'`);
+                                check("Coach sieht die Meldungen zu seinen Coachings", Number(seen.rows[0]?.n) === 4, seen.error || String(seen.rows[0]?.n));
+                                const short = await q(`select public.coaching_dispute_answer('${d1}', false, 'nein')`);
+                                check("Widerspruch nur mit Begründung", /10 Zeichen/.test(short.error || ""), short.error || "durchgelassen!");
+                                const obj = await q(`select public.coaching_dispute_answer('${d1}', false, 'Ich war pünktlich im Discord, der Kunde kam nicht.') as r`);
+                                check("Coach widerspricht", obj.rows[0]?.r === "widerspruch", obj.error || JSON.stringify(obj.rows[0]));
+                                const acc = await q(`select public.coaching_dispute_answer('${d4}', true, 'Tut mir leid, die Verbindung lag an mir.') as r`);
+                                check("Coach erstattet selbst", acc.rows[0]?.r === "erstattung", acc.error || JSON.stringify(acc.rows[0]));
+                                const decide = await q(`select public.coaching_dispute_decide('${d1}', 3300, 'Ich entscheide selbst')`);
+                                check("Coach entscheidet nicht selbst über Widersprüche", /Moderationsteam/.test(decide.error || ""), decide.error || "durchgelassen!");
+                            });
+                            await withClaims(MOD, "aal1", async () => {
+                                const r = await q(`select public.coaching_dispute_decide('${d1}', 1000, 'Ohne Zwei-Faktor')`);
+                                check("Moderation ohne Zwei-Faktor entscheidet nicht", /Moderationsteam/.test(r.error || ""), r.error || "durchgelassen!");
+                            });
+                            await withClaims(MOD, "aal2", async () => {
+                                const early = await q(`select public.coaching_dispute_decide('${d2}', 0, 'Zu früh entschieden')`);
+                                check("Moderation wartet die 48 Stunden des Coaches ab", /48 Stunden/.test(early.error || ""), early.error || "durchgelassen!");
+                                const tooMuch = await q(`select public.coaching_dispute_decide('${d1}', 5000, 'Mehr als bezahlt')`);
+                                check("Nicht mehr erstatten als bezahlt", /zwischen 0/.test(tooMuch.error || ""), tooMuch.error || "durchgelassen!");
+                                const part = await q(`select public.coaching_dispute_decide('${d1}', 1000, 'Beide Seiten glaubhaft, Teil-Erstattung') as r`);
+                                check("Moderation entscheidet Widerspruch: Teil-Erstattung", part.rows[0]?.r === "erstattung", part.error || JSON.stringify(part.rows[0]));
+                            });
+                            const logged = await one(`select count(*) as n from public.moderation_log where action = 'coaching_reklamation_entschieden'`);
+                            check("Entscheidung steht im Moderationsprotokoll", Number(logged.n) === 1, String(logged.n));
+
+                            // 48 Stunden vorbei: „nicht erschienen“ wird automatisch erstattet, „mangelhaft“ nicht
+                            await db.exec(`update public.coaching_disputes set respond_until = now() - interval '1 minute' where id in ('${d2}', '${d3}')`);
+                            const auto = (await one(`select public.coaching_disputes_auto() as n`)).n;
+                            const st = Object.fromEntries((await q(`select id, status, refund_cents from public.coaching_disputes`)).rows.map(r => [r.id, r]));
+                            check("Nach 48 Std. ohne Antwort: „nicht erschienen“ voll erstattet, „mangelhaft“ geht an die Moderation",
+                                Number(auto) === 1 && st[d3]?.status === "erstattung" && st[d3]?.refund_cents === 3300 && st[d2]?.status === "offen", JSON.stringify({ auto, d2: st[d2], d3: st[d3] }));
+                            await withClaims(MOD, "aal2", async () => {
+                                const rej = await q(`select public.coaching_dispute_decide('${d2}', 0, 'Coaching fand statt, Qualität ist Ansichtssache') as r`);
+                                check("Moderation lehnt ab (keine Erstattung)", rej.rows[0]?.r === "abgelehnt", rej.error || JSON.stringify(rej.rows[0]));
+                                const again = await q(`select public.coaching_dispute_decide('${d2}', 3300, 'Doch erstatten')`);
+                                check("Entschieden ist entschieden", /bereits entschieden/.test(again.error || ""), again.error || "durchgelassen!");
+                            });
+                            await as(K, async () => {
+                                const pend = await q(`select public.coaching_dispute_refunds_pending()`);
+                                const mark = await q(`select public.coaching_dispute_mark_refunded('${d4}')`);
+                                check("Erstattungen auszuführen bleibt dem Server vorbehalten", pend.error !== null && mark.error !== null, pend.error || mark.error || "durchgelassen!");
+                            });
+                            const pending = (await one(`select public.coaching_dispute_refunds_pending() as r`)).r || [];
+                            const byId = Object.fromEntries(pending.map(p => [p.id, p]));
+                            check("Server bekommt die offenen Erstattungen mit Betrag und Zahlung",
+                                byId[d1]?.refund_cents === 1000 && byId[d3]?.refund_cents === 3300 && byId[d4]?.refund_cents === 3300 && byId[d1]?.payment_intent === "pi_035_1" && !byId[d2],
+                                JSON.stringify(pending.map(p => ({ id: p.id.slice(-1), c: p.refund_cents }))));
+                            for (const id of [d1, d3, d4]) await db.exec(`select public.coaching_dispute_mark_refunded('${id}')`);
+                            const fin = Object.fromEntries((await q(`select d.id, d.status, b.status as booking from public.coaching_disputes d join public.coaching_bookings b on b.id = d.booking_id`)).rows.map(r => [r.id, r]));
+                            check("Abschluss: Teil-Erstattung lässt das Coaching bezahlt, volle Erstattung setzt es auf „erstattet“",
+                                fin[d1]?.status === "teilweise_erstattet" && fin[d1]?.booking === "bezahlt" && fin[d3]?.status === "erstattet" && fin[d3]?.booking === "erstattet" && fin[d4]?.status === "erstattet",
+                                JSON.stringify(fin));
+                            await db.exec(`update public.coaching_reminder_runs set last_run = '-infinity'`);
+                            const run2 = (await one(`select public.coaching_reminder_run() as r`)).r;
+                            const results = (run2?.reklamationen || []).filter(x => x.art === "ergebnis").map(x => x.id);
+                            check("Beide Seiten werden über das Ergebnis informiert (E-Mail-Liste)", [d1, d2, d3, d4].every(id => results.includes(id)), JSON.stringify(results));
                         }
                     }
                 }

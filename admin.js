@@ -270,12 +270,21 @@ document.addEventListener("DOMContentLoaded", async () => {
         ]);
         if (countOpen) countOpen.textContent = open ?? 0;
         if (countBans) countBans.textContent = (bans || []).filter(b => !b.banned_until || new Date(b.banned_until) > new Date()).length;
+        // Coaching-Fälle, die eine Entscheidung brauchen (Widerspruch oder 48 Stunden vorbei) – ohne SQL 035 einfach keine
+        const countDisputes = document.getElementById("countDisputes");
+        if (countDisputes) {
+            const { data: open35 } = await client.from("coaching_disputes").select("status, respond_until").in("status", ["offen", "widerspruch"]);
+            const due = (open35 || []).filter(d => d.status === "widerspruch" || new Date(d.respond_until) < new Date()).length;
+            countDisputes.hidden = !due;
+            countDisputes.textContent = due;
+        }
     }
 
     async function render() {
         list.innerHTML = '<div class="admin-empty"><i class="fa-solid fa-spinner fa-spin"></i> Lade …</div>';
         updateCounts();
         if (currentTab === "sperren") return renderBans();
+        if (currentTab === "coaching") return renderDisputes();
         if (currentTab === "team" && isAdmin) return renderTeam();
         if (currentTab === "protokoll" && isAdmin) return renderLog();
         if (currentTab === "fehler" && isAdmin) return renderErrors();
@@ -520,6 +529,127 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // --- Protokoll (nur Admins): wer hat wann was getan ---
+    // Coaching-Fälle (SQL 035): Reklamationen mit Widerspruch oder nach Ablauf der 48 Stunden entscheiden
+    const euroText = (cents) => (Number(cents || 0) / 100).toLocaleString("de-DE", { style: "currency", currency: "EUR" });
+    const DISPUTE_REASON_TEXT = { nicht_erschienen: "Coach ist nicht erschienen", mangelhaft: "Coaching war mangelhaft", sonstiges: "Etwas anderes" };
+    const DISPUTE_STATUS_TEXT = { offen: "Coach hat noch Zeit", widerspruch: "Widerspruch", erstattung: "Erstattung läuft", erstattet: "Erstattet", teilweise_erstattet: "Teilweise erstattet", abgelehnt: "Abgelehnt" };
+
+    async function renderDisputes() {
+        const { data: disputes, error } = await client.from("coaching_disputes").select("*").order("created_at", { ascending: false }).limit(100);
+        if (error) {
+            list.innerHTML = '<div class="admin-empty"><i class="fa-solid fa-database"></i> Die Reklamationen fehlen noch – bitte 035_coaching_reklamation.sql in Supabase ausführen.</div>';
+            return;
+        }
+        if (!disputes?.length) {
+            list.innerHTML = '<div class="admin-empty"><i class="fa-solid fa-scale-balanced"></i> Keine Coaching-Reklamationen.</div>';
+            return;
+        }
+        const { data: bookings } = await client.from("coaching_bookings").select("*").in("id", disputes.map(d => d.booking_id));
+        const bookingOf = new Map((bookings || []).map(b => [b.id, b]));
+        await loadProfiles(disputes.flatMap(d => [d.buyer_id, d.coach_id]));
+        const now = Date.now();
+        const needsDecision = (d) => d.status === "widerspruch" || (d.status === "offen" && new Date(d.respond_until).getTime() < now);
+        const groups = [
+            ["fa-gavel", "Zu entscheiden", disputes.filter(needsDecision)],
+            ["fa-hourglass-half", "Coach hat noch Zeit (48 Stunden)", disputes.filter(d => d.status === "offen" && !needsDecision(d))],
+            ["fa-check-double", "Abgeschlossen", disputes.filter(d => !["offen", "widerspruch"].includes(d.status))]
+        ];
+        const box = document.createElement("div");
+        box.className = "admin-disputes";
+        const intro = document.createElement("p");
+        intro.className = "admin-errors-head";
+        intro.innerHTML = '<span><i class="fa-solid fa-circle-info"></i> Regeln: Kunden melden bis 7 Tage nach dem Termin. Der Coach hat 48 Stunden zum Erstatten oder Widersprechen; „nicht erschienen“ ohne Antwort wird automatisch erstattet. Entscheidet fair und begründet – beide Seiten bekommen die Begründung per E-Mail.</span>';
+        box.appendChild(intro);
+        groups.forEach(([icon, title, items]) => {
+            if (!items.length) return;
+            const h = document.createElement("h3");
+            h.className = "admin-dispute-group";
+            h.innerHTML = `<i class="fa-solid ${icon}"></i> `;
+            h.append(`${title} (${items.length})`);
+            box.appendChild(h);
+            items.forEach(d => box.appendChild(disputeCard(d, bookingOf.get(d.booking_id), needsDecision(d))));
+        });
+        list.replaceChildren(box);
+    }
+
+    function disputeCard(d, b, decide) {
+        const card = document.createElement("div");
+        card.className = `admin-dispute ${d.status}`;
+        const total = b?.total_cents || 0;
+        const row = (icon, label, value) => `<span><i class="fa-solid ${icon}"></i> ${escapeHtml(label)}: ${escapeHtml(value)}</span>`;
+        card.innerHTML = `
+            <div class="admin-dispute-head">
+                <strong></strong>
+                <span class="admin-dispute-status">${escapeHtml(DISPUTE_STATUS_TEXT[d.status] || d.status)}</span>
+            </div>
+            <div class="admin-error-meta">
+                ${row("fa-user", "Kunde", nameOf(d.buyer_id))}
+                ${row("fa-chalkboard-user", "Coach", nameOf(d.coach_id))}
+                ${row("fa-euro-sign", "Bezahlt", euroText(total))}
+                ${row("fa-calendar-check", "Termin", b?.scheduled_at ? formatDate(b.scheduled_at) : "–")}
+                ${row("fa-flag-checkered", "Als erledigt gemeldet", b?.completed_at ? formatDate(b.completed_at) : "nein")}
+                ${row("fa-flag", "Gemeldet", formatDate(d.created_at))}
+                ${d.status === "offen" ? row("fa-hourglass-half", "Frist des Coaches", formatDate(d.respond_until)) : ""}
+            </div>
+            <div class="admin-dispute-reason"></div>
+            <div class="admin-msg-original admin-dispute-buyer"><span>Kunde:</span> </div>
+            ${d.coach_statement ? '<div class="admin-msg-original admin-dispute-coach"><span>Coach:</span> </div>' : '<div class="admin-msg-original missing">Der Coach hat nicht geantwortet.</div>'}
+            ${d.decision && !["offen", "widerspruch"].includes(d.status) ? `<div class="admin-dispute-decision"><i class="fa-solid fa-gavel"></i> ${escapeHtml(d.decision)}${d.refund_cents ? ` (${escapeHtml(euroText(d.refund_cents))})` : ""}</div>` : ""}`;
+        card.querySelector(".admin-dispute-head strong").textContent = b?.offer_title || "Coaching";
+        card.querySelector(".admin-dispute-reason").textContent = DISPUTE_REASON_TEXT[d.reason] || d.reason;
+        card.querySelector(".admin-dispute-buyer").append(`„${d.description}“`);
+        if (d.coach_statement) card.querySelector(".admin-dispute-coach").append(`„${d.coach_statement}“`);
+        if (decide && b) {
+            const actions = document.createElement("div");
+            actions.className = "admin-actions";
+            const add = (cls, html, handler) => {
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = `admin-btn ${cls}`;
+                btn.innerHTML = html;
+                btn.addEventListener("click", () => handler(btn));
+                actions.appendChild(btn);
+            };
+            add("warn", `<i class="fa-solid fa-rotate-left"></i> Voll erstatten (${escapeHtml(euroText(total))})`, (btn) => decideDispute(d, total, btn));
+            add("dismiss", '<i class="fa-solid fa-circle-half-stroke"></i> Teilweise erstatten', async (btn) => {
+                const raw = await showDialog({
+                    icon: "fa-circle-half-stroke", title: "Wie viel erstatten?",
+                    message: `Betrag in Euro, höchstens ${euroText(total)}.`,
+                    input: { placeholder: "z. B. 15,00", maxLength: 10, inputMode: "decimal" },
+                    confirmText: "Weiter", cancelText: "Abbrechen"
+                });
+                if (!raw) return;
+                const cents = Math.round(Number(String(raw).replace(/\s|€/g, "").replace(",", ".")) * 100);
+                if (!Number.isFinite(cents) || cents <= 0 || cents > total) return showToast(`Bitte einen Betrag zwischen 0,01 € und ${euroText(total)} eingeben.`, "error");
+                decideDispute(d, cents, btn);
+            });
+            add("ban", '<i class="fa-solid fa-xmark"></i> Ablehnen', (btn) => decideDispute(d, 0, btn));
+            card.appendChild(actions);
+        }
+        return card;
+    }
+
+    async function decideDispute(d, cents, btn) {
+        const reason = await showDialog({
+            icon: "fa-gavel", title: cents > 0 ? `${euroText(cents)} erstatten` : "Reklamation ablehnen",
+            message: "Kurze Begründung – Kunde und Coach bekommen sie per E-Mail, sie steht auch im Moderationsprotokoll.",
+            input: { placeholder: "z. B. Coach war laut Chat nicht erreichbar", maxLength: 1000, multiline: true },
+            confirmText: cents > 0 ? "Erstatten" : "Ablehnen", cancelText: "Abbrechen", danger: cents === 0
+        });
+        if (!reason) return;
+        btn.disabled = true;
+        const { error } = await client.rpc("coaching_dispute_decide", { _dispute_id: d.id, _refund_cents: cents, _decision: reason });
+        if (error) {
+            btn.disabled = false;
+            showToast(error.message, "error");
+            return;
+        }
+        // Erstattung gleich bei Stripe ausführen (sonst übernimmt es der Zeitplan in spätestens 15 Minuten)
+        if (cents > 0) await client.functions.invoke("coaching-refund", { body: { action: "reklamationen" } }).catch(() => null);
+        showToast(cents > 0 ? `Entschieden: ${euroText(cents)} werden erstattet.` : "Reklamation abgelehnt.", "success");
+        render();
+    }
+
     // Fehlerprotokoll der Webseite (SQL 034): was bei Nutzern schiefgeht, gruppiert und gezählt – nur Admins
     async function renderErrors() {
         const { data: rows, error } = await client.from("client_errors").select("*").order("last_seen", { ascending: false }).limit(200);

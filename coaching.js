@@ -64,6 +64,7 @@
     let slotState = null;      // Terminauswahl beim Anfragen: { offer, slots: [Date], day, daysLoaded }
     let selectedSlot = null;
     let reviewsByBooking = new Map(); // Coach-Bewertungen zu den eigenen Anfragen
+    let disputesByBooking = new Map(); // Reklamationen („Problem melden“, SQL 035)
     const coachReadyCache = new Map();
 
     const $ = (id) => document.getElementById(id);
@@ -105,7 +106,7 @@
     const errorText = (error, fallback) => {
         const msg = String(error?.message || "");
         // Eigene Meldungen der Datenbank (deutsch) weitergeben, technische nicht
-        return /[äöüß]|Bitte|Coaching|Anfrage|Angebot|Preis|Dauer|Titel|Konto|Coach|Zeit|Termin|Kalender/.test(msg) && msg.length < 200 ? msg : fallback;
+        return /[äöüß]|Bitte|Coaching|Anfrage|Angebot|Preis|Dauer|Titel|Konto|Coach|Zeit|Termin|Kalender|Reklamation|Problem|Erstatt/.test(msg) && msg.length < 200 ? msg : fallback;
     };
     const nameOf = (id) => profiles.get(id)?.username || "GSRA-Mitglied";
     const chatLink = (userId, title) => `messenger.html?sellerId=${encodeURIComponent(userId)}&sellerName=${encodeURIComponent(nameOf(userId))}&itemTitle=${encodeURIComponent(`Coaching: ${title}`)}`;
@@ -1063,6 +1064,242 @@
         showTab("anfragen");
     });
 
+    /* ---------- Reklamation: „Problem melden“ (SQL 035) ---------- */
+    const DISPUTE_REASONS = {
+        nicht_erschienen: ["fa-user-slash", "Coach ist nicht erschienen", "Der Termin fand nicht statt, weil der Coach nicht da war."],
+        mangelhaft: ["fa-thumbs-down", "Coaching war mangelhaft", "Es fand statt, hat dir aber deutlich weniger gebracht als beschrieben."],
+        sonstiges: ["fa-circle-question", "Etwas anderes", "Zum Beispiel technische Probleme oder ein deutlich verkürzter Termin."]
+    };
+    const DISPUTE_STATUS = {
+        offen: ["fa-hourglass-half", "Offen", "wait"],
+        widerspruch: ["fa-scale-balanced", "Moderation prüft", "wait"],
+        erstattung: ["fa-rotate", "Erstattung läuft", "ok"],
+        erstattet: ["fa-circle-check", "Erstattet", "ok"],
+        teilweise_erstattet: ["fa-circle-half-stroke", "Teilweise erstattet", "ok"],
+        abgelehnt: ["fa-circle-xmark", "Abgelehnt", "bad"]
+    };
+    const canReportProblem = (b) => ["bezahlt", "erledigt"].includes(b.status) && b.stripe_payment_intent && b.scheduled_at
+        && new Date(b.scheduled_at).getTime() <= Date.now() && Date.now() - new Date(b.scheduled_at).getTime() < 7 * 86400000;
+
+    function disputeBox(d, b, role) {
+        const box = el("div", `co-dispute ${d.status}`);
+        const head = el("div", "co-dispute-head");
+        const [rIcon, rLabel] = DISPUTE_REASONS[d.reason] || ["fa-flag", d.reason];
+        head.appendChild(iconText("strong", "", rIcon, `Problem gemeldet: ${rLabel}`));
+        const [sIcon, sLabel, tone] = DISPUTE_STATUS[d.status] || ["fa-circle", d.status, "off"];
+        head.appendChild(iconText("span", `co-status ${tone}`, sIcon, sLabel));
+        box.appendChild(head);
+        box.appendChild(el("p", "co-dispute-text", `„${d.description}“`));
+        if (d.coach_statement) {
+            const st = el("p", "co-dispute-text coach");
+            st.appendChild(el("strong", "", role === "coach" ? "Deine Antwort: " : "Antwort des Coaches: "));
+            st.append(`„${d.coach_statement}“`);
+            box.appendChild(st);
+        }
+        const until = new Date(d.respond_until);
+        const overdue = until.getTime() < Date.now();
+        let info = "";
+        if (d.status === "offen" && !overdue) {
+            info = role === "coach"
+                ? `Bitte antworte bis ${dateTime(d.respond_until)} Uhr: erstatte das Coaching oder widersprich mit einer kurzen Begründung. ${d.reason === "nicht_erschienen" ? "Ohne Antwort wird automatisch voll erstattet." : "Ohne Einigung entscheidet die GSRA-Moderation."}`
+                : `${nameOf(b.coach_id)} kann bis ${dateTime(d.respond_until)} Uhr erstatten oder widersprechen. ${d.reason === "nicht_erschienen" ? "Ohne Antwort bekommst du dein Geld automatisch zurück." : "Ohne Einigung entscheidet die GSRA-Moderation."}`;
+        } else if (d.status === "offen" || d.status === "widerspruch") {
+            info = "Die GSRA-Moderation prüft den Fall und entscheidet – beide bekommen das Ergebnis per E-Mail.";
+        } else if (d.status === "erstattung") {
+            info = `Die Erstattung von ${euro(d.refund_cents)} wird gerade bei Stripe ausgeführt.`;
+        } else if (d.status === "erstattet" || d.status === "teilweise_erstattet") {
+            info = `${euro(d.refund_cents)} wurden erstattet. Die Gutschrift erscheint je nach Bank in wenigen Tagen.`;
+        } else if (d.status === "abgelehnt") {
+            info = "Die Reklamation wurde abgelehnt, es gibt keine Erstattung.";
+        }
+        if (info) box.appendChild(iconText("p", "co-dispute-info", "fa-circle-info", info));
+        if (d.decision && !["offen", "widerspruch"].includes(d.status)) {
+            const dec = el("p", "co-dispute-text decision");
+            dec.appendChild(el("strong", "", "Entscheidung: "));
+            dec.append(d.decision);
+            box.appendChild(dec);
+        }
+        // Coach: erstatten (auch nach einem Widerspruch noch möglich) oder widersprechen
+        if (role === "coach" && ["offen", "widerspruch"].includes(d.status)) {
+            const actions = el("div", "co-actions");
+            const refundBtn = iconText("button", "co-btn primary", "fa-rotate-left", d.status === "widerspruch" ? "Doch erstatten" : "Erstatten");
+            refundBtn.type = "button";
+            refundBtn.addEventListener("click", () => answerDispute(d, b, true, refundBtn));
+            actions.appendChild(refundBtn);
+            if (d.status === "offen" && !overdue) {
+                const objectBtn = iconText("button", "co-btn", "fa-comment-dots", "Widersprechen");
+                objectBtn.type = "button";
+                objectBtn.addEventListener("click", () => answerDispute(d, b, false, objectBtn));
+                actions.appendChild(objectBtn);
+            }
+            box.appendChild(actions);
+        }
+        return box;
+    }
+
+    // Erstattungen sofort ausführen (macht sonst der Zeitplan spätestens nach 15 Minuten)
+    const runDisputeRefunds = () => invokeFn("coaching-refund", { action: "reklamationen" }).catch(() => null);
+
+    async function answerDispute(d, b, refund, btn) {
+        let statement = null;
+        if (refund) {
+            const ok = await showDialog({
+                icon: "fa-rotate-left", title: "Coaching erstatten?",
+                message: `${nameOf(b.buyer_id)} bekommt ${euro(b.total_cents)} zurück (inklusive Servicegebühr). Das Geld wird von deinem Stripe-Konto zurückgebucht.`,
+                confirmText: "Erstatten", cancelText: "Abbrechen"
+            });
+            if (!ok) return;
+        } else {
+            statement = await showDialog({
+                icon: "fa-comment-dots", title: "Widersprechen",
+                message: "Was ist aus deiner Sicht passiert? Die GSRA-Moderation sieht deine Antwort und entscheidet.",
+                input: { placeholder: "z. B. Ich war pünktlich im Discord, der Kunde kam nicht (mindestens 10 Zeichen)", maxLength: 2000, multiline: true },
+                confirmText: "Widerspruch senden", cancelText: "Abbrechen"
+            });
+            if (!statement) return;
+        }
+        btn.disabled = true;
+        const { error } = await client.rpc("coaching_dispute_answer", { _dispute_id: d.id, _refund: refund, _statement: statement });
+        if (error) {
+            btn.disabled = false;
+            showToast(errorText(error, "Das hat nicht geklappt."), "error");
+            return;
+        }
+        if (refund) {
+            showToast("Erstattung zugesagt – sie wird jetzt bei Stripe ausgeführt.", "success");
+            await runDisputeRefunds();
+        } else {
+            showToast("Widerspruch gesendet. Die GSRA-Moderation entscheidet.", "success");
+        }
+        loadCoachArea();
+    }
+
+    // Fenster „Problem melden“: Grund wählen und kurz beschreiben
+    function openProblemDialog(b) {
+        document.getElementById("coProblemDialog")?.remove();
+        const overlay = el("div", "gsra-dialog-overlay");
+        overlay.id = "coProblemDialog";
+        const dialog = el("div", "gsra-dialog co-dialog co-problem-dialog");
+        dialog.setAttribute("role", "dialog");
+        dialog.setAttribute("aria-modal", "true");
+        dialog.innerHTML = '<button type="button" class="gsra-dialog-close" title="Schließen"><i class="fa-solid fa-xmark"></i></button><div class="gsra-dialog-icon"><i class="fa-solid fa-flag"></i></div>';
+        dialog.appendChild(el("h3", "gsra-dialog-title", "Problem melden"));
+        dialog.appendChild(el("p", "co-book-sub", `${b.offer_title} · ${dateTime(b.scheduled_at)} Uhr mit ${nameOf(b.coach_id)}`));
+        const form = el("form", "co-form");
+        const reasons = el("div", "co-problem-reasons co-wide");
+        reasons.setAttribute("role", "radiogroup");
+        reasons.setAttribute("aria-label", "Was ist passiert?");
+        Object.entries(DISPUTE_REASONS).forEach(([key, [icon, label, hint]], i) => {
+            const option = el("label", "co-problem-reason");
+            const radio = document.createElement("input");
+            radio.type = "radio";
+            radio.name = "coProblemReason";
+            radio.value = key;
+            if (i === 0) radio.checked = true;
+            option.appendChild(radio);
+            const text = el("span", "");
+            text.appendChild(iconText("strong", "", icon, label));
+            text.appendChild(el("small", "", hint));
+            option.appendChild(text);
+            reasons.appendChild(option);
+        });
+        form.appendChild(reasons);
+        const field = el("label", "co-field co-wide");
+        field.appendChild(el("span", "", "Was ist passiert?"));
+        const textarea = document.createElement("textarea");
+        textarea.rows = 4;
+        textarea.maxLength = 2000;
+        textarea.required = true;
+        textarea.placeholder = "Beschreibe kurz und sachlich, was passiert ist (mindestens 10 Zeichen).";
+        field.appendChild(textarea);
+        form.appendChild(field);
+        form.appendChild(iconText("p", "co-form-note co-wide", "fa-circle-info",
+            "So geht es weiter: Der Coach kann innerhalb von 48 Stunden erstatten oder widersprechen. Ist der Coach nicht erschienen und antwortet nicht, bekommst du dein Geld automatisch zurück. Sonst entscheidet die GSRA-Moderation. Bitte melde nur echte Probleme – Missbrauch kann zu einer Verwarnung führen."));
+        const actions = el("div", "gsra-dialog-actions co-wide");
+        const cancelBtn = el("button", "gsra-dialog-btn secondary", "Abbrechen");
+        cancelBtn.type = "button";
+        const sendBtn = el("button", "gsra-dialog-btn primary", "Problem melden");
+        sendBtn.type = "submit";
+        actions.append(cancelBtn, sendBtn);
+        form.appendChild(actions);
+        dialog.appendChild(form);
+        overlay.appendChild(dialog);
+        const close = () => {
+            document.removeEventListener("keydown", onKey, true);
+            overlay.remove();
+            if (!document.querySelector(".gsra-dialog-overlay:not([hidden])")) document.body.style.overflow = "";
+        };
+        const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); } };
+        dialog.querySelector(".gsra-dialog-close").addEventListener("click", close);
+        cancelBtn.addEventListener("click", close);
+        overlay.addEventListener("mousedown", (e) => { if (e.target === overlay) close(); });
+        document.addEventListener("keydown", onKey, true);
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const reason = form.querySelector("input[name=coProblemReason]:checked")?.value;
+            const text = textarea.value.trim();
+            if (text.length < 10) {
+                textarea.classList.add("invalid");
+                textarea.focus();
+                showToast("Bitte beschreibe kurz, was passiert ist (mindestens 10 Zeichen).", "error");
+                return;
+            }
+            sendBtn.disabled = true;
+            const { error } = await client.rpc("coaching_report_problem", { _booking_id: b.id, _reason: reason, _description: text });
+            sendBtn.disabled = false;
+            if (error) {
+                showToast(errorText(error, "Die Meldung konnte nicht gesendet werden."), "error");
+                return;
+            }
+            close();
+            showToast(`Danke, deine Meldung ist eingegangen. ${nameOf(b.coach_id)} hat jetzt 48 Stunden Zeit zu reagieren.`, "success");
+            loadBuyerBookings();
+        });
+        document.body.appendChild(overlay);
+        document.body.style.overflow = "hidden";
+        textarea.focus();
+    }
+
+    // Nachweis für den Coach (z. B. für eine Rückbuchung über Bank oder Kreditkarte bei Stripe)
+    function downloadEvidence(b) {
+        const fmt = (iso) => (iso ? `${dateTime(iso)} Uhr` : "–");
+        const d = disputesByBooking.get(b.id);
+        const lines = [
+            "GSRA – Nachweis zu einem Coaching",
+            "==================================",
+            `Erstellt am: ${fmt(new Date().toISOString())}`,
+            "",
+            `Coaching: ${b.offer_title}`,
+            `Buchungsnummer: ${b.id}`,
+            `Coach: ${nameOf(b.coach_id)}`,
+            `Kunde: ${nameOf(b.buyer_id)}`,
+            `Dauer: ${duration(b.duration_minutes)}`,
+            "",
+            `Angefragt am: ${fmt(b.created_at)}`,
+            `Termin (vom Coach bestätigt): ${fmt(b.scheduled_at)}`,
+            `Bezahlt am: ${fmt(b.paid_at)}`,
+            `Bezahlter Betrag: ${euro(b.total_cents)} (davon Servicegebühr ${euro(b.fee_cents)})`,
+            `Stripe-Zahlung: ${b.stripe_payment_intent || "–"}`,
+            `Als erledigt gemeldet am: ${fmt(b.completed_at)}`,
+            `Status: ${(STATUS[b.status] || [null, b.status])[1]}`,
+            "",
+            "Bedingungen bei der Buchung: kostenlose Stornierung bis 24 Stunden vor dem Termin, danach keine Erstattung",
+            "durch den Kunden; Absprachen über den GSRA-Messenger.",
+            ...(d ? ["", `Reklamation: ${(DISPUTE_REASONS[d.reason] || [null, d.reason])[1]} (gemeldet am ${fmt(d.created_at)})`,
+                `Stand: ${(DISPUTE_STATUS[d.status] || [null, d.status])[1]}${d.decision ? ` – ${d.decision}` : ""}`] : []),
+            "",
+            "Hinweis: Den Chatverlauf mit dem Kunden findest du im GSRA-Messenger (z. B. als Bildschirmfoto beifügen)."
+        ];
+        const blob = new Blob([lines.join("\r\n")], { type: "text/plain;charset=utf-8" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `gsra-coaching-nachweis-${String(b.id).slice(0, 8)}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    }
+
     /* ---------- Termin in den eigenen Kalender (Datei für Outlook, Apple, Thunderbird … oder Google Kalender) ---------- */
     const icsStamp = (d) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
     const icsText = (s) => String(s || "").replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
@@ -1274,6 +1511,16 @@
         const review = reviewsByBooking.get(b.id);
         if (role === "buyer" && canReview(b)) {
             add(button(review ? "" : "primary", "fa-star", review ? "Bewertung ändern" : "Coach bewerten", () => rateCoach(b)));
+        }
+        // Reklamation: gemeldetes Problem mit Stand; Kunde kann ab Terminbeginn bis 7 Tage danach melden
+        const dispute = disputesByBooking.get(b.id);
+        if (dispute) card.appendChild(disputeBox(dispute, b, role));
+        if (role === "buyer" && !dispute && canReportProblem(b)) {
+            add(button("ghost", "fa-flag", "Problem melden", () => openProblemDialog(b)));
+        }
+        // Coach: Nachweis zum Coaching (z. B. bei einer Rückbuchung über Bank oder Kreditkarte)
+        if (role === "coach" && b.paid_at && ["bezahlt", "erledigt", "erstattet"].includes(b.status)) {
+            add(button("ghost", "fa-file-lines", "Nachweis", () => downloadEvidence(b)));
         }
         if (review && (role === "coach" || b.status !== "erstattet")) {
             const lvl = { 1: "ideal", 0: "in_ordnung", "-1": "mangelhaft", "-2": "schlecht" }[review.rating];
@@ -1766,12 +2013,14 @@
     }
 
     async function fetchBookings(column) {
-        const [{ data, error }, reviews] = await Promise.all([
+        const [{ data, error }, reviews, disputes] = await Promise.all([
             client.from("coaching_bookings").select("*").eq(column, me).order("created_at", { ascending: false }).limit(100),
-            client.from("coaching_reviews").select("*").eq(column, me).limit(200)
+            client.from("coaching_reviews").select("*").eq(column, me).limit(200),
+            client.from("coaching_disputes").select("*").eq(column, me).limit(200) // ohne SQL 035: Fehler, einfach keine
         ]);
         if (error) return null;
         (reviews.data || []).forEach(r => reviewsByBooking.set(r.booking_id, r));
+        (disputes.data || []).forEach(d => disputesByBooking.set(d.booking_id, d));
         await loadProfiles(data.map(b => (column === "buyer_id" ? b.coach_id : b.buyer_id)));
         return data;
     }
@@ -1873,7 +2122,7 @@
         if (!list) $("coCoachRequests").replaceChildren(el("div", "co-empty", "Anfragen konnten nicht geladen werden."));
         else {
             renderBookings($("coCoachRequests"), list, "coach");
-            setBadge("coBadgeCoach", list.filter(b => b.status === "angefragt").length);
+            setBadge("coBadgeCoach", list.filter(b => b.status === "angefragt" || disputesByBooking.get(b.id)?.status === "offen").length);
             bookingCache.coach = list;
             renderNextUp();
         }
@@ -1974,7 +2223,7 @@
         loadBuyerBookings();
         fetchBookings("coach_id").then(list => {
             if (!list) return;
-            setBadge("coBadgeCoach", list.filter(b => b.status === "angefragt").length);
+            setBadge("coBadgeCoach", list.filter(b => b.status === "angefragt" || disputesByBooking.get(b.id)?.status === "offen").length);
             bookingCache.coach = list;
             renderNextUp();
         });

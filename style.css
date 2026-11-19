@@ -5054,6 +5054,29 @@ textarea.gsra-dialog-input {
     border-radius: 10px;
     overflow: hidden;
 }
+/* Coaching-Fälle (Reklamationen) auf der Moderationsseite */
+.admin-disputes { display: flex; flex-direction: column; gap: 10px; }
+.admin-dispute-group { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; padding: 0; border: none; color: var(--gsra-blue); font-size: 14px; letter-spacing: 1px; text-transform: uppercase; text-align: left; }
+.admin-dispute {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px 16px;
+    background: var(--bg-card, #15161a);
+    border: 1px solid rgba(255, 204, 0, 0.3);
+    border-left: 3px solid var(--gsra-yellow);
+    border-radius: 10px;
+    text-align: left;
+}
+.admin-dispute.erstattet, .admin-dispute.teilweise_erstattet, .admin-dispute.erstattung { border-color: rgba(0, 255, 136, 0.25); border-left-color: #00ff88; }
+.admin-dispute.abgelehnt { border-color: rgba(255, 77, 77, 0.25); border-left-color: #ff4d4d; }
+.admin-dispute-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.admin-dispute-head strong { color: #fff; font-size: 15px; }
+.admin-dispute-status { padding: 2px 10px; background: rgba(255, 255, 255, 0.08); border-radius: 12px; color: #fff; font-size: 12px; font-weight: 700; }
+.admin-dispute-reason { color: var(--gsra-yellow); font-weight: 800; font-size: 13px; }
+.admin-dispute-decision { color: #fff; font-size: 13px; }
+.admin-dispute-decision i { margin-right: 6px; color: var(--gsra-blue); }
+
 /* Fehlerprotokoll der Webseite (nur Admins) */
 .admin-errors { display: flex; flex-direction: column; gap: 10px; }
 .admin-errors-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; color: var(--text-muted); font-size: 13px; text-align: left; }
@@ -11237,6 +11260,54 @@ select option {
 .co-cal-export { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; color: var(--text-muted); font-size: 13px; }
 .co-cal-export > span i { margin-right: 6px; color: var(--gsra-blue); }
 .co-cal-export .co-link { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+
+/* Coaching: Reklamation („Problem melden“) */
+.co-dispute {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 4px 0 2px;
+    padding: 12px 14px;
+    background: rgba(255, 204, 0, 0.06);
+    border: 1px solid rgba(255, 204, 0, 0.35);
+    border-left: 3px solid var(--gsra-yellow);
+    border-radius: 8px;
+    text-align: left;
+}
+.co-dispute.erstattet, .co-dispute.teilweise_erstattet, .co-dispute.erstattung { background: rgba(0, 255, 136, 0.05); border-color: rgba(0, 255, 136, 0.3); border-left-color: #00ff88; }
+.co-dispute.abgelehnt { background: rgba(255, 77, 77, 0.05); border-color: rgba(255, 77, 77, 0.3); border-left-color: #ff4d4d; }
+.co-dispute-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; }
+.co-dispute-head strong { color: #fff; font-size: 14px; }
+.co-dispute-head strong i { margin-right: 6px; color: var(--gsra-yellow); }
+.co-dispute-text { margin: 0; color: #cfd3dc; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.co-dispute-text strong { color: #fff; }
+.co-dispute-text.coach { padding-left: 10px; border-left: 2px solid rgba(0, 85, 255, 0.6); }
+.co-dispute-text.decision { color: #fff; }
+.co-dispute-info { margin: 0; color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+.co-dispute-info i { margin-right: 6px; color: var(--gsra-blue); }
+.co-dispute .co-actions { margin-top: 4px; }
+.co-problem-dialog { max-width: 520px; }
+.co-problem-reasons { display: flex; flex-direction: column; gap: 8px; }
+.co-problem-reason {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    background: #0f1014;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+.co-problem-reason:hover { border-color: rgba(0, 85, 255, 0.6); }
+.co-problem-reason:has(input:checked) { background: rgba(0, 85, 255, 0.14); border-color: var(--gsra-blue); }
+.co-problem-reason input { margin-top: 3px; accent-color: var(--gsra-blue); }
+.co-problem-reason span { display: flex; flex-direction: column; gap: 2px; }
+.co-problem-reason strong { color: #fff; font-size: 14px; }
+.co-problem-reason strong i { margin-right: 6px; color: var(--gsra-yellow); }
+.co-problem-reason small { color: var(--text-muted); font-size: 12px; line-height: 1.4; }
+.co-problem-dialog textarea.invalid { border-color: #ff4d4d; }
 
 /* Coaching: Terminauswahl beim Anfragen */
 .co-slots { display: flex; flex-direction: column; gap: 10px; min-width: 0; max-width: 100%; padding: 12px; background: #0f1014; border: 1px solid rgba(0, 85, 255, 0.35); border-radius: 10px; text-align: left; }

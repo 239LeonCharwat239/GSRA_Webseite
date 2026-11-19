@@ -4,6 +4,11 @@
 //   Käufer bis 24 Stunden vor dem Termin, der Coach jederzeit vor „erledigt“.
 // Die Erstattung läuft auf dem Stripe-Konto des Coaches (Direct Charge). Ein fester Idempotency-Key
 // verhindert doppelte Erstattungen, auch bei Doppelklick. Benötigte Secrets: STRIPE_SECRET_KEY.
+// Seit 19.11. (SQL 035) außerdem {"action":"reklamationen"}: führt die Erstattungen aus, die bei einer Reklamation
+// entschieden wurden (Coach hat zugesagt, Moderation hat entschieden oder automatisch nach 48 Stunden). Was erstattet
+// wird und wie viel, bestimmt allein die Datenbank (coaching_dispute_refunds_pending); deshalb darf dieser Aufruf
+// ohne Anmeldung erfolgen (Zeitplan alle 15 Minuten bzw. direkt nach einer Entscheidung). Jede Reklamation hat
+// ihren eigenen Idempotency-Key – doppelte Aufrufe erstatten nie doppelt.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const cors = {
@@ -25,10 +30,50 @@ Deno.serve(async (req) => {
     if (!stripeKey) return json({ error: "Die Bezahlung ist noch nicht eingerichtet (STRIPE_SECRET_KEY fehlt)." }, 500);
 
     const body = await req.json().catch(() => ({}));
+    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
+    // Reklamationen: entschiedene Erstattungen ausführen (voll oder teilweise)
+    if (body.action === "reklamationen") {
+      const { data: pending, error: pendingError } = await admin.rpc("coaching_dispute_refunds_pending");
+      if (pendingError) {
+        console.error("Reklamationen:", pendingError.message);
+        return json({ ok: false }, 500);
+      }
+      let done = 0;
+      for (const p of pending || []) {
+        if (!p.stripe_account_id || !p.payment_intent || !(Number(p.refund_cents) > 0)) {
+          console.error(`Reklamation ${p.id}: Stripe-Konto oder Zahlung fehlt – bitte prüfen.`);
+          continue;
+        }
+        const params = new URLSearchParams();
+        params.set("payment_intent", String(p.payment_intent));
+        if (Number(p.refund_cents) < Number(p.total_cents)) params.set("amount", String(p.refund_cents));   // Teil-Erstattung
+        params.set("reason", "requested_by_customer");
+        if (Number(p.fee_cents) > 0) params.set("refund_application_fee", "true");   // Servicegebühr anteilig zurück
+        params.set("metadata[booking_id]", String(p.booking_id));
+        params.set("metadata[reklamation]", String(p.id));
+        const res = await fetch("https://api.stripe.com/v1/refunds", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${stripeKey}`, "Content-Type": "application/x-www-form-urlencoded",
+            "Stripe-Account": String(p.stripe_account_id), "Idempotency-Key": `gsra-reklamation-${p.id}`,
+          },
+          body: params,
+        });
+        const refund = await res.json();
+        if (!res.ok && refund?.error?.code !== "charge_already_refunded") {
+          console.error(`Reklamation ${p.id}: Stripe-Fehler:`, refund?.error?.message);
+          continue;   // nächster Versuch beim nächsten Lauf
+        }
+        const { error } = await admin.rpc("coaching_dispute_mark_refunded", { _dispute_id: p.id });
+        if (error) console.error(`Reklamation ${p.id}: Verbuchen fehlgeschlagen:`, error.message);
+        else done++;
+      }
+      return json({ ok: true, erstattet: done });
+    }
+
     const bookingId = String(body.booking_id || "");
     if (!UUID.test(bookingId)) return json({ error: "Keine gültige Anfrage angegeben." }, 400);
-
-    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
     const { data: { user } } = await admin.auth.getUser(token);
     if (!user) return json({ error: "Bitte melde dich an." }, 401);
