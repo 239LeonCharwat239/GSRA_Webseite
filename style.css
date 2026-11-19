@@ -2516,6 +2516,27 @@ p {
     gap: 12px;
 }
 
+/* Lange Chats: ältere Nachrichten auf Knopfdruck (Messenger lädt seitenweise) */
+.chat-load-older {
+    align-self: center;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 6px;
+    padding: 7px 16px;
+    background: rgba(0, 85, 255, 0.12);
+    border: 1px solid rgba(0, 85, 255, 0.45);
+    border-radius: 18px;
+    color: #cfd8ff;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+.chat-load-older:hover, .chat-load-older:focus-visible { background: rgba(0, 85, 255, 0.25); border-color: var(--gsra-blue); color: #fff; outline: none; }
+.chat-load-older:disabled { opacity: 0.7; cursor: wait; }
+
 /* =========================================
    NACHRICHTENBLASEN & HOVER-AKTIONEN (GESPIEGELT)
 ========================================= */
@@ -5033,6 +5054,24 @@ textarea.gsra-dialog-input {
     border-radius: 10px;
     overflow: hidden;
 }
+/* Fehlerprotokoll der Webseite (nur Admins) */
+.admin-errors { display: flex; flex-direction: column; gap: 10px; }
+.admin-errors-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; color: var(--text-muted); font-size: 13px; text-align: left; }
+.admin-errors-head i { color: var(--gsra-blue); margin-right: 4px; }
+.admin-error {
+    padding: 12px 14px;
+    background: var(--bg-card, #15161a);
+    border: 1px solid rgba(255, 77, 77, 0.25);
+    border-left: 3px solid #ff4d4d;
+    border-radius: 10px;
+    text-align: left;
+}
+.admin-error-head { display: flex; align-items: baseline; gap: 10px; }
+.admin-error-count { flex: 0 0 auto; padding: 1px 8px; background: rgba(255, 77, 77, 0.15); border-radius: 10px; color: #ff8a8a; font-size: 12px; font-weight: 800; }
+.admin-error-msg { color: #fff; font-size: 14px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; }
+.admin-error-meta { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; color: var(--text-muted); font-size: 12px; }
+.admin-error-meta i { margin-right: 4px; color: var(--gsra-blue); }
+.admin-count[hidden] { display: none; }
 .admin-log-row {
     display: grid;
     grid-template-columns: 150px minmax(0, 1fr);

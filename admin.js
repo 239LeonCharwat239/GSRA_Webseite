@@ -60,7 +60,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     // Admins: alles; Moderatoren: Meldungen, Verwarnungen, Sperren bis 30 Tage (die Datenbank prüft das zusätzlich)
     const isAdmin = me.role === "admin";
-    if (isAdmin) document.querySelectorAll('.admin-tab[data-tab="team"], .admin-tab[data-tab="protokoll"]').forEach(t => { t.hidden = false; });
+    if (isAdmin) document.querySelectorAll('.admin-tab[data-tab="team"], .admin-tab[data-tab="protokoll"], .admin-tab[data-tab="fehler"]').forEach(t => { t.hidden = false; });
     // Zweiter Faktor ist Pflicht: Einrichten bzw. Code bestätigen, erst dann gibt die Datenbank Admin-Rechte frei
     if (!window.gsraMfa || !(await window.gsraMfa.requireForAdmin(client, gate))) return;
     gate.style.display = "none";
@@ -278,8 +278,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (currentTab === "sperren") return renderBans();
         if (currentTab === "team" && isAdmin) return renderTeam();
         if (currentTab === "protokoll" && isAdmin) return renderLog();
-        // Team und Protokoll sind Admin-Bereiche – nie stattdessen die Meldungen zeigen
-        if (currentTab === "team" || currentTab === "protokoll") {
+        if (currentTab === "fehler" && isAdmin) return renderErrors();
+        // Team, Protokoll und Fehler sind Admin-Bereiche – nie stattdessen die Meldungen zeigen
+        if (currentTab === "team" || currentTab === "protokoll" || currentTab === "fehler") {
             list.innerHTML = '<div class="admin-empty"><i class="fa-solid fa-lock"></i> Dieser Bereich ist nur für Administratoren.</div>';
             return;
         }
@@ -519,6 +520,70 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // --- Protokoll (nur Admins): wer hat wann was getan ---
+    // Fehlerprotokoll der Webseite (SQL 034): was bei Nutzern schiefgeht, gruppiert und gezählt – nur Admins
+    async function renderErrors() {
+        const { data: rows, error } = await client.from("client_errors").select("*").order("last_seen", { ascending: false }).limit(200);
+        if (error) {
+            list.innerHTML = '<div class="admin-empty"><i class="fa-solid fa-database"></i> Das Fehlerprotokoll fehlt noch – bitte 034_fehlerprotokoll.sql in Supabase ausführen.</div>';
+            return;
+        }
+        const countBadge = document.getElementById("countErrors");
+        if (countBadge) {
+            const recent = (rows || []).filter(r => Date.now() - new Date(r.last_seen).getTime() < 24 * 3600 * 1000).length;
+            countBadge.hidden = !recent;
+            countBadge.textContent = recent;
+        }
+        if (!rows?.length) {
+            list.innerHTML = '<div class="admin-empty"><i class="fa-solid fa-circle-check"></i> Keine Fehler gemeldet – alles läuft.</div>';
+            return;
+        }
+        await loadProfiles(rows.map(r => r.user_id));
+        const browser = (ua) => {
+            const s = String(ua || "");
+            const name = /Edg\//.test(s) ? "Edge" : /OPR\//.test(s) ? "Opera" : /Firefox\//.test(s) ? "Firefox" : /Chrome\//.test(s) ? "Chrome" : /Safari\//.test(s) ? "Safari" : "Browser";
+            const os = /Android/.test(s) ? "Android" : /iPhone|iPad/.test(s) ? "iOS" : /Windows/.test(s) ? "Windows" : /Mac OS/.test(s) ? "macOS" : /Linux/.test(s) ? "Linux" : "";
+            return [name, os].filter(Boolean).join(" · ");
+        };
+        const box = document.createElement("div");
+        box.className = "admin-errors";
+        const head = document.createElement("div");
+        head.className = "admin-errors-head";
+        head.innerHTML = '<span><i class="fa-solid fa-circle-info"></i> Fehler, die bei Nutzern aufgetreten sind (gleiche Fehler werden gezählt, nach 30 Tagen automatisch gelöscht).</span>';
+        const clear = document.createElement("button");
+        clear.type = "button";
+        clear.className = "admin-btn dismiss";
+        clear.innerHTML = '<i class="fa-solid fa-broom"></i> Liste leeren';
+        clear.addEventListener("click", async () => {
+            const ok = await showDialog({ icon: "fa-broom", title: "Fehlerliste leeren?", message: "Alle gemeldeten Fehler werden gelöscht. Neue Fehler erscheinen wieder hier.", confirmText: "Leeren", cancelText: "Abbrechen", danger: true });
+            if (!ok) return;
+            const { error: delError } = await client.from("client_errors").delete().gte("id", 0);
+            if (delError) return showToast("Die Liste konnte nicht geleert werden.", "error");
+            showToast("Fehlerliste geleert.", "success");
+            renderErrors();
+        });
+        head.appendChild(clear);
+        box.appendChild(head);
+        rows.forEach(r => {
+            const item = document.createElement("div");
+            item.className = "admin-error";
+            const where = [r.page, r.source && r.source !== r.page ? `${r.source}${r.line ? `:${r.line}` : ""}` : ""].filter(Boolean).join(" · ");
+            item.innerHTML = `
+                <div class="admin-error-head">
+                    <span class="admin-error-count" title="So oft aufgetreten">${Number(r.count) || 1}×</span>
+                    <strong class="admin-error-msg"></strong>
+                </div>
+                <div class="admin-error-meta">
+                    <span><i class="fa-solid fa-file-code"></i> ${escapeHtml(where || "unbekannte Stelle")}</span>
+                    <span><i class="fa-solid fa-clock"></i> zuletzt ${escapeHtml(formatDate(r.last_seen))}</span>
+                    <span><i class="fa-solid fa-user"></i> ${escapeHtml(r.user_id ? nameOf(r.user_id) : "nicht angemeldet")}</span>
+                    <span><i class="fa-solid fa-display"></i> ${escapeHtml(browser(r.user_agent))}</span>
+                </div>`;
+            item.querySelector(".admin-error-msg").textContent = r.message;
+            box.appendChild(item);
+        });
+        list.replaceChildren(box);
+    }
+
     async function renderLog() {
         const { data: log, error } = await client.from("moderation_log").select("*").order("id", { ascending: false }).limit(200);
         if (error) {

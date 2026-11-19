@@ -67,3 +67,5 @@ jobs:
             node --check "$f" || { echo "::error file=$f::Syntaxfehler in $f"; fehler=1; }
           done
           exit $fehler
+      - name: Verständliche Fehlermeldungen (Übersetzer)
+        run: node tests/ui/fehlertexte.test.mjs

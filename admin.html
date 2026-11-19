@@ -11,6 +11,7 @@
     <!-- Supabase SDK & Auth -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha256-7jvo3hkrl8sdc9HpXWuCux9rZYwPl8TvdX/DMZlu09M=" crossorigin="anonymous"></script>
     <script src="supabase-client.js"></script>
+    <script src="fehler-monitor.js"></script>
     <script src="auth-nav.js"></script>
 </head>
 <body>
@@ -58,6 +59,7 @@
                 <!-- Nur für Admins (blendet admin.js ein) -->
                 <button type="button" class="admin-tab" data-tab="team" hidden><i class="fa-solid fa-user-shield"></i> Team</button>
                 <button type="button" class="admin-tab" data-tab="protokoll" hidden><i class="fa-solid fa-clipboard-list"></i> Protokoll</button>
+                <button type="button" class="admin-tab" data-tab="fehler" hidden><i class="fa-solid fa-bug"></i> Fehler <span class="admin-count" id="countErrors" hidden>0</span></button>
             </div>
             <div id="adminList" class="admin-list"></div>
         </div>

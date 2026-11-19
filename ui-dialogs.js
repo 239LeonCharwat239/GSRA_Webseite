@@ -144,8 +144,49 @@ async function gsraShrinkImage(file, maxSize = 1600, quality = 0.85) {
 }
 window.gsraShrinkImage = gsraShrinkImage;
 
-// Kurze Hinweise unten rechts
+// Verständliche statt technischer Fehlermeldungen (Sicherheitsbericht Nr. 15).
+// Eigene deutsche Meldungen der Datenbank („Du hast schon 5 offene Anfragen …“) bleiben unverändert; technische
+// Texte wie „permission denied for table …“ oder „Failed to fetch“ werden übersetzt. Der Originaltext landet nur
+// in der Browser-Konsole bzw. im Fehlerprotokoll für das Team – Nutzer sehen keine internen Details.
+const GSRA_FRIENDLY_ERRORS = [
+    [/failed to fetch|networkerror|load failed|network request failed|err_internet/i, "Keine Verbindung zum Server. Bitte prüfe deine Internetverbindung und versuche es erneut."],
+    [/jwt expired|invalid jwt|jwt|auth session missing|refresh token|not authenticated|invalid claim|session.*expired/i, "Deine Anmeldung ist abgelaufen. Bitte melde dich neu an."],
+    [/permission denied|row-level security|violates row-level|not allowed|unauthorized|forbidden|\b401\b|\b403\b/i, "Dafür fehlt dir die Berechtigung."],
+    [/duplicate key|already exists|unique constraint/i, "Das gibt es bereits."],
+    [/too many requests|rate limit|\b429\b/i, "Zu viele Anfragen in kurzer Zeit. Bitte warte einen Moment und versuche es dann erneut."],
+    [/exceeded the maximum allowed size|payload too large|entity too large|\b413\b|file size/i, "Die Datei ist zu groß."],
+    [/mime type|not supported|unsupported file/i, "Dieser Dateityp wird nicht unterstützt."],
+    [/timeout|timed out|\b50[234]\b|bad gateway|service unavailable/i, "Der Server antwortet gerade nicht. Bitte versuche es gleich noch einmal."],
+    [/could not find the (function|table|column)|schema cache|does not exist|relation .* does not exist/i, "Diese Funktion ist gerade nicht verfügbar. Bitte versuche es später erneut."],
+    [/violates (check|foreign key|not-null) constraint|invalid input|value too long|out of range|malformed/i, "Die Eingabe ist ungültig. Bitte prüfe deine Angaben."]
+];
+const GSRA_GERMAN_HINT = /[äöüßÄÖÜ„“]|\b(bitte|nicht|du|dein|deine|dich|der|die|das|ist|kann|kannst|wurde|noch|schon|nur|mit|ohne|zu|für)\b/i;
+const GSRA_TECH_HINT = /\b(error|failed|invalid|denied|violates|constraint|relation|column|function|null|undefined|unexpected|token|exception|status|cannot|could not|not found|syntax)\b|[{}[\]<>]|\bat\s+\S+\.js/i;
+const GSRA_ENGLISH_HINT = /\b(the|is|was|of|to|for|not|and|with|your|this|that|could|cannot|went|wrong|please|error|failed|something|unknown)\b/i;
+function gsraFriendlyError(message, fallback = "Das hat leider nicht geklappt. Bitte versuche es erneut.") {
+    const text = String(message ?? "").trim();
+    if (!text) return fallback;
+    // Begründungen von Stripe sind gewollt sichtbar (z. B. bei der Einrichtung für Coaches)
+    if (/Stripe meldet:/.test(text)) return text.slice(0, 300);
+    // „Fehler beim Löschen: permission denied …“ → deutsche Einleitung behalten, technischen Teil übersetzen
+    const split = /^([^:]{3,60}):\s+(.+)$/s.exec(text);
+    const prefix = split && GSRA_GERMAN_HINT.test(split[1]) && !GSRA_TECH_HINT.test(split[1]) ? split[1] : null;
+    const tail = prefix ? split[2] : text;
+    const known = GSRA_FRIENDLY_ERRORS.find(([pattern]) => pattern.test(tail));
+    let friendly = null;
+    if (known) friendly = known[1];
+    else if (GSRA_TECH_HINT.test(tail) && !GSRA_GERMAN_HINT.test(tail)) friendly = fallback;
+    else if (!GSRA_GERMAN_HINT.test(tail) && GSRA_ENGLISH_HINT.test(tail)) friendly = fallback; // englischer Text
+    if (!friendly) return text.slice(0, 300);
+    console.warn("Technische Fehlermeldung (für Nutzer übersetzt):", text);
+    if (typeof window.gsraReportError === "function") window.gsraReportError({ message: text, source: "toast" });
+    return prefix ? `${prefix}: ${friendly}` : friendly;
+}
+window.gsraFriendlyError = gsraFriendlyError;
+
+// Kurze Hinweise unten rechts (Fehlermeldungen verständlich und etwas länger sichtbar)
 function showToast(message, type = "info") {
+    if (type === "error") message = gsraFriendlyError(message);
     let container = document.getElementById("toastContainer");
     if (!container) {
         container = document.createElement("div");
@@ -169,7 +210,7 @@ function showToast(message, type = "info") {
         toast.style.transform = "translateX(110%)";
         toast.style.transition = "all 0.35s ease";
         setTimeout(() => toast.remove(), 350);
-    }, 3500);
+    }, type === "error" ? 6000 : 3500);
 }
 
 // Kleines Auswahlmenü an einem Element (z. B. Profil- oder Forenbild): items = [{ icon, text, danger, onClick }]

@@ -2179,6 +2179,41 @@ async function leaveGroup(chat) {
     showToast(`Du hast „${chat.title}“ verlassen.`, "success");
 }
 
+// Lange Chats seitenweise laden (Sicherheitsbericht Nr. 16, Teil 2): zuerst die neuesten Nachrichten, ältere auf
+// Knopfdruck. Aktualisierungen laden nur den geöffneten Ausschnitt neu (ab der ältesten geladenen Nachricht).
+const MESSAGE_PAGE = 150;
+let messageWindow = { chatId: null, since: null, hasOlder: false };
+
+async function fetchMessageWindow(supabase, chatId) {
+    const base = () => supabase.from("messages").select("*").eq("chat_id", chatId);
+    if (messageWindow.chatId === chatId && messageWindow.since) {
+        const { data } = await base().gte("created_at", messageWindow.since).order("created_at", { ascending: true });
+        return data || [];
+    }
+    // Erstes Öffnen (bzw. kurzer Chat): die neueste Seite
+    const { data } = await base().order("created_at", { ascending: false }).limit(MESSAGE_PAGE + 1);
+    const rows = data || [];
+    const hasOlder = rows.length > MESSAGE_PAGE;
+    const page = rows.slice(0, MESSAGE_PAGE).reverse();
+    messageWindow = { chatId, since: hasOlder && page.length ? page[0].created_at : null, hasOlder };
+    return page;
+}
+
+// Zitierte Nachrichten, die weiter oben im Verlauf liegen, gezielt nachladen (nur für die Zitat-Anzeige)
+async function loadReplyTargets(supabase, messages) {
+    const missing = [...new Set(messages.map(m => m.reply_to).filter(id => id && !messagesCacheMap.has(id)))].slice(0, 200);
+    if (!missing.length) return;
+    const { data } = await supabase.from("messages").select("*").in("id", missing);
+    (data || []).forEach(m => messagesCacheMap.set(m.id, m));
+}
+
+async function showMessageWindow(supabase, chatId, messages) {
+    messagesCacheMap.clear();
+    messages.forEach(m => messagesCacheMap.set(m.id, m));
+    await loadReplyTargets(supabase, messages);
+    await renderMessages(messages, chatId);
+}
+
 async function loadChatMessages(chatId) {
     const supabase = window.supabaseClient || window.supabase;
     if (!supabase || !chatId) return;
@@ -2189,38 +2224,54 @@ async function loadChatMessages(chatId) {
         messageSubscription = null;
     }
 
-    const { data: messages } = await supabase
-        .from("messages")
-        .select("*")
-        .eq("chat_id", chatId)
-        .order("created_at", { ascending: true });
-
-    messagesCacheMap.clear();
-    if (messages) messages.forEach(m => messagesCacheMap.set(m.id, m));
-
-    await renderMessages(messages || [], chatId);
+    // Anderer Chat: wieder mit der neuesten Seite beginnen; derselbe Chat behält bereits geladene ältere Nachrichten
+    if (messageWindow.chatId !== chatId) messageWindow = { chatId: null, since: null, hasOlder: false };
+    const messages = await fetchMessageWindow(supabase, chatId);
+    await showMessageWindow(supabase, chatId, messages);
 
     const channelName = `chat_${chatId}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     messageSubscription = supabase
         .channel(channelName)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `chat_id=eq.${chatId}` }, async () => {
-            const { data: updatedMessages } = await supabase
-                .from("messages")
-                .select("*")
-                .eq("chat_id", chatId)
-                .order("created_at", { ascending: true });
-            
-            messagesCacheMap.clear();
-            if (updatedMessages) updatedMessages.forEach(m => messagesCacheMap.set(m.id, m));
-            await renderMessages(updatedMessages || [], chatId);
+            const updatedMessages = await fetchMessageWindow(supabase, chatId);
+            await showMessageWindow(supabase, chatId, updatedMessages);
             if (chatId === activeChatId && typeof scheduleMarkRead === "function") scheduleMarkRead();
         })
         .subscribe();
 }
 
+// „Ältere Nachrichten laden“: die nächste Seite davor holen, Leseposition beibehalten
+async function loadOlderMessages(btn) {
+    const supabase = window.supabaseClient || window.supabase;
+    const chatId = activeChatId;
+    if (!supabase || !chatId || messageWindow.chatId !== chatId || !messageWindow.since) return;
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Lade ältere Nachrichten …';
+    }
+    const { data, error } = await supabase.from("messages").select("*").eq("chat_id", chatId)
+        .lt("created_at", messageWindow.since).order("created_at", { ascending: false }).limit(MESSAGE_PAGE + 1);
+    if (error || chatId !== activeChatId) {
+        if (btn) btn.disabled = false;
+        if (error) showToast("Ältere Nachrichten konnten nicht geladen werden.", "error");
+        return;
+    }
+    const rows = data || [];
+    const page = rows.slice(0, MESSAGE_PAGE);
+    messageWindow.hasOlder = rows.length > MESSAGE_PAGE;
+    if (page.length) messageWindow.since = page[page.length - 1].created_at;
+    const previousHeight = chatMessages.scrollHeight;
+    const previousTop = chatMessages.scrollTop;
+    const messages = await fetchMessageWindow(supabase, chatId);
+    await showMessageWindow(supabase, chatId, messages);
+    chatMessages.scrollTop = chatMessages.scrollHeight - previousHeight + previousTop;
+}
+
 // Stellt die persönliche Willkommensnachricht (Zeitpunkt = Registrierung) immer als oberste Nachricht ins offizielle Forum
 function withWelcomeMessage(messages, chatId) {
     if (!chatId || chatId !== officialForumChatId || !currentUser?.created_at) return messages;
+    // Erst ganz oben im Verlauf (wenn keine älteren Nachrichten mehr nachzuladen sind)
+    if (messageWindow.chatId === chatId && messageWindow.hasOlder) return messages;
     const welcomeMsg = {
         id: WELCOME_MESSAGE_ID,
         chat_id: chatId,
@@ -2273,6 +2324,15 @@ async function renderMessages(messages, chatId = activeChatId) {
         return;
     }
     chatMessages.innerHTML = "";
+    // Lange Chats: Knopf für die nächste ältere Seite
+    if (messageWindow.chatId === chatId && messageWindow.hasOlder) {
+        const older = document.createElement("button");
+        older.type = "button";
+        older.className = "chat-load-older";
+        older.innerHTML = '<i class="fa-solid fa-clock-rotate-left"></i> Ältere Nachrichten laden';
+        older.addEventListener("click", () => loadOlderMessages(older));
+        chatMessages.appendChild(older);
+    }
     const seenSystemTexts = new Set();
     for (const msg of messages) {
         const isSystem = msg.text && (msg.text.includes("hat den Chat") || msg.text.includes("hat das Forum") || msg.text.includes("zum Forum hinzugefügt") || msg.text.includes("umbenannt") || msg.text.includes("aus der Gruppe entfernt") || msg.text.includes("hat die Gruppe verlassen") || msg.text.includes("ist dem Forum beigetreten"));
@@ -2692,6 +2752,8 @@ async function appendSingleMessage(msg, isSystem = false) {
                 targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 targetElement.classList.add('message-highlight');
                 setTimeout(() => targetElement.classList.remove('message-highlight'), 1500);
+            } else {
+                showToast("Diese Nachricht liegt weiter oben – tippe oben im Chat auf „Ältere Nachrichten laden“.", "info");
             }
         });
         bubble.appendChild(quoteDiv);

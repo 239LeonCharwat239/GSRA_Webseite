@@ -9,9 +9,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL] =
-    Array.from({ length: 33 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 33);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL] =
+    Array.from({ length: 34 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 34);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -1948,6 +1948,52 @@ if (MODERATION_SQL) {
                             const free = await one(`select public.coach_time_free('${U.max}', now() + interval '5 days 2 hours', 60, null) as f,
                                 public.coach_time_free('${U.max}', now() + interval '5 days', 60, null) as busy`);
                             check("Offene Anfragen blockieren ihre Zeit, abgelaufene nicht (Kalender aus 030)", free.f === true && free.busy === false, JSON.stringify(free));
+                        }
+
+                        // --- 034: Fehlerprotokoll der Webseite (Sicherheitsbericht Nr. 12) ---
+                        if (FEHLER_SQL) {
+                            await db.exec(readFileSync(FEHLER_SQL, "utf8"));
+                            const ctl34 = await db.exec(readFileSync(FEHLER_SQL, "utf8")); // zweiter Lauf
+                            const rows34 = ctl34[ctl34.length - 1].rows;
+                            console.log("Kontrolle 034:\n  " + rows34.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+                            check("Kontrolle 034: Fehlerprotokoll bereit, Lesen nur Admins", rows34.map(r => r.ergebnis).join(",") === "bereit,nur Admins", rows34.map(r => r.ergebnis).join(", "));
+                            await as(null, async () => {
+                                const a = await q(`select public.log_client_error('/login.html?token=geheim#x', 'TypeError: x is undefined', '/auth-nav.js?v=2', 10, 5, 'TestBrowser/1.0')`);
+                                const b = await q(`select public.log_client_error('/login.html', 'TypeError: x is undefined')`);
+                                const empty = await q(`select public.log_client_error('/login.html', '   ')`);
+                                check("Gäste melden Fehler (auch beim Login)", a.error === null && b.error === null && empty.error === null, a.error || b.error || empty.error || "");
+                                const read = await q(`select count(*) as n from public.client_errors`);
+                                const direct = await q(`insert into public.client_errors (page, message) values ('/x', 'Spam')`);
+                                check("Gäste lesen nichts und tragen nichts direkt ein", (read.error !== null || Number(read.rows[0]?.n) === 0) && direct.error !== null, read.error || direct.error || "durchgelassen!");
+                            });
+                            const login = await one(`select count(*) as rows, max(count) as n, max(page) as page, max(source) as source from public.client_errors where message = 'TypeError: x is undefined'`);
+                            check("Gleicher Fehler wird gezählt; Seite und Datei ohne Parameter (kein Token im Protokoll)",
+                                Number(login.rows) === 1 && Number(login.n) === 2 && login.page === "/login.html" && login.source === "/auth-nav.js", JSON.stringify(login));
+                            const noEmpty = await one(`select count(*) as n from public.client_errors where btrim(message) = ''`);
+                            check("Leere Meldungen werden verworfen", Number(noEmpty.n) === 0, String(noEmpty.n));
+                            await as(U.tim, async () => {
+                                for (let i = 0; i < 35; i++) await q(`select public.log_client_error('/messenger.html', 'Fehler Nummer ${i}')`);
+                                const own = await q(`select count(*) as n from public.client_errors`);
+                                const del = await q(`delete from public.client_errors returning id`);
+                                check("Mitglieder sehen und löschen das Protokoll nicht", Number(own.rows[0]?.n || 0) === 0 && (del.error !== null || del.rows.length === 0), own.error || del.error || "");
+                            });
+                            const tims = await one(`select count(*) as n from public.client_errors where user_id = '${U.tim}'`);
+                            check("Höchstens 30 neue Einträge pro Konto und Stunde", Number(tims.n) === 30, String(tims.n));
+                            await as(U.lena, async () => { await q(`select public.log_client_error('/dashboard.html', 'Fehler von Lena')`); }); // Konto wird am Ende gelöscht
+                            await withClaims(U.admin, "aal1", async () => {
+                                const r = await q(`select count(*) as n from public.client_errors`);
+                                check("Admin ohne Zwei-Faktor sieht das Protokoll nicht", Number(r.rows[0]?.n || 0) === 0, r.error || String(r.rows[0]?.n));
+                            });
+                            await withClaims(U.admin, "aal2", async () => {
+                                const r = await q(`select count(*) as n from public.client_errors`);
+                                check("Admin mit Zwei-Faktor sieht das Protokoll", Number(r.rows[0]?.n) >= 32, r.error || String(r.rows[0]?.n));
+                                const del = await q(`delete from public.client_errors where user_id = '${U.tim}' returning id`);
+                                check("Admin leert Einträge", del.error === null && del.rows.length === 30, del.error || String(del.rows.length));
+                            });
+                            await db.exec(`update public.client_errors set created_at = now() - interval '31 days' where message = 'TypeError: x is undefined'`);
+                            await as(null, async () => { await q(`select public.log_client_error('/index.html', 'Noch ein Fehler')`); });
+                            const old = await one(`select count(*) as n from public.client_errors where message = 'TypeError: x is undefined'`);
+                            check("Nach 30 Tagen automatisch gelöscht", Number(old.n) === 0, String(old.n));
                         }
                     }
                 }

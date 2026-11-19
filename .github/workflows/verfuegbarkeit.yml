@@ -1,0 +1,52 @@
+# GSRA – Verfügbarkeitswarnung (Sicherheitsbericht Nr. 12)
+# Prüft alle 30 Minuten, ob Webseite, Datenbank und Server-Funktionen erreichbar sind. Schlägt eine Prüfung fehl,
+# wird der Lauf rot und GitHub schickt automatisch eine E-Mail (an das Konto, das diese Datei zuletzt gepusht hat;
+# einstellbar unter GitHub → Settings → Notifications → Actions).
+# Genutzt wird nur der öffentliche Schlüssel der Webseite (steht ohnehin in supabase-client.js) – keine Geheimnisse.
+# Hinweis: GitHub pausiert Zeitpläne in Repositories, die 60 Tage lang keine Änderungen hatten.
+name: Verfügbarkeit
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pruefen:
+    name: Webseite, Datenbank, Server-Funktionen
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          sparse-checkout: supabase-client.js
+          sparse-checkout-cone-mode: false
+      - name: Erreichbarkeit prüfen
+        run: |
+          site="https://gsra-webseite.vercel.app"
+          api="https://mqqyvpmddaastacldbyy.supabase.co"
+          key=$(grep -oE "eyJ[A-Za-z0-9._-]+" supabase-client.js | head -n1)
+          if [ -z "$key" ]; then echo "::error::Öffentlicher Schlüssel in supabase-client.js nicht gefunden"; exit 1; fi
+          fehler=0
+          pruefe() {
+            name="$1"; shift
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 --retry 2 --retry-delay 5 "$@" || echo 000)
+            if [ "$code" -ge 200 ] && [ "$code" -lt 400 ]; then
+              echo "OK     $name (HTTP $code)"
+            else
+              echo "::error::$name nicht erreichbar (HTTP $code)"
+              fehler=1
+            fi
+          }
+          pruefe "Webseite" "$site/"
+          pruefe "Coaching-Seite" "$site/coaching.html"
+          pruefe "Anmeldedienst" -H "apikey: $key" "$api/auth/v1/health"
+          pruefe "Datenbank (Marktplatz lesen)" -H "apikey: $key" -H "Authorization: Bearer $key" "$api/rest/v1/marketplace?select=id&limit=1"
+          for f in coaching-connect coaching-checkout coaching-refund cancel-contract; do
+            pruefe "Server-Funktion $f" -X OPTIONS -H "apikey: $key" -H "Authorization: Bearer $key" "$api/functions/v1/$f"
+          done
+          exit $fehler
