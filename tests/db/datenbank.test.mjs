@@ -9,9 +9,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL] =
-    Array.from({ length: 31 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 31);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL] =
+    Array.from({ length: 32 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 32);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -1836,6 +1836,60 @@ if (MODERATION_SQL) {
                                 const empty = await q(`update public.profiles set languages = '{}' where id = '${K3}' returning languages`);
                                 check("Keine Sprache angeben bleibt möglich", empty.error === null && empty.rows[0]?.languages?.length === 0, empty.error || JSON.stringify(empty.rows[0]));
                             });
+                        }
+
+                        // --- 032: Chat-Anhänge im privaten Speicher (Sicherheitsbericht Nr. 9) ---
+                        if (ANHAENGE_SQL) {
+                            // Ausgangslage: alter Anhang ohne Ordner im Direktchat Anna ↔ Max
+                            await db.exec(`insert into storage.objects (bucket_id, name, owner) values ('chat_attachments', 'chat_alt_123.jpg', '${U.anna}');
+                                insert into public.messages (chat_id, sender_id, text, image_url) values ('${D}', '${U.anna}', '[Medien]', 'https://x.supabase.co/storage/v1/object/public/chat_attachments/chat_alt_123.jpg')`);
+                            await db.exec(readFileSync(ANHAENGE_SQL, "utf8"));
+                            const ctl32 = await db.exec(readFileSync(ANHAENGE_SQL, "utf8")); // zweiter Lauf
+                            const rows32 = ctl32[ctl32.length - 1].rows;
+                            console.log("Kontrolle 032:\n  " + rows32.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+                            check("Kontrolle 032: privat, Lesen und Hochladen nur für Chat-Mitglieder", rows32.slice(0, 3).map(r => r.ergebnis).join(",") === "ja,bereit,bereit", rows32.map(r => r.ergebnis).join(", "));
+                            check("Grenzen gesetzt (50 MB, nur Medien)", /^50 MB, \d+ Dateitypen$/.test(rows32[3]?.ergebnis || ""), rows32[3]?.ergebnis);
+
+                            const NEW = `${D}/${U.anna}/chat_neu_1.jpg`;
+                            await as(U.anna, async () => {
+                                const ok = await q(`insert into storage.objects (bucket_id, name, owner) values ('chat_attachments', '${NEW}', '${U.anna}') returning name`);
+                                check("Mitglied lädt in den eigenen Ordner seines Chats hoch", ok.error === null && ok.rows.length === 1, ok.error || "");
+                                const flat = await q(`insert into storage.objects (bucket_id, name, owner) values ('chat_attachments', 'chat_flach.jpg', '${U.anna}')`);
+                                const foreignFolder = await q(`insert into storage.objects (bucket_id, name, owner) values ('chat_attachments', '${D}/${U.max}/fremd.jpg', '${U.anna}')`);
+                                const foreignChat = await q(`insert into storage.objects (bucket_id, name, owner) values ('chat_attachments', '${FORUM}/${U.anna}/forum.jpg', '${U.anna}')`);
+                                const junk = await q(`insert into storage.objects (bucket_id, name, owner) values ('chat_attachments', 'kein-chat/${U.anna}/x.jpg', '${U.anna}')`);
+                                check("Abgelehnt: ohne Ordner, fremder Ordner, Chat ohne Schreibrecht, unsinniger Pfad",
+                                    [flat, foreignFolder, foreignChat, junk].every(r => r.error !== null), [flat, foreignFolder, foreignChat, junk].map(r => r.error ? "abgelehnt" : "DURCHGELASSEN").join(", "));
+                            });
+                            await as(U.max, async () => {
+                                const seen = await q(`select name from storage.objects where bucket_id = 'chat_attachments' order by name`);
+                                const names = seen.rows.map(r => r.name);
+                                check("Chat-Partner sieht neuen und alten Anhang", names.includes(NEW) && names.includes("chat_alt_123.jpg"), seen.error || JSON.stringify(names));
+                            });
+                            await as(U.tim, async () => {
+                                const seen = await q(`select name from storage.objects where bucket_id = 'chat_attachments'`);
+                                const direct = await q(`select public.chat_attachment_allowed('${NEW}') as a, public.chat_attachment_allowed('chat_alt_123.jpg') as b`);
+                                check("Fremde sehen die Anhänge nicht", seen.rows.length === 0 && direct.rows[0]?.a === false && direct.rows[0]?.b === false, seen.error || JSON.stringify({ seen: seen.rows, direct: direct.rows[0] }));
+                            });
+                            await as(null, async () => {
+                                const seen = await q(`select name from storage.objects where bucket_id = 'chat_attachments'`);
+                                check("Gäste sehen keine Anhänge", seen.error !== null || seen.rows.length === 0, seen.error || JSON.stringify(seen.rows));
+                            });
+                            await withClaims(MOD, "aal2", async () => {
+                                const seen = await q(`select count(*) as n from storage.objects where bucket_id = 'chat_attachments' and name in ('${NEW}', 'chat_alt_123.jpg')`);
+                                check("Moderation sieht Anhänge (Prüfung von Meldungen)", Number(seen.rows[0]?.n) === 2, seen.error || String(seen.rows[0]?.n));
+                            });
+                            await withClaims(MOD, "aal1", async () => {
+                                const seen = await q(`select count(*) as n from storage.objects where bucket_id = 'chat_attachments'`);
+                                check("Ohne Zwei-Faktor sieht die Moderation nichts", Number(seen.rows[0]?.n) === 0, seen.error || String(seen.rows[0]?.n));
+                            });
+                            // Gesperrt: auch der eigene Chat ist zu
+                            await db.exec(`insert into public.user_bans (user_id, banned_until, reason) values ('${U.max}', now() + interval '1 day', 'Test 032')`);
+                            await as(U.max, async () => {
+                                const seen = await q(`select count(*) as n from storage.objects where bucket_id = 'chat_attachments'`);
+                                check("Gesperrte Konten sehen keine Anhänge", seen.error !== null || Number(seen.rows[0]?.n) === 0, seen.error || String(seen.rows[0]?.n));
+                            });
+                            await db.exec(`delete from public.user_bans where user_id = '${U.max}' and reason = 'Test 032'`);
                         }
                     }
                 }

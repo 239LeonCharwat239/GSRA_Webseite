@@ -24,6 +24,29 @@ document.addEventListener("DOMContentLoaded", async () => {
     };
     const nameOf = (id) => profiles[id]?.username || "Unbekannt";
 
+    // Links zu Chat-Anhängen (privater Speicher, SQL 032): kurzlebige Adresse holen, sobald sie angezeigt werden;
+    // beim Klick auf einen abgelaufenen Link wird sie neu geholt
+    if (list && window.gsraChatMedia) {
+        const media = window.gsraChatMedia;
+        const signLinks = async () => {
+            const links = [...list.querySelectorAll("a[data-chat-media]:not([data-signed])")];
+            if (!links.length) return;
+            links.forEach(a => { a.dataset.signed = String(Date.now()); });
+            await media.sign(links.map(a => a.dataset.chatMedia));
+            links.forEach(a => { a.href = media.url(a.dataset.chatMedia); });
+        };
+        new MutationObserver(signLinks).observe(list, { childList: true, subtree: true });
+        list.addEventListener("click", async (e) => {
+            const a = e.target.closest("a[data-chat-media]");
+            if (!a || !media.pathOf(a.dataset.chatMedia)) return;
+            if (Date.now() - Number(a.dataset.signed || 0) < 90 * 60 * 1000 && a.href !== a.dataset.chatMedia) return;
+            e.preventDefault();
+            a.href = await media.signOne(a.dataset.chatMedia);
+            a.dataset.signed = String(Date.now());
+            window.open(a.href, "_blank", "noopener");
+        });
+    }
+
     // --- Zugang: angemeldet und Administrator ---
     const { data: { session } } = await client.auth.getSession();
     if (!session?.user) {
@@ -140,10 +163,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Nur echte Webadressen verlinken (kein „javascript:“ o. Ä. aus manipulierten Nachrichten)
     const safeUrl = (url) => (/^https?:\/\//i.test(String(url || "").trim()) ? String(url).trim() : "#");
 
+    // Anhänge liegen privat (SQL 032): die Links bekommen ihre kurzlebige Adresse beim Anzeigen (signMediaLinks)
+    const mediaLink = (url, label) => `<a href="${escapeHtml(safeUrl(url))}" data-chat-media="${escapeHtml(safeUrl(url))}" target="_blank" rel="noopener">${label}</a>`;
     function mediaHtml(imageUrl, audioUrl, transcript) {
         let html = "";
-        if (imageUrl) html += `<span class="admin-msg-media"><i class="fa-solid fa-photo-film"></i> Medien: ${imageUrl.split(",").map((url, i) => `<a href="${escapeHtml(safeUrl(url))}" target="_blank" rel="noopener">Datei ${i + 1}</a>`).join(", ")}</span>`;
-        if (audioUrl) html += `<span class="admin-msg-media"><i class="fa-solid fa-microphone"></i> <a href="${escapeHtml(safeUrl(audioUrl))}" target="_blank" rel="noopener">Sprachnachricht anhören</a></span>`;
+        if (imageUrl) html += `<span class="admin-msg-media"><i class="fa-solid fa-photo-film"></i> Medien: ${imageUrl.split(",").map((url, i) => mediaLink(url.trim(), `Datei ${i + 1}`)).join(", ")}</span>`;
+        if (audioUrl) html += `<span class="admin-msg-media"><i class="fa-solid fa-microphone"></i> ${mediaLink(audioUrl, "Sprachnachricht anhören")}</span>`;
         if (transcript) html += `<span class="admin-msg-transcript"><i class="fa-solid fa-closed-captioning"></i> „${escapeHtml(transcript)}“</span>`;
         return html;
     }

@@ -270,7 +270,9 @@ async function sendVoiceRecording() {
 
     try {
         const ext = result.type.includes("mp4") ? "m4a" : (result.type.includes("ogg") ? "ogg" : "webm");
-        const fileName = `voice_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
+        const baseName = `voice_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
+        // Privater Speicher (SQL 032): Ordner des Chats und eigener Unterordner
+        const fileName = window.gsraChatMedia ? window.gsraChatMedia.uploadPath(rec.chatId, currentUser.id, baseName) : baseName;
         const { error: uploadErr } = await supabase.storage.from("chat_attachments").upload(fileName, result.blob, { contentType: result.type });
         if (uploadErr) throw uploadErr;
         const { data: pubData } = supabase.storage.from("chat_attachments").getPublicUrl(fileName);
@@ -361,7 +363,18 @@ function getVoicePlayer(msg) {
     if (player && player.url === msg.audio_url) return player;
     const audio = new Audio();
     audio.preload = "none";
-    audio.src = msg.audio_url;
+    // Privater Speicher (SQL 032): kurzlebiger Link; ist er abgelaufen, einmal neu holen und weiterspielen
+    const media = window.gsraChatMedia;
+    audio.src = media ? media.url(msg.audio_url) : msg.audio_url;
+    let renewed = false;
+    audio.addEventListener("error", async () => {
+        if (renewed || !media?.pathOf(msg.audio_url)) return;
+        renewed = true;
+        const wasPlaying = !audio.paused;
+        audio.src = await media.signOne(msg.audio_url);
+        if (wasPlaying) audio.play().catch(() => {});
+    });
+    audio.addEventListener("loadedmetadata", () => { renewed = false; }); // nach erfolgreichem Laden darf später erneut erneuert werden
     player = { audio, url: msg.audio_url, duration: Number(msg.voice_duration) || 0, rate: 1, ui: null };
     const refresh = () => player.ui?.();
     audio.addEventListener("timeupdate", refresh);

@@ -2259,6 +2259,10 @@ function appendWelcomeMessage(msg) {
 
 async function renderMessages(messages, chatId = activeChatId) {
     if (!chatMessages) return;
+    // Kurzlebige Links für alle Anhänge auf einmal holen (privater Speicher, SQL 032)
+    if (window.gsraChatMedia) {
+        await window.gsraChatMedia.sign(messages.flatMap(m => [...String(m.image_url || "").split(","), m.audio_url || ""]).map(u => u.trim()).filter(Boolean));
+    }
     chatMediaItems = [];
     // „Für mich gelöschte“ Nachrichten ausblenden; offene Verwarnungen bleiben oben im Chat angeheftet
     messages = messages.filter(m => !hiddenMessageIds.has(String(m.id)));
@@ -2694,7 +2698,8 @@ async function appendSingleMessage(msg, isSystem = false) {
     }
 
     if (!isDeleted && msg.image_url) {
-        const urls = msg.image_url.split(",").map(u => u.trim()).filter(Boolean);
+        const toShow = (u) => (window.gsraChatMedia ? window.gsraChatMedia.url(u) : u);
+        const urls = msg.image_url.split(",").map(u => u.trim()).filter(Boolean).map(toShow);
         const displayCount = Math.min(urls.length, 4);
         const gridContainer = document.createElement("div");
         gridContainer.className = `wa-media-grid count-${displayCount}`;
@@ -3034,7 +3039,9 @@ if (chatForm) {
                 // Fotos verkleinern (höchstens 1920 px, ohne Standortdaten); Videos bleiben unverändert
                 const file = window.gsraShrinkImage ? await window.gsraShrinkImage(original, 1920) : original;
                 const fileExt = file.name.split('.').pop();
-                const fileName = `chat_${Date.now()}_${Math.random().toString(36).substring(2,7)}.${fileExt}`;
+                const baseName = `chat_${Date.now()}_${Math.random().toString(36).substring(2,7)}.${fileExt}`;
+                // Privater Speicher (SQL 032): Ordner des Chats und eigener Unterordner
+                const fileName = window.gsraChatMedia ? window.gsraChatMedia.uploadPath(activeChatId, currentUser.id, baseName) : baseName;
                 const { error: uploadErr } = await supabase.storage.from("chat_attachments").upload(fileName, file);
                 if (uploadErr) throw uploadErr;
                 const { data: pubData } = supabase.storage.from("chat_attachments").getPublicUrl(fileName);
