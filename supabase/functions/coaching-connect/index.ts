@@ -4,11 +4,21 @@
 // Seit 17.11. über Stripes Accounts v2 (für neue Plattformen vorgeschrieben); Status, Bezahlen und Erstatten
 // nutzen weiter die v1-Schnittstellen, die laut Stripe mit v2-Konten funktionieren.
 // Aktionen: "onboarding" (Konto anlegen bzw. Einrichtung fortsetzen → Link zu Stripe), "status" (Stand von Stripe holen).
+// Seit 19.11.: Coaches wählen „Privatperson“ (Standard) oder „mit Gewerbe/Firma“; als Privatperson füllt die GSRA
+// die Kontoart und eine Leistungsbeschreibung vor, damit Stripe keine Fragen zu einem Unternehmen stellt.
 // Benötigte Secrets in Supabase: STRIPE_SECRET_KEY, optional SITE_URL. Stripe Connect muss im Stripe-Dashboard aktiviert sein.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 // Länder, in denen Coaches ein Stripe-Konto eröffnen können (Auswahl auf der Coaching-Seite)
 const COUNTRIES = ["DE", "AT", "CH", "NL", "BE", "LU", "FR", "IT", "ES", "PT", "IE", "PL", "CZ", "DK", "SE", "FI", "NO"];
+// Sprache der Stripe-Einrichtung und der E-Mails von Stripe je Land
+const LOCALES: Record<string, string> = {
+  DE: "de", AT: "de", CH: "de", LU: "de", NL: "nl", BE: "nl", FR: "fr", IT: "it", ES: "es", PT: "pt", IE: "en",
+  PL: "pl", CZ: "cs", DK: "da", SE: "sv", FI: "fi", NO: "nb",
+};
+// Vorausgefüllt, damit Stripe weniger fragt (die Angabe nutzt Stripe nur intern zur Risikoprüfung)
+const PRODUCT_DESCRIPTION = "Sim-Racing-Coaching: Online-Fahrtraining, Setup-Beratung und Rennstrategie für einzelne Kunden, " +
+  "gebucht über die Community-Plattform GSRA (Global Simracing Alliance). Feste Termine, Bezahlung vor dem Coaching.";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -75,24 +85,40 @@ Deno.serve(async (req) => {
     const { data: licensed } = await admin.rpc("coach_license_active", { _user: user.id });
     if (licensed !== true) return json({ error: "Auszahlungen einrichten können Mitglieder mit GSRA-Coach-Lizenz." }, 403);
 
+    // Privatperson (Standard): Stripe überspringt alle Fragen zu Firma und Gewerbe.
+    // Mit Gewerbe oder Firma fragt Stripe die Unternehmensart selbst ab.
+    const privat = String(body.kind || "privat") !== "gewerblich";
+
     let accountId = existing?.stripe_account_id as string | undefined;
+    if (accountId && privat && !existing?.details_submitted) {
+      // Einrichtung angefangen, aber noch nicht abgeschickt: als Privatperson vorausfüllen (wenn Stripe es noch zulässt)
+      const res = await stripeV2(`accounts/${accountId}`, {
+        identity: { entity_type: "individual" },
+        defaults: { profile: { product_description: PRODUCT_DESCRIPTION } },
+      });
+      if (!res.ok) console.error("Stripe (Vorausfüllen übersprungen):", (await res.json().catch(() => ({})))?.error?.message);
+    }
     if (!accountId) {
       const country = String(body.country || "DE").toUpperCase();
       if (!COUNTRIES.includes(country)) return json({ error: "Für dieses Land ist die Auszahlung noch nicht möglich." }, 400);
       // Accounts v2 (Stripe legt neue Plattformen darauf fest; v1 ist für neue Konten gesperrt).
       // fees_collector "stripe": Stripe zieht die Zahlungsgebühr direkt beim Coach ab (Entscheidung 16.11.),
       // losses_collector "stripe": Stripe haftet für negative Salden, dashboard "full": eigenes Stripe-Dashboard.
-      // Die Angaben zur Person bzw. Firma fragt Stripe auf seiner Einrichtungsseite selbst ab.
+      // Name, Geburtsdatum, Adresse, Bankverbindung und Ausweis fragt Stripe selbst ab (gesetzlich vorgeschrieben).
       const { data: profile } = await admin.from("profiles").select("username").eq("id", user.id).maybeSingle();
       const res = await stripeV2("accounts", {
         ...(user.email ? { contact_email: user.email } : {}),
         display_name: String(profile?.username || "GSRA-Coach").slice(0, 100),
-        identity: { country: country.toLowerCase() },
+        identity: { country: country.toLowerCase(), ...(privat ? { entity_type: "individual" } : {}) },
         configuration: { merchant: { capabilities: { card_payments: { requested: true } } } },
-        defaults: { responsibilities: { fees_collector: "stripe", losses_collector: "stripe" } },
+        defaults: {
+          responsibilities: { fees_collector: "stripe", losses_collector: "stripe" },
+          profile: { product_description: PRODUCT_DESCRIPTION },
+          ...(LOCALES[country] ? { locales: [LOCALES[country]] } : {}),
+        },
         dashboard: "full",
         metadata: { gsra_user_id: user.id },
-      }, `gsra-coach-v2-${user.id}-${country}`);
+      }, `gsra-coach-v2b-${user.id}-${country}-${privat ? "privat" : "gewerblich"}`);
       const account = await res.json();
       if (!res.ok) {
         console.error("Stripe-Fehler:", account?.error?.message);

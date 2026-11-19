@@ -1544,10 +1544,13 @@
     }
 
     // Stripe jetzt einrichten bzw. fortsetzen (Land nur beim ersten Mal)
-    async function startStripeOnboarding(btn, country) {
+    async function startStripeOnboarding(btn, country, kind) {
         btn.disabled = true;
         try {
-            const res = await invokeFn("coaching-connect", { action: "onboarding", country: country || payoutData?.country || "DE" });
+            const res = await invokeFn("coaching-connect", {
+                action: "onboarding", country: country || payoutData?.country || "DE",
+                kind: kind || btn.closest(".co-payout")?.querySelector(".co-payout-kind")?.value || "privat"
+            });
             if (!res?.url) throw new Error("Die Einrichtung bei Stripe konnte nicht geöffnet werden.");
             window.location.href = res.url;
         } catch (err) {
@@ -1601,6 +1604,14 @@
                 : prominent
                     ? "Ohne Stripe-Konto können Kunden deine Coachings nicht bezahlen. Einmal verbinden, ein paar Minuten – das Geld geht direkt an dich."
                     : "Damit Kunden bezahlen können, verbindest du einmalig ein Stripe-Konto. Das Geld geht direkt an dich; die Stripe-Gebühren trägst du, die GSRA behält von deinem Preis nichts ein."));
+            // Was Stripe wissen will – ehrlich und kurz, damit niemand von einer „Firma“ abgeschreckt wird
+            const steps = el("ul", "co-payout-steps");
+            [["fa-user", "Als Privatperson brauchst du kein Gewerbe und keine Firma."],
+                ["fa-id-card", "Stripe fragt einmalig Name, Geburtsdatum, Adresse, Bankverbindung (IBAN) und meist ein Ausweisfoto – gesetzlich vorgeschrieben."],
+                ["fa-key", "Du legst dabei ein eigenes Stripe-Login an; so siehst du jederzeit deine Einnahmen."],
+                ["fa-stopwatch", "Dauert etwa 5 Minuten. Die Beschreibung deiner Tätigkeit füllt die GSRA für dich aus."]]
+                .forEach(([icon, line]) => steps.appendChild(iconText("li", "", icon, line)));
+            text.appendChild(steps);
             let country = null;
             if (!data) {
                 country = document.createElement("select");
@@ -1609,9 +1620,19 @@
                 PAYOUT_COUNTRIES.forEach(([code, name]) => country.add(new Option(name, code)));
                 actions.appendChild(country);
             }
+            // Privatperson (Standard) oder mit Gewerbe/Firma – nur solange bei Stripe noch nichts abgeschickt ist
+            let kind = null;
+            if (!data?.details_submitted) {
+                kind = document.createElement("select");
+                kind.className = "co-payout-country co-payout-kind";
+                kind.setAttribute("aria-label", "Du coachst als");
+                kind.add(new Option("Als Privatperson", "privat"));
+                kind.add(new Option("Mit Gewerbe oder Firma", "gewerblich"));
+                actions.appendChild(kind);
+            }
             const start = iconText("button", "co-btn primary", "fa-arrow-right", data ? "Weiter bei Stripe" : prominent ? "Jetzt mit Stripe verbinden" : "Mit Stripe einrichten");
             start.type = "button";
-            start.addEventListener("click", () => startStripeOnboarding(start, country?.value));
+            start.addEventListener("click", () => startStripeOnboarding(start, country?.value, kind?.value));
             actions.appendChild(start);
             if (data) {
                 const check = iconText("button", "co-btn ghost", "fa-rotate", "Stand prüfen");

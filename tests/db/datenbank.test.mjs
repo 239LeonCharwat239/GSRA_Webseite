@@ -9,9 +9,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL] =
-    Array.from({ length: 30 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 30);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL] =
+    Array.from({ length: 31 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 31);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -1809,6 +1809,32 @@ if (MODERATION_SQL) {
                                 const slotsFn = await q(`select * from public.coach_slots('${U.max}', 60, current_date, 7)`);
                                 const free = await q(`select public.coach_time_free('${U.max}', now(), 60)`);
                                 check("Mitglieder: interne Kalender-Funktionen gesperrt", slotsFn.error !== null && free.error !== null, slotsFn.error || free.error || "durchgelassen!");
+                            });
+                        }
+
+                        // --- 031: alle Sprachen (Format statt fester Liste) ---
+                        if (ALLE_SPRACHEN_SQL) {
+                            await as(K3, async () => {
+                                const before = await q(`update public.profiles set languages = array['sw', 'he'] where id = '${K3}'`);
+                                check("Vorher: Suaheli und Hebräisch nicht erlaubt (feste Liste aus 029)", before.error !== null, before.error || "durchgelassen!");
+                            });
+                            await db.exec(readFileSync(ALLE_SPRACHEN_SQL, "utf8"));
+                            const ctl31 = await db.exec(readFileSync(ALLE_SPRACHEN_SQL, "utf8")); // zweiter Lauf
+                            const rows31 = ctl31[ctl31.length - 1].rows;
+                            console.log("Kontrolle 031:\n  " + rows31.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+                            check("Kontrolle 031: Sprach- und Länderregel", rows31.map(r => r.ergebnis).join(",") === "bereit,bereit", rows31.map(r => r.ergebnis).join(", "));
+                            await as(K3, async () => {
+                                const ok = await q(`update public.profiles set languages = array['sw', 'he', 'fa', 'de'], country = 'KE' where id = '${K3}' returning languages, country`);
+                                check("Nachher: alle Sprachcodes und Länder speicherbar", ok.error === null && ok.rows[0]?.languages?.length === 4 && ok.rows[0]?.country === "KE", ok.error || JSON.stringify(ok.rows[0]));
+                                const tooMany = await q(`update public.profiles set languages = array['de','en','fr','es','it','nl','pl','pt','tr'] where id = '${K3}'`);
+                                const names = await q(`update public.profiles set languages = array['Deutsch'] where id = '${K3}'`);
+                                const upper = await q(`update public.profiles set languages = array['DE'] where id = '${K3}'`);
+                                const nul = await q(`update public.profiles set languages = array['de', null] where id = '${K3}'`);
+                                const inject = await q(`update public.profiles set languages = array['de,en'] where id = '${K3}'`);
+                                check("Weiterhin abgelehnt: mehr als 8, Namen, Großbuchstaben, leere Einträge, Kommas",
+                                    [tooMany, names, upper, nul, inject].every(r => r.error !== null), [tooMany, names, upper, nul, inject].map(r => r.error ? "abgelehnt" : "DURCHGELASSEN").join(", "));
+                                const empty = await q(`update public.profiles set languages = '{}' where id = '${K3}' returning languages`);
+                                check("Keine Sprache angeben bleibt möglich", empty.error === null && empty.rows[0]?.languages?.length === 0, empty.error || JSON.stringify(empty.rows[0]));
                             });
                         }
                     }

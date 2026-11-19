@@ -259,32 +259,93 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (savedLinks.length === 0) addSocialRow();
         if (addSocialLinkBtn) addSocialLinkBtn.addEventListener("click", () => addSocialRow()?.focus());
 
-        // Nation und Sprachen (029): Auswahlliste und Sprach-Chips (höchstens 8)
-        const countrySelect = document.getElementById("editCountry");
+        // Nation und Sprachen (029/031): alle Länder und Sprachen, zum Eintippen mit Vorschlägen (höchstens 8 Sprachen)
+        const countryInput = document.getElementById("editCountry");
         const languageBox = document.getElementById("editLanguages");
+        const languageInput = document.getElementById("editLanguageInput");
+        const languageQuick = document.getElementById("editLanguageQuick");
         const chosenLanguages = new Set(Array.isArray(profile?.languages) ? profile.languages : []);
         const profileHasOrigin = profile && Object.prototype.hasOwnProperty.call(profile, "languages");
-        if (countrySelect) {
-            (window.GSRA_COUNTRIES || []).forEach(([code, label]) => countrySelect.add(new Option(label, code)));
-            countrySelect.value = profile?.country || "";
+        const countries = window.GSRA_COUNTRIES || [];
+        const languages = window.GSRA_LANGUAGES || [];
+        const countryByName = new Map(countries.map(([code, label]) => [label.toLocaleLowerCase("de"), code]));
+        const languageByName = new Map(languages.map(([code, label]) => [label.toLocaleLowerCase("de"), code]));
+        const fillDatalist = (id, entries) => {
+            const list = document.getElementById(id);
+            if (list) entries.forEach(([, label]) => list.appendChild(new Option(label)));
+        };
+        fillDatalist("countryOptions", countries);
+        fillDatalist("languageOptions", languages);
+        // Eingetippter Ländername → Code (leer = keine Angabe, unbekannt = Hinweis beim Speichern)
+        const countryCode = () => {
+            const value = (countryInput?.value || "").trim();
+            return value ? countryByName.get(value.toLocaleLowerCase("de")) || null : "";
+        };
+        if (countryInput) {
+            countryInput.value = profile?.country && typeof window.gsraCountryName === "function" ? window.gsraCountryName(profile.country) : "";
+            countryInput.addEventListener("input", () => countryInput.classList.toggle("invalid", countryCode() === null && countryInput.value.trim().length > 3));
+            countryInput.addEventListener("change", () => countryInput.classList.toggle("invalid", countryCode() === null));
         }
-        if (languageBox) {
-            (window.GSRA_LANGUAGES || []).forEach(([code, label]) => {
+
+        const addLanguage = (code) => {
+            if (chosenLanguages.has(code)) return true;
+            if (chosenLanguages.size >= 8) {
+                showToast("Du kannst höchstens 8 Sprachen auswählen.", "error");
+                return false;
+            }
+            chosenLanguages.add(code);
+            renderLanguages();
+            return true;
+        };
+        const renderLanguages = () => {
+            if (!languageBox) return;
+            languageBox.replaceChildren();
+            if (!chosenLanguages.size) {
+                const none = document.createElement("span");
+                none.className = "dash-lang-none";
+                none.textContent = "Noch keine Sprache gewählt";
+                languageBox.appendChild(none);
+            }
+            chosenLanguages.forEach(code => {
                 const chip = document.createElement("button");
                 chip.type = "button";
-                chip.className = `dash-lang-chip${chosenLanguages.has(code) ? " active" : ""}`;
-                chip.setAttribute("aria-pressed", String(chosenLanguages.has(code)));
-                chip.textContent = label;
+                chip.className = "dash-lang-chip active";
+                chip.title = "Sprache entfernen";
+                chip.textContent = typeof window.gsraLanguageName === "function" ? window.gsraLanguageName(code) : code;
+                chip.insertAdjacentHTML("beforeend", ' <i class="fa-solid fa-xmark"></i>');
+                chip.setAttribute("aria-label", `${chip.textContent.trim()} entfernen`);
                 chip.addEventListener("click", () => {
-                    if (!chosenLanguages.has(code) && chosenLanguages.size >= 8) {
-                        showToast("Du kannst höchstens 8 Sprachen auswählen.", "error");
-                        return;
-                    }
-                    if (chosenLanguages.has(code)) chosenLanguages.delete(code); else chosenLanguages.add(code);
-                    chip.classList.toggle("active", chosenLanguages.has(code));
-                    chip.setAttribute("aria-pressed", String(chosenLanguages.has(code)));
+                    chosenLanguages.delete(code);
+                    renderLanguages();
                 });
                 languageBox.appendChild(chip);
+            });
+            // Schnellauswahl: häufige Sprachen, die noch fehlen
+            if (languageQuick) {
+                languageQuick.replaceChildren();
+                (window.GSRA_COMMON_LANGUAGES || []).filter(code => !chosenLanguages.has(code)).forEach(code => {
+                    const quick = document.createElement("button");
+                    quick.type = "button";
+                    quick.className = "dash-lang-chip";
+                    quick.innerHTML = '<i class="fa-solid fa-plus"></i> ';
+                    quick.append(typeof window.gsraLanguageName === "function" ? window.gsraLanguageName(code) : code);
+                    quick.addEventListener("click", () => addLanguage(code));
+                    languageQuick.appendChild(quick);
+                });
+            }
+        };
+        renderLanguages();
+        if (languageInput) {
+            const takeTyped = () => {
+                const code = languageByName.get(languageInput.value.trim().toLocaleLowerCase("de"));
+                if (code && addLanguage(code)) languageInput.value = "";
+                return Boolean(code);
+            };
+            languageInput.addEventListener("input", takeTyped);
+            languageInput.addEventListener("keydown", (e) => {
+                if (e.key !== "Enter") return;
+                e.preventDefault(); // Enter speichert hier nicht das ganze Profil
+                if (languageInput.value.trim() && !takeTyped()) showToast("Bitte wähle eine Sprache aus der Vorschlagsliste.", "error");
             });
         }
 
@@ -328,7 +389,14 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const changes = { username: newUsername, bio: newBio };
                 // Nation und Sprachen nur mitschicken, wenn die Datenbank sie schon kennt (SQL 029)
                 if (profileHasOrigin) {
-                    changes.country = countrySelect?.value || null;
+                    const code = countryCode();
+                    if (code === null) {
+                        countryInput.classList.add("invalid");
+                        countryInput.focus();
+                        showToast("Bitte wähle deine Nation aus der Vorschlagsliste (oder lass das Feld leer).", "error");
+                        return;
+                    }
+                    changes.country = code || null;
                     changes.languages = [...chosenLanguages];
                 }
                 let upsertErr = await saveProfile({ ...changes, social_links: socialLinks });

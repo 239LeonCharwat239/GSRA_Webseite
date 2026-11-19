@@ -38,23 +38,57 @@
         return avg >= 2.5 ? "ideal" : avg >= 1.75 ? "in_ordnung" : avg >= 1 ? "mangelhaft" : "schlecht";
     };
 
-    // Nation und Sprachen (Profil, Dashboard, Coaching) – Codes wie in der Datenbank (029)
-    const COUNTRIES = [["DE", "Deutschland"], ["AT", "Österreich"], ["CH", "Schweiz"], ["NL", "Niederlande"], ["BE", "Belgien"],
-        ["LU", "Luxemburg"], ["FR", "Frankreich"], ["IT", "Italien"], ["ES", "Spanien"], ["PT", "Portugal"], ["GB", "Vereinigtes Königreich"],
-        ["IE", "Irland"], ["PL", "Polen"], ["CZ", "Tschechien"], ["SK", "Slowakei"], ["HU", "Ungarn"], ["SI", "Slowenien"], ["HR", "Kroatien"],
-        ["RO", "Rumänien"], ["BG", "Bulgarien"], ["GR", "Griechenland"], ["DK", "Dänemark"], ["SE", "Schweden"], ["NO", "Norwegen"],
-        ["FI", "Finnland"], ["EE", "Estland"], ["LV", "Lettland"], ["LT", "Litauen"], ["TR", "Türkei"], ["UA", "Ukraine"], ["US", "USA"],
-        ["CA", "Kanada"], ["BR", "Brasilien"], ["MX", "Mexiko"], ["AR", "Argentinien"], ["AU", "Australien"], ["NZ", "Neuseeland"],
-        ["JP", "Japan"], ["KR", "Südkorea"], ["CN", "China"], ["IN", "Indien"], ["ZA", "Südafrika"], ["AE", "Vereinigte Arabische Emirate"]];
-    const LANGUAGES = [["de", "Deutsch"], ["en", "Englisch"], ["fr", "Französisch"], ["es", "Spanisch"], ["it", "Italienisch"],
-        ["nl", "Niederländisch"], ["pl", "Polnisch"], ["pt", "Portugiesisch"], ["tr", "Türkisch"], ["cs", "Tschechisch"], ["sk", "Slowakisch"],
-        ["da", "Dänisch"], ["sv", "Schwedisch"], ["no", "Norwegisch"], ["fi", "Finnisch"], ["hu", "Ungarisch"], ["ro", "Rumänisch"],
-        ["bg", "Bulgarisch"], ["hr", "Kroatisch"], ["sl", "Slowenisch"], ["el", "Griechisch"], ["uk", "Ukrainisch"], ["ru", "Russisch"],
-        ["ar", "Arabisch"], ["ja", "Japanisch"], ["zh", "Chinesisch"], ["ko", "Koreanisch"]];
+    // Nation und Sprachen (Profil, Dashboard, Coaching) – alle Länder (ISO 3166-1) und Sprachen (ISO 639-1).
+    // Die deutschen Namen liefert der Browser (Intl.DisplayNames); die Datenbank speichert nur die Codes (029/031).
+    const COUNTRY_CODES = ("AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ " +
+        "CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF " +
+        "GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW " +
+        "KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL " +
+        "NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST " +
+        "SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS XK YE YT ZA ZM ZW").split(" ");
+    const LANGUAGE_CODES = ("aa ab af ak am an ar as av ay az ba be bg bi bm bn bo br bs ca ce ch co cr cs cu cv cy da de dv dz ee el en eo " +
+        "es et eu fa ff fi fj fo fr fy ga gd gl gn gu gv ha he hi ho hr ht hu hy hz ia id ie ig ii ik io is it iu ja jv ka kg ki kj kk kl km " +
+        "kn ko kr ks ku kv kw ky la lb lg li ln lo lt lu lv mg mh mi mk ml mn mr ms mt my na nb nd ne ng nl nn no nr nv ny oc oj om or os pa " +
+        "pi pl ps pt qu rm rn ro ru rw sa sc sd se sg si sk sl sm sn so sq sr ss st su sv sw ta te tg th ti tk tl tn to tr ts tt tw ty ug uk " +
+        "ur uz ve vi vo wa wo xh yi yo za zh zu").split(" ");
+    // Falls der Browser keine Namen liefern kann: wenigstens die häufigsten auf Deutsch
+    const FALLBACK_NAMES = {
+        DE: "Deutschland", AT: "Österreich", CH: "Schweiz", NL: "Niederlande", BE: "Belgien", FR: "Frankreich", IT: "Italien", ES: "Spanien",
+        GB: "Vereinigtes Königreich", US: "Vereinigte Staaten", PL: "Polen", XK: "Kosovo",
+        de: "Deutsch", en: "Englisch", fr: "Französisch", es: "Spanisch", it: "Italienisch", nl: "Niederländisch", pl: "Polnisch",
+        pt: "Portugiesisch", tr: "Türkisch", ru: "Russisch",
+        // Seltene Sprachen, die manche Browser nicht benennen können
+        aa: "Afar", ab: "Abchasisch", av: "Awarisch", ba: "Baschkirisch", bi: "Bislama", bo: "Tibetisch", ce: "Tschetschenisch",
+        ch: "Chamorro", cr: "Cree", cu: "Kirchenslawisch", cv: "Tschuwaschisch", dz: "Dzongkha", ff: "Ful", fj: "Fidschi",
+        gv: "Manx", ho: "Hiri Motu", hz: "Herero", ie: "Interlingue", ii: "Yi", ik: "Inupiak", io: "Ido", iu: "Inuktitut",
+        kg: "Kongolesisch", ki: "Kikuyu", kj: "Kwanyama", kl: "Grönländisch", kr: "Kanuri", ks: "Kaschmiri", kv: "Komi",
+        kw: "Kornisch", li: "Limburgisch", lu: "Kiluba", mh: "Marshallesisch", na: "Nauruisch", nd: "Nord-Ndebele", ng: "Ndonga",
+        nr: "Süd-Ndebele", nv: "Navajo", oj: "Ojibwe", os: "Ossetisch", pi: "Pali", rn: "Kirundi", sc: "Sardisch", se: "Nordsamisch",
+        sg: "Sango", ss: "Swazi", ty: "Tahitisch", ve: "Venda", vo: "Volapük", za: "Zhuang"
+    };
+    const displayNames = (type, lang = "de") => {
+        try { return new Intl.DisplayNames([lang], { type, fallback: "none" }); } catch (e) { return null; }
+    };
+    // Deutscher Name; seltene Sprachen kennt der Browser teils nur auf Englisch
+    const regionNames = [displayNames("region"), displayNames("region", "en")];
+    const languageNames = [displayNames("language"), displayNames("language", "en")];
+    const nameFor = (namesList, code) => {
+        for (const names of namesList) {
+            let name = null;
+            try { name = names?.of(code) || null; } catch (e) { name = null; }
+            if (name && name !== code) return name;
+        }
+        return FALLBACK_NAMES[code] || null;
+    };
+    const byName = (a, b) => a[1].localeCompare(b[1], "de");
+    const COUNTRIES = COUNTRY_CODES.map(c => [c, nameFor(regionNames, c)]).filter(([, n]) => n).sort(byName);
+    const LANGUAGES = LANGUAGE_CODES.map(c => [c, nameFor(languageNames, c)]).filter(([, n]) => n).sort(byName);
+    // Häufig gewählt: oben im Dashboard als Schnellauswahl
+    window.GSRA_COMMON_LANGUAGES = ["de", "en", "fr", "es", "it", "nl", "pl", "pt", "tr", "ru"];
     window.GSRA_COUNTRIES = COUNTRIES;
     window.GSRA_LANGUAGES = LANGUAGES;
-    const countryName = (code) => (COUNTRIES.find(([k]) => k === code) || [null, code])[1];
-    const languageName = (code) => (LANGUAGES.find(([k]) => k === code) || [null, code])[1];
+    const countryName = (code) => (COUNTRIES.find(([k]) => k === code) || [null, nameFor(regionNames, code) || code])[1];
+    const languageName = (code) => (LANGUAGES.find(([k]) => k === code) || [null, nameFor(languageNames, code) || code])[1];
     window.gsraCountryName = countryName;
     window.gsraLanguageName = languageName;
 
