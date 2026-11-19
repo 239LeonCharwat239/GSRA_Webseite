@@ -21,6 +21,13 @@ Variante mit der alten `setups`-Tabelle, wie sie in der echten Datenbank ursprü
 
 Am Ende steht `ALLE PRÜFUNGEN BESTANDEN` (Exit-Code 0) oder die Anzahl der Fehler (Exit-Code 1).
 
+## Automatisch bei jedem Push
+
+GitHub führt beide Varianten und einen Syntax-Check aller Webseiten-Skripte bei jedem Push aus
+(`.github/workflows/pruefungen.yml`). Ergebnis: grüner Haken oder rotes Kreuz am Commit, unter
+„Actions“ im Repository steht, welche Prüfung fehlgeschlagen ist. Abhängigkeiten werden exakt nach
+`package-lock.json` installiert (`npm ci`).
+
 ## Neues Skript hinzufügen
 
 1. Neue Datei als `supabase/migrations/0NN_name.sql` anlegen (fortlaufende Nummer). Am Ende

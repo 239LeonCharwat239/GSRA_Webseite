@@ -5681,6 +5681,73 @@ textarea.gsra-dialog-input {
 .dash-lang-quick .dash-lang-chip i { color: var(--gsra-blue); font-size: 10px; }
 .dash-form #editCountry.invalid { border-color: #ff4d4d; box-shadow: 0 0 0 3px rgba(255, 77, 77, 0.2); }
 
+/* Auswahlliste mit Suche (Nation, Sprachen) – eigene Liste statt der Browser-Vorschläge */
+.gsra-combo { position: relative; }
+.gsra-combo.open > input { border-color: var(--gsra-blue); box-shadow: 0 0 0 3px rgba(0, 85, 255, 0.2); }
+.gsra-combo-list {
+    position: absolute;
+    z-index: 60;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    max-height: 264px;
+    margin: 0;
+    padding: 6px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    list-style: none;
+    background: linear-gradient(180deg, rgba(0, 85, 255, 0.07) 0%, rgba(0, 85, 255, 0) 40%), #0f1116;
+    border: 1px solid rgba(0, 85, 255, 0.55);
+    border-radius: 10px;
+    box-shadow: 0 16px 34px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 85, 255, 0.6) transparent;
+    animation: gsraComboIn 0.12s ease-out;
+}
+.gsra-combo-list[hidden] { display: none; }
+.gsra-combo-list::-webkit-scrollbar { width: 8px; }
+.gsra-combo-list::-webkit-scrollbar-thumb { background: rgba(0, 85, 255, 0.55); border-radius: 8px; }
+.gsra-combo-list::-webkit-scrollbar-track { background: transparent; }
+@keyframes gsraComboIn { from { transform: translateY(-4px); } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .gsra-combo-list { animation: none; } }
+.gsra-combo-head {
+    padding: 8px 10px 4px;
+    color: var(--gsra-yellow);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+}
+.gsra-combo-head + .gsra-combo-option { margin-top: 2px; }
+.gsra-combo-option + .gsra-combo-head { margin-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.07); padding-top: 10px; }
+.gsra-combo-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 7px;
+    color: #e3e5eb;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.12s ease;
+}
+.gsra-combo-option:hover { background: rgba(255, 255, 255, 0.05); }
+.gsra-combo-option.active { background: rgba(0, 85, 255, 0.25); color: #fff; box-shadow: inset 3px 0 0 var(--gsra-blue); }
+.gsra-combo-option mark { background: none; color: var(--gsra-yellow); font-weight: 800; }
+.gsra-combo-code {
+    flex: 0 0 auto;
+    padding: 1px 6px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 4px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+}
+.gsra-combo-option.active .gsra-combo-code { border-color: rgba(0, 85, 255, 0.7); color: #cfd8ff; }
+.gsra-combo-empty { padding: 10px; color: var(--text-muted); font-size: 13px; }
+
 .gsra-profile-presence {
     display: flex;
     flex-wrap: wrap;
@@ -11098,6 +11165,39 @@ select option {
 .co-cal-status.dirty { color: var(--gsra-yellow); }
 .co-cal-badge { color: #00ff88; font-weight: 700; }
 .co-when.pending { color: var(--gsra-yellow); }
+
+/* Coaching: „Dein nächstes Coaching“ und „In meinen Kalender“ */
+.co-next {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0 0 18px;
+    padding: 16px 18px;
+    background: linear-gradient(120deg, rgba(0, 85, 255, 0.16) 0%, rgba(0, 85, 255, 0.03) 60%), #15161a;
+    border: 1px solid rgba(0, 85, 255, 0.5);
+    border-left: 4px solid var(--gsra-blue);
+    border-radius: 12px;
+    text-align: left;
+}
+.co-next[hidden] { display: none; }
+.co-next.soon { border-color: rgba(255, 204, 0, 0.55); border-left-color: var(--gsra-yellow);
+    background: linear-gradient(120deg, rgba(255, 204, 0, 0.13) 0%, rgba(255, 204, 0, 0.02) 60%), #15161a; }
+.co-next-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; }
+.co-next-label { color: var(--gsra-blue); font-size: 12px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; }
+.co-next.soon .co-next-label { color: var(--gsra-yellow); }
+.co-next-label i { margin-right: 6px; }
+.co-next-countdown { padding: 3px 10px; background: rgba(255, 255, 255, 0.08); border-radius: 12px; color: #fff; font-size: 12px; font-weight: 800; }
+.co-next.soon .co-next-countdown { background: var(--gsra-yellow); color: #111; }
+.co-next-title { color: #fff; font-size: 17px; }
+.co-next-paid { color: #00ff88; font-weight: 700; }
+.co-next-open { color: var(--gsra-yellow); font-weight: 700; }
+.co-next-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.co-next-foot .co-link, .co-cal-export .co-link { margin-top: 0; }
+.co-next-hint { margin: 0; color: var(--text-muted); font-size: 12px; }
+.co-next-hint i { margin-right: 6px; color: var(--gsra-blue); }
+.co-cal-export { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; color: var(--text-muted); font-size: 13px; }
+.co-cal-export > span i { margin-right: 6px; color: var(--gsra-blue); }
+.co-cal-export .co-link { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
 
 /* Coaching: Terminauswahl beim Anfragen */
 .co-slots { display: flex; flex-direction: column; gap: 10px; min-width: 0; max-width: 100%; padding: 12px; background: #0f1014; border: 1px solid rgba(0, 85, 255, 0.35); border-radius: 10px; text-align: left; }

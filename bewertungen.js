@@ -87,6 +87,157 @@
     window.GSRA_COMMON_LANGUAGES = ["de", "en", "fr", "es", "it", "nl", "pl", "pt", "tr", "ru"];
     window.GSRA_COUNTRIES = COUNTRIES;
     window.GSRA_LANGUAGES = LANGUAGES;
+    // Auswahlliste mit Suche (Nation, Sprachen): eigene Liste im GSRA-Stil statt der Vorschläge des Browsers.
+    // Immer direkt unter dem Feld, feste Höhe zum Scrollen, Treffer hervorgehoben, mit Pfeiltasten und Enter bedienbar.
+    const fold = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLocaleLowerCase("de");
+    let comboCount = 0;
+    let openCombo = null; // immer nur eine Liste offen
+    document.addEventListener("pointerdown", (e) => {
+        if (openCombo && !openCombo.wrap.contains(e.target)) openCombo.close();
+    });
+    window.gsraCombobox = (input, entries, { onPick, pinned = [], pinnedLabel = "Häufig", allLabel = "Alle", showCode = false } = {}) => {
+        if (!input || !Array.isArray(entries)) return null;
+        const wrap = document.createElement("div");
+        wrap.className = "gsra-combo";
+        input.parentNode.insertBefore(wrap, input);
+        wrap.appendChild(input);
+        const list = document.createElement("ul");
+        const listId = `gsra-combo-${++comboCount}`;
+        list.id = listId;
+        list.className = "gsra-combo-list";
+        list.setAttribute("role", "listbox");
+        list.hidden = true;
+        wrap.appendChild(list);
+        input.removeAttribute("list");
+        input.setAttribute("role", "combobox");
+        input.setAttribute("aria-autocomplete", "list");
+        input.setAttribute("aria-expanded", "false");
+        input.setAttribute("aria-controls", listId);
+
+        let shown = [];
+        let active = -1;
+        const options = () => [...list.querySelectorAll(".gsra-combo-option")];
+        const setActive = (index) => {
+            const all = options();
+            all.forEach(o => o.classList.remove("active"));
+            active = Math.max(-1, Math.min(index, all.length - 1));
+            if (active < 0) { input.removeAttribute("aria-activedescendant"); return; }
+            all[active].classList.add("active");
+            input.setAttribute("aria-activedescendant", all[active].id);
+            all[active].scrollIntoView({ block: "nearest" });
+        };
+        const close = () => {
+            list.hidden = true;
+            wrap.classList.remove("open");
+            input.setAttribute("aria-expanded", "false");
+            setActive(-1);
+            if (openCombo?.wrap === wrap) openCombo = null;
+        };
+        const pick = (entry) => {
+            if (!entry) return;
+            close();
+            if (typeof onPick === "function") onPick(entry[0], entry[1]);
+        };
+        const heading = (text) => {
+            const li = document.createElement("li");
+            li.className = "gsra-combo-head";
+            li.setAttribute("role", "presentation");
+            li.textContent = text;
+            list.appendChild(li);
+        };
+        const render = () => {
+            const raw = input.value.trim();
+            const term = fold(raw);
+            list.replaceChildren();
+            let pinCount = 0;
+            if (!term) {
+                const pin = pinned.map(code => entries.find(([c]) => c === code)).filter(Boolean);
+                pinCount = pin.length;
+                shown = [...pin, ...entries.filter(([c]) => !pinned.includes(c))];
+                if (pinCount) heading(pinnedLabel);
+            } else {
+                // Erst Namen, die mit dem Suchwort beginnen, dann solche mit einem Wort, das so beginnt
+                // („staaten“ findet Vereinigte Staaten; „sch“ findet nicht jede Sprache auf „-isch“). Umlaute egal.
+                const starts = [];
+                const contains = [];
+                entries.forEach(entry => {
+                    const name = fold(entry[1]);
+                    if (name.startsWith(term)) starts.push(entry);
+                    else if (name.split(/[\s\-()/,.]+/).some(word => word.startsWith(term)) || fold(entry[0]) === term) contains.push(entry);
+                });
+                shown = [...starts, ...contains];
+            }
+            if (!shown.length) {
+                const li = document.createElement("li");
+                li.className = "gsra-combo-empty";
+                li.setAttribute("role", "presentation");
+                li.textContent = `Nichts gefunden für „${raw}“`;
+                list.appendChild(li);
+            }
+            const lowerTerm = raw.toLocaleLowerCase("de");
+            shown.forEach(([code, label], i) => {
+                if (pinCount && i === pinCount) heading(allLabel);
+                const li = document.createElement("li");
+                li.id = `${listId}-${i}`;
+                li.className = "gsra-combo-option";
+                li.setAttribute("role", "option");
+                const name = document.createElement("span");
+                // Hervorheben: Treffer am Anfang bzw. am Wortanfang
+                const lowerLabel = label.toLocaleLowerCase("de");
+                const at = !lowerTerm ? -1 : lowerLabel.startsWith(lowerTerm) ? 0
+                    : (() => { const m = new RegExp(`[\\s\\-()/,.]${lowerTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`).exec(lowerLabel); return m ? m.index + 1 : -1; })();
+                if (at >= 0) {
+                    const mark = document.createElement("mark");
+                    mark.textContent = label.slice(at, at + raw.length);
+                    name.append(label.slice(0, at), mark, label.slice(at + raw.length));
+                } else {
+                    name.textContent = label;
+                }
+                li.appendChild(name);
+                if (showCode) {
+                    const badge = document.createElement("span");
+                    badge.className = "gsra-combo-code";
+                    badge.textContent = code;
+                    li.appendChild(badge);
+                }
+                li.addEventListener("mousedown", (e) => e.preventDefault()); // Feld behält den Fokus
+                li.addEventListener("click", () => pick([code, label]));
+                list.appendChild(li);
+            });
+            if (openCombo && openCombo.wrap !== wrap) openCombo.close();
+            openCombo = { wrap, close };
+            list.hidden = false;
+            wrap.classList.add("open");
+            input.setAttribute("aria-expanded", "true");
+            list.scrollTop = 0;
+            setActive(term && shown.length ? 0 : -1);
+        };
+
+        input.addEventListener("focus", render);
+        input.addEventListener("click", () => { if (list.hidden) render(); });
+        input.addEventListener("input", render);
+        input.addEventListener("blur", () => setTimeout(close, 120));
+        input.addEventListener("keydown", (e) => {
+            if (e.key === "ArrowDown") {
+                e.preventDefault();
+                if (list.hidden) render();
+                setActive(active + 1);
+            } else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setActive(active - 1);
+            } else if (e.key === "Enter") {
+                if (list.hidden || !shown.length || !input.value.trim()) return;
+                e.preventDefault(); // Enter wählt aus, statt das Formular abzuschicken
+                pick(shown[active >= 0 ? active : 0]);
+            } else if (e.key === "Escape" && !list.hidden) {
+                e.preventDefault();
+                e.stopPropagation();
+                close();
+            }
+        });
+        return { close, refresh: render };
+    };
+
     const countryName = (code) => (COUNTRIES.find(([k]) => k === code) || [null, nameFor(regionNames, code) || code])[1];
     const languageName = (code) => (LANGUAGES.find(([k]) => k === code) || [null, nameFor(languageNames, code) || code])[1];
     window.gsraCountryName = countryName;

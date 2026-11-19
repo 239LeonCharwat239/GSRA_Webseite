@@ -9,9 +9,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL] =
-    Array.from({ length: 32 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 32);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL] =
+    Array.from({ length: 33 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 33);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -1890,6 +1890,64 @@ if (MODERATION_SQL) {
                                 check("Gesperrte Konten sehen keine Anhänge", seen.error !== null || Number(seen.rows[0]?.n) === 0, seen.error || String(seen.rows[0]?.n));
                             });
                             await db.exec(`delete from public.user_bans where user_id = '${U.max}' and reason = 'Test 032'`);
+                        }
+
+                        // --- 033: Erinnerungen vor dem Termin, alte Anfragen beenden ---
+                        if (ERINNERUNG_SQL) {
+                            await db.exec(readFileSync(ERINNERUNG_SQL, "utf8"));
+                            const ctl33 = await db.exec(readFileSync(ERINNERUNG_SQL, "utf8")); // zweiter Lauf
+                            const rows33 = ctl33[ctl33.length - 1].rows;
+                            console.log("Kontrolle 033:\n  " + rows33.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+                            check("Kontrolle 033: Status, Funktionen, nur Server (Zeitplan braucht pg_cron – im Nachbau nicht vorhanden)",
+                                rows33.slice(0, 3).map(r => r.ergebnis).join(",") === "bereit,bereit,ja" && /^fehlt/.test(rows33[3]?.ergebnis || ""), rows33.map(r => r.ergebnis).join(", "));
+
+                            // Testbuchungen bei Max: fällig in 50 Min. (bezahlt), in 20 Std. (bezahlt), in 10 Std. (angenommen, unbezahlt),
+                            // in 3 Tagen (bezahlt); alte bzw. verpasste Anfragen; eine frische Anfrage
+                            const B = (n) => `33000000-0000-0000-0000-00000000000${n}`;
+                            const row = (n, buyer, status, at, created = "now()") =>
+                                `('${B(n)}', '${U.max}', '${buyer}', 'Erinnerungstest ${n}', 60, 3000, 0, 3000, '${status}', ${at}, ${created})`;
+                            await db.exec(`insert into public.coaching_bookings (id, coach_id, buyer_id, offer_title, duration_minutes, price_cents, fee_cents, total_cents, status, scheduled_at, created_at) values
+                                ${row(1, U.tim, "bezahlt", "now() + interval '50 minutes'")},
+                                ${row(2, U.anna, "bezahlt", "now() + interval '20 hours'")},
+                                ${row(3, K3, "angenommen", "now() + interval '10 hours'")},
+                                ${row(4, U.tim, "bezahlt", "now() + interval '3 days'")},
+                                ${row(5, U.anna, "angefragt", "null", "now() - interval '8 days'")},
+                                ${row(6, K3, "angefragt", "now() + interval '30 minutes'")},
+                                ${row(7, U.anna, "angenommen", "now() - interval '1 hour'")},
+                                ${row(8, U.tim, "angefragt", "now() + interval '5 days'")};
+                                update public.coaching_reminder_runs set last_run = '-infinity'`);
+                            await as(K, async () => {
+                                const run = await q(`select public.coaching_reminder_run()`);
+                                check("Erinnerungen nur für den Server", run.error !== null, run.error || "durchgelassen!");
+                                const tidy = await q(`select public.coaching_expire_stale() as n`);
+                                check("Aufräumen darf jedes Mitglied anstoßen", tidy.error === null, tidy.error || "");
+                            });
+                            await as(null, async () => {
+                                const tidy = await q(`select public.coaching_expire_stale()`);
+                                check("Gäste stoßen nichts an", tidy.error !== null, tidy.error || "durchgelassen!");
+                            });
+                            const st = Object.fromEntries((await q(`select id, status from public.coaching_bookings where id::text like '33000000%'`)).rows.map(r => [r.id.slice(-1), r.status]));
+                            check("Abgelaufen: unbeantwortet nach 7 Tagen, Termin verpasst, angenommen aber nie bezahlt; Rest bleibt",
+                                st[5] === "abgelaufen" && st[6] === "abgelaufen" && st[7] === "abgelaufen" && st[8] === "angefragt" && st[1] === "bezahlt" && st[3] === "angenommen", JSON.stringify(st));
+
+                            await db.exec(`update public.coaching_reminder_runs set last_run = '-infinity'`);
+                            const r1 = (await one(`select public.coaching_reminder_run() as r`)).r;
+                            const mine = (r1?.erinnerungen || []).filter(e => String(e.id).startsWith("33000000"));
+                            const art = Object.fromEntries(mine.map(e => [e.id.slice(-1), e.art]));
+                            check("Fällig: 1 Std. vorher (bezahlt), 24 Std. vorher (bezahlt und unbezahlt) – nicht in 3 Tagen",
+                                r1?.lauf === true && art[1] === "1h" && art[2] === "24h" && art[3] === "24h" && !art[4] && mine.length === 3, JSON.stringify(art));
+                            check("Erinnerung enthält Namen, Titel und Termin", mine.every(e => e.coach_name && e.kunde_name && e.titel && e.termin), JSON.stringify(mine[0]));
+                            const r2 = (await one(`select public.coaching_reminder_run() as r`)).r;
+                            check("Höchstens ein Lauf alle 4 Minuten (zweiter Aufruf geht leer aus)", r2?.lauf === false && (r2?.erinnerungen || []).length === 0, JSON.stringify(r2));
+                            await db.exec(`update public.coaching_reminder_runs set last_run = '-infinity'`);
+                            const r3 = (await one(`select public.coaching_reminder_run() as r`)).r;
+                            const again = (r3?.erinnerungen || []).filter(e => String(e.id).startsWith("33000000"));
+                            check("Jede Erinnerung genau einmal", r3?.lauf === true && again.length === 0, JSON.stringify(again));
+                            const marks = await one(`select reminded_24h_at is not null as tag, reminded_1h_at is not null as stunde from public.coaching_bookings where id = '${B(1)}'`);
+                            check("Nach der 1-Stunden-Erinnerung keine 24-Stunden-Erinnerung mehr", marks.tag === true && marks.stunde === true, JSON.stringify(marks));
+                            const free = await one(`select public.coach_time_free('${U.max}', now() + interval '5 days 2 hours', 60, null) as f,
+                                public.coach_time_free('${U.max}', now() + interval '5 days', 60, null) as busy`);
+                            check("Offene Anfragen blockieren ihre Zeit, abgelaufene nicht (Kalender aus 030)", free.f === true && free.busy === false, JSON.stringify(free));
                         }
                     }
                 }

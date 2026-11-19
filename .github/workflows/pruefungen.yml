@@ -1,0 +1,69 @@
+# GSRA – automatische Prüfungen bei jedem Push (Sicherheitsbericht Nr. 17, Teil 1)
+# 1) Datenbank-Nachbau: spielt alle Skripte aus supabase/migrations zweimal ein und prüft die Sicherheitsregeln
+#    (erlaubte UND verbotene Zugriffe als Gast, Mitglied, Coach, Moderation, Admin) – in beiden Ausgangslagen.
+# 2) JavaScript-Syntax: Jede Datei der Webseite muss fehlerfrei lesbar sein.
+# Schlägt etwas fehl, zeigt GitHub ein rotes Kreuz am Commit (und in GitHub Desktop), bevor jemand es live nutzt.
+# Absicherung: nur Leserechte, Aktionen auf eine feste Version (Commit) gepinnt, Pakete exakt nach package-lock.json.
+name: Prüfungen
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pruefungen-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  datenbank:
+    name: Datenbank-Nachbau (${{ matrix.ausgangslage }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ausgangslage: Standard
+            alt_setups: "0"
+          - ausgangslage: alte Setups-Tabelle
+            alt_setups: "1"
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tests/db/package-lock.json
+      - name: Abhängigkeiten (exakt nach package-lock.json)
+        working-directory: tests/db
+        run: npm ci --ignore-scripts
+      - name: Alle Prüfungen
+        working-directory: tests/db
+        env:
+          ALT_SETUPS: ${{ matrix.alt_setups }}
+        run: node datenbank.test.mjs
+
+  syntax:
+    name: JavaScript-Syntax
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 22
+      - name: Jede Datei der Webseite prüfen
+        run: |
+          fehler=0
+          for f in *.js; do
+            node --check "$f" || { echo "::error file=$f::Syntaxfehler in $f"; fehler=1; }
+          done
+          exit $fehler

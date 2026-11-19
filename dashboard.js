@@ -270,12 +270,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         const languages = window.GSRA_LANGUAGES || [];
         const countryByName = new Map(countries.map(([code, label]) => [label.toLocaleLowerCase("de"), code]));
         const languageByName = new Map(languages.map(([code, label]) => [label.toLocaleLowerCase("de"), code]));
-        const fillDatalist = (id, entries) => {
-            const list = document.getElementById(id);
-            if (list) entries.forEach(([, label]) => list.appendChild(new Option(label)));
-        };
-        fillDatalist("countryOptions", countries);
-        fillDatalist("languageOptions", languages);
+        // Eigene Auswahllisten im GSRA-Stil (bewertungen.js) statt der Vorschläge des Browsers
+        const combo = typeof window.gsraCombobox === "function" ? window.gsraCombobox : () => null;
         // Eingetippter Ländername → Code (leer = keine Angabe, unbekannt = Hinweis beim Speichern)
         const countryCode = () => {
             const value = (countryInput?.value || "").trim();
@@ -285,6 +281,13 @@ document.addEventListener("DOMContentLoaded", async () => {
             countryInput.value = profile?.country && typeof window.gsraCountryName === "function" ? window.gsraCountryName(profile.country) : "";
             countryInput.addEventListener("input", () => countryInput.classList.toggle("invalid", countryCode() === null && countryInput.value.trim().length > 3));
             countryInput.addEventListener("change", () => countryInput.classList.toggle("invalid", countryCode() === null));
+            combo(countryInput, countries, {
+                pinned: ["DE", "AT", "CH"], pinnedLabel: "Häufig", allLabel: "Alle Länder", showCode: true,
+                onPick: (code, label) => {
+                    countryInput.value = label;
+                    countryInput.classList.remove("invalid");
+                }
+            });
         }
 
         const addLanguage = (code) => {
@@ -336,16 +339,23 @@ document.addEventListener("DOMContentLoaded", async () => {
         };
         renderLanguages();
         if (languageInput) {
-            const takeTyped = () => {
-                const code = languageByName.get(languageInput.value.trim().toLocaleLowerCase("de"));
-                if (code && addLanguage(code)) languageInput.value = "";
-                return Boolean(code);
-            };
-            languageInput.addEventListener("input", takeTyped);
+            const languageCombo = combo(languageInput, languages, {
+                pinned: window.GSRA_COMMON_LANGUAGES || [], pinnedLabel: "Häufig", allLabel: "Alle Sprachen",
+                onPick: (code) => {
+                    if (addLanguage(code)) languageInput.value = "";
+                    // Liste offen lassen, damit man gleich die nächste Sprache wählen kann
+                    if (document.activeElement === languageInput) setTimeout(() => languageCombo?.refresh(), 0);
+                }
+            });
             languageInput.addEventListener("keydown", (e) => {
-                if (e.key !== "Enter") return;
+                if (e.key !== "Enter" || e.defaultPrevented) return;
                 e.preventDefault(); // Enter speichert hier nicht das ganze Profil
-                if (languageInput.value.trim() && !takeTyped()) showToast("Bitte wähle eine Sprache aus der Vorschlagsliste.", "error");
+                const code = languageByName.get(languageInput.value.trim().toLocaleLowerCase("de"));
+                if (code) {
+                    if (addLanguage(code)) languageInput.value = "";
+                } else if (languageInput.value.trim()) {
+                    showToast("Bitte wähle eine Sprache aus der Liste.", "error");
+                }
             });
         }
 

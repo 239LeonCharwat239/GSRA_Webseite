@@ -23,7 +23,8 @@
         storniert: ["fa-ban", "Storniert", "off"],
         bezahlt: ["fa-credit-card", "Bezahlt", "ok"],
         erledigt: ["fa-flag-checkered", "Erledigt", "done"],
-        erstattet: ["fa-rotate-left", "Erstattet", "off"]
+        erstattet: ["fa-rotate-left", "Erstattet", "off"],
+        abgelaufen: ["fa-hourglass-end", "Abgelaufen", "off"]   // SQL 033: unbeantwortet oder nie bezahlt
     };
     // Länder für das Stripe-Konto der Coaches (wie in der Server-Funktion coaching-connect)
     const PAYOUT_COUNTRIES = [["DE", "Deutschland"], ["AT", "Österreich"], ["CH", "Schweiz"], ["NL", "Niederlande"], ["BE", "Belgien"],
@@ -1062,6 +1063,100 @@
         showTab("anfragen");
     });
 
+    /* ---------- Termin in den eigenen Kalender (Datei für Outlook, Apple, Thunderbird … oder Google Kalender) ---------- */
+    const icsStamp = (d) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+    const icsText = (s) => String(s || "").replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+    // Lange Zeilen nach RFC 5545 umbrechen (Folgezeilen beginnen mit einem Leerzeichen)
+    const icsFold = (line) => line.length <= 73 ? line : line.match(/.{1,73}/g).join("\r\n ");
+    function calendarEvent(b, role) {
+        const start = new Date(b.scheduled_at);
+        const end = new Date(start.getTime() + b.duration_minutes * 60000);
+        const other = nameOf(role === "buyer" ? b.coach_id : b.buyer_id);
+        const url = `${location.origin}/coaching.html?tab=${role === "buyer" ? "anfragen" : "coach"}`;
+        return {
+            start, end, url,
+            title: role === "buyer" ? `GSRA-Coaching: ${b.offer_title}` : `GSRA-Coaching mit ${other}: ${b.offer_title}`,
+            details: role === "buyer" ? `Coaching mit ${other}. Absprachen über den GSRA-Messenger.` : `Du coachst ${other}. Absprachen über den GSRA-Messenger.`
+        };
+    }
+    function downloadIcs(b, role) {
+        const e = calendarEvent(b, role);
+        const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//GSRA//Coaching//DE", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
+            "BEGIN:VEVENT", `UID:${b.id}@gsra-coaching`, `DTSTAMP:${icsStamp(new Date())}`, `DTSTART:${icsStamp(e.start)}`, `DTEND:${icsStamp(e.end)}`,
+            `SUMMARY:${icsText(e.title)}`, `DESCRIPTION:${icsText(`${e.details}\n${e.url}`)}`, `URL:${e.url}`,
+            "BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${icsText(e.title)}`, "TRIGGER:-PT1H", "END:VALARM",
+            "END:VEVENT", "END:VCALENDAR"].map(icsFold);
+        const blob = new Blob([`${lines.join("\r\n")}\r\n`], { type: "text/calendar;charset=utf-8" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `gsra-coaching-${e.start.toISOString().slice(0, 10)}.ics`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    }
+    function googleCalendarUrl(b, role) {
+        const e = calendarEvent(b, role);
+        const params = new URLSearchParams({ action: "TEMPLATE", text: e.title, dates: `${icsStamp(e.start)}/${icsStamp(e.end)}`, details: `${e.details}\n${e.url}` });
+        return `https://calendar.google.com/calendar/render?${params}`;
+    }
+    // Kleine Leiste „In meinen Kalender: Datei · Google“
+    function calendarLinks(b, role) {
+        const row = el("div", "co-cal-export");
+        row.appendChild(iconText("span", "", "fa-calendar-plus", "In meinen Kalender:"));
+        const file = iconText("button", "co-link", "fa-file-arrow-down", "Kalenderdatei");
+        file.type = "button";
+        file.title = "Für Outlook, Apple Kalender, Thunderbird u. a. – mit Erinnerung 1 Stunde vorher";
+        file.addEventListener("click", () => downloadIcs(b, role));
+        const google = iconText("a", "co-link", "fa-brands fa-google", "Google Kalender");
+        google.querySelector("i").className = "fa-brands fa-google";
+        google.href = googleCalendarUrl(b, role);
+        google.target = "_blank";
+        google.rel = "noopener noreferrer";
+        row.append(file, google);
+        return row;
+    }
+
+    // Oben auf der Seite: das nächste bestätigte Coaching (als Kunde oder Coach) mit Countdown
+    const bookingCache = { buyer: [], coach: [] };
+    function renderNextUp() {
+        const box = $("coNextUp");
+        if (!box) return;
+        const now = Date.now();
+        const upcoming = [...bookingCache.buyer.map(b => [b, "buyer"]), ...bookingCache.coach.map(b => [b, "coach"])]
+            .filter(([b]) => ["angenommen", "bezahlt"].includes(b.status) && b.scheduled_at
+                && new Date(b.scheduled_at).getTime() + b.duration_minutes * 60000 > now)
+            .sort((x, y) => new Date(x[0].scheduled_at) - new Date(y[0].scheduled_at));
+        box.hidden = !upcoming.length;
+        if (!upcoming.length) return;
+        const [b, role] = upcoming[0];
+        const start = new Date(b.scheduled_at).getTime();
+        const mins = Math.round((start - now) / 60000);
+        const countdown = mins <= 0 ? "läuft gerade" : mins < 60 ? `in ${mins} Min.` : mins < 48 * 60 ? `in ${Math.round(mins / 60)} Std.` : `in ${Math.round(mins / 1440)} Tagen`;
+        const other = nameOf(role === "buyer" ? b.coach_id : b.buyer_id);
+        box.className = `co-next${mins < 24 * 60 ? " soon" : ""}`;
+        box.replaceChildren();
+        const head = el("div", "co-next-head");
+        head.appendChild(iconText("span", "co-next-label", "fa-stopwatch", role === "buyer" ? "Dein nächstes Coaching" : "Du coachst als Nächstes"));
+        head.appendChild(el("span", "co-next-countdown", countdown));
+        box.appendChild(head);
+        box.appendChild(el("strong", "co-next-title", b.offer_title));
+        const info = el("div", "co-meta");
+        info.appendChild(iconText("span", "", "fa-calendar-check", `${dateTime(b.scheduled_at)} Uhr`));
+        info.appendChild(iconText("span", "", "fa-user", role === "buyer" ? `mit ${other}` : `für ${other}`));
+        info.appendChild(iconText("span", b.status === "bezahlt" ? "co-next-paid" : "co-next-open", b.status === "bezahlt" ? "fa-circle-check" : "fa-hourglass-half",
+            b.status === "bezahlt" ? "bezahlt" : role === "buyer" ? "noch nicht bezahlt" : "Kunde hat noch nicht bezahlt"));
+        box.appendChild(info);
+        const foot = el("div", "co-next-foot");
+        foot.appendChild(calendarLinks(b, role));
+        const go = iconText("button", "co-link", "fa-arrow-right", role === "buyer" ? "Zu meinen Anfragen" : "Zum Bereich „Als Coach“");
+        go.type = "button";
+        go.addEventListener("click", () => showTab(role === "buyer" ? "anfragen" : "coach"));
+        foot.appendChild(go);
+        box.appendChild(foot);
+        box.appendChild(iconText("p", "co-next-hint", "fa-envelope", "Wir erinnern euch beide per E-Mail – 24 Stunden und 1 Stunde vorher."));
+    }
+
     function bookingCard(b, role) {
         const other = role === "buyer" ? b.coach_id : b.buyer_id;
         const card = el("article", `co-booking ${b.status}`);
@@ -1094,6 +1189,10 @@
             if (b.preferred_time) meta.appendChild(iconText("span", "", "fa-calendar-day", `Wunsch: ${b.preferred_time}`));
         }
         card.appendChild(meta);
+        // Bestätigter Termin: in den eigenen Kalender übernehmen
+        if (["angenommen", "bezahlt"].includes(b.status) && b.scheduled_at && new Date(b.scheduled_at).getTime() + b.duration_minutes * 60000 > Date.now()) {
+            card.appendChild(calendarLinks(b, role));
+        }
         if (b.message) card.appendChild(el("p", "co-desc co-quote", b.message));
 
         const money = el("div", "co-money");
@@ -1707,6 +1806,8 @@
         }
         renderBookings($("coBuyerList"), list, "buyer");
         setBadge("coBadgeBuyer", list.filter(b => b.status === "angenommen").length);
+        bookingCache.buyer = list;
+        renderNextUp();
     }
 
     async function loadMyOffers() {
@@ -1773,6 +1874,8 @@
         else {
             renderBookings($("coCoachRequests"), list, "coach");
             setBadge("coBadgeCoach", list.filter(b => b.status === "angefragt").length);
+            bookingCache.coach = list;
+            renderNextUp();
         }
         renderLicenseBox();
         // Ungespeicherte Änderungen am Kalender nicht beim Neuladen der Anfragen verwerfen
@@ -1864,10 +1967,17 @@
         }
 
         renderCategories();
+        // Alte Anfragen und nie bezahlte Coachings beenden (SQL 033; ohne 033 passiert einfach nichts)
+        await client.rpc("coaching_expire_stale").then(() => {}, () => {});
         await loadOffers();
-        // Zähler auf den Tabs gleich anzeigen
+        // Zähler auf den Tabs und „Dein nächstes Coaching“ gleich anzeigen
         loadBuyerBookings();
-        fetchBookings("coach_id").then(list => list && setBadge("coBadgeCoach", list.filter(b => b.status === "angefragt").length));
+        fetchBookings("coach_id").then(list => {
+            if (!list) return;
+            setBadge("coBadgeCoach", list.filter(b => b.status === "angefragt").length);
+            bookingCache.coach = list;
+            renderNextUp();
+        });
         const params = new URLSearchParams(window.location.search);
         const tab = params.get("tab");
         if (["pro", "anfragen", "coach"].includes(tab)) showTab(tab, { updateUrl: false });
