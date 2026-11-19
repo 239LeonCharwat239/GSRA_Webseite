@@ -11286,6 +11286,79 @@ select option {
 .co-dispute-info { margin: 0; color: var(--text-muted); font-size: 12px; line-height: 1.5; }
 .co-dispute-info i { margin-right: 6px; color: var(--gsra-blue); }
 .co-dispute .co-actions { margin-top: 4px; }
+.co-dispute.co-flash { animation: co-flash 0.9s ease 3; }
+@keyframes co-flash { 50% { box-shadow: 0 0 0 3px rgba(255, 204, 0, 0.55); } }
+@media (prefers-reduced-motion: reduce) { .co-dispute.co-flash { animation: none; box-shadow: 0 0 0 3px rgba(255, 204, 0, 0.55); } }
+.co-license.banned { border-color: rgba(255, 77, 77, 0.35); border-left-color: #ff4d4d; }
+.co-license.banned .co-payout-head > i { color: #ff4d4d; }
+
+/* Coaching: Regeln zu Reklamationen im Bereich „Als Coach“ */
+.co-rules {
+    margin: 0 0 18px;
+    padding: 0;
+    background: #15161a;
+    border: 1px solid rgba(0, 85, 255, 0.3);
+    border-left: 4px solid var(--gsra-blue);
+    border-radius: 12px;
+    text-align: left;
+}
+.co-rules summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 18px;
+    color: #fff;
+    font-weight: 700;
+    font-size: 15px;
+    cursor: pointer;
+    list-style: none;
+}
+.co-rules summary::-webkit-details-marker { display: none; }
+.co-rules summary > i { color: var(--gsra-blue); }
+.co-rules summary::after { content: "\f078"; margin-left: auto; font-family: "Font Awesome 6 Free"; font-weight: 900; font-size: 12px; color: var(--text-muted); transition: transform 0.2s ease; }
+.co-rules[open] summary::after { transform: rotate(180deg); }
+.co-rules ul { margin: 0; padding: 0 18px 16px 38px; color: #cfd3dc; font-size: 13px; line-height: 1.55; }
+.co-rules li + li { margin-top: 6px; }
+.co-rules li strong { color: #fff; }
+
+/* Hinweis oben auf jeder Seite: offene Reklamation für Coaches (auth-nav.js) */
+.gsra-dispute-notice {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 14px;
+    margin: 0 0 18px;
+    padding: 12px 16px;
+    background: rgba(255, 204, 0, 0.1);
+    border: 1px solid rgba(255, 204, 0, 0.45);
+    border-left: 4px solid var(--gsra-yellow);
+    border-radius: 10px;
+    color: #e6e8ee;
+    font-size: 14px;
+    line-height: 1.45;
+    text-align: left;
+    box-sizing: border-box;
+}
+.gsra-dispute-notice.urgent { background: rgba(255, 77, 77, 0.12); border-color: rgba(255, 77, 77, 0.5); border-left-color: #ff4d4d; }
+.gsra-dispute-notice-icon { font-size: 18px; color: var(--gsra-yellow); }
+.gsra-dispute-notice.urgent .gsra-dispute-notice-icon { color: #ff6b6b; }
+.gsra-dispute-notice-text { flex: 1 1 320px; min-width: 0; overflow-wrap: anywhere; }
+.gsra-dispute-notice-text strong { color: #fff; }
+.gsra-dispute-notice-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background: var(--gsra-yellow);
+    border-radius: 8px;
+    color: #0b0c10;
+    font-weight: 700;
+    font-size: 13px;
+    text-decoration: none;
+    white-space: nowrap;
+}
+.gsra-dispute-notice.urgent .gsra-dispute-notice-btn { background: #ff4d4d; color: #fff; }
+.gsra-dispute-notice-btn:hover { filter: brightness(1.08); }
 .co-problem-dialog { max-width: 520px; }
 .co-problem-reasons { display: flex; flex-direction: column; gap: 8px; }
 .co-problem-reason {

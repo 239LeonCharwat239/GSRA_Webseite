@@ -426,11 +426,14 @@ document.addEventListener("DOMContentLoaded", async () => {
             </form>
             <p class="admin-team-note">Neue Admins lassen sich aus Sicherheitsgründen nur im Supabase SQL Editor ernennen.</p>
             <p><strong>Coach-Lizenz</strong> entziehen (mit Begründung, Angebote werden pausiert) oder wiederherstellen.
-            Verwarnungen und Sperren entziehen die Lizenz automatisch.</p>
+            Verwarnungen und Sperren entziehen die Lizenz automatisch. <strong>Dauerhaft sperren</strong> (nur Admins): Die Person kann nie wieder
+            Coach werden, offene Anfragen enden, bezahlte künftige Termine werden voll erstattet, der Coach bekommt die Begründung per E-Mail.
+            Aufheben lässt sich das nur hier über „Wiederherstellen“.</p>
             <form class="admin-team-form admin-license-form" autocomplete="off">
                 <input type="text" inputmode="numeric" placeholder="GSRA-ID" maxlength="12" required>
-                <input type="text" placeholder="Begründung (nur beim Entziehen)" maxlength="300">
+                <input type="text" placeholder="Begründung (nicht beim Wiederherstellen)" maxlength="300">
                 <button type="submit" class="admin-btn warn" data-license="revoke"><i class="fa-solid fa-ban"></i> Lizenz entziehen</button>
+                <button type="submit" class="admin-btn ban" data-license="ban"><i class="fa-solid fa-user-lock"></i> Dauerhaft sperren</button>
                 <button type="submit" class="admin-btn dismiss" data-license="restore"><i class="fa-solid fa-rotate-left"></i> Wiederherstellen</button>
             </form>
             <p><strong>Pro-Fahrer</strong> veröffentlichen Pro Setups und erscheinen im Coaching oben als Pro-Coaches (ohne Lizenz).</p>
@@ -485,6 +488,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             const { data: target } = await client.from("profiles").select("id, username").eq("gsra_id", gsraId).maybeSingle();
             if (!target) return showToast("Zu dieser GSRA-ID gibt es kein Konto.", "error");
             const restore = e.submitter?.dataset.license === "restore";
+            if (e.submitter?.dataset.license === "ban") {
+                if (await banCoachPermanently(target.id, target.username, reasonInput.value.trim())) e.target.reset();
+                return;
+            }
             const { error } = restore
                 ? await client.rpc("coach_license_restore", { _user: target.id })
                 : await client.rpc("coach_license_revoke", { _user: target.id, _reason: reasonInput.value.trim() });
@@ -529,9 +536,32 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // --- Protokoll (nur Admins): wer hat wann was getan ---
-    // Coaching-Fälle (SQL 035): Reklamationen mit Widerspruch oder nach Ablauf der 48 Stunden entscheiden
+    // Coaching-Fälle (SQL 035/036): Reklamationen mit Widerspruch oder nach Ablauf der 5 Tage entscheiden
     const euroText = (cents) => (Number(cents || 0) / 100).toLocaleString("de-DE", { style: "currency", currency: "EUR" });
-    const DISPUTE_REASON_TEXT = { nicht_erschienen: "Coach ist nicht erschienen", mangelhaft: "Coaching war mangelhaft", sonstiges: "Etwas anderes" };
+    const DISPUTE_REASON_TEXT = { nicht_erschienen: "Coach ist nicht erschienen", mangelhaft: "Coaching war mangelhaft", sonstiges: "Etwas anderes",
+        coach_gesperrt: "Coach dauerhaft gesperrt – Termin entfällt" };
+
+    // Dauerhafte Coach-Sperre (SQL 036, nur Admins mit Zwei-Faktor): Lizenz nie wieder, Anfragen enden, Bezahltes wird erstattet
+    async function banCoachPermanently(userId, name, presetReason = "") {
+        const reason = await showDialog({
+            icon: "fa-user-lock", danger: true, title: `${name} dauerhaft als Coach sperren?`,
+            message: "Die Person kann mit diesem Konto nie wieder Coach werden – egal wie lange sie wartet oder wie gut sie bewertet wird. "
+                + "Angebote werden pausiert, offene Anfragen abgelehnt, angenommene storniert und bezahlte künftige Termine voll erstattet. "
+                + "Das Konto selbst bleibt nutzbar. Die Begründung bekommt der Coach per E-Mail.",
+            input: { placeholder: "Begründung (mindestens 10 Zeichen), z. B. Beleidigungen im Coaching", maxLength: 300, multiline: true, value: presetReason },
+            confirmText: "Dauerhaft sperren", cancelText: "Abbrechen"
+        });
+        if (!reason) return false;
+        const { data, error } = await client.rpc("coach_ban_permanent", { _user: userId, _reason: reason });
+        if (error) {
+            showToast(error.message, "error");
+            return false;
+        }
+        // Erstattungen gleich bei Stripe ausführen (sonst übernimmt es der Zeitplan in spätestens 15 Minuten)
+        if (data?.erstattungen) await client.functions.invoke("coaching-refund", { body: { action: "reklamationen" } }).catch(() => null);
+        showToast(`${name} ist dauerhaft als Coach gesperrt. ${data?.abgelehnt || 0} Anfragen abgelehnt, ${data?.storniert || 0} storniert, ${data?.erstattungen || 0} Termine werden erstattet.`, "success");
+        return true;
+    }
     const DISPUTE_STATUS_TEXT = { offen: "Coach hat noch Zeit", widerspruch: "Widerspruch", erstattung: "Erstattung läuft", erstattet: "Erstattet", teilweise_erstattet: "Teilweise erstattet", abgelehnt: "Abgelehnt" };
 
     async function renderDisputes() {
@@ -551,14 +581,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         const needsDecision = (d) => d.status === "widerspruch" || (d.status === "offen" && new Date(d.respond_until).getTime() < now);
         const groups = [
             ["fa-gavel", "Zu entscheiden", disputes.filter(needsDecision)],
-            ["fa-hourglass-half", "Coach hat noch Zeit (48 Stunden)", disputes.filter(d => d.status === "offen" && !needsDecision(d))],
+            ["fa-hourglass-half", "Coach hat noch Zeit (5 Tage)", disputes.filter(d => d.status === "offen" && !needsDecision(d))],
             ["fa-check-double", "Abgeschlossen", disputes.filter(d => !["offen", "widerspruch"].includes(d.status))]
         ];
         const box = document.createElement("div");
         box.className = "admin-disputes";
         const intro = document.createElement("p");
         intro.className = "admin-errors-head";
-        intro.innerHTML = '<span><i class="fa-solid fa-circle-info"></i> Regeln: Kunden melden bis 7 Tage nach dem Termin. Der Coach hat 48 Stunden zum Erstatten oder Widersprechen; „nicht erschienen“ ohne Antwort wird automatisch erstattet. Entscheidet fair und begründet – beide Seiten bekommen die Begründung per E-Mail.</span>';
+        intro.innerHTML = '<span><i class="fa-solid fa-circle-info"></i> Regeln: Kunden melden bis 7 Tage nach dem Termin. Der Coach hat 5 Tage zum Erstatten oder Widersprechen (E-Mail, Hinweis auf jeder Seite, Erinnerung 24 Std. vor Fristende); „nicht erschienen“ ohne Antwort wird automatisch erstattet. Entscheidet fair und begründet – beide Seiten bekommen die Begründung per E-Mail. Bei schweren Fällen (Beleidigungen, Drohungen) können Admins den Coach dauerhaft sperren.</span>';
         box.appendChild(intro);
         groups.forEach(([icon, title, items]) => {
             if (!items.length) return;
@@ -625,6 +655,20 @@ document.addEventListener("DOMContentLoaded", async () => {
             });
             add("ban", '<i class="fa-solid fa-xmark"></i> Ablehnen', (btn) => decideDispute(d, 0, btn));
             card.appendChild(actions);
+        }
+        // Schwere Fälle: Coach dauerhaft sperren (nur Admins; die Datenbank prüft es zusätzlich)
+        if (isAdmin && d.reason !== "coach_gesperrt" && d.coach_id !== session.user.id) {
+            const ban = document.createElement("button");
+            ban.type = "button";
+            ban.className = "admin-btn ban admin-dispute-coachban";
+            ban.innerHTML = '<i class="fa-solid fa-user-lock"></i> Coach dauerhaft sperren';
+            ban.addEventListener("click", async () => {
+                ban.disabled = true;
+                if (await banCoachPermanently(d.coach_id, nameOf(d.coach_id))) render();
+                else ban.disabled = false;
+            });
+            const wrap = card.querySelector(".admin-actions") || card.appendChild(Object.assign(document.createElement("div"), { className: "admin-actions" }));
+            wrap.appendChild(ban);
         }
         return card;
     }
@@ -744,6 +788,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             coach_lizenz_entzogen: ["fa-ban", `hat die Coach-Lizenz entzogen${d(e).grund ? ` – Begründung: ${d(e).grund}` : ""}`],
             coach_lizenz_automatisch: ["fa-robot", `Coach-Lizenz automatisch entzogen (${String(d(e).grund || "").replace(/^Automatisch:\s*/, "")})`],
             coach_lizenz_wiederhergestellt: ["fa-rotate-left", "hat die Coach-Lizenz wiederhergestellt"],
+            coach_dauerhaft_gesperrt: ["fa-user-lock", `hat einen Coach dauerhaft gesperrt – Begründung: ${d(e).grund || "–"} (${d(e).abgelehnt ?? 0} Anfragen abgelehnt, ${d(e).storniert ?? 0} storniert, ${d(e).erstattungen ?? 0} Erstattungen)`],
+            coach_sperre_aufgehoben: ["fa-unlock", "hat eine dauerhafte Coach-Sperre aufgehoben"],
+            coaching_reklamation_entschieden: ["fa-gavel", `hat eine Coaching-Reklamation entschieden (${euroText(d(e).erstattung_cent)} erstattet)${d(e).grund ? ` – ${d(e).grund}` : ""}`],
             coaching_bewertung_geloescht: ["fa-comment-slash", "hat eine Coach-Bewertung entfernt"],
             pro_fahrer_hinzugefuegt: ["fa-crown", "hat einen Pro-Fahrer hinzugefügt (Setups und Coaching)"],
             pro_fahrer_entfernt: ["fa-user-minus", "hat einen Pro-Fahrer entfernt"]

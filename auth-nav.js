@@ -162,6 +162,49 @@ const initAuthNav = async () => {
             .subscribe();
     };
 
+    // Coaches: offene Reklamation → Hinweis oben auf jeder Seite, bis geantwortet ist (SQL 035/036).
+    // Die E-Mail kann im Spam landen – dieser Hinweis nicht. Ohne SQL 035 passiert einfach nichts.
+    const showCoachDisputeNotice = async (userId) => {
+        try {
+            const { data, error } = await client.from("coaching_disputes")
+                .select("id, respond_until, coaching_bookings(offer_title)")
+                .eq("coach_id", userId).eq("status", "offen")
+                .order("respond_until", { ascending: true }).limit(10);
+            const header = document.querySelector("header");
+            if (error || !data?.length || !header || document.getElementById("gsraDisputeNotice")) return;
+            const first = data[0];
+            const until = new Date(first.respond_until);
+            const hoursLeft = (until.getTime() - Date.now()) / 3600000;
+            const bar = document.createElement("div");
+            bar.id = "gsraDisputeNotice";
+            bar.className = `gsra-dispute-notice${hoursLeft < 24 ? " urgent" : ""}`;
+            bar.setAttribute("role", "alert");
+            bar.innerHTML = '<i class="fa-solid fa-scale-balanced gsra-dispute-notice-icon" aria-hidden="true"></i>';
+            const text = document.createElement("span");
+            text.className = "gsra-dispute-notice-text";
+            const strong = document.createElement("strong");
+            strong.textContent = data.length > 1
+                ? `${data.length} Reklamationen zu deinen Coachings`
+                : `Reklamation zu deinem Coaching „${first.coaching_bookings?.offer_title || "Coaching"}“`;
+            const when = until.toLocaleString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+            text.append(strong, hoursLeft > 0
+                ? ` – bitte antworte bis ${when} Uhr: erstatten oder widersprechen. Ohne Antwort entscheidet die Moderation, bei „nicht erschienen“ wird automatisch erstattet.`
+                : " – deine Antwortfrist ist abgelaufen, die Moderation entscheidet jetzt. Erstatten kannst du weiterhin.");
+            const link = document.createElement("a");
+            link.href = "coaching.html?tab=coach#reklamation";
+            link.className = "gsra-dispute-notice-btn";
+            link.innerHTML = '<i class="fa-solid fa-arrow-right"></i> Jetzt ansehen';
+            bar.append(text, link);
+            // Am Anfang des Inhalts (die Kopfzeile ist fest; .container hält schon Abstand zu ihr)
+            const host = document.querySelector("header ~ .container");
+            if (host) host.prepend(bar);
+            else header.insertAdjacentElement("afterend", bar);
+            document.querySelector('header nav a[href="coaching.html"]')?.classList.add("nav-unread-glow");
+        } catch (e) {
+            /* kein Hinweis – die E-Mail und der Bereich „Als Coach“ bleiben */
+        }
+    };
+
     // Angenommene Freundschaftsanfrage: Hinweis im GSRA-Design – beim Öffnen einer Seite und live
     const showFriendAccepted = async (friendId) => {
         const { data: friend } = await client.from("profiles").select("username, avatar_url").eq("id", friendId).maybeSingle();
@@ -252,6 +295,7 @@ const initAuthNav = async () => {
 
     if (session?.user?.id && await checkBan(session.user.id)) return;
     if (session?.user?.id) showAdminLink(session.user.id);
+    if (session?.user?.id) showCoachDisputeNotice(session.user.id);
 
     if (session?.user?.id) {
         startVisibilityHeader(client);

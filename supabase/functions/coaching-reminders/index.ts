@@ -7,6 +7,8 @@
 // Benötigte Secrets (wie bei cancel-contract): SMTP_USER und SMTP_PASS, optional SMTP_HOST, SMTP_PORT, SITE_URL.
 // Seit 19.11. (SQL 035) auch E-Mails zu Reklamationen: neue Meldung → Coach (mit Frist) und Eingangsbestätigung an
 // den Kunden; Ergebnis (erstattet, teilweise erstattet, abgelehnt) → beide.
+// Seit SQL 036: Erinnerung an den Coach 24 Std. vor Ende seiner 5-Tage-Frist; dauerhafte Coach-Sperre → E-Mail mit
+// Begründung an den Coach; Termine, die deshalb entfallen → Erstattungs-E-Mail nur an den Kunden.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import nodemailer from "npm:nodemailer@6.9.16";
 
@@ -64,20 +66,24 @@ function mails(r: Due, site: string) {
 }
 
 type Case = {
-  id: string; art: "neu" | "ergebnis"; status: string; grund: string; titel: string; termin: string; frist: string;
+  id: string; art: "neu" | "erinnerung" | "ergebnis"; status: string; grund: string; titel: string; termin: string; frist: string;
   betrag: number; entscheidung: string | null; coach_id: string; kunde_id: string; coach_name: string; kunde_name: string;
 };
+type Ban = { coach_id: string; grund: string | null; coach_name: string };
+type Texts = Partial<Record<"kunde" | "coach", { subject: string; text: string }>>;
 const GRUND: Record<string, string> = {
   nicht_erschienen: "Coach ist nicht erschienen", mangelhaft: "Coaching war mangelhaft", sonstiges: "Etwas anderes",
 };
 const euro = (cents: number) => (Number(cents || 0) / 100).toLocaleString("de-DE", { style: "currency", currency: "EUR" });
+const GRUSS = "\n\nDein GSRA-Team\nGlobal Simracing Alliance";
 
 // Texte zu Reklamationen für Kunde bzw. Coach
-function caseMails(c: Case, site: string) {
+function caseMails(c: Case, site: string): Texts {
   const kundeLink = `${site}/coaching.html?tab=anfragen`;
-  const coachLink = `${site}/coaching.html?tab=coach`;
-  const gruss = "\n\nDein GSRA-Team\nGlobal Simracing Alliance";
+  const coachLink = `${site}/coaching.html?tab=coach#reklamation`;
+  const gruss = GRUSS;
   const fall = `„${c.titel}“ am ${when(c.termin)}`;
+  const ohneAntwort = c.grund === "nicht_erschienen" ? "Ohne Antwort wird das Coaching automatisch voll erstattet." : "Ohne Einigung entscheidet die GSRA-Moderation.";
   if (c.art === "neu") {
     return {
       kunde: {
@@ -86,7 +92,24 @@ function caseMails(c: Case, site: string) {
       },
       coach: {
         subject: `Reklamation zu deinem Coaching „${c.titel}“ – bitte bis ${when(c.frist)} reagieren`,
-        text: `Hallo ${c.coach_name},\n\n${c.kunde_name} hat ein Problem mit ${fall} gemeldet: ${GRUND[c.grund] || c.grund}.\n\nBitte reagiere bis ${when(c.frist)} (deutsche Zeit) auf der Coaching-Seite unter „Als Coach“: Erstatte das Coaching oder widersprich mit einer kurzen Begründung. ${c.grund === "nicht_erschienen" ? "Ohne Antwort wird das Coaching automatisch voll erstattet." : "Ohne Einigung entscheidet die GSRA-Moderation."}\n\nZur Reklamation: ${coachLink}${gruss}`,
+        text: `Hallo ${c.coach_name},\n\n${c.kunde_name} hat ein Problem mit ${fall} gemeldet: ${GRUND[c.grund] || c.grund}.\n\nDu hast 5 Tage Zeit: Bitte reagiere bis ${when(c.frist)} (deutsche Zeit) auf der Coaching-Seite unter „Als Coach“ – erstatte das Coaching oder widersprich mit einer kurzen Begründung. ${ohneAntwort}\n\nSolange der Fall offen ist, siehst du oben auf jeder GSRA-Seite einen Hinweis. 24 Stunden vor Ablauf der Frist erinnern wir dich noch einmal.\n\nZur Reklamation: ${coachLink}${gruss}`,
+      },
+    };
+  }
+  if (c.art === "erinnerung") {
+    return {
+      coach: {
+        subject: `Erinnerung: Reklamation zu „${c.titel}“ – nur noch bis ${when(c.frist)}`,
+        text: `Hallo ${c.coach_name},\n\ndie Reklamation von ${c.kunde_name} zu ${fall} (${GRUND[c.grund] || c.grund}) ist noch offen. Deine Frist endet am ${when(c.frist)} (deutsche Zeit).\n\nBitte erstatte das Coaching oder widersprich mit einer kurzen Begründung. ${ohneAntwort}\n\nZur Reklamation: ${coachLink}${gruss}`,
+      },
+    };
+  }
+  // Coach dauerhaft gesperrt: Termin entfällt, nur der Kunde bekommt eine E-Mail (der Coach bekommt die Sperr-E-Mail)
+  if (c.grund === "coach_gesperrt") {
+    return {
+      kunde: {
+        subject: `Dein Coaching „${c.titel}“ entfällt – du bekommst dein Geld zurück`,
+        text: `Hallo ${c.kunde_name},\n\nleider entfällt dein Coaching ${fall}: ${c.coach_name} darf auf GSRA nicht mehr coachen. Wir haben dir den vollen Betrag (${euro(c.betrag)}) erstattet. Die Gutschrift erscheint je nach Bank in wenigen Tagen auf deinem Konto.\n\nAuf der Coaching-Seite findest du viele weitere Coaches: ${site}/coaching.html${gruss}`,
       },
     };
   }
@@ -101,7 +124,17 @@ function caseMails(c: Case, site: string) {
     },
     coach: {
       subject: `Ergebnis der Reklamation zu „${c.titel}“`,
-      text: `Hallo ${c.coach_name},\n\nzur Reklamation von ${c.kunde_name} zu ${fall}: ${ergebnis}${begruendung}\n\nDeine Coachings: ${coachLink}${gruss}`,
+      text: `Hallo ${c.coach_name},\n\nzur Reklamation von ${c.kunde_name} zu ${fall}: ${ergebnis}${begruendung}\n\nDeine Coachings: ${site}/coaching.html?tab=coach${gruss}`,
+    },
+  };
+}
+
+// Dauerhafte Coach-Sperre: Entscheidung mit Begründung und Weg zum Widerspruch
+function banMail(b: Ban): Texts {
+  return {
+    coach: {
+      subject: "Deine GSRA-Coach-Lizenz wurde dauerhaft entzogen",
+      text: `Hallo ${b.coach_name},\n\ndie GSRA hat dir die Coach-Lizenz dauerhaft entzogen.\n\nBegründung: ${b.grund || "–"}\n\nWas das bedeutet:\n- Mit diesem Konto kannst du keine Coachings mehr anbieten, auch später nicht.\n- Deine Angebote sind pausiert, offene Anfragen wurden beendet.\n- Bereits bezahlte künftige Termine werden deinen Kunden voll erstattet.\n- Dein GSRA-Konto selbst (Messenger, Marktplatz, Setups) kannst du weiter nutzen.\n\nWenn du die Entscheidung für einen Irrtum hältst, antworte einfach auf diese E-Mail – wir sehen uns den Fall noch einmal an.${GRUSS}`,
     },
   };
 }
@@ -117,7 +150,8 @@ Deno.serve(async (req) => {
     }
     const due: Due[] = data?.erinnerungen || [];
     const cases: Case[] = data?.reklamationen || [];
-    if (!data?.lauf || (!due.length && !cases.length)) return json({ ok: true, gesendet: 0 });
+    const bans: Ban[] = data?.sperren || [];
+    if (!data?.lauf || (!due.length && !cases.length && !bans.length)) return json({ ok: true, gesendet: 0 });
 
     const user = Deno.env.get("SMTP_USER");
     const pass = Deno.env.get("SMTP_PASS");
@@ -133,12 +167,14 @@ Deno.serve(async (req) => {
     const emailOf = async (id: string) => (await admin.auth.admin.getUserById(id)).data?.user?.email || null;
 
     let sent = 0;
-    const send = async (label: string, texts: Record<"kunde" | "coach", { subject: string; text: string }>, kundeId: string, coachId: string) => {
+    const send = async (label: string, texts: Texts, kundeId: string | null, coachId: string) => {
       for (const [who, id] of [["kunde", kundeId], ["coach", coachId]] as const) {
+        const mail = texts[who];
+        if (!mail || !id) continue;
         try {
           const to = await emailOf(id);
           if (!to) continue;
-          await transporter.sendMail({ from: `"GSRA Coaching" <${user}>`, to, subject: texts[who].subject, text: texts[who].text });
+          await transporter.sendMail({ from: `"GSRA Coaching" <${user}>`, to, subject: mail.subject, text: mail.text });
           sent++;
         } catch (err) {
           // Vermerkt ist die E-Mail schon: lieber eine verpasste als doppelte E-Mails
@@ -148,6 +184,7 @@ Deno.serve(async (req) => {
     };
     for (const r of due) await send(`Erinnerung ${r.id}`, mails(r, site), r.kunde_id, r.coach_id);
     for (const c of cases) await send(`Reklamation ${c.id}`, caseMails(c, site), c.kunde_id, c.coach_id);
+    for (const b of bans) await send(`Coach-Sperre ${b.coach_id}`, banMail(b), null, b.coach_id);
     return json({ ok: true, gesendet: sent });
   } catch (err) {
     console.error(err);

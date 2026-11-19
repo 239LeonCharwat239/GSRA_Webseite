@@ -5,7 +5,7 @@
 // Die Erstattung läuft auf dem Stripe-Konto des Coaches (Direct Charge). Ein fester Idempotency-Key
 // verhindert doppelte Erstattungen, auch bei Doppelklick. Benötigte Secrets: STRIPE_SECRET_KEY.
 // Seit 19.11. (SQL 035) außerdem {"action":"reklamationen"}: führt die Erstattungen aus, die bei einer Reklamation
-// entschieden wurden (Coach hat zugesagt, Moderation hat entschieden oder automatisch nach 48 Stunden). Was erstattet
+// entschieden wurden (Coach hat zugesagt, Moderation hat entschieden oder automatisch nach Ablauf der Frist des Coaches, seit SQL 036 auch bei dauerhafter Coach-Sperre). Was erstattet
 // wird und wie viel, bestimmt allein die Datenbank (coaching_dispute_refunds_pending); deshalb darf dieser Aufruf
 // ohne Anmeldung erfolgen (Zeitplan alle 15 Minuten bzw. direkt nach einer Entscheidung). Jede Reklamation hat
 // ihren eigenen Idempotency-Key – doppelte Aufrufe erstatten nie doppelt.

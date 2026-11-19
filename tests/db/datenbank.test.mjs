@@ -9,9 +9,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL] =
-    Array.from({ length: 35 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 35);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL] =
+    Array.from({ length: 36 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 36);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -1782,6 +1782,46 @@ if (MODERATION_SQL) {
                             });
                             const kept = await one(`select scheduled_at = '${slots[0]}'::timestamptz as same, status from public.coaching_bookings where id = '${kb?.id}'`);
                             check("Termin aus dem Kalender bleibt erhalten", kept?.same === true && kept?.status === "angenommen", JSON.stringify(kept));
+
+                            // Lange Coachings: 3 Stunden ab 18 Uhr belegen 18–21 Uhr – für alle Angebote desselben Coaches
+                            let longOffer = null;
+                            await as(U.max, async () => {
+                                longOffer = (await q(`select public.coaching_save_offer(null, 'Langes Coaching Le Mans', null, 'Fahrtechnik', 'iRacing', 180, 9000, true) as id`)).rows[0]?.id;
+                            });
+                            let long = [];
+                            await as(U.tim, async () => {
+                                const fs = await q(`select public.coaching_free_slots('${longOffer}') as r`);
+                                long = fs.rows[0]?.r?.slots || [];
+                                const late = long.filter(s => {
+                                    const [h, m] = new Date(s).toLocaleTimeString("de-DE", { timeZone: "Europe/Berlin", hour12: false }).split(":").map(Number);
+                                    return h * 60 + m > 19 * 60; // Fenster 18–22 Uhr: 3 Stunden passen nur bis Start 19:00
+                                });
+                                check("3-Stunden-Angebot: nur Startzeiten, bei denen alle 3 Stunden ins Zeitfenster passen", long.length > 0 && late.length === 0, fs.error || JSON.stringify(late.slice(0, 3)));
+                                const busy = [slots[0], slot2].map(s => new Date(s).getTime());
+                                const clash = long.filter(s => { const t = new Date(s).getTime(); return busy.some(b => t < b + 60 * 60000 && b < t + 180 * 60000); });
+                                check("3-Stunden-Termine überschneiden keine bestehende Buchung", clash.length === 0, JSON.stringify(clash));
+                                const ok = await q(`select public.coaching_book_at('${longOffer}', '${long[0]}'::timestamptz)`);
+                                check("Kunde fragt 3 Stunden an", ok.error === null, ok.error || "");
+                            });
+                            await as(K3, async () => {
+                                const t = new Date(long[0]).getTime();
+                                const free60 = ((await q(`select public.coaching_free_slots('${maxOffer}') as r`)).rows[0]?.r?.slots || []).map(s => new Date(s).getTime());
+                                const free180 = ((await q(`select public.coaching_free_slots('${longOffer}') as r`)).rows[0]?.r?.slots || []).map(s => new Date(s).getTime());
+                                const inside60 = free60.filter(x => x > t - 60 * 60000 && x < t + 180 * 60000);
+                                const inside180 = free180.filter(x => x > t - 180 * 60000 && x < t + 180 * 60000);
+                                const plus1 = await q(`select public.coaching_book_at('${maxOffer}', '${long[0]}'::timestamptz + interval '1 hour')`);
+                                const plus2 = await q(`select public.coaching_book_at('${maxOffer}', '${long[0]}'::timestamptz + interval '2 hours')`);
+                                check("3 Stunden angefragt → +1 h und +2 h auch beim 60-Minuten-Angebot belegt, nichts Überlappendes mehr frei",
+                                    inside60.length === 0 && inside180.length === 0 && /nicht mehr frei/.test(plus1.error || "") && /nicht mehr frei/.test(plus2.error || ""),
+                                    [plus1.error, plus2.error, inside60.length, inside180.length].join(" | "));
+                            });
+                            const tl = await one(`select id from public.coaching_bookings where buyer_id = '${U.tim}' and offer_id = '${longOffer}'`);
+                            await as(U.max, async () => { await q(`select public.coaching_respond('${tl?.id}', false)`); });
+                            await as(K3, async () => {
+                                const again = ((await q(`select public.coaching_free_slots('${longOffer}') as r`)).rows[0]?.r?.slots || []).map(s => new Date(s).getTime());
+                                check("Abgelehnte Anfrage gibt die 3 Stunden wieder frei", again.includes(new Date(long[0]).getTime()), String(again.length));
+                            });
+
                             await as(K, async () => {
                                 const list = await q(`select public.coaching_calendar_coaches() as id`);
                                 check("Seite erkennt Coaches mit Kalender", list.rows.some(r => r.id === U.max), list.error || JSON.stringify(list.rows));
@@ -2114,6 +2154,162 @@ if (MODERATION_SQL) {
                             const run2 = (await one(`select public.coaching_reminder_run() as r`)).r;
                             const results = (run2?.reklamationen || []).filter(x => x.art === "ergebnis").map(x => x.id);
                             check("Beide Seiten werden über das Ergebnis informiert (E-Mail-Liste)", [d1, d2, d3, d4].every(id => results.includes(id)), JSON.stringify(results));
+                        }
+
+                        // --- 036: 5 Tage Antwortfrist, Erinnerung, dauerhafte Coach-Sperre ---
+                        if (COACH_SPERRE_SQL && REKLAMATION_SQL) {
+                            const S = (n) => `36000000-0000-0000-0000-00000000000${n}`;
+                            await db.exec(`insert into public.coaching_bookings (id, coach_id, buyer_id, offer_title, duration_minutes, price_cents, fee_cents, total_cents, status, scheduled_at, stripe_payment_intent, paid_at) values
+                                ('${S(1)}', '${U.max}', '${U.anna}', 'Fristtest alt', 60, 3000, 300, 3300, 'bezahlt', now() - interval '1 hour', 'pi_036_1', now() - interval '3 days'),
+                                ('${S(2)}', '${U.max}', '${K3}', 'Fristtest neu', 60, 3000, 300, 3300, 'bezahlt', now() - interval '2 hours', 'pi_036_2', now() - interval '3 days')`);
+                            let oldCase = null;
+                            await as(U.anna, async () => { oldCase = (await q(`select public.coaching_report_problem('${S(1)}', 'nicht_erschienen', 'Noch nach alter Regel mit 48 Stunden gemeldet.') as id`)).rows[0]?.id; });
+                            const before = await one(`select round(extract(epoch from respond_until - created_at) / 3600) as h from public.coaching_disputes where id = '${oldCase}'`);
+                            await db.exec(readFileSync(COACH_SPERRE_SQL, "utf8"));
+                            const ctl36 = await db.exec(readFileSync(COACH_SPERRE_SQL, "utf8")); // zweiter Lauf
+                            const rows36 = ctl36[ctl36.length - 1].rows;
+                            console.log("Kontrolle 036:\n  " + rows36.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+                            check("Kontrolle 036: 5 Tage, Sperre bereit, E-Mail-Liste nur Server", rows36.map(r => r.ergebnis).join(",") === "5 Tage,bereit,ja", rows36.map(r => r.ergebnis).join(", "));
+                            const after = await one(`select round(extract(epoch from respond_until - created_at) / 3600) as h from public.coaching_disputes where id = '${oldCase}'`);
+                            check("Offener Fall von vorher: Frist von 48 Std. auf 5 Tage verlängert", Number(before.h) === 48 && Number(after.h) === 120, JSON.stringify({ before, after }));
+
+                            let newCase = null;
+                            await as(K3, async () => {
+                                const r = await q(`select public.coaching_report_problem('${S(2)}', 'mangelhaft', 'Der Coach war die ganze Zeit abgelenkt.') as id`);
+                                newCase = r.rows[0]?.id;
+                                check("Neue Meldung angelegt", r.error === null && Boolean(newCase), r.error || "");
+                            });
+                            const h = await one(`select extract(epoch from respond_until - now()) / 3600 as h from public.coaching_disputes where id = '${newCase}'`);
+                            check("Coach hat 5 Tage Zeit (statt 48 Stunden)", Number(h.h) > 119.9 && Number(h.h) <= 120, String(h.h));
+                            await withClaims(MOD, "aal2", async () => {
+                                const early = await q(`select public.coaching_dispute_decide('${newCase}', 0, 'Zu früh entschieden')`);
+                                check("Moderation wartet die Frist ab (mit Datum in der Meldung)", /bis \d\d\.\d\d\.\d{4}, \d\d:\d\d Uhr Zeit zu antworten/.test(early.error || ""), early.error || "durchgelassen!");
+                            });
+
+                            // Erinnerung 24 Std. vor Fristende – genau einmal
+                            const runNow = async () => { await db.exec(`update public.coaching_reminder_runs set last_run = '-infinity'`); return (await one(`select public.coaching_reminder_run() as r`)).r; };
+                            const r1 = await runNow();
+                            const neu36 = (r1?.reklamationen || []).filter(x => x.art === "neu").map(x => x.id);
+                            const rem1 = (r1?.reklamationen || []).filter(x => x.art === "erinnerung").map(x => x.id);
+                            check("Neue Meldung geht an den Coach, noch keine Erinnerung (Frist weit weg)", neu36.includes(newCase) && neu36.includes(oldCase) && rem1.length === 0, JSON.stringify({ neu36, rem1 }));
+                            await db.exec(`update public.coaching_disputes set respond_until = now() + interval '20 hours' where id = '${newCase}'`);
+                            const r2 = await runNow();
+                            const rem2 = (r2?.reklamationen || []).filter(x => x.art === "erinnerung");
+                            const r3 = await runNow();
+                            const rem3 = (r3?.reklamationen || []).filter(x => x.art === "erinnerung");
+                            check("24 Std. vor Fristende genau eine Erinnerung an den Coach (mit Frist)", rem2.length === 1 && rem2[0].id === newCase && Boolean(rem2[0].frist) && rem3.length === 0,
+                                JSON.stringify({ rem2: rem2.map(x => x.id), rem3: rem3.length }));
+                            await db.exec(`update public.coaching_disputes set respond_until = now() - interval '1 minute' where id = '${newCase}'`);
+                            await as(U.max, async () => {
+                                const late = await q(`select public.coaching_dispute_answer('${newCase}', false, 'Ich widerspreche leider zu spät.')`);
+                                check("Nach der Frist kein Widerspruch mehr (Erstatten bleibt möglich)", /Frist/.test(late.error || ""), late.error || "durchgelassen!");
+                            });
+
+                            // Dauerhafte Coach-Sperre
+                            await db.exec(`insert into public.coaching_bookings (id, coach_id, buyer_id, offer_title, duration_minutes, price_cents, fee_cents, total_cents, status, scheduled_at) values
+                                ('${S(3)}', '${U.max}', '${U.lena}', 'Offene Anfrage', 60, 3000, 300, 3300, 'angefragt', null),
+                                ('${S(4)}', '${U.max}', '${U.anna}', 'Angenommen, nicht bezahlt', 60, 3000, 300, 3300, 'angenommen', now() + interval '5 days')`);
+                            await db.exec(`insert into public.coaching_bookings (id, coach_id, buyer_id, offer_title, duration_minutes, price_cents, fee_cents, total_cents, status, scheduled_at, stripe_payment_intent, paid_at) values
+                                ('${S(5)}', '${U.max}', '${K}', 'Morgen früh', 60, 3000, 300, 3300, 'bezahlt', now() + interval '12 hours', 'pi_036_5', now() - interval '1 day')`);
+                            const pre = await one(`select count(*) filter (where status = 'angefragt') as a, count(*) filter (where status = 'angenommen') as n,
+                                    count(*) filter (where status = 'bezahlt' and stripe_payment_intent is not null and (scheduled_at is null or scheduled_at > now())) as p,
+                                    count(*) filter (where status = 'bezahlt' and scheduled_at <= now()) as past
+                                from public.coaching_bookings where coach_id = '${U.max}'`);
+                            const REASON = "Beleidigungen im Coaching und Drohungen gegenüber Kunden.";
+                            await as(K, async () => {
+                                const r = await q(`select public.coach_ban_permanent('${U.max}', '${REASON}')`);
+                                check("Mitglieder sperren keine Coaches", /nur Administratoren/.test(r.error || ""), r.error || "durchgelassen!");
+                            });
+                            await withClaims(MOD, "aal2", async () => {
+                                const r = await q(`select public.coach_ban_permanent('${U.max}', '${REASON}')`);
+                                check("Moderatoren sperren nicht dauerhaft (nur Administratoren)", /nur Administratoren/.test(r.error || ""), r.error || "durchgelassen!");
+                            });
+                            await withClaims(U.admin, "aal1", async () => {
+                                const r = await q(`select public.coach_ban_permanent('${U.max}', '${REASON}')`);
+                                check("Admin ohne Zwei-Faktor sperrt nicht", /nur Administratoren/.test(r.error || ""), r.error || "durchgelassen!");
+                            });
+                            let ban = null;
+                            await withClaims(U.admin, "aal2", async () => {
+                                const short = await q(`select public.coach_ban_permanent('${U.max}', 'frech')`);
+                                const self = await q(`select public.coach_ban_permanent('${U.admin}', '${REASON}')`);
+                                check("Sperre nur mit Begründung und nie für sich selbst", /10 Zeichen/.test(short.error || "") && /eigene Konto/.test(self.error || ""), [short.error, self.error].join(" | "));
+                                const r = await q(`select public.coach_ban_permanent('${U.max}', '${REASON}') as r`);
+                                ban = r.rows[0]?.r;
+                                check("Admin sperrt den Coach dauerhaft", r.error === null && ban, r.error || "");
+                                const twice = await q(`select public.coach_ban_permanent('${U.max}', '${REASON}')`);
+                                check("Doppelt sperren wird erkannt", /bereits dauerhaft/.test(twice.error || ""), twice.error || "durchgelassen!");
+                            });
+                            check("Rückmeldung: abgelehnte Anfragen, stornierte Annahmen, Erstattungen",
+                                ban?.abgelehnt === Number(pre.a) && ban?.storniert === Number(pre.n) && ban?.erstattungen === Number(pre.p) && Number(pre.a) >= 1 && Number(pre.n) >= 1 && Number(pre.p) >= 2,
+                                JSON.stringify({ ban, pre }));
+                            const postB = await one(`select count(*) filter (where status in ('angefragt', 'angenommen')) as offen,
+                                    count(*) filter (where status = 'bezahlt' and scheduled_at <= now()) as past,
+                                    (select count(*) from public.coaching_offers where coach_id = '${U.max}' and active) as angebote
+                                from public.coaching_bookings where coach_id = '${U.max}'`);
+                            check("Keine offenen Anfragen mehr, Angebote pausiert, vergangene Coachings bleiben bezahlt",
+                                Number(postB.offen) === 0 && Number(postB.angebote) === 0 && Number(postB.past) === Number(pre.past), JSON.stringify(postB));
+                            const refunds = (await q(`select d.booking_id, d.status, d.refund_cents, b.total_cents from public.coaching_disputes d join public.coaching_bookings b on b.id = d.booking_id where d.reason = 'coach_gesperrt'`)).rows;
+                            const pend36 = ((await one(`select public.coaching_dispute_refunds_pending() as r`)).r || []).map(p => p.booking_id);
+                            check("Künftige bezahlte Termine: volle Erstattung über die Automatik",
+                                refunds.length === Number(pre.p) && refunds.every(x => x.status === "erstattung" && x.refund_cents === x.total_cents) && pend36.includes(S(5)) && pend36.includes("35000000-0000-0000-0000-000000000005"),
+                                JSON.stringify({ refunds, pend36 }));
+                            const lic = await one(`select public.coach_license_active('${U.max}') as a`);
+                            check("Lizenz (auch Pro-Coach) nicht mehr aktiv", lic.a === false, String(lic.a));
+                            await as(U.max, async () => {
+                                const claim = await q(`select public.coach_claim_license()`);
+                                const offer = await q(`select public.coaching_save_offer(null, 'Neues Angebot', null, 'Fahrtechnik', 'iRacing', 60, 3000, true)`);
+                                const cal = await q(`select public.coach_save_calendar('Europe/Berlin', '[]'::jsonb)`);
+                                check("Gesperrter Coach: keine Lizenz, kein Angebot, kein Kalender", /dauerhaft entzogen/.test(claim.error || "") && /Coach-Lizenz/.test(offer.error || "") && /Coach-Lizenz/.test(cal.error || ""),
+                                    [claim.error, offer.error, cal.error].join(" | "));
+                                const st = await q(`select public.coach_license_status('${U.max}') as s`);
+                                const e = st.rows[0]?.s?.entzogen;
+                                check("Coach sieht: dauerhaft entzogen, mit Begründung", e?.dauerhaft === true && e?.grund === REASON, st.error || JSON.stringify(e));
+                                const banned = await q(`select public.is_banned() as b`);
+                                check("Das Konto selbst bleibt nutzbar (keine Kontosperre)", banned.rows[0]?.b === false, banned.error || String(banned.rows[0]?.b));
+                            });
+                            const maxOffer36 = (await one(`select id from public.coaching_offers where coach_id = '${U.max}' and title = 'Kalender-Coaching Spa'`))?.id;
+                            await as(U.tim, async () => {
+                                const fs = await q(`select public.coaching_free_slots('${maxOffer36}')`);
+                                check("Kunden können nicht mehr buchen", /nicht mehr angeboten/.test(fs.error || ""), fs.error || "durchgelassen!");
+                            });
+                            // Lange Zeit vergeht, Bewertungen sind gut: trotzdem keine Lizenz
+                            await db.exec(`update auth.users set created_at = now() - interval '3 years' where id = '${U.max}'`);
+                            await as(U.max, async () => {
+                                const claim = await q(`select public.coach_claim_license()`);
+                                check("Auch nach Jahren nie wieder selbst holbar", /dauerhaft entzogen/.test(claim.error || ""), claim.error || "durchgelassen!");
+                            });
+                            await withClaims(MOD, "aal2", async () => {
+                                const rev = await q(`select public.coach_license_revoke('${U.max}', 'Moderator will den Grund ändern')`);
+                                const res = await q(`select public.coach_license_restore('${U.max}')`);
+                                check("Moderatoren können die dauerhafte Sperre weder überschreiben noch aufheben",
+                                    /bereits dauerhaft/.test(rev.error || "") && /nur Administratoren/.test(res.error || ""), [rev.error, res.error].join(" | "));
+                            });
+                            const log36 = await one(`select count(*) as n, max(details ->> 'grund') as g from public.moderation_log where action = 'coach_dauerhaft_gesperrt' and target_user = '${U.max}'`);
+                            check("Sperre steht im Moderationsprotokoll", Number(log36.n) === 1 && log36.g === REASON, JSON.stringify(log36));
+
+                            const r4 = await runNow();
+                            const bans4 = r4?.sperren || [];
+                            const neu4 = (r4?.reklamationen || []).filter(x => x.art === "neu" && x.grund === "coach_gesperrt");
+                            const due4 = (r4?.erinnerungen || []).map(x => x.id);
+                            const r5 = await runNow();
+                            check("Coach bekommt genau eine E-Mail mit Begründung; keine „neue Reklamation“, keine Termin-Erinnerung für Erstattetes",
+                                bans4.length === 1 && bans4[0].coach_id === U.max && bans4[0].grund === REASON && (r5?.sperren || []).length === 0 && neu4.length === 0 && !due4.includes(S(5)),
+                                JSON.stringify({ bans4, neu4: neu4.length, due4, r5: (r5?.sperren || []).length }));
+                            for (const x of refunds) {
+                                const id = (await one(`select id from public.coaching_disputes where booking_id = '${x.booking_id}'`)).id;
+                                await db.exec(`select public.coaching_dispute_mark_refunded('${id}')`);
+                            }
+                            const r6 = await runNow();
+                            const res6 = (r6?.reklamationen || []).filter(x => x.art === "ergebnis" && x.grund === "coach_gesperrt");
+                            const bk = await one(`select status from public.coaching_bookings where id = '${S(5)}'`);
+                            check("Nach der Erstattung: Kunden werden informiert, Termin steht auf „erstattet“", res6.length === refunds.length && bk.status === "erstattet", JSON.stringify({ n: res6.length, bk }));
+
+                            await withClaims(U.admin, "aal2", async () => {
+                                const res = await q(`select public.coach_license_restore('${U.max}')`);
+                                check("Admin kann eine irrtümliche Sperre aufheben", res.error === null, res.error || "");
+                            });
+                            const lic2 = await one(`select public.coach_license_active('${U.max}') as a, (select count(*) from public.moderation_log where action = 'coach_sperre_aufgehoben') as n`);
+                            check("Nach dem Aufheben wieder Pro-Coach, Aufhebung im Protokoll", lic2.a === true && Number(lic2.n) === 1, JSON.stringify(lic2));
                         }
                     }
                 }

@@ -277,7 +277,8 @@
         }
         const rep = await window.gsraReputation(userId);
         const c = rep?.coaching;
-        if (!c?.pro && !c?.lizenz) return;
+        // Abzeichen nur bei gültiger Lizenz (Pro-Coaches haben sie automatisch; entzogen = kein Abzeichen)
+        if (!c?.lizenz) return;
         const coach = document.createElement("span");
         coach.className = `gsra-coach-badge${c.pro ? " pro" : ""}`;
         coach.innerHTML = c.pro ? '<i class="fa-solid fa-crown"></i> Pro-Coach' : '<i class="fa-solid fa-award"></i> GSRA-Coach';
@@ -435,7 +436,7 @@
         row("fa-sliders", "Setups", setupContent);
         // Coaching: Pro-Coach bzw. GSRA-Coach, Zufriedenheit, Angebote, gegebene Coachings, häufige Merkmale
         const coachContent = [];
-        if (c.pro || c.lizenz) {
+        if (c.lizenz) {
             const badge = document.createElement("span");
             badge.className = `rep-coach${c.pro ? " pro" : ""}`;
             badge.innerHTML = c.pro ? '<i class="fa-solid fa-crown"></i> Pro-Coach' : '<i class="fa-solid fa-award"></i> GSRA-Coach';

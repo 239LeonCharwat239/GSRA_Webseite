@@ -194,6 +194,20 @@
     }
     document.querySelectorAll(".co-tab").forEach(t => t.addEventListener("click", () => showTab(t.dataset.tab)));
 
+    // Hinweis oben („Jetzt ansehen“) auf der Coaching-Seite selbst: nur der Anker ändert sich, ohne neu zu laden
+    window.addEventListener("hashchange", () => {
+        if (window.location.hash === "#reklamation") showTab("coach", { updateUrl: false });
+    });
+
+    // Regeln zu Reklamationen im Bereich „Als Coach“: einmal zugeklappt, bleibt es zu (nur in diesem Browser)
+    const rulesBox = $("coRules");
+    if (rulesBox) {
+        try { if (localStorage.getItem("gsra_co_regeln_zu") === "1") rulesBox.open = false; } catch (e) { /* ohne Speicher einfach offen */ }
+        rulesBox.addEventListener("toggle", () => {
+            try { localStorage.setItem("gsra_co_regeln_zu", rulesBox.open ? "0" : "1"); } catch (e) { /* egal */ }
+        });
+    }
+
     /* ---------- Angebote ---------- */
     function renderCategories() {
         const box = $("coCategories");
@@ -725,8 +739,16 @@
                 actions.append(closeBtn, offerBtn);
                 return;
             }
-            body.appendChild(el("p", "co-license-intro", "Coach wird man bei der GSRA über Leistung in der Community, nicht über ein Abo. Sind alle vier Punkte erfüllt, holst du dir die Lizenz hier."));
             const revoked = license.entzogen;
+            // Dauerhaft entzogen (SQL 036): keine Voraussetzungen mehr, nur die Begründung
+            if (revoked?.dauerhaft) {
+                body.appendChild(iconText("div", "co-license-revoked", "fa-user-lock",
+                    `Die GSRA hat dir die Coach-Lizenz am ${dateText(revoked.am)} dauerhaft entzogen. Begründung: ${revoked.grund || "–"}`));
+                body.appendChild(el("p", "co-license-intro", "Mit diesem Konto kannst du keine Coachings mehr anbieten – auch später nicht. Alles andere auf GSRA kannst du weiter nutzen. Hältst du die Entscheidung für einen Irrtum, schreib uns (Kontakt im Impressum)."));
+                actions.appendChild(closeBtn);
+                return;
+            }
+            body.appendChild(el("p", "co-license-intro", "Coach wird man bei der GSRA über Leistung in der Community, nicht über ein Abo. Sind alle vier Punkte erfüllt, holst du dir die Lizenz hier."));
             if (revoked) {
                 const note = el("div", "co-license-revoked");
                 note.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> ';
@@ -736,6 +758,8 @@
                 body.appendChild(note);
             }
             body.appendChild(criteriaList(license));
+            body.appendChild(iconText("p", "co-form-note", "fa-scale-balanced",
+                "Gut zu wissen: Kunden können ab Terminbeginn bis 7 Tage danach ein Problem melden. Du bekommst dann eine E-Mail und einen Hinweis auf jeder GSRA-Seite und hast 5 Tage Zeit zu antworten."));
             const blocked = revoked && !revoked.automatisch;
             const ready = license.fortschritt?.alle === true && !blocked;
             const claim = el("button", "gsra-dialog-btn primary", ready ? "Lizenz holen" : "Noch nicht alles erfüllt");
@@ -778,12 +802,20 @@
             text.appendChild(el("span", "", `Seit ${license.erteilt_am ? dateText(license.erteilt_am) : "–"}. Bleib fair und zuverlässig: Verwarnungen oder Sperren entziehen die Lizenz automatisch.`));
         } else {
             const done = Object.values(license.fortschritt?.erfuellt || {}).filter(Boolean).length;
-            text.appendChild(el("strong", "", license.entzogen ? "Coach-Lizenz entzogen" : "Noch keine Coach-Lizenz"));
-            text.appendChild(el("span", "", `${done} von 4 Voraussetzungen erfüllt. Coach wird man über Setups, gute Bewertungen und faires Verhalten.`));
+            if (license.entzogen?.dauerhaft) {
+                box.classList.add("banned");
+                head.innerHTML = '<i class="fa-solid fa-user-lock"></i>';
+                text.appendChild(el("strong", "", "Coach-Lizenz dauerhaft entzogen"));
+                text.appendChild(el("span", "", `Begründung: ${String(license.entzogen.grund || "–").replace(/[.!]\s*$/, "")}. Mit diesem Konto kannst du keine Coachings mehr anbieten.`));
+            } else {
+                text.appendChild(el("strong", "", license.entzogen ? "Coach-Lizenz entzogen" : "Noch keine Coach-Lizenz"));
+                text.appendChild(el("span", "", `${done} von 4 Voraussetzungen erfüllt. Coach wird man über Setups, gute Bewertungen und faires Verhalten.`));
+            }
         }
         head.appendChild(text);
         const actions = el("div", "co-actions");
-        const btn = iconText("button", `co-btn ${license.aktiv ? "" : "primary"}`, "fa-list-check", license.aktiv ? "Details" : "Voraussetzungen ansehen");
+        const btn = iconText("button", `co-btn ${license.aktiv || license.entzogen?.dauerhaft ? "" : "primary"}`, "fa-list-check",
+            license.aktiv || license.entzogen?.dauerhaft ? "Details" : "Voraussetzungen ansehen");
         btn.type = "button";
         btn.addEventListener("click", openLicenseDialog);
         actions.appendChild(btn);
@@ -1078,14 +1110,16 @@
         teilweise_erstattet: ["fa-circle-half-stroke", "Teilweise erstattet", "ok"],
         abgelehnt: ["fa-circle-xmark", "Abgelehnt", "bad"]
     };
+    // Nur zur Anzeige (nicht im Melde-Fenster): Erstattung, weil der Coach dauerhaft gesperrt wurde (SQL 036)
+    const DISPUTE_LABELS = { ...DISPUTE_REASONS, coach_gesperrt: ["fa-user-lock", "Coach darf nicht mehr coachen", ""] };
     const canReportProblem = (b) => ["bezahlt", "erledigt"].includes(b.status) && b.stripe_payment_intent && b.scheduled_at
         && new Date(b.scheduled_at).getTime() <= Date.now() && Date.now() - new Date(b.scheduled_at).getTime() < 7 * 86400000;
 
     function disputeBox(d, b, role) {
         const box = el("div", `co-dispute ${d.status}`);
         const head = el("div", "co-dispute-head");
-        const [rIcon, rLabel] = DISPUTE_REASONS[d.reason] || ["fa-flag", d.reason];
-        head.appendChild(iconText("strong", "", rIcon, `Problem gemeldet: ${rLabel}`));
+        const [rIcon, rLabel] = DISPUTE_LABELS[d.reason] || ["fa-flag", d.reason];
+        head.appendChild(iconText("strong", "", rIcon, d.reason === "coach_gesperrt" ? `Coaching entfällt: ${rLabel}` : `Problem gemeldet: ${rLabel}`));
         const [sIcon, sLabel, tone] = DISPUTE_STATUS[d.status] || ["fa-circle", d.status, "off"];
         head.appendChild(iconText("span", `co-status ${tone}`, sIcon, sLabel));
         box.appendChild(head);
@@ -1101,7 +1135,7 @@
         let info = "";
         if (d.status === "offen" && !overdue) {
             info = role === "coach"
-                ? `Bitte antworte bis ${dateTime(d.respond_until)} Uhr: erstatte das Coaching oder widersprich mit einer kurzen Begründung. ${d.reason === "nicht_erschienen" ? "Ohne Antwort wird automatisch voll erstattet." : "Ohne Einigung entscheidet die GSRA-Moderation."}`
+                ? `Bitte antworte bis ${dateTime(d.respond_until)} Uhr: erstatte das Coaching oder widersprich mit einer kurzen Begründung. ${d.reason === "nicht_erschienen" ? "Ohne Antwort wird automatisch voll erstattet." : "Ohne Einigung entscheidet die GSRA-Moderation."} 24 Stunden vor Fristende erinnern wir dich noch einmal per E-Mail.`
                 : `${nameOf(b.coach_id)} kann bis ${dateTime(d.respond_until)} Uhr erstatten oder widersprechen. ${d.reason === "nicht_erschienen" ? "Ohne Antwort bekommst du dein Geld automatisch zurück." : "Ohne Einigung entscheidet die GSRA-Moderation."}`;
         } else if (d.status === "offen" || d.status === "widerspruch") {
             info = "Die GSRA-Moderation prüft den Fall und entscheidet – beide bekommen das Ergebnis per E-Mail.";
@@ -1214,7 +1248,7 @@
         field.appendChild(textarea);
         form.appendChild(field);
         form.appendChild(iconText("p", "co-form-note co-wide", "fa-circle-info",
-            "So geht es weiter: Der Coach kann innerhalb von 48 Stunden erstatten oder widersprechen. Ist der Coach nicht erschienen und antwortet nicht, bekommst du dein Geld automatisch zurück. Sonst entscheidet die GSRA-Moderation. Bitte melde nur echte Probleme – Missbrauch kann zu einer Verwarnung führen."));
+            "So geht es weiter: Der Coach kann innerhalb von 5 Tagen erstatten oder widersprechen. Ist der Coach nicht erschienen und antwortet nicht, bekommst du dein Geld automatisch zurück. Sonst entscheidet die GSRA-Moderation. Bitte melde nur echte Probleme – Missbrauch kann zu einer Verwarnung führen."));
         const actions = el("div", "gsra-dialog-actions co-wide");
         const cancelBtn = el("button", "gsra-dialog-btn secondary", "Abbrechen");
         cancelBtn.type = "button";
@@ -1252,7 +1286,7 @@
                 return;
             }
             close();
-            showToast(`Danke, deine Meldung ist eingegangen. ${nameOf(b.coach_id)} hat jetzt 48 Stunden Zeit zu reagieren.`, "success");
+            showToast(`Danke, deine Meldung ist eingegangen. ${nameOf(b.coach_id)} hat jetzt 5 Tage Zeit zu reagieren.`, "success");
             loadBuyerBookings();
         });
         document.body.appendChild(overlay);
@@ -1285,7 +1319,7 @@
             "",
             "Bedingungen bei der Buchung: kostenlose Stornierung bis 24 Stunden vor dem Termin, danach keine Erstattung",
             "durch den Kunden; Absprachen über den GSRA-Messenger.",
-            ...(d ? ["", `Reklamation: ${(DISPUTE_REASONS[d.reason] || [null, d.reason])[1]} (gemeldet am ${fmt(d.created_at)})`,
+            ...(d ? ["", `Reklamation: ${(DISPUTE_LABELS[d.reason] || [null, d.reason])[1]} (gemeldet am ${fmt(d.created_at)})`,
                 `Stand: ${(DISPUTE_STATUS[d.status] || [null, d.status])[1]}${d.decision ? ` – ${d.decision}` : ""}`] : []),
             "",
             "Hinweis: Den Chatverlauf mit dem Kunden findest du im GSRA-Messenger (z. B. als Bildschirmfoto beifügen)."
@@ -2125,6 +2159,16 @@
             setBadge("coBadgeCoach", list.filter(b => b.status === "angefragt" || disputesByBooking.get(b.id)?.status === "offen").length);
             bookingCache.coach = list;
             renderNextUp();
+            // Vom Hinweis oben auf jeder Seite (coaching.html?tab=coach#reklamation): offene Reklamation zeigen
+            if (window.location.hash === "#reklamation") {
+                history.replaceState(null, "", tabUrl("coach"));
+                const box = $("coCoachRequests").querySelector(".co-dispute.offen") || $("coCoachRequests").querySelector(".co-dispute.widerspruch");
+                if (box) {
+                    box.scrollIntoView({ behavior: "smooth", block: "center" });
+                    box.classList.add("co-flash");
+                    setTimeout(() => box.classList.remove("co-flash"), 2600);
+                }
+            }
         }
         renderLicenseBox();
         // Ungespeicherte Änderungen am Kalender nicht beim Neuladen der Anfragen verwerfen
