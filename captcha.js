@@ -41,9 +41,11 @@
         if (!key || !container) return null;
         const ts = await load();
         let current = null;
+        let failed = false;
         let waiting = [];
         const settle = (value) => {
             current = value;
+            if (value) failed = false;
             waiting.splice(0).forEach(fn => fn(value));
         };
         container.classList.add("gsra-captcha");
@@ -54,12 +56,17 @@
             appearance: "interaction-only", // sichtbar nur, wenn Cloudflare wirklich nachfragen muss
             callback: (token) => settle(token),
             "expired-callback": () => { current = null; },
-            "timeout-callback": () => { current = null; }
+            "timeout-callback": () => { current = null; },
+            // Prüfung gescheitert (z. B. strenger Tracking-Schutz): Wartende sofort informieren, Cloudflare versucht es erneut
+            "error-callback": () => { failed = true; settle(null); }
         });
         return {
             // Wartet auf ein gültiges Token (null, wenn nach der Wartezeit keins da ist)
+            // true, wenn Cloudflare den Browser gerade nicht prüfen konnte
+            failed: () => failed,
             token(timeoutMs = 45000) {
                 if (current) return Promise.resolve(current);
+                if (failed) return Promise.resolve(null);
                 return new Promise(resolve => {
                     const timer = setTimeout(() => {
                         waiting = waiting.filter(fn => fn !== done);

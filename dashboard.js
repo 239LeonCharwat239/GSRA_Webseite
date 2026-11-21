@@ -527,7 +527,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                     if (window.gsraCaptcha?.enabled) {
                         captchaToken = captcha ? await captcha.token() : null;
                         if (!captchaToken) {
-                            fail("Bitte bestätige kurz über dem Knopf, dass du kein Bot bist, und versuche es erneut.");
+                            if (captcha?.failed()) captcha.reset();
+                            fail(captcha?.failed()
+                                ? "Der Bot-Schutz konnte deinen Browser gerade nicht prüfen. Bitte lade die Seite neu und versuche es erneut."
+                                : "Bitte bestätige kurz über dem Knopf, dass du kein Bot bist, und versuche es erneut.");
                             return;
                         }
                     }

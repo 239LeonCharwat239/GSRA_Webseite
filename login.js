@@ -39,7 +39,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             return null;
         }
         const token = await captcha.token();
-        if (!token) showToast('Bitte bestätige kurz unter dem Formular, dass du kein Bot bist.', 'error');
+        if (!token && captcha.failed()) {
+            captcha.reset(); // nächster Versuch mit neuer Prüfung
+            showToast('Der Bot-Schutz konnte deinen Browser gerade nicht prüfen. Bitte lade die Seite neu – oder versuche es mit einem anderen Browser bzw. ohne strengen Tracking-Blocker.', 'error');
+        } else if (!token) {
+            showToast('Bitte bestätige kurz unter dem Formular, dass du kein Bot bist.', 'error');
+        }
         return token;
     };
     const captchaUsed = () => captcha?.reset();
