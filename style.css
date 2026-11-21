@@ -6800,6 +6800,26 @@ button.dash-avatar:hover,
     background: rgba(255, 255, 255, 0.08);
 }
 
+/* „Wie war dein Coaching?“ (auth-nav.js, SQL 038): gelb statt grün, bleibt stehen bis zur Entscheidung */
+.gsra-review-card { border-color: rgba(255, 204, 0, 0.4); border-left-color: var(--gsra-yellow); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), 0 0 18px rgba(255, 204, 0, 0.12); }
+.gsra-review-card .gsra-notify-avatar { border-color: var(--gsra-yellow); color: var(--gsra-yellow); background: rgba(255, 204, 0, 0.1); }
+.gsra-review-card .gsra-notify-title { color: var(--gsra-yellow); }
+.gsra-review-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.gsra-review-card .gsra-notify-action { background: var(--gsra-yellow); color: #0b0c10; }
+.gsra-review-card .gsra-notify-action:hover { background: #ffd633; }
+.gsra-review-later, .gsra-review-never {
+    margin-top: 8px;
+    padding: 6px 4px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.gsra-review-later:hover, .gsra-review-never:hover { color: #fff; }
+
 .gsra-notify-progress {
     position: absolute;
     left: 0;
@@ -11159,6 +11179,59 @@ select option {
 .co-away-banner-text { flex: 1 1 280px; min-width: 0; }
 .co-away-banner-text i { margin-right: 8px; color: #00c2ff; }
 .co-away-dialog { max-width: 460px; }
+/* Dauer-Varianten (SQL 038) */
+.co-lengths { color: #fff; font-weight: 700; }
+.co-price-note.lengths i { margin-right: 4px; color: var(--gsra-blue); }
+.co-duration-choice { display: flex; flex-direction: column; gap: 8px; text-align: left; }
+.co-duration-choice[hidden] { display: none; }
+.co-duration-label { color: #fff; font-size: 14px; }
+.co-duration-label i { margin-right: 6px; color: var(--gsra-yellow); }
+.co-duration-options { display: flex; flex-wrap: wrap; gap: 8px; }
+.co-duration-option {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    min-width: 96px;
+    padding: 9px 14px;
+    background: #0f1014;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    color: #e3e5eb;
+    font: inherit;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+.co-duration-option strong { color: #fff; font-size: 14px; }
+.co-duration-option span { color: var(--gsra-yellow); font-size: 13px; font-weight: 700; }
+.co-duration-option:hover { border-color: rgba(0, 85, 255, 0.6); }
+.co-duration-option.active { background: rgba(0, 85, 255, 0.16); border-color: var(--gsra-blue); box-shadow: 0 0 0 1px var(--gsra-blue) inset; }
+.co-variants { display: flex; flex-direction: column; gap: 8px; padding: 12px; background: rgba(255, 255, 255, 0.02); border: 1px dashed rgba(255, 255, 255, 0.12); border-radius: 8px; text-align: left; }
+.co-variants-head { display: flex; flex-direction: column; gap: 2px; }
+.co-variants-title { color: #cfd3dc; font-size: 12px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; }
+.co-variants-head small { color: var(--text-muted); font-size: 12px; }
+.co-variant-row { display: flex; align-items: center; gap: 8px; }
+.co-variant-row select, .co-variant-row input {
+    box-sizing: border-box;
+    height: 40px;
+    min-width: 0;
+    margin: 0;
+    padding: 8px 12px;
+    background: #0b0c10;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    color: #fff;
+    color-scheme: dark;
+    font-family: inherit;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.co-variant-row select:focus, .co-variant-row input:focus { border-color: var(--gsra-blue); box-shadow: 0 0 0 3px rgba(0, 85, 255, 0.22); }
+.co-variant-row select { flex: 1 1 140px; }
+.co-variant-row input { flex: 0 1 120px; }
+.co-variant-euro { color: var(--text-muted); }
+.co-variants .co-cal-add { align-self: flex-start; }
 .co-btn.co-flash-btn { animation: co-flash 0.9s ease 3; }
 .co-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 /* Rahmen = Hintergrund der schrägen Form, Innenfläche = ::before (wie die Marktplatz-Knöpfe) */

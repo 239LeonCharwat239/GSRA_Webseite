@@ -205,6 +205,67 @@ const initAuthNav = async () => {
         }
     };
 
+    // Nach einem Coaching: „Wie war dein Coaching?“ direkt auf der Seite (SQL 038) – statt gleich eine E-Mail zu schicken.
+    // „Später“ blendet die Frage bis zum nächsten Browser-Start aus, „Nicht bewerten“ dauerhaft (dann auch keine E-Mail).
+    const showReviewPrompt = async () => {
+        try {
+            if (/\/(login|passwort-neu)(\.html)?$/.test(window.location.pathname)) return;
+            const { data, error } = await client.rpc("coaching_review_prompts");
+            if (error || !Array.isArray(data)) return;
+            let later = [];
+            try { later = JSON.parse(sessionStorage.getItem("gsra_bewertung_spaeter") || "[]"); } catch (e) { later = []; }
+            const p = data.find(x => !later.includes(x.id));
+            if (!p || document.getElementById("gsraReviewPrompt")) return;
+            let stack = document.getElementById("gsraNotifyStack");
+            if (!stack) {
+                stack = document.createElement("div");
+                stack.id = "gsraNotifyStack";
+                stack.className = "gsra-notify-stack";
+                document.body.appendChild(stack);
+            }
+            const card = document.createElement("div");
+            card.id = "gsraReviewPrompt";
+            card.className = "gsra-notify-card gsra-review-card";
+            card.setAttribute("role", "dialog");
+            card.setAttribute("aria-label", "Coaching bewerten");
+            card.innerHTML = `
+                <div class="gsra-notify-avatar"><i class="fa-solid fa-star"></i></div>
+                <div class="gsra-notify-body">
+                    <div class="gsra-notify-title"><i class="fa-solid fa-flag-checkered"></i> Wie war dein Coaching?</div>
+                    <div class="gsra-notify-text"></div>
+                    <div class="gsra-review-actions">
+                        <a class="gsra-notify-action" href="coaching.html?tab=anfragen#bewerten-${encodeURIComponent(p.id)}"><i class="fa-solid fa-star"></i> Jetzt bewerten</a>
+                        <button type="button" class="gsra-review-later">Später</button>
+                        <button type="button" class="gsra-review-never">Nicht bewerten</button>
+                    </div>
+                </div>
+                <button type="button" class="gsra-notify-close" title="Später"><i class="fa-solid fa-xmark"></i></button>`;
+            const text = card.querySelector(".gsra-notify-text");
+            text.append("„");
+            const strong = document.createElement("strong");
+            strong.textContent = p.titel || "Coaching";
+            text.append(strong, `“ mit ${p.coach_name || "deinem Coach"} – deine Bewertung hilft anderen Fahrern und dem Coach.`);
+            const remove = () => {
+                card.classList.add("leaving");
+                setTimeout(() => card.remove(), 300);
+            };
+            const snooze = () => {
+                try { sessionStorage.setItem("gsra_bewertung_spaeter", JSON.stringify([...later, p.id])); } catch (e) { /* egal */ }
+                remove();
+            };
+            card.querySelector(".gsra-review-later").addEventListener("click", snooze);
+            card.querySelector(".gsra-notify-close").addEventListener("click", snooze);
+            card.querySelector(".gsra-review-never").addEventListener("click", async () => {
+                await client.rpc("coaching_review_dismiss", { _booking_id: p.id }).then(() => {}, () => {});
+                remove();
+            });
+            card.querySelector(".gsra-notify-action").addEventListener("click", remove);
+            stack.appendChild(card);
+        } catch (e) {
+            /* ohne SQL 038 einfach keine Abfrage */
+        }
+    };
+
     // Angenommene Freundschaftsanfrage: Hinweis im GSRA-Design – beim Öffnen einer Seite und live
     const showFriendAccepted = async (friendId) => {
         const { data: friend } = await client.from("profiles").select("username, avatar_url").eq("id", friendId).maybeSingle();
@@ -296,6 +357,7 @@ const initAuthNav = async () => {
     if (session?.user?.id && await checkBan(session.user.id)) return;
     if (session?.user?.id) showAdminLink(session.user.id);
     if (session?.user?.id) showCoachDisputeNotice(session.user.id);
+    if (session?.user?.id) setTimeout(showReviewPrompt, 1500); // nach dem Seitenaufbau, nicht sofort aufdringlich
 
     if (session?.user?.id) {
         startVisibilityHeader(client);

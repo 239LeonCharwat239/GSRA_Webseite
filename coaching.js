@@ -68,6 +68,9 @@
     let awayCoaches = new Map();  // Coaches gerade im Urlaub: coach_id → bis (SQL 037)
     let myAway = null;            // eigener Urlaub: { urlaub, geplant, von, bis }
     let editingOffer = null;
+    let variantsByOffer = new Map(); // weitere Längen je Angebot: offer_id → [{ duration_minutes, price_cents }] (SQL 038)
+    let bookingDuration = null;      // gewählte Länge beim Anfragen
+    let variantRows = [];            // Formular „Weitere Längen“: [{ dauer, preis }] (Preis als Text in €)
     const coachReadyCache = new Map();
 
     const $ = (id) => document.getElementById(id);
@@ -77,7 +80,18 @@
     // Rabatt des Coaches (SQL 037): gilt bis einschließlich discount_until (deutsche Zeit); gerechnet wird in der Datenbank
     const berlinToday = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Berlin" });
     const discountActive = (o) => Boolean(o?.discount_percent) && (!o.discount_until || o.discount_until >= berlinToday());
-    const priceOf = (o) => (discountActive(o) ? Math.round(o.price_cents * (100 - o.discount_percent) / 100) : o.price_cents);
+    const discounted = (o, cents) => (discountActive(o) ? Math.round(cents * (100 - o.discount_percent) / 100) : cents);
+    const priceOf = (o) => discounted(o, o.price_cents);
+    // Längen eines Angebots: Grund-Dauer plus weitere Längen des Coaches (SQL 038), kürzeste zuerst
+    const optionsOf = (o) => [{ dauer: o.duration_minutes, preis: o.price_cents },
+        ...(variantsByOffer.get(o.id) || []).map(v => ({ dauer: v.duration_minutes, preis: v.price_cents }))].sort((a, b) => a.dauer - b.dauer);
+    const storeVariants = (rows) => {
+        (rows || []).forEach(v => {
+            if (!variantsByOffer.has(v.offer_id)) variantsByOffer.set(v.offer_id, []);
+            const list = variantsByOffer.get(v.offer_id);
+            if (!list.some(x => x.duration_minutes === v.duration_minutes)) list.push(v);
+        });
+    };
     const dayText = (isoDate) => new Date(`${isoDate}T12:00:00`).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
     const duration = (min) => {
         const h = Math.floor(min / 60), m = min % 60;
@@ -205,7 +219,7 @@
     // Hinweis oben („Jetzt ansehen“) auf der Coaching-Seite selbst: nur der Anker ändert sich, ohne neu zu laden
     window.addEventListener("hashchange", () => {
         if (window.location.hash === "#reklamation") showTab("coach", { updateUrl: false });
-        if (window.location.hash === "#bewerten") showTab("anfragen", { updateUrl: false });
+        if (/^#bewerten(-[\w-]+)?$/.test(window.location.hash)) showTab("anfragen", { updateUrl: false });
     });
 
     // Regeln zu Reklamationen im Bereich „Als Coach“: einmal zugeklappt, bleibt es zu (nur in diesem Browser)
@@ -247,6 +261,11 @@
         } else {
             box.appendChild(el("strong", "co-price-main", euro(price)));
         }
+        // Weitere Längen mit ihrem Preis (Rabatt gilt für alle Längen)
+        const more = optionsOf(offer).filter(x => x.dauer !== offer.duration_minutes);
+        if (more.length) {
+            box.appendChild(iconText("small", "co-price-note lengths", "fa-clock", `für ${duration(offer.duration_minutes)} · auch ${more.map(x => `${duration(x.dauer)} ${euro(discounted(offer, x.preis))}`).join(" · ")}`));
+        }
         if (offer.coach_id === me) {
             box.appendChild(el("small", "co-price-note", "Dein Angebot – an dich, abzüglich Stripe-Gebühr"));
         } else if (feePercent > 0) {
@@ -282,7 +301,8 @@
 
         card.appendChild(el("h3", "co-card-title", offer.title));
         const meta = el("div", "co-meta");
-        meta.appendChild(iconText("span", "", "fa-clock", duration(offer.duration_minutes)));
+        const opts = optionsOf(offer);
+        meta.appendChild(iconText("span", opts.length > 1 ? "co-lengths" : "", "fa-clock", opts.map(x => duration(x.dauer)).join(" · ")));
         if (offer.simulation) meta.appendChild(iconText("span", "", "fa-gamepad", offer.simulation));
         if (calendarCoaches.has(offer.coach_id)) meta.appendChild(iconText("span", "co-cal-badge", "fa-calendar-check", "Termin direkt wählen"));
         const away = awayCoaches.has(offer.coach_id);
@@ -602,6 +622,14 @@
             client.rpc("coaching_away_coaches")
         ]);
         if (request !== offersRequest) return;
+        // Weitere Längen der Angebote (SQL 038); ohne 038 einfach nur die Grund-Dauer
+        variantsByOffer = new Map();
+        const offerIds = (data || []).map(o => o.id);
+        if (offerIds.length) {
+            const vars = await client.from("coaching_offer_variants").select("offer_id, duration_minutes, price_cents").in("offer_id", offerIds);
+            if (request !== offersRequest) return;
+            if (!vars.error) storeVariants(vars.data);
+        }
         proIds = new Set((pros.data || []).map(p => p.user_id));
         // Ohne SQL 037 gibt es den Urlaubsmodus noch nicht: dann einfach ohne Hinweis
         awayCoaches = new Map(away.error ? [] : (away.data || []).map(a => [a.coach_id, a.bis || null]));
@@ -669,6 +697,59 @@
     });
 
     /* ---------- Angebot anlegen / bearbeiten ---------- */
+    // Preis-Eingabe in Cent („40“, „40,50“, „1.000“)
+    const parseEuro = (text) => Math.round(Number(String(text || "").trim().replace(/\s|€/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".")) * 100);
+
+    // „Weitere Längen“ (SQL 038): bis zu 3 Längen mit eigenem Preis, Kunden wählen beim Anfragen
+    const LENGTH_CHOICES = [30, 45, 60, 90, 120, 150, 180, 240, 300, 360];
+    function renderVariantEditor() {
+        const box = $("coVariants");
+        if (!box) return;
+        box.replaceChildren();
+        const head = el("div", "co-variants-head");
+        head.appendChild(el("span", "co-variants-title", "Weitere Längen"));
+        head.appendChild(el("small", "", "optional, bis zu 3 – Kunden wählen beim Anfragen, z. B. 1, 2 oder 3 Stunden"));
+        box.appendChild(head);
+        variantRows.forEach((row, i) => {
+            const line = el("div", "co-variant-row");
+            const sel = document.createElement("select");
+            sel.setAttribute("aria-label", `Weitere Länge ${i + 1}`);
+            [...new Set([...LENGTH_CHOICES, Number(row.dauer)])].filter(Boolean).sort((a, b) => a - b)
+                .forEach(m => sel.add(new Option(duration(m), String(m))));
+            sel.value = String(row.dauer);
+            sel.addEventListener("change", () => { row.dauer = Number(sel.value); });
+            const price = document.createElement("input");
+            price.type = "text";
+            price.inputMode = "decimal";
+            price.maxLength = 8;
+            price.placeholder = "Preis in €";
+            price.value = row.preis;
+            price.setAttribute("aria-label", `Preis für weitere Länge ${i + 1} in Euro`);
+            price.addEventListener("input", () => { row.preis = price.value; });
+            const rm = el("button", "co-cal-remove");
+            rm.type = "button";
+            rm.title = "Länge entfernen";
+            rm.setAttribute("aria-label", "Länge entfernen");
+            rm.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+            rm.addEventListener("click", () => { variantRows.splice(i, 1); renderVariantEditor(); });
+            line.append(sel, price, el("span", "co-variant-euro", "€"), rm);
+            box.appendChild(line);
+        });
+        if (variantRows.length < 3) {
+            const add = iconText("button", "co-cal-add", "fa-plus", "Weitere Länge");
+            add.type = "button";
+            add.addEventListener("click", () => {
+                const base = Number($("coDuration").value);
+                const used = new Set([base, ...variantRows.map(r => Number(r.dauer))]);
+                const next = LENGTH_CHOICES.find(m => m > base && !used.has(m)) || LENGTH_CHOICES.find(m => !used.has(m));
+                variantRows.push({ dauer: next, preis: "" });
+                renderVariantEditor();
+                box.querySelector(".co-variant-row:last-of-type input")?.focus();
+            });
+            box.appendChild(add);
+        }
+    }
+
     function openOfferForm(offer = null) {
         if (!offer && !canOffer()) {
             openLicenseDialog();
@@ -681,6 +762,8 @@
         $("coDiscount").value = discountActive(offer) ? String(offer.discount_percent) : "";
         $("coDiscountUntil").min = berlinToday();
         $("coDiscountUntil").value = discountActive(offer) && offer.discount_until ? offer.discount_until : "";
+        variantRows = (variantsByOffer.get(offer?.id) || []).map(v => ({ dauer: v.duration_minutes, preis: (v.price_cents / 100).toLocaleString("de-DE", { maximumFractionDigits: 2 }) }));
+        renderVariantEditor();
         $("coTitle").value = offer?.title || "";
         $("coCategory").value = offer?.category || "Fahrtechnik";
         $("coSim").value = offer?.simulation || "";
@@ -1101,6 +1184,17 @@
             return;
         }
         const discountUntil = discount ? ($("coDiscountUntil").value || null) : null;
+        // Weitere Längen prüfen: Preis 5–1.000 €, keine doppelte Länge (auch nicht zur Grund-Dauer)
+        const baseDuration = Number($("coDuration").value);
+        const variants = variantRows.map(r => ({ dauer: Number(r.dauer), preis: parseEuro(r.preis) }));
+        if (variants.some(v => !Number.isFinite(v.preis) || v.preis < 500 || v.preis > 100000)) {
+            showToast("Jede weitere Länge braucht einen Preis zwischen 5 € und 1.000 €.", "error");
+            return;
+        }
+        if (new Set([baseDuration, ...variants.map(v => v.dauer)]).size !== variants.length + 1) {
+            showToast("Jede Länge darf es nur einmal geben – auch nicht doppelt zur Dauer oben.", "error");
+            return;
+        }
         const submit = e.submitter || $("coOfferForm").querySelector("[type=submit]");
         submit.disabled = true;
         const { data: savedId, error } = await client.rpc("coaching_save_offer", {
@@ -1120,6 +1214,13 @@
         if (offerId && (discount !== oldDiscount || discountUntil !== oldUntil)) {
             const { error: discountError } = await client.rpc("coaching_set_discount", { _offer_id: offerId, _percent: discount, _until: discountUntil });
             if (discountError) showToast(errorText(discountError, "Der Rabatt konnte nicht gespeichert werden."), "error");
+        }
+        // Weitere Längen nur speichern, wenn sie sich geändert haben
+        const sortKey = (list) => JSON.stringify([...list].sort((a, b) => a.dauer - b.dauer));
+        const oldVariants = (variantsByOffer.get(editingId) || []).map(v => ({ dauer: v.duration_minutes, preis: v.price_cents }));
+        if (offerId && sortKey(variants) !== sortKey(oldVariants)) {
+            const { error: variantError } = await client.rpc("coaching_save_variants", { _offer_id: offerId, _variants: variants });
+            if (variantError) showToast(errorText(variantError, "Die weiteren Längen konnten nicht gespeichert werden."), "error");
         }
         submit.disabled = false;
         closeModal("coOfferModal");
@@ -1152,9 +1253,10 @@
     }
 
     /* ---------- Anfragen ---------- */
-    function openBooking(offer) {
-        bookingOffer = offer;
-        $("coBookSub").textContent = `${offer.title} · ${duration(offer.duration_minutes)} mit ${nameOf(offer.coach_id)}`;
+    // Preis-Tabelle und Untertitel für die gewählte Länge
+    function renderBookPrice(offer) {
+        const option = optionsOf(offer).find(x => x.dauer === bookingDuration) || { dauer: offer.duration_minutes, preis: offer.price_cents };
+        $("coBookSub").textContent = `${offer.title} · ${duration(option.dauer)} mit ${nameOf(offer.coach_id)}`;
         const table = $("coBookPrice");
         table.replaceChildren();
         const row = (label, value, cls = "") => {
@@ -1162,11 +1264,52 @@
             const dd = el("dd", cls, value);
             table.append(dt, dd);
         };
-        const price = priceOf(offer);
+        const price = discounted(offer, option.preis);
         const fee = feeOf(price);
-        row("Preis des Coaches", discountActive(offer) ? `${euro(price)} (statt ${euro(offer.price_cents)}, −${offer.discount_percent} %)` : euro(price));
+        row("Preis des Coaches", discountActive(offer) ? `${euro(price)} (statt ${euro(option.preis)}, −${offer.discount_percent} %)` : euro(price));
         row(feePercent ? "Servicegebühr (10 %, Paddock)" : "Servicegebühr (Pole/Alliance)", feePercent ? euro(fee) : "entfällt");
         row("Gesamt", euro(price + fee), "total");
+    }
+
+    // Länge wählen (nur wenn der Coach mehrere anbietet); ändert Preis und freie Termine
+    function renderDurationChoice(offer) {
+        const box = $("coBookDuration");
+        const opts = optionsOf(offer);
+        box.hidden = opts.length < 2;
+        box.replaceChildren();
+        if (opts.length < 2) return;
+        box.appendChild(iconText("strong", "co-duration-label", "fa-clock", "Länge wählen"));
+        const list = el("div", "co-duration-options");
+        list.setAttribute("role", "radiogroup");
+        list.setAttribute("aria-label", "Länge des Coachings");
+        opts.forEach(x => {
+            const active = x.dauer === bookingDuration;
+            const btn = el("button", `co-duration-option${active ? " active" : ""}`);
+            btn.type = "button";
+            btn.setAttribute("role", "radio");
+            btn.setAttribute("aria-checked", String(active));
+            btn.append(el("strong", "", duration(x.dauer)), el("span", "", euro(discounted(offer, x.preis))));
+            btn.addEventListener("click", () => {
+                if (bookingDuration === x.dauer) return;
+                bookingDuration = x.dauer;
+                selectedSlot = null;
+                renderDurationChoice(offer);
+                renderBookPrice(offer);
+                if (calendarCoaches.has(offer.coach_id)) {
+                    $("coSlotPicker").replaceChildren(iconText("p", "co-slots-loading", "fa-spinner fa-spin", "Lade freie Termine …"));
+                    loadSlots(offer);
+                }
+            });
+            list.appendChild(btn);
+        });
+        box.appendChild(list);
+    }
+
+    function openBooking(offer) {
+        bookingOffer = offer;
+        bookingDuration = offer.duration_minutes;
+        renderDurationChoice(offer);
+        renderBookPrice(offer);
         $("coBookTime").value = "";
         $("coBookMessage").value = "";
         // Hat der Coach einen Kalender, wählt man einen freien Termin; sonst Wunschtermin als Text
@@ -1193,8 +1336,12 @@
     // Freie Termine laden (zuerst 4 Wochen, auf Wunsch weitere); ohne Kalender zurück zum Wunschtermin
     async function loadSlots(offer, more = false) {
         const from = more && slotState ? isoDay(new Date(Date.now() + slotState.daysLoaded * 86400000)) : null;
-        const { data, error } = await client.rpc("coaching_free_slots", { _offer_id: offer.id, _from: from, _days: 28 });
-        if (bookingOffer !== offer) return; // Fenster inzwischen für ein anderes Angebot geöffnet
+        const dur = bookingDuration || offer.duration_minutes;
+        // Andere Länge als die Grund-Dauer: freie Termine passend zu dieser Länge (SQL 038)
+        const { data, error } = dur !== offer.duration_minutes
+            ? await client.rpc("coaching_free_slots_dauer", { _offer_id: offer.id, _duration: dur, _from: from, _days: 28 })
+            : await client.rpc("coaching_free_slots", { _offer_id: offer.id, _from: from, _days: 28 });
+        if (bookingOffer !== offer || (bookingDuration || offer.duration_minutes) !== dur) return; // inzwischen anderes Angebot oder andere Länge
         if (error || !data?.kalender) {
             if (more) return showToast(errorText(error, "Weitere Termine konnten nicht geladen werden."), "error");
             slotState = null;
@@ -1209,7 +1356,7 @@
             slotState.slots = [...slotState.slots, ...fresh.filter(d => !known.has(d.getTime()))].sort((a, b) => a - b);
             slotState.daysLoaded += 28;
         } else {
-            slotState = { offer, slots: fresh, day: null, daysLoaded: 28 };
+            slotState = { offer, slots: fresh, day: null, daysLoaded: 28, duration: dur };
         }
         renderSlots();
     }
@@ -1291,7 +1438,7 @@
         if (more) picker.appendChild(more);
         const chosen = el("p", `co-slot-chosen${selectedSlot ? " ok" : ""}`);
         if (selectedSlot) {
-            const end = new Date(selectedSlot.getTime() + st.offer.duration_minutes * 60000);
+            const end = new Date(selectedSlot.getTime() + (st.duration || st.offer.duration_minutes) * 60000);
             chosen.appendChild(iconText("span", "", "fa-circle-check", `Dein Termin: ${dateTime(selectedSlot.toISOString())} – ${end.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })} Uhr`));
         } else {
             chosen.appendChild(iconText("span", "", "fa-hand-pointer", "Wähle einen Tag und eine Uhrzeit."));
@@ -1309,9 +1456,16 @@
         const submit = e.submitter || $("coBookForm").querySelector("[type=submit]");
         submit.disabled = true;
         const message = $("coBookMessage").value.trim();
-        const { data, error } = slotState
-            ? await client.rpc("coaching_book_at", { _offer_id: bookingOffer.id, _scheduled_at: selectedSlot.toISOString(), _message: message })
-            : await client.rpc("coaching_book", { _offer_id: bookingOffer.id, _message: message, _preferred_time: $("coBookTime").value.trim() });
+        const dur = bookingDuration || bookingOffer.duration_minutes;
+        // Andere Länge (SQL 038): eigener Aufruf; sonst wie bisher
+        const { data, error } = dur !== bookingOffer.duration_minutes
+            ? await client.rpc("coaching_book_dauer", {
+                _offer_id: bookingOffer.id, _duration: dur, _scheduled_at: slotState ? selectedSlot.toISOString() : null,
+                _message: message, _preferred_time: slotState ? null : $("coBookTime").value.trim()
+            })
+            : slotState
+                ? await client.rpc("coaching_book_at", { _offer_id: bookingOffer.id, _scheduled_at: selectedSlot.toISOString(), _message: message })
+                : await client.rpc("coaching_book", { _offer_id: bookingOffer.id, _message: message, _preferred_time: $("coBookTime").value.trim() });
         submit.disabled = false;
         if (error) {
             showToast(errorText(error, "Die Anfrage konnte nicht gesendet werden."), "error");
@@ -2334,7 +2488,16 @@
         setBadge("coBadgeBuyer", list.filter(b => b.status === "angenommen").length);
         bookingCache.buyer = list;
         renderNextUp();
-        // Aus der E-Mail „Wie war dein Coaching?“ (coaching.html?tab=anfragen#bewerten): zum Bewerten springen
+        // Aus der Bewertungsabfrage oder E-Mail (#bewerten-<Buchung>): Bewertungsfenster direkt öffnen
+        const direct = /^#bewerten-([\w-]{1,64})$/.exec(window.location.hash);
+        if (direct) {
+            history.replaceState(null, "", tabUrl("anfragen"));
+            const b = list.find(x => x.id === direct[1]);
+            if (b && canReview(b)) rateCoach(b);
+            else if (b) showToast("Dieses Coaching kannst du gerade nicht bewerten.", "info");
+            return;
+        }
+        // Ohne bestimmte Buchung (#bewerten): zum ersten „Coach bewerten“ springen
         if (window.location.hash === "#bewerten") {
             history.replaceState(null, "", tabUrl("anfragen"));
             const btn = [...$("coBuyerList").querySelectorAll(".co-btn.primary")].find(b => /Coach bewerten/.test(b.textContent));
@@ -2349,6 +2512,14 @@
     async function loadMyOffers() {
         const box = $("coMyOffers");
         const { data, error } = await client.from("coaching_offers").select("*").eq("coach_id", me).order("created_at", { ascending: false });
+        // Eigene weitere Längen (auch für pausierte Angebote) frisch laden (SQL 038)
+        if (!error && data?.length) {
+            const vars = await client.from("coaching_offer_variants").select("offer_id, duration_minutes, price_cents").in("offer_id", data.map(o => o.id));
+            if (!vars.error) {
+                data.forEach(o => variantsByOffer.delete(o.id));
+                storeVariants(vars.data);
+            }
+        }
         box.replaceChildren();
         if (error) {
             box.appendChild(el("div", "co-empty", "Deine Angebote konnten nicht geladen werden."));
@@ -2369,8 +2540,10 @@
             const row = el("article", `co-own${o.active ? "" : " paused"}`);
             const text = el("div", "co-own-text");
             text.appendChild(el("strong", "", o.title));
+            const extra = (variantsByOffer.get(o.id) || []).map(v => `${duration(v.duration_minutes)} ${euro(v.price_cents)}`);
             text.appendChild(el("small", "", `${o.category} · ${duration(o.duration_minutes)} · ${euro(o.price_cents)}`
-                + `${discountActive(o) ? ` · −${o.discount_percent} % Rabatt (${euro(priceOf(o))}${o.discount_until ? ` bis ${dayText(o.discount_until)}` : ""})` : ""}${o.active ? "" : " · pausiert"}`));
+                + `${extra.length ? ` · auch ${extra.join(", ")}` : ""}`
+                + `${discountActive(o) ? ` · −${o.discount_percent} % Rabatt${o.discount_until ? ` bis ${dayText(o.discount_until)}` : ""}` : ""}${o.active ? "" : " · pausiert"}`));
             row.appendChild(text);
             const actions = el("div", "co-actions");
             const toggle = iconText("button", "co-btn", o.active ? "fa-pause" : "fa-play", o.active ? "Pausieren" : "Aktivieren");

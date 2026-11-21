@@ -216,6 +216,8 @@
                     <input type="text" id="coDiscount" inputmode="numeric" maxlength="2" placeholder="z. B. 10"></label>
                 <label class="co-field"><span>Rabatt gilt bis <small>(optional)</small></span>
                     <input type="date" id="coDiscountUntil" data-placeholder="ohne Enddatum"></label>
+                <!-- Weitere Längen mit eigenem Preis (SQL 038, füllt coaching.js) -->
+                <div id="coVariants" class="co-variants co-wide"></div>
                 <label class="co-field co-wide"><span>Beschreibung <small>(optional)</small></span>
                     <textarea id="coDescription" rows="4" maxlength="2000" placeholder="Was lernt man bei dir? Für wen ist das Coaching gedacht? Wie läuft es ab (z. B. Discord, gemeinsamer Server)?"></textarea></label>
                 <label class="co-check co-wide"><input type="checkbox" id="coActive" checked> <span>Angebot sichtbar (kann jederzeit pausiert werden)</span></label>
@@ -237,6 +239,8 @@
             <p class="co-book-sub" id="coBookSub"></p>
             <dl class="co-price-table" id="coBookPrice"></dl>
             <form id="coBookForm" class="co-form">
+                <!-- Länge wählen, wenn der Coach mehrere anbietet (SQL 038, füllt coaching.js) -->
+                <div id="coBookDuration" class="co-duration-choice co-wide" hidden></div>
                 <!-- Coach mit Kalender: freien Termin wählen (füllt coaching.js) -->
                 <div id="coSlotPicker" class="co-slots co-wide" hidden></div>
                 <label class="co-field co-wide" id="coBookTimeField"><span>Wunschtermin <small>(optional)</small></span>

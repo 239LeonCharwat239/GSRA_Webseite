@@ -9,7 +9,8 @@
 // den Kunden; Ergebnis (erstattet, teilweise erstattet, abgelehnt) → beide.
 // Seit SQL 036: Erinnerung an den Coach 24 Std. vor Ende seiner 5-Tage-Frist; dauerhafte Coach-Sperre → E-Mail mit
 // Begründung an den Coach; Termine, die deshalb entfallen → Erstattungs-E-Mail nur an den Kunden.
-// Seit SQL 037: 2 Stunden nach dem Ende eines bezahlten Coachings eine Bitte um Bewertung an den Kunden.
+// Seit SQL 037/038: Bitte um Bewertung an den Kunden. Zuerst fragt die Webseite selbst; die E-Mail kommt nur als späte
+// Erinnerung 3 Tage nach dem Termin, wenn weder bewertet noch „Nicht bewerten“ gewählt wurde (entscheidet die Datenbank).
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import nodemailer from "npm:nodemailer@6.9.16";
 
@@ -136,7 +137,7 @@ function reviewMail(r: Review, site: string): Texts {
   return {
     kunde: {
       subject: `Wie war dein Coaching mit ${r.coach_name}?`,
-      text: `Hallo ${r.kunde_name},\n\nwie war dein Coaching „${r.titel}“ am ${when(r.termin)} mit ${r.coach_name}?\n\nDeine Bewertung dauert nur einen Moment und hilft anderen Fahrern, den passenden Coach zu finden – und ${r.coach_name}, noch besser zu werden.\n\nJetzt bewerten: ${site}/coaching.html?tab=anfragen#bewerten\n\nLief etwas schief? Dann kannst du bis 7 Tage nach dem Termin ein Problem melden.${GRUSS}`,
+      text: `Hallo ${r.kunde_name},\n\nwie war dein Coaching „${r.titel}“ am ${when(r.termin)} mit ${r.coach_name}?\n\nDeine Bewertung dauert nur einen Moment und hilft anderen Fahrern, den passenden Coach zu finden – und ${r.coach_name}, noch besser zu werden.\n\nJetzt bewerten: ${site}/coaching.html?tab=anfragen#bewerten-${r.id}\n\nLief etwas schief? Dann kannst du bis 7 Tage nach dem Termin ein Problem melden.${GRUSS}`,
     },
   };
 }

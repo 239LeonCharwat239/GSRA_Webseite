@@ -12,7 +12,7 @@
    Adresse ohne feste Version. Das Skript wird deshalb nur auf diesen Seiten und erst bei Bedarf geladen.
 ========================================= */
 (function () {
-    const SITE_KEY = ""; // öffentlicher Site-Key aus Cloudflare Turnstile
+    const SITE_KEY = "0x4AAAAAAGMS_9O4Qo8L3tU3"; // öffentlicher Site-Key aus Cloudflare Turnstile (Widget „GSRA“, 22.11.)
 
     // Nur auf dem eigenen Rechner (localhost): Test-Schlüssel von Cloudflare zum Ausprobieren,
     // z. B. localStorage.gsra_captcha_test = "1x00000000000000000000AA" (besteht immer)
