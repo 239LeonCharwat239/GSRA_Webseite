@@ -9,6 +9,7 @@
 // den Kunden; Ergebnis (erstattet, teilweise erstattet, abgelehnt) → beide.
 // Seit SQL 036: Erinnerung an den Coach 24 Std. vor Ende seiner 5-Tage-Frist; dauerhafte Coach-Sperre → E-Mail mit
 // Begründung an den Coach; Termine, die deshalb entfallen → Erstattungs-E-Mail nur an den Kunden.
+// Seit SQL 037: 2 Stunden nach dem Ende eines bezahlten Coachings eine Bitte um Bewertung an den Kunden.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import nodemailer from "npm:nodemailer@6.9.16";
 
@@ -129,6 +130,17 @@ function caseMails(c: Case, site: string): Texts {
   };
 }
 
+// Nach dem Coaching: Bitte um Bewertung (nur an den Kunden)
+type Review = { id: string; titel: string; termin: string; coach_id: string; kunde_id: string; coach_name: string; kunde_name: string };
+function reviewMail(r: Review, site: string): Texts {
+  return {
+    kunde: {
+      subject: `Wie war dein Coaching mit ${r.coach_name}?`,
+      text: `Hallo ${r.kunde_name},\n\nwie war dein Coaching „${r.titel}“ am ${when(r.termin)} mit ${r.coach_name}?\n\nDeine Bewertung dauert nur einen Moment und hilft anderen Fahrern, den passenden Coach zu finden – und ${r.coach_name}, noch besser zu werden.\n\nJetzt bewerten: ${site}/coaching.html?tab=anfragen#bewerten\n\nLief etwas schief? Dann kannst du bis 7 Tage nach dem Termin ein Problem melden.${GRUSS}`,
+    },
+  };
+}
+
 // Dauerhafte Coach-Sperre: Entscheidung mit Begründung und Weg zum Widerspruch
 function banMail(b: Ban): Texts {
   return {
@@ -151,7 +163,8 @@ Deno.serve(async (req) => {
     const due: Due[] = data?.erinnerungen || [];
     const cases: Case[] = data?.reklamationen || [];
     const bans: Ban[] = data?.sperren || [];
-    if (!data?.lauf || (!due.length && !cases.length && !bans.length)) return json({ ok: true, gesendet: 0 });
+    const reviews: Review[] = data?.bewertungen || [];
+    if (!data?.lauf || (!due.length && !cases.length && !bans.length && !reviews.length)) return json({ ok: true, gesendet: 0 });
 
     const user = Deno.env.get("SMTP_USER");
     const pass = Deno.env.get("SMTP_PASS");
@@ -185,6 +198,7 @@ Deno.serve(async (req) => {
     for (const r of due) await send(`Erinnerung ${r.id}`, mails(r, site), r.kunde_id, r.coach_id);
     for (const c of cases) await send(`Reklamation ${c.id}`, caseMails(c, site), c.kunde_id, c.coach_id);
     for (const b of bans) await send(`Coach-Sperre ${b.coach_id}`, banMail(b), null, b.coach_id);
+    for (const r of reviews) await send(`Bewertungsbitte ${r.id}`, reviewMail(r, site), r.kunde_id, r.coach_id);
     return json({ ok: true, gesendet: sent });
   } catch (err) {
     console.error(err);

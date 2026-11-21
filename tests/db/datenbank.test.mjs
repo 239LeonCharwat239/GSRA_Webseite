@@ -9,9 +9,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL] =
-    Array.from({ length: 36 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 36);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL] =
+    Array.from({ length: 37 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 37);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -2310,6 +2310,152 @@ if (MODERATION_SQL) {
                             });
                             const lic2 = await one(`select public.coach_license_active('${U.max}') as a, (select count(*) from public.moderation_log where action = 'coach_sperre_aufgehoben') as n`);
                             check("Nach dem Aufheben wieder Pro-Coach, Aufhebung im Protokoll", lic2.a === true && Number(lic2.n) === 1, JSON.stringify(lic2));
+                        }
+
+                        // --- 037: Urlaubsmodus, Rabatte, Bitte um Bewertung ---
+                        if (URLAUB_SQL && COACH_SPERRE_SQL) {
+                            await db.exec(readFileSync(URLAUB_SQL, "utf8"));
+                            const ctl37 = await db.exec(readFileSync(URLAUB_SQL, "utf8")); // zweiter Lauf
+                            const rows37 = ctl37[ctl37.length - 1].rows;
+                            console.log("Kontrolle 037:\n  " + rows37.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+                            check("Kontrolle 037: Urlaub, Rabatte, Bewertungsbitte bereit, Internes gesperrt", rows37.map(r => r.ergebnis).join(",") === "bereit,bereit,bereit,ja", rows37.map(r => r.ergebnis).join(", "));
+                            const pastAsked = await one(`select count(*) filter (where review_asked_at is null) as n from public.coaching_bookings where scheduled_at + make_interval(mins => duration_minutes) < now()`);
+                            check("Schon vergangene Coachings bekommen keine nachträgliche Bewertungs-E-Mail", Number(pastAsked.n) === 0, String(pastAsked.n));
+
+                            // Max: neues Angebot (120 €) und Zeiten jeden Tag 18–22 Uhr
+                            const WIN37 = JSON.stringify([1, 2, 3, 4, 5, 6, 7].map(t => ({ tag: t, von: 1080, bis: 1320 })));
+                            let offer37 = null;
+                            await as(U.max, async () => {
+                                offer37 = (await q(`select public.coaching_save_offer(null, 'Urlaubs- und Rabatt-Test', null, 'Fahrtechnik', 'iRacing', 60, 12000, true) as id`)).rows[0]?.id;
+                                await q(`select public.coach_save_calendar('Europe/Berlin', '${WIN37}'::jsonb)`);
+                            });
+                            check("037-Test: Angebot und Kalender angelegt", Boolean(offer37), String(offer37));
+                            const freeDays = async (who) => {
+                                let days = [];
+                                await as(who, async () => {
+                                    const r = await q(`select public.coaching_free_slots('${offer37}') as r`);
+                                    days = [...new Set((r.rows[0]?.r?.slots || []).map(s => new Date(s).toLocaleDateString("sv-SE", { timeZone: "Europe/Berlin" })))];
+                                });
+                                return days;
+                            };
+                            const berlinDay = async (offset) => (await one(`select ((now() at time zone 'Europe/Berlin')::date + ${offset})::text as d`)).d;
+                            const d3 = await berlinDay(3), d4 = await berlinDay(4), d7 = await berlinDay(7);
+
+                            await as(K, async () => {
+                                const r = await q(`select public.coach_set_away(null, null)`);
+                                check("Urlaubsmodus nur für Coaches", /Coach-Lizenz/.test(r.error || ""), r.error || "durchgelassen!");
+                            });
+                            await as(U.max, async () => {
+                                const past = await q(`select public.coach_set_away((now() at time zone 'Europe/Berlin')::date - 1, null)`);
+                                const wrong = await q(`select public.coach_set_away('${d4}', '${d3}')`);
+                                const long = await q(`select public.coach_set_away('${d3}', '${d3}'::date + 200)`);
+                                check("Urlaub: nicht rückwirkend, Ende nach Beginn, höchstens 180 Tage",
+                                    /frühestens heute/.test(past.error || "") && /vor dem Beginn/.test(wrong.error || "") && /180 Tage/.test(long.error || ""),
+                                    [past.error, wrong.error, long.error].join(" | "));
+                                const ok = await q(`select public.coach_set_away('${d3}', '${d4}') as r`);
+                                check("Coach plant Urlaub (Tag 3 bis 4)", ok.error === null && ok.rows[0]?.r?.von === d3 && ok.rows[0]?.r?.bis === d4, ok.error || JSON.stringify(ok.rows[0]?.r));
+                                const direct = await q(`insert into public.coach_away (coach_id, from_day) values ('${U.max}', current_date)`);
+                                check("Urlaub nicht direkt eintragbar", direct.error !== null, direct.error || "durchgelassen!");
+                                const own = await q(`select public.coach_away_info('${U.max}') as i`);
+                                check("Coach sieht seinen geplanten Urlaub", own.rows[0]?.i?.geplant === true && own.rows[0]?.i?.von === d3, own.error || JSON.stringify(own.rows[0]?.i));
+                            });
+                            const daysPlanned = await freeDays(K);
+                            check("Urlaubstage verschwinden aus den freien Terminen, andere Tage bleiben",
+                                !daysPlanned.includes(d3) && !daysPlanned.includes(d4) && daysPlanned.includes(d7), JSON.stringify(daysPlanned.slice(0, 8)));
+                            await as(K, async () => {
+                                const seen = await q(`select count(*) as n from public.coach_away`);
+                                const info = await q(`select public.coach_away_info('${U.max}') as i`);
+                                check("Andere sehen keinen geplanten Urlaub und keine Tabelle", Number(seen.rows[0]?.n) === 0 && info.rows[0]?.i?.urlaub === false && !info.rows[0]?.i?.geplant,
+                                    seen.error || JSON.stringify(info.rows[0]?.i));
+                                const book = await q(`select public.coaching_book_at('${offer37}', ('${d3}'::date + time '19:00') at time zone 'Europe/Berlin')`);
+                                check("Buchung an einem Urlaubstag abgelehnt (mit Hinweis)", /im Urlaub/.test(book.error || ""), book.error || "durchgelassen!");
+                            });
+                            // Ab heute, ohne Ende
+                            await as(U.max, async () => { await q(`select public.coach_set_away(null, null)`); });
+                            await as(K, async () => {
+                                const info = await q(`select public.coach_away_info('${U.max}') as i`);
+                                const list = await q(`select public.coaching_away_coaches() as l`);
+                                check("Alle sehen: im Urlaub (ohne Enddatum)", info.rows[0]?.i?.urlaub === true && info.rows[0]?.i?.bis === null
+                                    && (list.rows[0]?.l || []).some(x => x.coach_id === U.max), JSON.stringify({ i: info.rows[0]?.i, l: list.rows[0]?.l }));
+                            });
+                            check("Im offenen Urlaub keine freien Termine", (await freeDays(K)).length === 0, "");
+                            // Ohne Kalender: Anfrage per Text gesperrt, solange der Urlaub läuft
+                            await as(U.max, async () => { await q(`select public.coach_save_calendar('Europe/Berlin', '[]'::jsonb)`); });
+                            await as(K3, async () => {
+                                const r = await q(`select public.coaching_book('${offer37}', 'Hallo', 'Samstag')`);
+                                check("Ohne Kalender: keine Anfrage, solange der Coach im Urlaub ist", /gerade im Urlaub/.test(r.error || ""), r.error || "durchgelassen!");
+                            });
+                            // Abgelaufener Urlaub zählt nicht mehr
+                            await db.exec(`update public.coach_away set from_day = current_date - 10, until_day = current_date - 2 where coach_id = '${U.max}'`);
+                            await as(K, async () => {
+                                const info = await q(`select public.coach_away_info('${U.max}') as i`);
+                                check("Urlaub endet von selbst (Enddatum vorbei)", info.rows[0]?.i?.urlaub === false, JSON.stringify(info.rows[0]?.i));
+                            });
+                            await as(U.max, async () => {
+                                await q(`select public.coach_set_away(null, null)`);
+                                const end = await q(`select public.coach_end_away()`);
+                                const info = await q(`select public.coach_away_info('${U.max}') as i`);
+                                check("Coach beendet den Urlaub mit einem Klick", end.error === null && info.rows[0]?.i?.urlaub === false && !info.rows[0]?.i?.geplant, end.error || JSON.stringify(info.rows[0]?.i));
+                                await q(`select public.coach_save_calendar('Europe/Berlin', '${WIN37}'::jsonb)`);
+                            });
+
+                            // Rabatte
+                            await as(K, async () => {
+                                const r = await q(`select public.coaching_set_discount('${offer37}', 20, null)`);
+                                check("Nur der Coach selbst gibt Rabatt auf sein Angebot", /gehört dir nicht/.test(r.error || ""), r.error || "durchgelassen!");
+                            });
+                            await as(U.max, async () => {
+                                const low = await q(`select public.coaching_set_discount('${offer37}', 3, null)`);
+                                const high = await q(`select public.coaching_set_discount('${offer37}', 80, null)`);
+                                const past = await q(`select public.coaching_set_discount('${offer37}', 20, current_date - 3)`);
+                                check("Rabatt nur 5–70 % und nicht rückwirkend", /5 und 70/.test(low.error || "") && /5 und 70/.test(high.error || "") && /Vergangenheit/.test(past.error || ""),
+                                    [low.error, high.error, past.error].join(" | "));
+                                const ok = await q(`select public.coaching_set_discount('${offer37}', 20, (now() at time zone 'Europe/Berlin')::date + 10) as r`);
+                                check("Coach gibt 20 % Rabatt (120 € → 96 €)", ok.rows[0]?.r?.preis === 9600 && ok.rows[0]?.r?.prozent === 20, ok.error || JSON.stringify(ok.rows[0]?.r));
+                                const direct = await q(`update public.coaching_offers set discount_percent = 70 where id = '${offer37}'`);
+                                check("Rabatt nicht direkt änderbar", direct.error !== null || (await one(`select discount_percent as p from public.coaching_offers where id = '${offer37}'`)).p === 20, direct.error || "");
+                            });
+                            const planK = (await one(`select public.plan_of('${K}') as p`)).p;
+                            const feeK = ["pole", "alliance"].includes(planK) ? 0 : 960;
+                            let slot37 = null;
+                            await as(K, async () => {
+                                slot37 = ((await q(`select public.coaching_free_slots('${offer37}') as r`)).rows[0]?.r?.slots || [])[0];
+                                const r = await q(`select public.coaching_book_at('${offer37}', '${slot37}'::timestamptz) as r`);
+                                check("Buchung zum Rabattpreis, Servicegebühr vom reduzierten Preis", r.rows[0]?.r?.price_cents === 9600 && r.rows[0]?.r?.fee_cents === feeK && r.rows[0]?.r?.total_cents === 9600 + feeK && r.rows[0]?.r?.rabatt === 20,
+                                    r.error || JSON.stringify(r.rows[0]?.r));
+                            });
+                            const stored = await one(`select price_cents, discount_percent from public.coaching_bookings where offer_id = '${offer37}' and buyer_id = '${K}'`);
+                            check("Rabatt steht an der Buchung", stored?.price_cents === 9600 && stored?.discount_percent === 20, JSON.stringify(stored));
+                            await db.exec(`update public.coaching_offers set discount_until = current_date - 1 where id = '${offer37}'`);
+                            const expired = await one(`select public.coaching_effective_price(price_cents, discount_percent, discount_until) as p from public.coaching_offers where id = '${offer37}'`);
+                            check("Abgelaufener Rabatt gilt nicht mehr", expired.p === 12000, String(expired.p));
+                            await as(U.max, async () => {
+                                const off = await q(`select public.coaching_set_discount('${offer37}', 0, null) as r`);
+                                check("Rabatt entfernen", off.error === null && off.rows[0]?.r?.prozent === null, off.error || JSON.stringify(off.rows[0]?.r));
+                            });
+
+                            // Bitte um Bewertung
+                            const B = (n) => `37000000-0000-0000-0000-00000000000${n}`;
+                            const pb = (n, buyer, at, dur = 60) => `('${B(n)}', '${U.max}', '${buyer}', 'Bewertungstest ${n}', ${dur}, 3000, 300, 3300, 'bezahlt', ${at}, 'pi_037_${n}', now() - interval '20 days')`;
+                            await db.exec(`insert into public.coaching_bookings (id, coach_id, buyer_id, offer_title, duration_minutes, price_cents, fee_cents, total_cents, status, scheduled_at, stripe_payment_intent, paid_at) values
+                                ${pb(1, K3, "now() - interval '4 hours'")}, ${pb(2, U.anna, "now() - interval '90 minutes'")},
+                                ${pb(3, U.tim, "now() - interval '5 hours'")}, ${pb(4, K, "now() - interval '6 hours'")}, ${pb(5, U.anna, "now() - interval '15 days'")}`);
+                            await db.exec(`update public.coaching_bookings set review_asked_at = null where id in ('${B(1)}', '${B(2)}', '${B(3)}', '${B(4)}', '${B(5)}')`);
+                            await db.exec(`insert into public.coaching_reviews (booking_id, coach_id, buyer_id, rating) values ('${B(3)}', '${U.max}', '${U.tim}', 1)`);
+                            await as(K, async () => { await q(`select public.coaching_report_problem('${B(4)}', 'mangelhaft', 'Das Coaching war leider viel zu kurz.')`); });
+                            const runNow37 = async () => { await db.exec(`update public.coaching_reminder_runs set last_run = '-infinity'`); return (await one(`select public.coaching_reminder_run() as r`)).r; };
+                            const rr1 = await runNow37();
+                            const asked = (rr1?.bewertungen || []).map(x => x.id);
+                            const rr2 = await runNow37();
+                            check("Bewertungsbitte: 2 Std. nach dem Ende, nur einmal; nicht wenn bewertet, reklamiert, zu früh oder zu alt",
+                                asked.includes(B(1)) && !asked.includes(B(2)) && !asked.includes(B(3)) && !asked.includes(B(4)) && !asked.includes(B(5)) && (rr2?.bewertungen || []).length === 0
+                                && (rr1?.bewertungen || []).find(x => x.id === B(1))?.kunde_id === K3,
+                                JSON.stringify({ asked, again: (rr2?.bewertungen || []).length }));
+                            await as(K, async () => {
+                                const r = await q(`select public.coach_away_on('${U.max}', current_date)`);
+                                const b = await q(`select public.coaching_book_internal('${offer37}', null, null, null)`);
+                                check("Interne Funktionen für Mitglieder gesperrt", r.error !== null && b.error !== null, r.error || b.error || "durchgelassen!");
+                            });
                         }
                     }
                 }

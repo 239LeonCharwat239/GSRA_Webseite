@@ -267,7 +267,7 @@
     // Abzeichen im Profil: Rolle (Admin, Moderator) und Coach (Pro-Coach bzw. GSRA-Coach)
     window.gsraProfileBadges = async (meta, userId, profile) => {
         if (!meta || !userId) return;
-        meta.querySelectorAll(".gsra-role-badge, .gsra-coach-badge").forEach(b => b.remove());
+        meta.querySelectorAll(".gsra-role-badge, .gsra-coach-badge, .gsra-away-badge").forEach(b => b.remove());
         const first = meta.firstChild;
         if (profile?.role === "admin" || profile?.role === "moderator") {
             const badge = document.createElement("span");
@@ -284,6 +284,16 @@
         coach.innerHTML = c.pro ? '<i class="fa-solid fa-crown"></i> Pro-Coach' : '<i class="fa-solid fa-award"></i> GSRA-Coach';
         const after = meta.querySelector(".gsra-role-badge");
         meta.insertBefore(coach, after ? after.nextSibling : meta.firstChild);
+        // Coach im Urlaub (SQL 037): „Im Urlaub bis …“ neben dem Coach-Abzeichen; ohne 037 einfach nichts
+        const { data: away, error } = await db().rpc("coach_away_info", { _user: userId }).then(r => r, () => ({ error: true }));
+        if (error || !away?.urlaub || !coach.isConnected) return;
+        const badge = document.createElement("span");
+        badge.className = "gsra-away-badge";
+        badge.innerHTML = '<i class="fa-solid fa-umbrella-beach"></i> ';
+        badge.append(away.bis
+            ? `Im Urlaub bis ${new Date(`${away.bis}T12:00:00`).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })}`
+            : "Gerade im Urlaub");
+        coach.after(badge);
     };
 
     // Coach-Bereich im Profil: neueste Bewertungen mit Kommentar und Link zu den Coachings

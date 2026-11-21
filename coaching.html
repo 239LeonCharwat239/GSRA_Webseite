@@ -44,7 +44,17 @@
         <section class="hero-section co-hero">
             <h1 class="hero-title">GSRA <span class="text-blue">COACHING</span></h1>
             <p class="hero-subtitle text-yellow">Lerne von erfahrenen Fahrern aus der Community – zu ihrem eigenen Preis.</p>
+            <!-- Live-Zahlen (füllt coaching.js) -->
+            <div id="coStats" class="co-stats" hidden></div>
         </section>
+
+        <!-- So läuft dein Coaching -->
+        <ol class="co-steps" aria-label="So läuft dein Coaching">
+            <li><span class="co-step-num">1</span><i class="fa-solid fa-magnifying-glass"></i><div><strong>Coach finden</strong><span>Nach Simulation, Sprache, Preis und Bewertung filtern.</span></div></li>
+            <li><span class="co-step-num">2</span><i class="fa-solid fa-calendar-check"></i><div><strong>Termin wählen</strong><span>Freie Zeiten direkt im Kalender des Coaches.</span></div></li>
+            <li><span class="co-step-num">3</span><i class="fa-solid fa-lock"></i><div><strong>Sicher bezahlen</strong><span>Über Stripe – bis 24 Std. vorher kostenlos stornierbar.</span></div></li>
+            <li><span class="co-step-num">4</span><i class="fa-solid fa-flag-checkered"></i><div><strong>Fahren &amp; bewerten</strong><span>Danach bewertest du – oder meldest ein Problem.</span></div></li>
+        </ol>
 
         <!-- So funktioniert's -->
         <div class="co-facts">
@@ -55,6 +65,9 @@
 
         <!-- Hinweis für Coaches ohne fertiges Stripe-Konto (füllt coaching.js) -->
         <div id="coStripePrompt" class="co-payout prompt" hidden></div>
+
+        <!-- Eigener Urlaubsmodus ist an (SQL 037, füllt coaching.js) -->
+        <div id="coAwayBanner" class="co-away-banner" hidden></div>
 
         <!-- Dein nächstes Coaching (als Kunde oder Coach) mit Countdown und „In meinen Kalender“ -->
         <section id="coNextUp" class="co-next" hidden aria-live="polite"></section>
@@ -129,6 +142,8 @@
             <!-- GSRA-Coach-Lizenz und Auszahlungen über Stripe (füllt coaching.js) -->
             <div id="coLicense" class="co-license" hidden></div>
             <div id="coPayout" class="co-payout" hidden></div>
+            <!-- Urlaubsmodus: ein Knopf oder ein Zeitraum, endet von selbst (SQL 037) -->
+            <section id="coAway" class="co-away" hidden></section>
             <!-- Freie Zeiten: Kunden buchen nur dort (füllt coaching.js, SQL 030) -->
             <section id="coCalendar" class="co-calendar" hidden></section>
             <!-- Reklamationen: Regeln für Coaches (SQL 035/036) – zugeklappt bleibt gemerkt (coaching.js) -->
@@ -196,6 +211,11 @@
                     </select></label>
                 <label class="co-field"><span>Dein Preis in €</span>
                     <input type="text" id="coPrice" inputmode="decimal" maxlength="8" placeholder="z. B. 40" required></label>
+                <!-- Rabatt (SQL 037): erscheint als „−10 %“ mit durchgestrichenem Preis -->
+                <label class="co-field"><span>Rabatt in % <small>(optional, 5–70)</small></span>
+                    <input type="text" id="coDiscount" inputmode="numeric" maxlength="2" placeholder="z. B. 10"></label>
+                <label class="co-field"><span>Rabatt gilt bis <small>(optional)</small></span>
+                    <input type="date" id="coDiscountUntil" data-placeholder="ohne Enddatum"></label>
                 <label class="co-field co-wide"><span>Beschreibung <small>(optional)</small></span>
                     <textarea id="coDescription" rows="4" maxlength="2000" placeholder="Was lernt man bei dir? Für wen ist das Coaching gedacht? Wie läuft es ab (z. B. Discord, gemeinsamer Server)?"></textarea></label>
                 <label class="co-check co-wide"><input type="checkbox" id="coActive" checked> <span>Angebot sichtbar (kann jederzeit pausiert werden)</span></label>
@@ -252,6 +272,7 @@
     </div>
 
     <script src="ui-dialogs.js"></script>
+    <script src="datum-zeit.js"></script>
     <script src="bewertungen.js"></script>
     <script src="profil-karte.js"></script>
     <script src="coaching.js"></script>

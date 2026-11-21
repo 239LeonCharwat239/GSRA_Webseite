@@ -24,6 +24,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Links in den E-Mails führen zurück auf diese Webseite
     const pageUrl = (page) => new URL(page, window.location.href).href;
 
+    // Bot-Schutz (captcha.js, Sicherheit Nr. 8): ohne Site-Key aus, dann läuft alles wie bisher
+    let captcha = null;
+    if (window.gsraCaptcha?.enabled) {
+        window.gsraCaptcha.mount(document.getElementById('captchaBox'))
+            .then(widget => { captcha = widget; })
+            .catch(() => showToast('Der Bot-Schutz konnte nicht geladen werden. Bitte lade die Seite neu.', 'error'));
+    }
+    // Token für genau eine Anfrage: undefined = Schutz aus, null = (noch) keins da → abbrechen
+    const captchaToken = async () => {
+        if (!window.gsraCaptcha?.enabled) return undefined;
+        if (!captcha) {
+            showToast('Der Bot-Schutz lädt noch – bitte versuche es in ein paar Sekunden erneut.', 'info');
+            return null;
+        }
+        const token = await captcha.token();
+        if (!token) showToast('Bitte bestätige kurz unter dem Formular, dass du kein Bot bist.', 'error');
+        return token;
+    };
+    const captchaUsed = () => captcha?.reset();
+
     // Nach der Anmeldung zurück zur ursprünglich aufgerufenen Unterseite (nur eigene Seiten, sonst Dashboard)
     const params = new URLSearchParams(window.location.search);
     const requestedPage = params.get('weiter') || '';
@@ -66,6 +86,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (/rate limit|only request this after|too many/i.test(msg)) return 'Zu viele Versuche in kurzer Zeit. Bitte warte einen Moment und versuche es dann erneut.';
         if (/invalid.*email|unable to validate email/i.test(msg)) return 'Bitte gib eine gültige E-Mail-Adresse ein.';
         if (/database error saving new user/i.test(msg)) return 'Das Konto konnte nicht angelegt werden. Ist der Benutzername vielleicht schon vergeben?';
+        if (/captcha/i.test(msg)) return 'Der Bot-Schutz hat nicht geklappt. Bitte versuche es noch einmal.';
         return msg;
     };
 
@@ -110,7 +131,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo: pageUrl('passwort-neu.html') });
+        const token = await captchaToken();
+        if (token === null) return;
+        const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo: pageUrl('passwort-neu.html'), captchaToken: token });
+        captchaUsed();
         if (error) {
             showToast(authErrorText(error), 'error');
             return;
@@ -133,7 +157,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             cancelText: 'Schließen'
         });
         if (!resend) return;
-        const { error } = await client.auth.resend({ type: 'signup', email, options: { emailRedirectTo: pageUrl(nextPage) } });
+        const token = await captchaToken();
+        if (token === null) return;
+        const { error } = await client.auth.resend({ type: 'signup', email, options: { emailRedirectTo: pageUrl(nextPage), captchaToken: token } });
+        captchaUsed();
         if (error) showToast(authErrorText(error), 'error');
         else showToast('Die Bestätigungs-Mail wurde erneut gesendet.', 'success');
     };
@@ -192,6 +219,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // Registrierung mit Benutzernamen und Zeitpunkt der Zustimmung in user_metadata;
             // der Bestätigungs-Link führt direkt zur gewünschten Seite (sonst ins Dashboard)
+            const token = await captchaToken();
+            if (token === null) return;
             const { data, error } = await client.auth.signUp({
                 email,
                 password,
@@ -200,9 +229,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                         username: username,
                         terms_accepted_at: new Date().toISOString()
                     },
-                    emailRedirectTo: pageUrl(nextPage)
+                    emailRedirectTo: pageUrl(nextPage),
+                    captchaToken: token
                 }
             });
+            captchaUsed();
 
             if (error) {
                 showToast('Registrierung fehlgeschlagen: ' + authErrorText(error), 'error');
@@ -219,7 +250,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         } else {
             // Login
-            const { data, error } = await client.auth.signInWithPassword({ email, password });
+            const token = await captchaToken();
+            if (token === null) return;
+            const { data, error } = await client.auth.signInWithPassword({ email, password, options: { captchaToken: token } });
+            captchaUsed();
 
             if (error) {
                 if (/banned/i.test(error.message)) showBanNotice(null);

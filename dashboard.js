@@ -479,6 +479,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                         <h3 class="gsra-dialog-title">Konto endgültig löschen?</h3>
                         <p class="gsra-dialog-message">Gelöscht werden dein Profil, deine Chats und Nachrichten, Freundschaften, Inserate und Setups. Gruppen, die du gegründet hast, gehen an ein anderes Mitglied über. Das lässt sich nicht rückgängig machen.\n\nBitte bestätige mit deinem Passwort:</p>
                         <input type="password" class="gsra-dialog-input" autocomplete="current-password" placeholder="Dein Passwort">
+                        <div class="dash-captcha"></div>
                         <p class="dash-dialog-error" hidden></p>
                         <div class="gsra-dialog-actions">
                             <button type="button" class="gsra-dialog-btn secondary">Abbrechen</button>
@@ -488,8 +489,14 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const input = overlay.querySelector("input");
                 const errorText = overlay.querySelector(".dash-dialog-error");
                 const confirmBtn = overlay.querySelector(".gsra-dialog-btn.primary");
+                // Bot-Schutz (captcha.js): das Passwort wird über eine Anmeldung geprüft
+                let captcha = null;
+                if (window.gsraCaptcha?.enabled) {
+                    window.gsraCaptcha.mount(overlay.querySelector(".dash-captcha")).then(w => { captcha = w; }, () => {});
+                }
                 const close = () => {
                     document.removeEventListener("keydown", onKey, true);
+                    captcha?.remove();
                     overlay.remove();
                 };
                 const onKey = (e) => {
@@ -516,10 +523,19 @@ document.addEventListener("DOMContentLoaded", async () => {
                     confirmBtn.disabled = true;
                     confirmBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Wird gelöscht …';
                     errorText.hidden = true;
-                    const { error: authError } = await client.auth.signInWithPassword({ email: currentUser.email, password: input.value });
+                    let captchaToken;
+                    if (window.gsraCaptcha?.enabled) {
+                        captchaToken = captcha ? await captcha.token() : null;
+                        if (!captchaToken) {
+                            fail("Bitte bestätige kurz über dem Knopf, dass du kein Bot bist, und versuche es erneut.");
+                            return;
+                        }
+                    }
+                    const { error: authError } = await client.auth.signInWithPassword({ email: currentUser.email, password: input.value, options: { captchaToken } });
+                    captcha?.reset();
                     if (authError) {
                         input.classList.add("invalid");
-                        fail("Das Passwort ist nicht korrekt.");
+                        fail(/captcha/i.test(authError.message || "") ? "Der Bot-Schutz hat nicht geklappt. Bitte versuche es erneut." : "Das Passwort ist nicht korrekt.");
                         return;
                     }
                     const { error } = await client.rpc("delete_own_account");

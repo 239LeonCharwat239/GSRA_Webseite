@@ -65,12 +65,20 @@
     let selectedSlot = null;
     let reviewsByBooking = new Map(); // Coach-Bewertungen zu den eigenen Anfragen
     let disputesByBooking = new Map(); // Reklamationen („Problem melden“, SQL 035)
+    let awayCoaches = new Map();  // Coaches gerade im Urlaub: coach_id → bis (SQL 037)
+    let myAway = null;            // eigener Urlaub: { urlaub, geplant, von, bis }
+    let editingOffer = null;
     const coachReadyCache = new Map();
 
     const $ = (id) => document.getElementById(id);
     const canOffer = () => license?.aktiv === true;
     const euro = (cents) => (Number(cents || 0) / 100).toLocaleString("de-DE", { style: "currency", currency: "EUR" });
     const feeOf = (cents) => Math.round(Number(cents || 0) * feePercent / 100);
+    // Rabatt des Coaches (SQL 037): gilt bis einschließlich discount_until (deutsche Zeit); gerechnet wird in der Datenbank
+    const berlinToday = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Berlin" });
+    const discountActive = (o) => Boolean(o?.discount_percent) && (!o.discount_until || o.discount_until >= berlinToday());
+    const priceOf = (o) => (discountActive(o) ? Math.round(o.price_cents * (100 - o.discount_percent) / 100) : o.price_cents);
+    const dayText = (isoDate) => new Date(`${isoDate}T12:00:00`).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
     const duration = (min) => {
         const h = Math.floor(min / 60), m = min % 60;
         if (!h) return `${m} Min.`;
@@ -106,7 +114,7 @@
     const errorText = (error, fallback) => {
         const msg = String(error?.message || "");
         // Eigene Meldungen der Datenbank (deutsch) weitergeben, technische nicht
-        return /[äöüß]|Bitte|Coaching|Anfrage|Angebot|Preis|Dauer|Titel|Konto|Coach|Zeit|Termin|Kalender|Reklamation|Problem|Erstatt/.test(msg) && msg.length < 200 ? msg : fallback;
+        return /[äöüß]|Bitte|Coaching|Anfrage|Angebot|Preis|Dauer|Titel|Konto|Coach|Zeit|Termin|Kalender|Reklamation|Problem|Erstatt|Urlaub|Rabatt/.test(msg) && msg.length < 200 ? msg : fallback;
     };
     const nameOf = (id) => profiles.get(id)?.username || "GSRA-Mitglied";
     const chatLink = (userId, title) => `messenger.html?sellerId=${encodeURIComponent(userId)}&sellerName=${encodeURIComponent(nameOf(userId))}&itemTitle=${encodeURIComponent(`Coaching: ${title}`)}`;
@@ -197,6 +205,7 @@
     // Hinweis oben („Jetzt ansehen“) auf der Coaching-Seite selbst: nur der Anker ändert sich, ohne neu zu laden
     window.addEventListener("hashchange", () => {
         if (window.location.hash === "#reklamation") showTab("coach", { updateUrl: false });
+        if (window.location.hash === "#bewerten") showTab("anfragen", { updateUrl: false });
     });
 
     // Regeln zu Reklamationen im Bereich „Als Coach“: einmal zugeklappt, bleibt es zu (nur in diesem Browser)
@@ -226,11 +235,22 @@
 
     function priceBlock(offer) {
         const box = el("div", "co-price");
-        box.appendChild(el("strong", "co-price-main", euro(offer.price_cents)));
+        const price = priceOf(offer);
+        if (discountActive(offer)) {
+            // Rabatt des Coaches: „−10 %“, alter Preis durchgestrichen, neuer Preis groß
+            const line = el("div", "co-price-line");
+            line.appendChild(el("span", "co-discount-badge", `−${offer.discount_percent} %`));
+            line.appendChild(el("s", "co-price-old", euro(offer.price_cents)));
+            line.appendChild(el("strong", "co-price-main", euro(price)));
+            box.appendChild(line);
+            if (offer.discount_until) box.appendChild(iconText("small", "co-price-note discount", "fa-tag", `Rabatt gilt bis ${dayText(offer.discount_until)}`));
+        } else {
+            box.appendChild(el("strong", "co-price-main", euro(price)));
+        }
         if (offer.coach_id === me) {
             box.appendChild(el("small", "co-price-note", "Dein Angebot – an dich, abzüglich Stripe-Gebühr"));
         } else if (feePercent > 0) {
-            box.appendChild(el("small", "co-price-note", `Für dich ${euro(offer.price_cents + feeOf(offer.price_cents))} inkl. ${euro(feeOf(offer.price_cents))} Servicegebühr`));
+            box.appendChild(el("small", "co-price-note", `Für dich ${euro(price + feeOf(price))} inkl. ${euro(feeOf(price))} Servicegebühr`));
         } else {
             box.appendChild(iconText("small", "co-price-note free", "fa-crown", "Keine Servicegebühr für dich"));
         }
@@ -265,6 +285,11 @@
         meta.appendChild(iconText("span", "", "fa-clock", duration(offer.duration_minutes)));
         if (offer.simulation) meta.appendChild(iconText("span", "", "fa-gamepad", offer.simulation));
         if (calendarCoaches.has(offer.coach_id)) meta.appendChild(iconText("span", "co-cal-badge", "fa-calendar-check", "Termin direkt wählen"));
+        const away = awayCoaches.has(offer.coach_id);
+        if (away) {
+            const until = awayCoaches.get(offer.coach_id);
+            meta.appendChild(iconText("span", "co-away-badge", "fa-umbrella-beach", until ? `Im Urlaub bis ${dayText(until)}` : "Gerade im Urlaub"));
+        }
         card.appendChild(meta);
         if (offer.description) card.appendChild(el("p", "co-desc", offer.description));
 
@@ -297,6 +322,11 @@
             const book = iconText("button", "co-btn primary", "fa-calendar-check", "Anfragen");
             book.type = "button";
             book.addEventListener("click", () => openBooking(offer));
+            // Im Urlaub ohne Kalender: keine Anfragen (mit Kalender gibt es Termine nach dem Urlaub)
+            if (away && !calendarCoaches.has(offer.coach_id)) {
+                book.disabled = true;
+                book.title = "Der Coach ist gerade im Urlaub – danach kannst du wieder anfragen.";
+            }
             actions.appendChild(book);
             if (isModerator) {
                 const del = iconText("button", "co-btn danger", "fa-trash", "Entfernen");
@@ -327,16 +357,16 @@
             && (!filter.sim || simKey(o.simulation) === filter.sim)
             && (!filter.lang || (Array.isArray(coach.languages) && coach.languages.includes(filter.lang)))
             && (!filter.country || coach.country === filter.country)
-            && (min === null || !Number.isFinite(min) || o.price_cents >= min)
-            && (max === null || !Number.isFinite(max) || o.price_cents <= max)
+            && (min === null || !Number.isFinite(min) || priceOf(o) >= min)
+            && (max === null || !Number.isFinite(max) || priceOf(o) <= max)
             && (!term || [o.title, o.description, o.simulation, o.category, nameOf(o.coach_id)].some(v => String(v || "").toLowerCase().includes(term)));
     }
 
     // Sortierung; „Empfohlen“ = neue Angebote zuerst, sonst zufällig je Besuch (gleiche Chance für alle Coaches)
     function sortOffers(list) {
         const sorted = [...list];
-        if (filter.sort === "preis-auf") sorted.sort((a, b) => a.price_cents - b.price_cents);
-        else if (filter.sort === "preis-ab") sorted.sort((a, b) => b.price_cents - a.price_cents);
+        if (filter.sort === "preis-auf") sorted.sort((a, b) => priceOf(a) - priceOf(b));
+        else if (filter.sort === "preis-ab") sorted.sort((a, b) => priceOf(b) - priceOf(a));
         else if (filter.sort === "neu") sorted.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
         else if (filter.sort === "bewertung") {
             const score = (o) => coachScores.get(o.coach_id) || { score: -1, count: 0 };
@@ -539,15 +569,42 @@
     }
 
     let offersRequest = 0; // nur die neueste Abfrage zählt (eine ältere, langsamere überschreibt nichts)
+    // Live-Zahlen unter der Überschrift: Coaches, Angebote, Pro-Coaches, Online-Kalender, Rabatte
+    function renderStats() {
+        const box = $("coStats");
+        if (!box) return;
+        const coaches = new Set(offers.map(o => o.coach_id));
+        const pros = [...coaches].filter(id => proIds.has(id)).length;
+        const withCalendar = [...coaches].filter(id => calendarCoaches.has(id)).length;
+        const discounts = offers.filter(discountActive).length;
+        const items = [
+            ["fa-user-tie", coaches.size, coaches.size === 1 ? "Coach" : "Coaches"],
+            ["fa-chalkboard-user", offers.length, offers.length === 1 ? "Angebot" : "Angebote"],
+            pros ? ["fa-crown", pros, pros === 1 ? "Pro-Coach" : "Pro-Coaches"] : null,
+            withCalendar ? ["fa-calendar-check", withCalendar, "mit Online-Kalender"] : null,
+            discounts ? ["fa-tag", discounts, discounts === 1 ? "Angebot mit Rabatt" : "Angebote mit Rabatt"] : null
+        ].filter(Boolean);
+        box.replaceChildren(...items.map(([icon, n, label]) => {
+            const item = el("span", "co-stat");
+            item.innerHTML = `<i class="fa-solid ${icon}"></i>`;
+            item.append(el("strong", "", String(n)), el("span", "", label));
+            return item;
+        }));
+        box.hidden = !offers.length;
+    }
+
     async function loadOffers() {
         const request = ++offersRequest;
-        const [{ data, error }, pros, cal] = await Promise.all([
+        const [{ data, error }, pros, cal, away] = await Promise.all([
             client.from("coaching_offers").select("*").eq("active", true).order("created_at", { ascending: false }).limit(300),
             client.from("pro_creators").select("user_id"),
-            client.rpc("coaching_calendar_coaches")
+            client.rpc("coaching_calendar_coaches"),
+            client.rpc("coaching_away_coaches")
         ]);
         if (request !== offersRequest) return;
         proIds = new Set((pros.data || []).map(p => p.user_id));
+        // Ohne SQL 037 gibt es den Urlaubsmodus noch nicht: dann einfach ohne Hinweis
+        awayCoaches = new Map(away.error ? [] : (away.data || []).map(a => [a.coach_id, a.bis || null]));
         // Ohne SQL 030 gibt es die Funktion noch nicht: dann einfach ohne Kalender-Hinweis
         calendarCoaches = new Set(cal.error ? [] : (cal.data || []).map(r => (typeof r === "string" ? r : r?.coaching_calendar_coaches)).filter(Boolean));
         if (error) {
@@ -564,6 +621,7 @@
         await loadProfiles((data || []).map(o => o.coach_id));
         if (request !== offersRequest) return;
         offers = [...fresh, ...rest];
+        renderStats();
         fillFilterOptions();
         if (filter.sort === "bewertung") await loadCoachScores();
         if (request !== offersRequest) return;
@@ -617,7 +675,12 @@
             return;
         }
         editingId = offer?.id || null;
+        editingOffer = offer;
         $("coOfferTitle").textContent = offer ? "Coaching bearbeiten" : "Coaching anbieten";
+        // Rabatt (SQL 037): leer = kein Rabatt; abgelaufene Rabatte erscheinen nicht mehr
+        $("coDiscount").value = discountActive(offer) ? String(offer.discount_percent) : "";
+        $("coDiscountUntil").min = berlinToday();
+        $("coDiscountUntil").value = discountActive(offer) && offer.discount_until ? offer.discount_until : "";
         $("coTitle").value = offer?.title || "";
         $("coCategory").value = offer?.category || "Fahrtechnik";
         $("coSim").value = offer?.simulation || "";
@@ -830,10 +893,170 @@
         btn.title = canOffer() ? "" : "Coach wird man mit der GSRA-Coach-Lizenz – über Setups, Bewertungen und faires Verhalten.";
     }
 
+    /* ---------- Urlaubsmodus (SQL 037) ---------- */
+    async function loadAway() {
+        if (!canOffer()) {
+            myAway = null;
+            renderAway();
+            return;
+        }
+        const { data, error } = await client.rpc("coach_away_info", { _user: me });
+        myAway = error ? undefined : data; // undefined = ohne SQL 037: Bereich ausblenden
+        renderAway();
+    }
+
+    const awayRange = (a) => a.bis ? `bis ${dayText(a.bis)}` : "ohne Enddatum – bis du ihn beendest";
+
+    function renderAway() {
+        const box = $("coAway");
+        const banner = $("coAwayBanner");
+        if (!box || !banner) return;
+        box.hidden = !canOffer() || myAway === undefined;
+        banner.hidden = !(myAway?.urlaub);
+        if (box.hidden) return;
+        const a = myAway || { urlaub: false };
+        box.className = `co-away${a.urlaub ? " active" : a.geplant ? " planned" : ""}`;
+        box.replaceChildren();
+        const head = el("div", "co-payout-head");
+        head.innerHTML = '<i class="fa-solid fa-umbrella-beach"></i>';
+        const text = el("div", "co-payout-text");
+        if (a.urlaub) {
+            text.appendChild(el("strong", "", "Du bist im Urlaub"));
+            text.appendChild(el("span", "", `Seit ${dayText(a.von)}, ${awayRange(a)}. In dieser Zeit gibt es keine freien Termine; andere sehen „Im Urlaub“.`));
+        } else if (a.geplant) {
+            text.appendChild(el("strong", "", "Urlaub geplant"));
+            text.appendChild(el("span", "", `Ab ${dayText(a.von)}, ${awayRange(a)}. Er startet und endet von selbst.`));
+        } else {
+            text.appendChild(el("strong", "", "Urlaubsmodus"));
+            text.appendChild(el("span", "", "Weg, im Urlaub oder Prüfungsstress? Mit einem Klick bist du nicht buchbar – oder plane einen Zeitraum, der von selbst endet."));
+        }
+        head.appendChild(text);
+        const actions = el("div", "co-actions");
+        const btn = (cls, icon, label, onClick) => {
+            const b = iconText("button", `co-btn ${cls}`, icon, label);
+            b.type = "button";
+            b.addEventListener("click", () => onClick(b));
+            actions.appendChild(b);
+        };
+        if (a.urlaub || a.geplant) {
+            btn("primary", a.urlaub ? "fa-plane-arrival" : "fa-xmark", a.urlaub ? "Urlaub beenden" : "Planung löschen", (b) => endAway(b));
+            btn("", "fa-calendar-days", "Zeitraum ändern", () => openAwayDialog());
+        } else {
+            btn("primary", "fa-umbrella-beach", "Ab jetzt im Urlaub", (b) => setAway(null, null, b));
+            btn("", "fa-calendar-days", "Zeitraum planen", () => openAwayDialog());
+        }
+        box.append(head, actions);
+
+        // Hinweis oben auf der Coaching-Seite, damit man das Beenden nicht vergisst
+        banner.replaceChildren();
+        if (a.urlaub) {
+            banner.appendChild(iconText("span", "co-away-banner-text", "fa-umbrella-beach", `Du bist im Urlaubsmodus (${awayRange(a)}). Kunden können dich in dieser Zeit nicht buchen.`));
+            const end = iconText("button", "co-btn primary", "fa-plane-arrival", "Urlaub beenden");
+            end.type = "button";
+            end.addEventListener("click", () => endAway(end));
+            banner.appendChild(end);
+        }
+    }
+
+    async function setAway(from, until, btn) {
+        if (btn) btn.disabled = true;
+        const { data, error } = await client.rpc("coach_set_away", { _from: from, _until: until });
+        if (btn) btn.disabled = false;
+        if (error) return showToast(errorText(error, "Der Urlaub konnte nicht gespeichert werden."), "error"), false;
+        showToast(data?.bis ? `Urlaub eingetragen: ${dayText(data.von)} bis ${dayText(data.bis)}.` : "Urlaubsmodus an – bis du ihn beendest.", "success");
+        if (data?.betroffen > 0) {
+            showDialog({
+                icon: "fa-triangle-exclamation", title: "Termine in deinem Urlaub",
+                message: `${data.betroffen === 1 ? "1 bestehender Termin fällt" : `${data.betroffen} bestehende Termine fallen`} in diesen Zeitraum. Neue Buchungen sind gesperrt, bestehende bleiben. Halte sie ein oder sag sie unter „Anfragen an dich“ ab (Bezahltes wird dann voll erstattet).`,
+                confirmText: "Verstanden"
+            });
+        }
+        await loadAway();
+        loadOffers();
+        return true;
+    }
+
+    async function endAway(btn) {
+        btn.disabled = true;
+        const { error } = await client.rpc("coach_end_away");
+        btn.disabled = false;
+        if (error) return showToast(errorText(error, "Das hat nicht geklappt."), "error");
+        showToast("Willkommen zurück! Du bist wieder buchbar.", "success");
+        await loadAway();
+        loadOffers();
+    }
+
+    // Zeitraum planen: von (ab heute) und bis (optional); die Datumsfelder zeigt datum-zeit.js im GSRA-Design
+    function openAwayDialog() {
+        document.getElementById("coAwayDialog")?.remove();
+        const overlay = el("div", "gsra-dialog-overlay");
+        overlay.id = "coAwayDialog";
+        const dialog = el("div", "gsra-dialog co-dialog co-away-dialog");
+        dialog.setAttribute("role", "dialog");
+        dialog.setAttribute("aria-modal", "true");
+        dialog.innerHTML = '<button type="button" class="gsra-dialog-close" title="Schließen"><i class="fa-solid fa-xmark"></i></button><div class="gsra-dialog-icon"><i class="fa-solid fa-umbrella-beach"></i></div>';
+        dialog.appendChild(el("h3", "gsra-dialog-title", "Urlaub planen"));
+        const form = el("form", "co-form");
+        const field = (label, input) => {
+            const wrap = el("label", "co-field");
+            wrap.appendChild(el("span", "", label));
+            wrap.appendChild(input);
+            return wrap;
+        };
+        const today = berlinToday();
+        const maxDay = new Date(Date.now() + 365 * 86400000).toLocaleDateString("sv-SE", { timeZone: "Europe/Berlin" });
+        const from = document.createElement("input");
+        from.type = "date";
+        from.required = true;
+        from.min = today;
+        from.max = maxDay;
+        from.value = myAway?.von && myAway.von >= today ? myAway.von : today;
+        const until = document.createElement("input");
+        until.type = "date";
+        until.min = today;
+        until.dataset.placeholder = "ohne Enddatum";
+        until.value = myAway?.bis || "";
+        from.addEventListener("change", () => { until.min = from.value || today; });
+        form.append(field("Von", from), field("Bis (optional)", until));
+        form.appendChild(iconText("p", "co-form-note co-wide", "fa-circle-info",
+            "In dieser Zeit gibt es keine freien Termine und keine neuen Anfragen; andere sehen „Im Urlaub bis …“. Ohne Enddatum bleibt der Urlaub an, bis du ihn beendest. Bestehende Termine bleiben bestehen."));
+        const actions = el("div", "gsra-dialog-actions co-wide");
+        const cancel = el("button", "gsra-dialog-btn secondary", "Abbrechen");
+        cancel.type = "button";
+        const save = el("button", "gsra-dialog-btn primary", "Speichern");
+        save.type = "submit";
+        actions.append(cancel, save);
+        form.appendChild(actions);
+        dialog.appendChild(form);
+        overlay.appendChild(dialog);
+        const close = () => {
+            document.removeEventListener("keydown", onKey, true);
+            overlay.remove();
+            if (!document.querySelector(".gsra-dialog-overlay:not([hidden])")) document.body.style.overflow = "";
+        };
+        const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); close(); } };
+        dialog.querySelector(".gsra-dialog-close").addEventListener("click", close);
+        cancel.addEventListener("click", close);
+        overlay.addEventListener("mousedown", (e) => { if (e.target === overlay) close(); });
+        document.addEventListener("keydown", onKey, true);
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            if (!from.value) return showToast("Bitte wähle, ab wann du im Urlaub bist.", "error");
+            if (until.value && until.value < from.value) return showToast("Das Ende liegt vor dem Beginn.", "error");
+            save.disabled = true;
+            const ok = await setAway(from.value, until.value || null);
+            save.disabled = false;
+            if (ok) close();
+        });
+        document.body.appendChild(overlay);
+        document.body.style.overflow = "hidden";
+    }
+
     async function refreshLicenseUi() {
         await loadLicense();
         updateOfferButton();
         renderLicenseBox();
+        loadAway();
         await loadPayout();
         if (!$("coMyOffers").closest(".co-panel").hidden) await Promise.all([loadMyOffers(), loadCalendar()]);
     }
@@ -870,18 +1093,35 @@
             $("coTitle").focus();
             return;
         }
+        const discountRaw = $("coDiscount").value.trim();
+        const discount = discountRaw === "" ? 0 : Number(discountRaw.replace(",", "."));
+        if (discount !== 0 && (!Number.isInteger(discount) || discount < 5 || discount > 70)) {
+            showToast("Der Rabatt muss eine ganze Zahl zwischen 5 und 70 Prozent sein – oder leer bleiben.", "error");
+            $("coDiscount").focus();
+            return;
+        }
+        const discountUntil = discount ? ($("coDiscountUntil").value || null) : null;
         const submit = e.submitter || $("coOfferForm").querySelector("[type=submit]");
         submit.disabled = true;
-        const { error } = await client.rpc("coaching_save_offer", {
+        const { data: savedId, error } = await client.rpc("coaching_save_offer", {
             _id: editingId, _title: $("coTitle").value.trim(), _description: $("coDescription").value.trim(),
             _category: $("coCategory").value, _simulation: $("coSim").value.trim(),
             _duration: Number($("coDuration").value), _price_cents: price, _active: $("coActive").checked
         });
-        submit.disabled = false;
         if (error) {
+            submit.disabled = false;
             showToast(errorText(error, "Das Angebot konnte nicht gespeichert werden."), "error");
             return;
         }
+        // Rabatt nur speichern, wenn er sich geändert hat
+        const oldDiscount = discountActive(editingOffer) ? editingOffer.discount_percent : 0;
+        const oldUntil = discountActive(editingOffer) ? (editingOffer.discount_until || null) : null;
+        const offerId = editingId || (typeof savedId === "string" ? savedId : savedId?.id);
+        if (offerId && (discount !== oldDiscount || discountUntil !== oldUntil)) {
+            const { error: discountError } = await client.rpc("coaching_set_discount", { _offer_id: offerId, _percent: discount, _until: discountUntil });
+            if (discountError) showToast(errorText(discountError, "Der Rabatt konnte nicht gespeichert werden."), "error");
+        }
+        submit.disabled = false;
         closeModal("coOfferModal");
         const isNew = !editingId;
         showToast(isNew ? "Dein Coaching ist online." : "Angebot gespeichert.", "success");
@@ -922,10 +1162,11 @@
             const dd = el("dd", cls, value);
             table.append(dt, dd);
         };
-        const fee = feeOf(offer.price_cents);
-        row("Preis des Coaches", euro(offer.price_cents));
+        const price = priceOf(offer);
+        const fee = feeOf(price);
+        row("Preis des Coaches", discountActive(offer) ? `${euro(price)} (statt ${euro(offer.price_cents)}, −${offer.discount_percent} %)` : euro(price));
         row(feePercent ? "Servicegebühr (10 %, Paddock)" : "Servicegebühr (Pole/Alliance)", feePercent ? euro(fee) : "entfällt");
-        row("Gesamt", euro(offer.price_cents + fee), "total");
+        row("Gesamt", euro(price + fee), "total");
         $("coBookTime").value = "";
         $("coBookMessage").value = "";
         // Hat der Coach einen Kalender, wählt man einen freien Termin; sonst Wunschtermin als Text
@@ -1477,6 +1718,7 @@
             money.append(`${paid ? "Bezahlt – du erhältst" : "Du erhältst"} ${euro(b.price_cents)}`);
             money.appendChild(el("small", "", " abzüglich Stripe-Gebühr"));
         }
+        if (b.discount_percent && b.status !== "erstattet") money.appendChild(el("span", "co-discount-badge small", `−${b.discount_percent} % Rabatt`));
         card.appendChild(money);
 
         const actions = el("div", "co-actions");
@@ -1784,6 +2026,7 @@
                     const input = document.createElement("input");
                     input.type = "time";
                     input.step = 900;
+                    input.required = true; // Zeitfenster haben immer eine Uhrzeit (kein „Leeren“)
                     input.value = minutesToTime(minutes);
                     input.setAttribute("aria-label", `${name} ${label}`);
                     input.addEventListener("change", () => {
@@ -2091,6 +2334,16 @@
         setBadge("coBadgeBuyer", list.filter(b => b.status === "angenommen").length);
         bookingCache.buyer = list;
         renderNextUp();
+        // Aus der E-Mail „Wie war dein Coaching?“ (coaching.html?tab=anfragen#bewerten): zum Bewerten springen
+        if (window.location.hash === "#bewerten") {
+            history.replaceState(null, "", tabUrl("anfragen"));
+            const btn = [...$("coBuyerList").querySelectorAll(".co-btn.primary")].find(b => /Coach bewerten/.test(b.textContent));
+            if (btn) {
+                btn.scrollIntoView({ behavior: "smooth", block: "center" });
+                btn.classList.add("co-flash-btn");
+                setTimeout(() => btn.classList.remove("co-flash-btn"), 2800);
+            }
+        }
     }
 
     async function loadMyOffers() {
@@ -2116,7 +2369,8 @@
             const row = el("article", `co-own${o.active ? "" : " paused"}`);
             const text = el("div", "co-own-text");
             text.appendChild(el("strong", "", o.title));
-            text.appendChild(el("small", "", `${o.category} · ${duration(o.duration_minutes)} · ${euro(o.price_cents)}${o.active ? "" : " · pausiert"}`));
+            text.appendChild(el("small", "", `${o.category} · ${duration(o.duration_minutes)} · ${euro(o.price_cents)}`
+                + `${discountActive(o) ? ` · −${o.discount_percent} % Rabatt (${euro(priceOf(o))}${o.discount_until ? ` bis ${dayText(o.discount_until)}` : ""})` : ""}${o.active ? "" : " · pausiert"}`));
             row.appendChild(text);
             const actions = el("div", "co-actions");
             const toggle = iconText("button", "co-btn", o.active ? "fa-pause" : "fa-play", o.active ? "Pausieren" : "Aktivieren");
@@ -2257,6 +2511,7 @@
         if (canOffer()) {
             loadPayout();   // Stripe-Hinweis oben, falls noch nicht verbunden
             loadCalendar(); // eigene freie Zeiten (Bereich „Als Coach“)
+            loadAway();     // Urlaubsmodus (Hinweis oben, solange er an ist)
         }
 
         renderCategories();
