@@ -676,9 +676,12 @@ function buildMainNav() {
         g.classList.remove("open");
         g.querySelector("button[aria-expanded]")?.setAttribute("aria-expanded", "false");
     });
+    // Am PC mit Maus öffnen die Menüs beim Darüberfahren (style.css) – ein Klick soll nichts zusätzlich umklappen
+    const hoverDesktop = () => window.matchMedia("(hover: hover) and (min-width: 901px)").matches;
     header.addEventListener("click", (e) => {
         const btn = /** @type {Element} */ (e.target).closest(".gsra-nav-trigger, .gsra-account-btn");
         if (!btn) return;
+        if (hoverDesktop()) { e.preventDefault(); return; }
         const group = btn.closest(".gsra-nav-group");
         const open = !group.classList.contains("open");
         close(group);

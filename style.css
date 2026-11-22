@@ -12771,13 +12771,11 @@ header .gsra-account-menu #logoutBtn:hover { background: rgba(255, 77, 77, 0.1) 
     .gsra-account-btn { padding: 2px; }
 }
 
-/* Messenger als Hauptpunkt: neue Nachrichten = dezenter roter Punkt am Wort (statt roter Leuchtschrift) */
-.gsra-nav a.gsra-nav-link.nav-unread-glow { color: var(--text-light) !important; text-shadow: none !important; }
-.gsra-nav a.gsra-nav-link.nav-unread-glow:hover, .gsra-nav a.gsra-nav-link.nav-unread-glow.active { color: var(--gsra-blue) !important; }
-.gsra-nav a.gsra-nav-link.nav-unread-glow::after { background-color: var(--gsra-blue) !important; }
-.gsra-nav a.gsra-nav-link.nav-unread-glow:not(:hover):not(.active)::after { width: 0 !important; }
+/* Messenger als Hauptpunkt: neue Nachrichten = rote, leicht leuchtende Schrift (Wunsch 22.11., wie früher);
+   der Punkt bleibt aus, nur der Text für Screenreader sagt „neue Nachrichten“ */
+.gsra-nav a.gsra-nav-link.nav-unread-glow { color: #ff4d4d !important; text-shadow: 0 0 12px rgba(255, 77, 77, 0.9) !important; }
 .gsra-nav-badge {
-    display: none;
+    display: none !important;
     width: 8px;
     height: 8px;
     margin-left: 6px;
@@ -12793,22 +12791,14 @@ header .gsra-account-menu #logoutBtn:hover { background: rgba(255, 77, 77, 0.1) 
 @keyframes gsraBadgePulse { 0%, 100% { box-shadow: 0 0 0 3px rgba(255, 77, 77, 0.18); } 50% { box-shadow: 0 0 0 5px rgba(255, 77, 77, 0.06); } }
 @media (prefers-reduced-motion: reduce) { .gsra-nav-badge { animation: none; } }
 .sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-@media (max-width: 900px) {
-    /* Handy: der Menü-Knopf zeigt neue Nachrichten mit einem kleinen Punkt statt rotem Leuchten */
-    header:has(nav a.nav-unread-glow) .nav-toggle { position: relative; border-color: rgba(255, 255, 255, 0.15); box-shadow: none; }
-    header:has(nav a.nav-unread-glow) .nav-toggle span { background: #fff; }
-    header:has(nav a.nav-unread-glow) .nav-toggle::after {
-        content: "";
-        position: absolute;
-        top: -3px;
-        right: -3px;
-        width: 11px;
-        height: 11px;
-        background: #ff4d4d;
-        border: 2px solid #000;
-        border-radius: 50%;
-    }
-    header .gsra-nav .gsra-nav-link .gsra-nav-badge { vertical-align: middle; }
+/* Menüs am PC (Maus): öffnen nur beim Darüberfahren, der Pfeil dreht sich dabei mit – ein Klick ändert nichts.
+   Mit der Tastatur (Tab) öffnen sie, sobald ein Eintrag darin den Fokus hat. */
+@media (hover: hover) and (min-width: 901px) {
+    .gsra-nav-group:hover > .gsra-nav-trigger, .gsra-nav-group:has(:focus-visible) > .gsra-nav-trigger { color: var(--gsra-blue); }
+    .gsra-nav-group:hover > .gsra-nav-trigger i, .gsra-nav-group:has(:focus-visible) > .gsra-nav-trigger i,
+    .gsra-account:hover .gsra-account-btn > i, .gsra-account:has(:focus-visible) .gsra-account-btn > i { transform: rotate(180deg); }
+    .gsra-account-btn > i { transition: transform 0.2s; }
+    .gsra-nav-group:has(:focus-visible) > .gsra-nav-menu { display: flex; }
 }
 
 /* =========================================
