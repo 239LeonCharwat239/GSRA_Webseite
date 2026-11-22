@@ -601,7 +601,7 @@ const GSRA_NAV = [
     ] },
     { label: "Garage", items: [
         { label: "Setups", href: "setups.html", icon: "fa-sliders", text: "Setup Hub für alle Simulationen" },
-        { label: "Stint-Planer", icon: "fa-gas-pump", text: "Sprit, Stints und Boxenstopps planen", bald: true },
+        { label: "Stint-Planer", href: "stintplaner.html", icon: "fa-gas-pump", text: "Sprit, Stints und Boxenstopps planen", vorschau: true },
         { label: "Telemetrie", icon: "fa-chart-line", text: "Runden vergleichen und schneller werden", bald: true },
         { label: "Liveries", icon: "fa-palette", text: "Designs teilen und finden", bald: true }
     ] },
@@ -637,7 +637,7 @@ function buildMainNav() {
              <span class="gsra-nav-item-text"><strong>${navEscape(it.label)} <em>Bald</em></strong><small>${navEscape(it.text)}</small></span></span>`
         : `<a class="gsra-nav-item${isHere(it.href) ? " active" : ""}" role="menuitem" href="${it.href}"${isHere(it.href) ? ' aria-current="page"' : ""}>
              <span class="gsra-nav-item-icon"><i class="fa-solid ${it.icon}"></i></span>
-             <span class="gsra-nav-item-text"><strong>${navEscape(it.label)}</strong><small>${navEscape(it.text)}</small></span></a>`;
+             <span class="gsra-nav-item-text"><strong>${navEscape(it.label)}${it.vorschau ? " <em class=\"vorschau\">Vorschau</em>" : ""}</strong><small>${navEscape(it.text)}</small></span></a>`;
 
     nav.innerHTML = GSRA_NAV.map((g, i) => {
         if (!g.items) return `<a href="${g.href}"${g.id ? ` id="${g.id}"` : ""} class="gsra-nav-link${isHere(g.href) ? " active" : ""}"${isHere(g.href) ? ' aria-current="page"' : ""}>${navEscape(g.label)}${g.id === "messengerNavBtn" ? '<span class="gsra-nav-badge" aria-hidden="true"></span><span class="sr-only gsra-nav-badge-text"> – neue Nachrichten</span>' : ""}</a>`;

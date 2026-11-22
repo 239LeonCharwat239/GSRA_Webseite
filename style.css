@@ -12899,3 +12899,86 @@ header .gsra-account-menu #logoutBtn:hover { background: rgba(255, 77, 77, 0.1) 
 .dash-mfa-status { margin-left: 8px; padding: 2px 9px; background: rgba(255, 255, 255, 0.08); border-radius: 10px; color: var(--text-muted); font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; vertical-align: middle; }
 .dash-mfa-status.on { background: rgba(0, 255, 136, 0.12); color: #00e07a; }
 .dash-mfa-gate { margin-top: 14px; max-width: 520px; }
+
+/* =========================================
+   STINT-PLANER (src/stintplaner.ts)
+========================================= */
+.gsra-nav-item-text em.vorschau { margin-left: 4px; padding: 1px 6px; background: rgba(255, 204, 0, 0.16); border-radius: 6px; color: var(--gsra-yellow); font-size: 10px; font-style: normal; letter-spacing: 0.5px; text-transform: uppercase; }
+.sp-beta { max-width: 1200px; margin: 0 auto 18px; padding: 10px 14px; background: rgba(255, 204, 0, 0.07); border: 1px solid rgba(255, 204, 0, 0.3); border-radius: 10px; color: #dfe3ea; font-size: 13px; text-align: left; }
+.sp-beta i { color: var(--gsra-yellow); margin-right: 4px; }
+.sp-layout { display: grid; grid-template-columns: minmax(320px, 420px) 1fr; gap: 20px; max-width: 1200px; margin: 0 auto; text-align: left; align-items: start; }
+.sp-formular { display: flex; flex-direction: column; gap: 14px; }
+.sp-karte { padding: 14px 16px; background: var(--bg-card); border: 1px solid var(--border-subtle); border-left: 3px solid var(--gsra-blue); border-radius: 12px; }
+.sp-karte h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; color: #fff; font-size: 14px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; }
+.sp-karte h2 i { color: var(--gsra-yellow); }
+.sp-felder { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end; }
+.sp-felder label { display: flex; flex-direction: column; gap: 5px; color: var(--text-muted); font-size: 12px; font-weight: 600; }
+.sp-felder .sp-breit { grid-column: 1 / -1; }
+.sp-formular input[type="text"], .sp-formular input[type="number"], .sp-formular input[type="datetime-local"] {
+    width: 100%;
+    padding: 9px 10px;
+    background: #0f1116;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 8px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 14px;
+}
+.sp-formular input:focus { outline: none; border-color: var(--gsra-blue); box-shadow: 0 0 0 3px rgba(0, 85, 255, 0.2); }
+.sp-haken { flex-direction: row !important; align-items: center; gap: 8px !important; color: #dfe3ea !important; font-size: 13px !important; }
+.sp-haken input { width: 16px; height: 16px; accent-color: var(--gsra-yellow); }
+.sp-umschalter { display: flex; gap: 8px; margin-bottom: 12px; }
+.sp-umschalter label { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; color: #dfe3ea; font-size: 13px; font-weight: 700; cursor: pointer; }
+.sp-umschalter label:has(input:checked) { background: var(--gsra-yellow); border-color: var(--gsra-yellow); color: #000; }
+.sp-umschalter input { position: absolute; opacity: 0; pointer-events: none; }
+.sp-fahrer-liste { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.sp-fahrer-zeile { display: grid; grid-template-columns: 1fr 1fr 34px; gap: 8px; }
+.sp-icon-btn { width: 34px; height: 38px; background: rgba(255, 77, 77, 0.08); border: 1px solid rgba(255, 77, 77, 0.3); border-radius: 8px; color: #ff8080; cursor: pointer; }
+.sp-icon-btn:hover { background: rgba(255, 77, 77, 0.18); }
+.sp-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 14px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 8px; color: #fff; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.sp-btn:hover { border-color: var(--gsra-yellow); color: var(--gsra-yellow); }
+.sp-btn.primaer { background: var(--gsra-yellow); border-color: var(--gsra-yellow); color: #000; }
+.sp-btn.primaer:hover { box-shadow: var(--yellow-glow); color: #000; }
+.sp-aktionen { display: flex; flex-wrap: wrap; gap: 10px; }
+.sp-ergebnis { position: sticky; top: 110px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.sp-kacheln { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.sp-kachel { display: flex; flex-direction: column; gap: 4px; padding: 12px; background: var(--bg-card); border: 1px solid var(--border-subtle); border-top: 3px solid var(--gsra-yellow); border-radius: 10px; }
+.sp-kachel i { color: var(--gsra-yellow); }
+.sp-kachel strong { color: #fff; font-size: 20px; font-weight: 900; }
+.sp-kachel span { color: var(--text-muted); font-size: 12px; }
+.sp-vergleich { padding: 14px 16px; background: #12141a; border: 1px solid rgba(0, 85, 255, 0.4); border-radius: 12px; }
+.sp-vergleich h3, .sp-titel { margin: 0 0 10px; color: #fff; font-size: 14px; font-weight: 900; letter-spacing: 0.6px; text-transform: uppercase; }
+.sp-vergleich-zeilen { display: grid; gap: 6px; }
+.sp-vergleich-zeile { display: flex; justify-content: space-between; gap: 12px; padding: 8px 10px; background: rgba(255, 255, 255, 0.03); border-radius: 8px; font-size: 13px; }
+.sp-vergleich-zeile span { color: var(--text-muted); text-align: right; }
+.sp-fazit { margin: 10px 0 0; color: #dfe3ea; font-size: 13px; }
+.sp-fazit.gut { color: #00e07a; }
+.sp-tabelle-rahmen { overflow-x: auto; border: 1px solid var(--border-subtle); border-radius: 12px; }
+.sp-tabelle { width: 100%; border-collapse: collapse; font-size: 13px; }
+.sp-tabelle th { padding: 10px; background: #12141a; color: var(--text-muted); font-size: 11px; font-weight: 800; letter-spacing: 0.6px; text-align: left; text-transform: uppercase; white-space: nowrap; }
+.sp-tabelle td { padding: 10px; border-top: 1px solid var(--border-subtle); color: #e6e9ef; vertical-align: top; white-space: nowrap; }
+.sp-tabelle td small { display: block; color: var(--text-muted); font-size: 11px; }
+.sp-tabelle .sp-nr { color: var(--gsra-yellow); font-weight: 900; }
+.sp-tabelle .sp-fahrer { font-weight: 800; }
+.sp-tags { display: flex; gap: 4px; margin-top: 4px; }
+.sp-tags em { padding: 1px 6px; border-radius: 6px; font-size: 10px; font-style: normal; font-weight: 800; text-transform: uppercase; }
+.sp-tags em.reifen { background: rgba(0, 85, 255, 0.2); color: #9ab8ff; }
+.sp-tags em.wechsel { background: rgba(255, 204, 0, 0.16); color: var(--gsra-yellow); }
+.sp-ziel { color: #00e07a; font-weight: 800; }
+.sp-fahrerzeiten { display: grid; gap: 6px; }
+.sp-fahrerzeit { display: flex; justify-content: space-between; gap: 12px; padding: 9px 12px; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 10px; font-size: 13px; }
+.sp-fahrerzeit span { color: var(--text-muted); text-align: right; }
+.sp-fehler { display: flex; gap: 10px; align-items: center; padding: 14px; background: rgba(255, 77, 77, 0.08); border: 1px solid rgba(255, 77, 77, 0.35); border-radius: 10px; color: #ffb3b3; }
+@media (max-width: 960px) {
+    /* minmax(0, 1fr): die Spalte darf schmaler als ihr Inhalt werden – sonst wird rechts abgeschnitten */
+    .sp-layout { grid-template-columns: minmax(0, 1fr); }
+    .sp-ergebnis { position: static; }
+    .sp-kacheln { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sp-vergleich-zeile, .sp-fahrerzeit { flex-wrap: wrap; }
+    .sp-vergleich-zeile span, .sp-fahrerzeit span { text-align: left; }
+}
+@media (max-width: 420px) {
+    .sp-felder { grid-template-columns: 1fr; }
+    .sp-fahrer-zeile { grid-template-columns: 1fr 34px; }
+    .sp-fahrer-zeile .sp-fahrer-zeit { grid-column: 1 / 2; }
+}

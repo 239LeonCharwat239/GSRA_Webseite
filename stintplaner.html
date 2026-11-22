@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stint-Planer - GSRA</title>
+    <meta name="description" content="Stint-Planer der GSRA: Kraftstoff, Stints, Fahrerwechsel und Boxenstopps für Langstreckenrennen im Simracing planen.">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha256-7jvo3hkrl8sdc9HpXWuCux9rZYwPl8TvdX/DMZlu09M=" crossorigin="anonymous"></script>
+    <script src="supabase-client.js"></script>
+    <script src="fehler-monitor.js"></script>
+    <script src="auth-nav.js"></script>
+</head>
+<body>
+
+<header>
+    <div class="logo-slogan-container">
+        <a href="index.html" class="logo-link">
+            <img src="GSRA_Logo_ohne Hintergrund.png" alt="GSRA Logo" class="logo">
+        </a>
+        <div class="header-slogan">
+            <span class="text-blue">UNITED BY SPEED.</span>
+            <span class="text-yellow">DRIVEN GLOBALLY.</span>
+        </div>
+    </div>
+    <!-- Die Navigation baut auth-nav.js aus einer zentralen Liste (GSRA_NAV) -->
+    <nav>
+        <a href="index.html">Home</a>
+        <a href="messenger.html">Messenger</a>
+        <a href="login.html" class="login-btn" id="loginNavBtn">Login</a>
+        <button id="logoutBtn" class="login-btn" style="display: none;">Logout</button>
+    </nav>
+</header>
+
+    <main class="container">
+        <section class="hero-section">
+            <h1 class="hero-title">Stint-<span class="text-blue">Planer</span></h1>
+            <p class="hero-subtitle">Kraftstoff, Stints, Fahrerwechsel und Boxenstopps für dein nächstes Langstreckenrennen – in Sekunden geplant.</p>
+        </section>
+
+        <p class="sp-beta"><i class="fa-solid fa-flask" aria-hidden="true"></i> <strong>Vorschau:</strong> Der Stint-Planer befindet sich in Entwicklung. Später übernimmt die GSRA-App Verbrauch und Rundenzeiten automatisch aus der Simulation.</p>
+
+        <div class="sp-layout">
+            <form id="spFormular" class="sp-formular" autocomplete="off" novalidate>
+                <section class="sp-karte">
+                    <h2><i class="fa-solid fa-flag-checkered" aria-hidden="true"></i> Rennen</h2>
+                    <div class="sp-umschalter" role="radiogroup" aria-label="Renndauer">
+                        <label><input type="radio" name="modus" value="zeit" checked> Nach Zeit</label>
+                        <label><input type="radio" name="modus" value="runden"> Nach Runden</label>
+                    </div>
+                    <div class="sp-felder">
+                        <label class="sp-nur-zeit"><span>Stunden</span><input name="dauerStd" type="number" min="0" max="33" step="1" inputmode="numeric"></label>
+                        <label class="sp-nur-zeit"><span>Minuten</span><input name="dauerMin" type="number" min="0" max="59" step="1" inputmode="numeric"></label>
+                        <label class="sp-nur-runden" hidden><span>Runden</span><input name="runden" type="number" min="1" max="5000" step="1" inputmode="numeric"></label>
+                        <label class="sp-breit"><span>Start (optional, für echte Uhrzeiten)</span><input name="start" type="datetime-local"></label>
+                    </div>
+                </section>
+
+                <section class="sp-karte">
+                    <h2><i class="fa-solid fa-gas-pump" aria-hidden="true"></i> Fahrzeug und Verbrauch</h2>
+                    <div class="sp-felder">
+                        <label><span>Rundenzeit (z. B. 1:45,3)</span><input name="rundenzeit" type="text" inputmode="decimal" maxlength="9"></label>
+                        <label><span>Verbrauch je Runde (l)</span><input name="verbrauch" type="text" inputmode="decimal" maxlength="6"></label>
+                        <label><span>Tankgröße (l)</span><input name="tank" type="text" inputmode="decimal" maxlength="6"></label>
+                        <label><span>Reserve (l)</span><input name="reserve" type="text" inputmode="decimal" maxlength="5"></label>
+                        <label class="sp-breit"><span>Reifen halten (Runden, 0 = kein Wechsel)</span><input name="reifenRunden" type="number" min="0" max="2000" step="1" inputmode="numeric"></label>
+                    </div>
+                </section>
+
+                <section class="sp-karte">
+                    <h2><i class="fa-solid fa-wrench" aria-hidden="true"></i> Boxenstopp</h2>
+                    <div class="sp-felder">
+                        <label><span>Boxengasse (s)</span><input name="boxgasse" type="text" inputmode="decimal" maxlength="5"></label>
+                        <label><span>Tanken (l pro s)</span><input name="tankrate" type="text" inputmode="decimal" maxlength="5"></label>
+                        <label><span>Reifenwechsel (s)</span><input name="reifenzeit" type="text" inputmode="decimal" maxlength="5"></label>
+                        <label><span>Fahrerwechsel (s)</span><input name="fahrerwechsel" type="text" inputmode="decimal" maxlength="5"></label>
+                        <label class="sp-breit sp-haken"><input name="parallel" type="checkbox"> <span>Tanken, Reifen- und Fahrerwechsel gleichzeitig</span></label>
+                    </div>
+                </section>
+
+                <section class="sp-karte">
+                    <h2><i class="fa-solid fa-users" aria-hidden="true"></i> Fahrer</h2>
+                    <div id="spFahrer" class="sp-fahrer-liste"></div>
+                    <div class="sp-felder">
+                        <button type="button" id="spFahrerNeu" class="sp-btn"><i class="fa-solid fa-user-plus" aria-hidden="true"></i> Fahrer hinzufügen</button>
+                        <label><span>Stints am Stück</span><input name="stintsAmStueck" type="number" min="1" max="6" step="1" inputmode="numeric"></label>
+                    </div>
+                </section>
+
+                <section class="sp-karte">
+                    <h2><i class="fa-solid fa-leaf" aria-hidden="true"></i> Variante: Sprit sparen</h2>
+                    <div class="sp-felder">
+                        <label><span>Weniger Verbrauch (%)</span><input name="sparProzent" type="text" inputmode="decimal" maxlength="4"></label>
+                        <label><span>Zeitverlust je Runde (s)</span><input name="sparVerlust" type="text" inputmode="decimal" maxlength="4"></label>
+                    </div>
+                </section>
+
+                <div class="sp-aktionen">
+                    <button type="button" id="spTeilen" class="sp-btn primaer"><i class="fa-solid fa-share-nodes" aria-hidden="true"></i> Link zum Teilen kopieren</button>
+                    <button type="button" id="spZurueck" class="sp-btn"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Zurücksetzen</button>
+                </div>
+            </form>
+
+            <section id="spErgebnis" class="sp-ergebnis" aria-live="polite"></section>
+        </div>
+    </main>
+
+    <script src="ui-dialogs.js"></script>
+    <script src="datum-zeit.js"></script>
+    <script type="module" src="src/stintplaner.ts"></script>
+    <script type="module" src="src/suche.ts"></script>
+</body>
+</html>

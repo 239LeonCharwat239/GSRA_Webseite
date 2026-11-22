@@ -46,6 +46,12 @@ export const HILFE: HilfeArtikel[] = [
   { id: "startseite", thema: "start", frage: "Was zeigt mir die Startseite?",
     antwort: ["Nach der Anmeldung siehst du auf der Startseite die nächsten drei Rennen aus dem Rennkalender mit Countdown. Laufende Rennen bleiben bis sechs Stunden nach dem Start sichtbar."] },
 
+  { id: "stintplaner", thema: "start", frage: "Wie nutze ich den Stint-Planer?",
+    antwort: ["Unter „Garage“ findest du den Stint-Planer. Gib Renndauer (nach Zeit oder Runden), Rundenzeit, Verbrauch je Runde, Tankgröße und Reserve ein, ergänze die Zeiten für Boxengasse, Tanken, Reifen- und Fahrerwechsel und trage deine Fahrer ein – auf Wunsch mit eigener Rundenzeit.",
+      "Der Planer berechnet daraus sofort jeden Stint mit Rennzeit und echter Uhrzeit, Runden, Kraftstoff, Reifenwechseln und Boxenstopps, dazu die Fahrzeiten je Fahrer. Der Vergleich zeigt, ob sich Kraftstoffsparen lohnt. Über „Link zum Teilen kopieren“ schickst du den kompletten Plan an dein Team.",
+      "Der Stint-Planer ist eine Vorschau. Künftig übernimmt die GSRA-App Verbrauch und Rundenzeiten automatisch aus der Simulation."],
+    links: [{ label: "Zum Stint-Planer", href: "stintplaner.html" }] },
+
   // ---------- Messenger ----------
   { id: "chat-starten", thema: "messenger", frage: "Wie beginne ich einen Chat?",
     antwort: ["Direktnachrichten sind zwischen Freunden möglich. Öffne dazu das Profil der Person – etwa über die Suche – und sende eine Freundschaftsanfrage. Sobald sie angenommen ist, könnt ihr miteinander schreiben.",
