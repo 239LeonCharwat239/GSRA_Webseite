@@ -467,6 +467,22 @@ document.addEventListener("DOMContentLoaded", async () => {
                     <span class="dash-own-meta"><i class="fa-solid fa-thumbs-up"></i> ${Number(item.likes) || 0} <i class="fa-solid fa-thumbs-down"></i> ${Number(item.dislikes) || 0}</span>
                 </a>`);
 
+        // Auf allen Geräten abmelden (wie „Alle Geräte abmelden“ bei WhatsApp): beendet jede Anmeldung dieses Kontos
+        document.getElementById("signOutEverywhereBtn")?.addEventListener("click", async () => {
+            const ok = await showDialog({
+                icon: "fa-right-from-bracket",
+                title: "Auf allen Geräten abmelden?",
+                message: "Du wirst überall abgemeldet – auch hier. Danach meldest du dich einfach neu an.",
+                confirmText: "Überall abmelden",
+                cancelText: "Abbrechen"
+            });
+            if (!ok) return;
+            const { error } = await client.auth.signOut({ scope: "global" });
+            if (error) return showToast("Das Abmelden hat nicht geklappt. Bitte versuche es erneut.", "error");
+            if (typeof window.gsraClearDeviceMedia === "function") await window.gsraClearDeviceMedia();
+            window.location.href = "login.html";
+        });
+
         // Konto löschen: Passwort bestätigen, dann endgültig löschen (die Datenbank prüft, dass das Passwort gerade eben bestätigt wurde)
         const deleteAccountBtn = document.getElementById("deleteAccountBtn");
         if (deleteAccountBtn) {
@@ -557,6 +573,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     close();
                     await client.auth.signOut().catch(() => {});
                     Object.keys(localStorage).filter(key => key.startsWith("gsra_")).forEach(key => localStorage.removeItem(key));
+                    if (typeof window.gsraClearDeviceMedia === "function") await window.gsraClearDeviceMedia();
                     await showDialog({
                         icon: "fa-circle-check",
                         title: "Dein Konto wurde gelöscht",

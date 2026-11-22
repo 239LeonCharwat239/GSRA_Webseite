@@ -405,10 +405,19 @@ const initAuthNav = async () => {
             // Beim Abmelden sofort offline – der Spielstatus verschwindet
             await Promise.race([client.rpc("touch_presence", { _offline: true }), new Promise(resolve => setTimeout(resolve, 1500))]).catch(() => {});
             await client.auth.signOut();
+            await clearDeviceMedia();
             window.location.href = "login.html";
         });
     }
 };
+
+// Auf dem Gerät gespeicherte Chat-Fotos und Sprachnachrichten (chat-medien.js) beim Abmelden entfernen –
+// wichtig auf geteilten Rechnern. Wird auch nach dem Löschen des Kontos und „Auf allen Geräten abmelden“ genutzt.
+async function clearDeviceMedia() {
+    try { if (window.caches) await caches.delete("gsra-chat-medien-v1"); } catch (e) { /* egal */ }
+    try { localStorage.removeItem("gsra_chat_medien_index"); } catch (e) { /* egal */ }
+}
+window.gsraClearDeviceMedia = clearDeviceMedia;
 
 // Visibility-Header: Namen der Mitglieder mit Pole oder Alliance schweben hinter der Navigation von links nach rechts.
 // Fair: Alle Namen werden gemischt und nacheinander gezeigt, erst danach neu gemischt – jeder kommt gleich oft dran.

@@ -7002,6 +7002,12 @@ button.dash-avatar:hover,
     color: #fff;
     box-shadow: 0 0 15px rgba(255, 77, 77, 0.4);
 }
+/* „Auf allen Geräten abmelden“: gleiche Karte, aber Blau statt Rot (keine Löschung) */
+.dash-safe-card { border-top-color: var(--gsra-blue); }
+.dash-safe-card h3 i { color: #6cb8ff; }
+.dash-safe-card .dash-delete-btn { border-color: var(--gsra-blue); color: #6cb8ff; }
+.dash-safe-card .dash-delete-btn:hover { background: var(--gsra-blue); color: #fff; box-shadow: var(--blue-glow); }
+.dash-safe-card + .dash-danger-card { margin-top: 16px; }
 
 .dash-dialog-error {
     margin: -10px 0 14px;
