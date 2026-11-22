@@ -55,7 +55,16 @@ for (const seite of seiten) {
   for (const m of html.matchAll(SKRIPT)) {
     const src = m[1];
     if (/^https?:/i.test(src)) continue;
-    const datei = src.split("?")[0].replace(/^\.\//, "");
+    const datei = src.split("?")[0].replace(/^\.?\//, "");
+    // TypeScript-Module (Vite) liegen unter src/ – sie werden mit ihren Importen geprüft
+    if (/^src\/.+\.ts$/.test(datei)) {
+      try { readFileSync(join(ROOT, datei)); } catch {
+        merke({ messageText: `Seite lädt ein Modul, das es nicht gibt: ${datei}`, code: 0 }, seite);
+        continue;
+      }
+      skripte.push(join(ROOT, datei));
+      continue;
+    }
     if (datei.includes("/")) {
       merke({ messageText: `Skript außerhalb des Hauptordners wird nicht geprüft: ${datei}`, code: 0 }, seite);
       continue;

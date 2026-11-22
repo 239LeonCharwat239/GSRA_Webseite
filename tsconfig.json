@@ -3,7 +3,8 @@
   // Die Seite bleibt reines JavaScript ohne Build-Schritt; TypeScript liest die Dateien nur und meldet Typfehler.
   // Typen stehen als JSDoc-Kommentare im Code (/** @type {HTMLInputElement} */ …) und in types/gsra.d.ts.
   // Die eigentliche Prüfung läuft PRO SEITE mit genau den Skripten, die die Seite lädt (dort mit checkJs):
-  //   cd tests/typ && npm ci --ignore-scripts && npm run pruefen      (läuft bei jedem Push in GitHub)
+  //   npm ci --ignore-scripts && npm run pruefen      (im Hauptordner; läuft bei jedem Push in GitHub)
+  // Neue Dateien sind TypeScript-Module unter src/ (Vite baut sie, siehe vite.config.ts).
   // checkJs bleibt hier aus, weil der Editor sonst alle Seiten in einen Topf wirft und Scheinkonflikte meldet
   // (z. B. „currentUser“ gibt es im Marktplatz und im Messenger – die Seiten begegnen sich nie).
   "compilerOptions": {
@@ -21,5 +22,5 @@
     "skipLibCheck": true,
     "types": []
   },
-  "include": ["*.js", "types/*.d.ts"]
+  "include": ["*.js", "src/**/*.ts", "types/*.d.ts"]
 }

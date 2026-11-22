@@ -3,7 +3,8 @@
 #    (erlaubte UND verbotene Zugriffe als Gast, Mitglied, Coach, Moderation, Admin) – in beiden Ausgangslagen.
 # 2) JavaScript-Syntax: Jede Datei der Webseite muss fehlerfrei lesbar sein.
 # 3) TypeScript-Prüfung (Teil 2): jede Seite mit genau ihren Skripten – Typfehler, fehlende Funktionen,
-#    ungenutzter und unerreichbarer Code (tests/typ/pruefen.mjs, Einstellungen in tsconfig.json).
+#    ungenutzter und unerreichbarer Code (tests/typ/pruefen.mjs, Einstellungen in tsconfig.json) – und der
+#    Build wie auf Vercel (Vite): veröffentlicht wird nur dist/, ohne interne Dateien.
 # Schlägt etwas fehl, zeigt GitHub ein rotes Kreuz am Commit (und in GitHub Desktop), bevor jemand es live nutzt.
 # Absicherung: nur Leserechte, Aktionen auf eine feste Version (Commit) gepinnt, Pakete exakt nach package-lock.json.
 name: Prüfungen
@@ -80,7 +81,7 @@ jobs:
         run: node tests/ui/fehlertexte.test.mjs
 
   typen:
-    name: TypeScript-Prüfung (pro Seite)
+    name: TypeScript-Prüfung und Build
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -91,10 +92,21 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: tests/typ/package-lock.json
-      - name: TypeScript (exakt nach package-lock.json)
-        working-directory: tests/typ
+          cache-dependency-path: package-lock.json
+      - name: TypeScript und Vite (exakt nach package-lock.json, ohne Installationsskripte)
         run: npm ci --ignore-scripts
       - name: Jede Seite mit ihren Skripten prüfen (Typen, ungenutzter und unerreichbarer Code)
-        working-directory: tests/typ
         run: npm run pruefen
+      - name: Webseite bauen (wie auf Vercel)
+        run: npm run build
+      - name: Veröffentlicht wird nur die Webseite (keine Datenbank-Skripte, Tests oder Einstellungen)
+        run: |
+          fehler=0
+          for verboten in supabase tests types .github node_modules package.json package-lock.json vercel.json tsconfig.json vite.config.ts CLAUDE.md; do
+            if [ -e "dist/$verboten" ]; then echo "::error::dist/$verboten darf nicht veröffentlicht werden"; fehler=1; fi
+          done
+          seiten=$(ls dist/*.html | wc -l)
+          quelle=$(ls *.html | wc -l)
+          if [ "$seiten" != "$quelle" ]; then echo "::error::Es fehlen Seiten im Build ($seiten von $quelle)"; fehler=1; fi
+          for f in *.js; do [ -f "dist/$f" ] || { echo "::error::dist/$f fehlt"; fehler=1; }; done
+          exit $fehler

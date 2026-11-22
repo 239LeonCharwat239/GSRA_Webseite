@@ -12133,12 +12133,16 @@ textarea { resize: none !important; }
     opacity: 0;
 }
 .gsra-file-body { display: flex; align-items: center; gap: 14px; }
-.gsra-file-icon {
+/* „.gsra-file .gsra-file-icon“: stärker als die Regeln von Font Awesome, damit die Wolke mittig in der Box sitzt */
+.gsra-file .gsra-file-icon {
     flex: 0 0 44px;
+    width: 44px;
     height: 44px;
-    display: inline-flex;
+    display: flex;
     align-items: center;
     justify-content: center;
+    text-align: center;
+    line-height: 1;
     background: rgba(255, 204, 0, 0.1);
     border: 1px solid rgba(255, 204, 0, 0.35);
     border-radius: 10px;
