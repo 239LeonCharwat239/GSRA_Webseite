@@ -176,7 +176,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         showDialog({
             icon: 'fa-ban',
             title: 'Dein Konto ist gesperrt',
-            message: date && !isNaN(date)
+            message: date && !isNaN(date.getTime())
                 ? `Dein Konto ist bis zum ${date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })} gesperrt. Danach kannst du dich wieder anmelden.`
                 : (until === 'dauerhaft'
                     ? 'Dein Konto wurde dauerhaft gesperrt. Bei Fragen wende dich an das GSRA-Team.'

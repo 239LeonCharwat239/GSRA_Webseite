@@ -303,7 +303,7 @@ const modalStatusActions = document.getElementById("modalStatusActions");
 const itemCreateModal = document.getElementById("itemCreateModal");
 const openItemModalBtn = document.getElementById("openItemModalBtn");
 const closeCreateModalBtn = document.getElementById("closeCreateModalBtn");
-const createItemForm = document.getElementById("create-item-form");
+const createItemForm = /** @type {HTMLFormElement} */ (document.getElementById("create-item-form"));
 const modalFormHeader = document.getElementById("modalFormHeader");
 const modalFormSubheader = document.getElementById("modalFormSubheader");
 const submitItemBtn = document.getElementById("submitItemBtn");
@@ -320,7 +320,7 @@ const itemCategorySelect = document.getElementById("itemCategory");
 const itemSubcategorySelect = document.getElementById("itemSubcategory");
 const itemSpecGroup = document.getElementById("itemSpecGroup");
 const itemSpecLabel = document.getElementById("itemSpecLabel");
-const itemSpecInput = document.getElementById("itemSpec");
+const itemSpecInput = /** @type {HTMLInputElement} */ (document.getElementById("itemSpec"));
 
 const fillOptions = (select, options, firstOption = null) => {
     if (!select) return;
@@ -749,7 +749,7 @@ function filterItems() {
     } else if (sortValue === "price-desc") {
         filtered.sort((a, b) => parseFloat(b.price || 0) - parseFloat(a.price || 0));
     } else {
-        filtered.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+        filtered.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
     }
 
     renderMarketplaceItems(filtered);

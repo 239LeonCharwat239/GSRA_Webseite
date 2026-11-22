@@ -652,8 +652,8 @@ function openReportDialog(userId, context = {}) {
 
     // Zeitraum (z. B. für große öffentliche Foren): höchstens 7 Tage, vorausgefüllt mit den letzten 24 Stunden
     const periodBox = overlay.querySelector(".gsra-report-period");
-    const fromInput = overlay.querySelector(".gsra-report-from");
-    const toInput = overlay.querySelector(".gsra-report-to");
+    const fromInput = /** @type {HTMLInputElement} */ (overlay.querySelector(".gsra-report-from"));
+    const toInput = /** @type {HTMLInputElement} */ (overlay.querySelector(".gsra-report-to"));
     const toLocalInput = (date) => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     const now = new Date();
     fromInput.value = toLocalInput(new Date(now.getTime() - 24 * 3600000));
@@ -664,9 +664,9 @@ function openReportDialog(userId, context = {}) {
     const periodError = () => {
         const from = new Date(fromInput.value);
         const to = new Date(toInput.value);
-        if (isNaN(from) || isNaN(to)) return "Bitte gib an, von wann bis wann es passiert ist.";
+        if (isNaN(from.getTime()) || isNaN(to.getTime())) return "Bitte gib an, von wann bis wann es passiert ist.";
         if (from >= to) return "„Von“ muss vor „bis“ liegen.";
-        if (to - from > 7 * 86400000) return "Ein Zeitraum darf höchstens 7 Tage umfassen.";
+        if (to.getTime() - from.getTime() > 7 * 86400000) return "Ein Zeitraum darf höchstens 7 Tage umfassen.";
         if (to > new Date(Date.now() + 5 * 60000)) return "Der Zeitraum darf nicht in der Zukunft liegen.";
         if (from < new Date(Date.now() - 180 * 86400000)) return "Gemeldet werden können nur die letzten 180 Tage.";
         return null;

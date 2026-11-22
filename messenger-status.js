@@ -288,6 +288,7 @@ const SYSTEM_TEXT_PATTERN = /hat den Chat|hat das Forum|zum Forum hinzugefügt|u
 
 function isNewestForeignMessage(msg) {
     if (!msg || String(msg.sender_id) === String(currentUser?.id)) return false;
+    /** @type {any} */
     let newest = null;
     messagesCacheMap.forEach(m => {
         if (!m.sender_id || String(m.sender_id) === String(currentUser.id) || hiddenMessageIds.has(String(m.id))) return;

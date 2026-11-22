@@ -303,7 +303,8 @@ const initAuthNav = async () => {
         stack.appendChild(card);
         setTimeout(remove, 12000);
         // Im Messenger erscheint der neue Freund sofort in der Liste
-        if (typeof refreshSocialState === "function" && typeof currentUser !== "undefined" && currentUser?.id) refreshSocialState();
+        // (refreshSocialState/currentUser gibt es nur auf der Messenger-Seite, daher über window)
+        if (typeof window.refreshSocialState === "function" && window.gsraMessengerUserId?.()) window.refreshSocialState();
     };
     const checkAcceptedRequests = async (userId) => {
         const { data, error } = await client.from("friendships").select("friend_id").eq("user_id", userId).eq("status", "accepted");
@@ -585,7 +586,7 @@ function addNavToggle() {
     setOpen(false);
     toggle.addEventListener("click", () => setOpen(!header.classList.contains("nav-open")));
     nav.addEventListener("click", (e) => { if (e.target.closest("a, button")) setOpen(false); });
-    document.addEventListener("click", (e) => { if (!header.contains(e.target)) setOpen(false); });
+    document.addEventListener("click", (e) => { if (!header.contains(/** @type {Node} */ (e.target))) setOpen(false); });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") setOpen(false); });
 }
 

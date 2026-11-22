@@ -148,6 +148,7 @@ window.gsraShrinkImage = gsraShrinkImage;
 // Eigene deutsche Meldungen der Datenbank („Du hast schon 5 offene Anfragen …“) bleiben unverändert; technische
 // Texte wie „permission denied for table …“ oder „Failed to fetch“ werden übersetzt. Der Originaltext landet nur
 // in der Browser-Konsole bzw. im Fehlerprotokoll für das Team – Nutzer sehen keine internen Details.
+/** @type {Array<[pattern: RegExp, text: string]>} */
 const GSRA_FRIENDLY_ERRORS = [
     [/failed to fetch|networkerror|load failed|network request failed|err_internet/i, "Keine Verbindung zum Server. Bitte prüfe deine Internetverbindung und versuche es erneut."],
     [/jwt expired|invalid jwt|jwt|auth session missing|refresh token|not authenticated|invalid claim|session.*expired/i, "Deine Anmeldung ist abgelaufen. Bitte melde dich neu an."],

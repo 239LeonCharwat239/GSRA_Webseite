@@ -2,6 +2,8 @@
 # 1) Datenbank-Nachbau: spielt alle Skripte aus supabase/migrations zweimal ein und prüft die Sicherheitsregeln
 #    (erlaubte UND verbotene Zugriffe als Gast, Mitglied, Coach, Moderation, Admin) – in beiden Ausgangslagen.
 # 2) JavaScript-Syntax: Jede Datei der Webseite muss fehlerfrei lesbar sein.
+# 3) TypeScript-Prüfung (Teil 2): jede Seite mit genau ihren Skripten – Typfehler, fehlende Funktionen,
+#    ungenutzter und unerreichbarer Code (tests/typ/pruefen.mjs, Einstellungen in tsconfig.json).
 # Schlägt etwas fehl, zeigt GitHub ein rotes Kreuz am Commit (und in GitHub Desktop), bevor jemand es live nutzt.
 # Absicherung: nur Leserechte, Aktionen auf eine feste Version (Commit) gepinnt, Pakete exakt nach package-lock.json.
 name: Prüfungen
@@ -76,3 +78,23 @@ jobs:
           exit $fehler
       - name: Verständliche Fehlermeldungen (Übersetzer)
         run: node tests/ui/fehlertexte.test.mjs
+
+  typen:
+    name: TypeScript-Prüfung (pro Seite)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: tests/typ/package-lock.json
+      - name: TypeScript (exakt nach package-lock.json)
+        working-directory: tests/typ
+        run: npm ci --ignore-scripts
+      - name: Jede Seite mit ihren Skripten prüfen (Typen, ungenutzter und unerreichbarer Code)
+        working-directory: tests/typ
+        run: npm run pruefen

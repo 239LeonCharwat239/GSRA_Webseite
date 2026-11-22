@@ -26,7 +26,7 @@
     const preset = new URLSearchParams(window.location.search).get("vertrag");
     const presetRadio = preset && form.querySelector(`input[name="contract"][value="${preset === "alliance" ? "alliance" : "pole"}"]`);
     if (presetRadio) presetRadio.checked = true;
-    const dateInput = document.getElementById("kdDate");
+    const dateInput = /** @type {HTMLInputElement} */ (document.getElementById("kdDate"));
     dateInput.min = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
     toggleFields();
 

@@ -1,0 +1,25 @@
+{
+  // TypeScript-Prüfung der Webseite (Sicherheitsbericht Nr. 17).
+  // Die Seite bleibt reines JavaScript ohne Build-Schritt; TypeScript liest die Dateien nur und meldet Typfehler.
+  // Typen stehen als JSDoc-Kommentare im Code (/** @type {HTMLInputElement} */ …) und in types/gsra.d.ts.
+  // Die eigentliche Prüfung läuft PRO SEITE mit genau den Skripten, die die Seite lädt (dort mit checkJs):
+  //   cd tests/typ && npm ci --ignore-scripts && npm run pruefen      (läuft bei jedem Push in GitHub)
+  // checkJs bleibt hier aus, weil der Editor sonst alle Seiten in einen Topf wirft und Scheinkonflikte meldet
+  // (z. B. „currentUser“ gibt es im Marktplatz und im Messenger – die Seiten begegnen sich nie).
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "strict": false,
+    "noImplicitThis": true,
+    "noFallthroughCasesInSwitch": true,
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
+    "noUnusedLocals": true,
+    "skipLibCheck": true,
+    "types": []
+  },
+  "include": ["*.js", "types/*.d.ts"]
+}

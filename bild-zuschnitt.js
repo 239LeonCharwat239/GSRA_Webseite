@@ -39,7 +39,7 @@ window.gsraCropImage = (file, { size = 512, title = "Bildausschnitt wählen" } =
             </div>
         </div>`;
     overlay.querySelector(".gsra-dialog-title").textContent = title;
-    const stage = overlay.querySelector(".gsra-crop-stage");
+    const stage = /** @type {HTMLElement} */ (overlay.querySelector(".gsra-crop-stage"));
     const canvas = stage.querySelector("canvas");
     const zoomInput = overlay.querySelector('input[type="range"]');
     stage.style.width = stage.style.height = `${STAGE}px`;

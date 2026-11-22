@@ -223,7 +223,7 @@
     });
 
     // Regeln zu Reklamationen im Bereich „Als Coach“: einmal zugeklappt, bleibt es zu (nur in diesem Browser)
-    const rulesBox = $("coRules");
+    const rulesBox = /** @type {HTMLDetailsElement} */ ($("coRules"));
     if (rulesBox) {
         try { if (localStorage.getItem("gsra_co_regeln_zu") === "1") rulesBox.open = false; } catch (e) { /* ohne Speicher einfach offen */ }
         rulesBox.addEventListener("toggle", () => {
@@ -387,7 +387,7 @@
         const sorted = [...list];
         if (filter.sort === "preis-auf") sorted.sort((a, b) => priceOf(a) - priceOf(b));
         else if (filter.sort === "preis-ab") sorted.sort((a, b) => priceOf(b) - priceOf(a));
-        else if (filter.sort === "neu") sorted.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        else if (filter.sort === "neu") sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
         else if (filter.sort === "bewertung") {
             const score = (o) => coachScores.get(o.coach_id) || { score: -1, count: 0 };
             sorted.sort((a, b) => (score(b).score - score(a).score) || (score(b).count - score(a).count));
@@ -760,14 +760,14 @@
         $("coOfferTitle").textContent = offer ? "Coaching bearbeiten" : "Coaching anbieten";
         // Rabatt (SQL 037): leer = kein Rabatt; abgelaufene Rabatte erscheinen nicht mehr
         $("coDiscount").value = discountActive(offer) ? String(offer.discount_percent) : "";
-        $("coDiscountUntil").min = berlinToday();
+        /** @type {HTMLInputElement} */ ($("coDiscountUntil")).min = berlinToday();
         $("coDiscountUntil").value = discountActive(offer) && offer.discount_until ? offer.discount_until : "";
         variantRows = (variantsByOffer.get(offer?.id) || []).map(v => ({ dauer: v.duration_minutes, preis: (v.price_cents / 100).toLocaleString("de-DE", { maximumFractionDigits: 2 }) }));
         renderVariantEditor();
         $("coTitle").value = offer?.title || "";
         $("coCategory").value = offer?.category || "Fahrtechnik";
         $("coSim").value = offer?.simulation || "";
-        const dur = $("coDuration");
+        const dur = /** @type {HTMLSelectElement} */ ($("coDuration"));
         const minutes = String(offer?.duration_minutes || 60);
         if (![...dur.options].some(o => o.value === minutes)) dur.add(new Option(duration(Number(minutes)), minutes));
         dur.value = minutes;
@@ -788,6 +788,7 @@
     $("coOfferBtn").addEventListener("click", () => openOfferForm());
 
     /* ---------- GSRA-Coach-Lizenz ---------- */
+    /** @type {Array<[min: number, name: string]>} */
     const LEVEL_NAMES = [[2.5, "Ideal"], [1.75, "In Ordnung"], [1, "Mangelhaft"], [0, "Schlecht"]];
     const levelName = (avg) => (LEVEL_NAMES.find(([min]) => Number(avg) >= min) || LEVEL_NAMES[3])[1];
 
@@ -1792,7 +1793,7 @@
         const upcoming = [...bookingCache.buyer.map(b => [b, "buyer"]), ...bookingCache.coach.map(b => [b, "coach"])]
             .filter(([b]) => ["angenommen", "bezahlt"].includes(b.status) && b.scheduled_at
                 && new Date(b.scheduled_at).getTime() + b.duration_minutes * 60000 > now)
-            .sort((x, y) => new Date(x[0].scheduled_at) - new Date(y[0].scheduled_at));
+            .sort((x, y) => new Date(x[0].scheduled_at).getTime() - new Date(y[0].scheduled_at).getTime());
         box.hidden = !upcoming.length;
         if (!upcoming.length) return;
         const [b, role] = upcoming[0];
@@ -1978,7 +1979,7 @@
         $("coTimeTitle").textContent = mode === "accept" ? "Anfrage annehmen" : "Termin ändern";
         $("coTimeSub").textContent = `${b.offer_title} · ${duration(b.duration_minutes)} mit ${nameOf(b.buyer_id)}`;
         $("coTimeSubmit").textContent = mode === "accept" ? "Annehmen" : "Termin speichern";
-        const input = $("coTimeInput");
+        const input = /** @type {HTMLInputElement} */ ($("coTimeInput"));
         const min = new Date(Date.now() + 65 * 60000);
         input.min = localInput(min);
         input.max = localInput(new Date(Date.now() + 179 * 86400000));
@@ -2063,6 +2064,7 @@
 
     /* ---------- Verfügbarkeitskalender (SQL 030): Coach trägt freie Zeiten ein, Kunden buchen nur dort ---------- */
     const WEEKDAYS = [[1, "Montag"], [2, "Dienstag"], [3, "Mittwoch"], [4, "Donnerstag"], [5, "Freitag"], [6, "Samstag"], [7, "Sonntag"]];
+    /** @type {Array<[icon: string, label: string, hint: string, days: number[], von: number, bis: number]>} */
     const CAL_PRESETS = [
         ["fa-briefcase", "Werktags abends", "Mo–Fr 18–22 Uhr", [1, 2, 3, 4, 5], 1080, 1320],
         ["fa-sun", "Wochenende", "Sa + So 10–18 Uhr", [6, 7], 600, 1080],
@@ -2179,7 +2181,7 @@
                 const timeInput = (minutes, isEnd, label) => {
                     const input = document.createElement("input");
                     input.type = "time";
-                    input.step = 900;
+                    input.step = "900";
                     input.required = true; // Zeitfenster haben immer eine Uhrzeit (kein „Leeren“)
                     input.value = minutesToTime(minutes);
                     input.setAttribute("aria-label", `${name} ${label}`);

@@ -19,6 +19,7 @@
     };
     const ownScript = (file) => !file || file.startsWith(location.origin);
 
+    /** @param {{ message?: string, source?: string, line?: number | null, col?: number | null }} [info] */
     function report({ message, source = "", line = null, col = null } = {}) {
         const text = String(message || "").replace(/\s+/g, " ").trim().slice(0, 500);
         if (!text || IGNORE.test(text) || sent >= MAX_PER_PAGE) return;

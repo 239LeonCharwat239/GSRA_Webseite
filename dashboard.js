@@ -236,7 +236,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const icon = row.querySelector(".dash-social-icon");
             const syncIcon = () => {
                 const link = normalizeSocialUrl(input.value);
-                const platform = link ? socialPlatformOf(link) : { icon: "fa-solid fa-link", color: "#a0a5b1" };
+                const platform = link ? socialPlatformOf(link) : { name: "", icon: "fa-solid fa-link", color: "#a0a5b1" };
                 icon.innerHTML = socialIconHtml(platform);
                 icon.style.color = platform.color;
                 icon.title = link ? platform.name : "";
@@ -370,6 +370,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
                 // Links prüfen: nur echte Webadressen (ohne „https://“ wird es ergänzt)
                 const socialLinks = [];
+                /** @type {HTMLInputElement | null} */
                 let invalidInput = null;
                 (socialLinksEditor ? [...socialLinksEditor.querySelectorAll("input")] : []).forEach(input => {
                     if (!input.value.trim()) return;
@@ -456,7 +457,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     <span class="dash-own-meta text-yellow">${parseFloat(item.price || 0).toFixed(2)} €</span>
                 </a>`;
             });
-        const setupRows = (ownSetups.data || []).sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+        const setupRows = (ownSetups.data || []).sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
         renderOwnList("ownSetups", "ownSetupsCount", setupRows, ownSetups.error,
             `<div class="dash-own-empty"><p>Du hast noch keine Setups hochgeladen.</p><a href="setups.html#setupUploadForm" class="login-btn">Setup hochladen</a></div>`,
             (item) => `
@@ -637,15 +638,15 @@ document.addEventListener("DOMContentLoaded", async () => {
             `;
 
             if (f.status === 'pending' && !isSender) {
-                div.querySelector(".accept-btn").onclick = async () => {
+                div.querySelector(".accept-btn").addEventListener("click", async () => {
                     await client.from("friendships").update({ status: 'accepted' }).eq("id", f.id);
                     loadFriends();
-                };
+                });
             }
 
-            div.querySelector(".chat-friend-btn").onclick = () => {
+            div.querySelector(".chat-friend-btn").addEventListener("click", () => {
                 window.location.href = `messenger.html?friendId=${otherId}`;
-            };
+            });
 
             friendsListContainer.appendChild(div);
         });

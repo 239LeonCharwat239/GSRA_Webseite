@@ -365,7 +365,8 @@ function setupComboBox(inputId, dropdownId, getListFn, isTrack = false) {
     input.addEventListener('input', () => renderOptions(input.value));
 
     document.addEventListener('click', (e) => {
-        if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+        const target = /** @type {Node} */ (e.target);
+        if (!input.contains(target) && !dropdown.contains(target)) {
             dropdown.style.display = 'none';
         }
     });
@@ -461,7 +462,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 function updateFormatFields(simKey) {
     const sim = simOf(simKey);
     const hasFile = Boolean(sim?.ext);
-    const fileInput = document.getElementById('setupFile');
+    const fileInput = /** @type {HTMLInputElement} */ (document.getElementById('setupFile'));
     document.getElementById('fileField').hidden = !hasFile;
     document.getElementById('manualField').hidden = hasFile;
     fileInput.accept = hasFile ? `.${sim.ext}` : '';
@@ -505,7 +506,8 @@ function bindHubControls() {
         document.getElementById(btn.dataset.closeModal).style.display = 'none';
     }));
     window.addEventListener('click', (e) => {
-        if (e.target.classList?.contains('modal-overlay')) e.target.style.display = 'none';
+        const target = /** @type {HTMLElement} */ (e.target);
+        if (target.classList?.contains('modal-overlay')) target.style.display = 'none';
     });
 
     // Aktionen in der Liste: abstimmen, herunterladen, Werte ansehen, löschen
@@ -579,7 +581,7 @@ function renderSetups(resetPaging = true) {
         return `${simLabel(s.simulation)} ${s.car_model} ${s.track_name} ${s.file_name} ${s.setup_type} ${s.description} ${uploaderNames[s.uploader_id] || ''}`.toLowerCase().includes(hubFilter.search);
     });
     items.sort(hubFilter.sort === 'new'
-        ? (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
+        ? (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
         : (a, b) => (Number(b.is_pro) - Number(a.is_pro)) || score(b) - score(a));
     document.getElementById('setupCount').textContent = `${items.length} ${items.length === 1 ? 'Setup' : 'Setups'}`;
     if (!items.length) {
@@ -833,7 +835,7 @@ async function deleteReview(setup, box, review) {
 
 // Hochladen: Datei mit passender Endung oder Werte/Screenshots; Pro Setups im privaten Speicher
 function bindUpload() {
-    const form = document.getElementById('setupUploadForm');
+    const form = /** @type {HTMLFormElement} */ (document.getElementById('setupUploadForm'));
     const statusText = document.getElementById('uploadStatus');
     const submit = form.querySelector('button[type="submit"]');
     form.addEventListener('submit', async (e) => {

@@ -95,6 +95,11 @@
     document.addEventListener("pointerdown", (e) => {
         if (openCombo && !openCombo.wrap.contains(e.target)) openCombo.close();
     });
+    /**
+     * @param {HTMLInputElement} input
+     * @param {any[]} entries
+     * @param {{ onPick?: (value: any, label: any) => void, pinned?: any[], pinnedLabel?: string, allLabel?: string, showCode?: boolean }} [options]
+     */
     window.gsraCombobox = (input, entries, { onPick, pinned = [], pinnedLabel = "Häufig", allLabel = "Alle", showCode = false } = {}) => {
         if (!input || !Array.isArray(entries)) return null;
         const wrap = document.createElement("div");

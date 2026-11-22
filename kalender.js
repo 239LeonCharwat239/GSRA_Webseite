@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('kalCreateBtn')?.addEventListener('click', openCreateModal);
     document.getElementById('kalModalClose')?.addEventListener('click', closeCreateModal);
     document.getElementById('kalModalCancel')?.addEventListener('click', closeCreateModal);
-    document.getElementById('kalModal')?.addEventListener('mousedown', (e) => { if (e.target.id === 'kalModal') closeCreateModal(); });
+    document.getElementById('kalModal')?.addEventListener('mousedown', (e) => { if (/** @type {Element} */ (e.target).id === 'kalModal') closeCreateModal(); });
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && !document.getElementById('kalModal')?.hidden) closeCreateModal();
     });
@@ -285,7 +285,7 @@ async function handleCreateEvent(e) {
         if (error) {
             showToast('Fehler beim Erstellen: ' + eventErrorText(error), 'error');
         } else {
-            document.getElementById('create-event-form').reset();
+            /** @type {HTMLFormElement} */ (document.getElementById('create-event-form')).reset();
             closeCreateModal();
             showToast('Das Event ist veröffentlicht.', 'success');
             await loadEvents();

@@ -3,6 +3,8 @@
 ========================================= */
 
 let currentUser = null;
+// Für auth-nav.js (läuft auf jeder Seite): angemeldeter Messenger-Nutzer, sonst null
+window.gsraMessengerUserId = () => currentUser?.id || null;
 let currentUsername = "";
 let activeChatId = null;
 let messageSubscription = null;
@@ -136,7 +138,7 @@ const chatTitleText = document.getElementById("chatTitleText");
 const chatMessages = document.getElementById("chatMessages");
 const messageInput = document.getElementById("messageInput");
 const sendBtn = document.getElementById("sendBtn");
-const chatForm = document.getElementById("chatForm");
+const chatForm = /** @type {HTMLFormElement} */ (document.getElementById("chatForm"));
 const chatActions = document.getElementById("chatActions");
 const editChatTitleBtn = document.getElementById("editChatTitleBtn");
 const deleteChatBtn = document.getElementById("deleteChatBtn");
@@ -151,7 +153,7 @@ const imagePreviewName = document.getElementById("imagePreviewName");
 const removeImageBtn = document.getElementById("removeImageBtn");
 const imageModal = document.getElementById("imageModal");
 const modalImageFull = document.getElementById("modalImageFull");
-const modalVideoFull = document.getElementById("modalVideoFull");
+const modalVideoFull = /** @type {HTMLVideoElement} */ (document.getElementById("modalVideoFull"));
 const closeImageModal = document.getElementById("closeImageModal");
 const viewerStage = document.getElementById("viewerStage");
 const viewerPrevBtn = document.getElementById("viewerPrevBtn");
@@ -322,7 +324,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         pill.addEventListener("click", (e) => {
             document.querySelectorAll(".wa-pill").forEach(p => p.classList.remove("active"));
             e.currentTarget.classList.add("active");
-            currentFilter = e.currentTarget.getAttribute("data-filter");
+            currentFilter = pill.getAttribute("data-filter");
             renderChatsList();
         });
     });
@@ -445,7 +447,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
 
         document.addEventListener("click", (e) => {
-            if (!emojiPickerWrapper.contains(e.target) && e.target !== emojiToggleBtn) {
+            if (!emojiPickerWrapper.contains(/** @type {Node} */ (e.target)) && e.target !== emojiToggleBtn) {
                 emojiPickerWrapper.style.display = "none";
             }
         });
@@ -515,7 +517,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     window.addEventListener("dragover", (e) => {
         if (!isFileDrag(e)) return;
         e.preventDefault();
-        if (!waChatActivePane || !waChatActivePane.contains(e.target) || (messageInput && messageInput.disabled)) e.dataTransfer.dropEffect = "none";
+        if (!waChatActivePane || !waChatActivePane.contains(/** @type {Node} */ (e.target)) ||(messageInput && messageInput.disabled)) e.dataTransfer.dropEffect = "none";
     });
     window.addEventListener("drop", (e) => {
         if (isFileDrag(e)) e.preventDefault();
@@ -678,7 +680,7 @@ function showViewerItem(index) {
             thumb.classList.toggle("active", i === index);
             thumb.classList.toggle("other-album", viewerItems[i].msgId !== item.msgId);
         });
-        const activeThumb = viewerThumbs.children[index];
+        const activeThumb = /** @type {HTMLElement} */ (viewerThumbs.children[index]);
         if (activeThumb) {
             viewerThumbs.scrollLeft = activeThumb.offsetLeft - (viewerThumbs.clientWidth - activeThumb.offsetWidth) / 2;
         }
@@ -1089,7 +1091,7 @@ function setupGlobalMessageListener() {
                 }
 
                 if (eventType === 'INSERT') {
-                    allChatsCache.sort((a, b) => new Date(b.last_msg_time || b.created_at || 0) - new Date(a.last_msg_time || a.created_at || 0));
+                    allChatsCache.sort((a, b) => new Date(b.last_msg_time || b.created_at || 0).getTime() - new Date(a.last_msg_time || a.created_at || 0).getTime());
                 }
 
                 updateGlobalUnreadState();
@@ -1231,7 +1233,7 @@ async function loadUserChats() {
     // Offizielles Forum eindeutig bestimmen: Gibt es (versehentlich) mehrere, gilt immer das älteste – für alle Mitglieder gleich
     const officialCandidates = rawChats
         .filter(c => c.title === 'GSRA Official / Community Forum')
-        .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
+        .sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());
     let forumChat = officialCandidates[0] || rawChats.find(c => c.title && c.title.includes('Official'));
 
     if (!forumChat) {
@@ -1322,7 +1324,7 @@ async function loadUserChats() {
         }
     }
 
-    allChatsCache.sort((a, b) => new Date(b.last_msg_time || b.created_at || 0) - new Date(a.last_msg_time || a.created_at || 0));
+    allChatsCache.sort((a, b) => new Date(b.last_msg_time || b.created_at || 0).getTime() - new Date(a.last_msg_time || a.created_at || 0).getTime());
 
     updateGlobalUnreadState();
     renderChatsList();

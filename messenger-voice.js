@@ -447,7 +447,7 @@ function renderVoiceMessage(bubble, msg) {
     box.querySelector(".voice-wave").addEventListener("click", (e) => {
         if (blockedBySelection()) return;
         e.stopPropagation();
-        const rect = e.currentTarget.getBoundingClientRect();
+        const rect = /** @type {HTMLElement} */ (e.currentTarget).getBoundingClientRect();
         const fraction = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
         const duration = player.duration || (isFinite(player.audio.duration) ? player.audio.duration : 0);
         if (!duration) return;

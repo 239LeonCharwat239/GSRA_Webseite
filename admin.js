@@ -106,7 +106,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const parts = [];
         if (warnings) parts.push(`${warnings}x verwarnt`);
         if (tempBans.length) {
-            const days = tempBans.map(b => Math.round((new Date(b.banned_until) - new Date(b.created_at)) / 86400000));
+            const days = tempBans.map(b => Math.round((new Date(b.banned_until).getTime() - new Date(b.created_at).getTime()) / 86400000));
             const same = days.every(d => d === days[0]);
             parts.push(same ? `${tempBans.length}x für ${days[0]} Tage gesperrt` : `${tempBans.length}x vorübergehend gesperrt`);
         }
@@ -468,28 +468,30 @@ document.addEventListener("DOMContentLoaded", async () => {
         };
         intro.querySelector(".admin-pro-form").addEventListener("submit", async (e) => {
             e.preventDefault();
-            const gsraId = Number(String(e.target.querySelector("input").value).replace(/[^\d]/g, ""));
+            const form = /** @type {HTMLFormElement} */ (e.currentTarget);
+            const gsraId = Number(String(form.querySelector("input").value).replace(/[^\d]/g, ""));
             if (!gsraId) return showToast("Bitte gib eine GSRA-ID ein.", "error");
             const { data: target } = await client.from("profiles").select("id, username").eq("gsra_id", gsraId).maybeSingle();
             if (!target) return showToast("Zu dieser GSRA-ID gibt es kein Konto.", "error");
             const { error: addError } = await client.from("pro_creators").insert({ user_id: target.id });
             if (addError) return showToast(/duplicate|unique/i.test(addError.message) ? `${target.username} ist bereits Pro-Fahrer.` : addError.message, "error");
             showToast(`${target.username} ist jetzt Pro-Fahrer.`, "success");
-            e.target.reset();
+            form.reset();
             renderPros();
         });
         renderPros();
         // Coach-Lizenz per GSRA-ID entziehen oder wiederherstellen
         intro.querySelector(".admin-license-form").addEventListener("submit", async (e) => {
             e.preventDefault();
-            const [idInput, reasonInput] = e.target.querySelectorAll("input");
+            const form = /** @type {HTMLFormElement} */ (e.currentTarget);
+            const [idInput, reasonInput] = form.querySelectorAll("input");
             const gsraId = Number(String(idInput.value).replace(/[^\d]/g, ""));
             if (!gsraId) return showToast("Bitte gib eine GSRA-ID ein.", "error");
             const { data: target } = await client.from("profiles").select("id, username").eq("gsra_id", gsraId).maybeSingle();
             if (!target) return showToast("Zu dieser GSRA-ID gibt es kein Konto.", "error");
             const restore = e.submitter?.dataset.license === "restore";
             if (e.submitter?.dataset.license === "ban") {
-                if (await banCoachPermanently(target.id, target.username, reasonInput.value.trim())) e.target.reset();
+                if (await banCoachPermanently(target.id, target.username, reasonInput.value.trim())) form.reset();
                 return;
             }
             const { error } = restore
@@ -497,11 +499,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                 : await client.rpc("coach_license_revoke", { _user: target.id, _reason: reasonInput.value.trim() });
             if (error) return showToast(error.message, "error");
             showToast(restore ? `Coach-Lizenz von ${target.username} wiederhergestellt.` : `Coach-Lizenz von ${target.username} entzogen.`, "success");
-            e.target.reset();
+            form.reset();
         });
         intro.querySelector("form").addEventListener("submit", async (e) => {
             e.preventDefault();
-            const id = Number(String(e.target.querySelector("input").value).replace(/[^\d]/g, ""));
+            const id = Number(String(/** @type {HTMLFormElement} */ (e.currentTarget).querySelector("input").value).replace(/[^\d]/g, ""));
             if (!id) return showToast("Bitte gib eine GSRA-ID ein.", "error");
             const { data: name, error } = await client.rpc("admin_set_role", { _gsra_id: id, _role: "moderator" });
             if (error) return showToast(error.message, "error");
