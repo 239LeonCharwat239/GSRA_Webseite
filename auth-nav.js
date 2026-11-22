@@ -615,8 +615,9 @@ const GSRA_NAV = [
 // Profil-Menü (nur angemeldet); Moderation/Admin kommt bei Bedarf dazu
 const GSRA_ACCOUNT_MENU = [
     { label: "Dashboard", href: "dashboard.html", icon: "fa-gauge-high" },
-    { label: "Abo", href: "abo.html", icon: "fa-crown" },
-    { label: "Unterstützen", href: "unterstuetzen.html", icon: "fa-heart" }
+    { label: "Abo", href: "abo.html", icon: "fa-crown" }
+    // „Unterstützen“ (unterstuetzen.html) kommt mit der Stripe-Funktion dazu – entschieden 22.11.: einmalig + monatlich,
+    // freiwillig mit Namen auf der Unterstützer-Wand und Abzeichen im Profil
 ];
 
 const navEscape = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[c]);

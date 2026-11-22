@@ -119,17 +119,17 @@ window.gsraMfa = (() => {
         return waitForCode(client, codeForm(gate, { intro, button: "Bestätigen" }), factorId);
     }
 
-    async function showEnroll(client, gate, unverified) {
+    async function showEnroll(client, gate, unverified, member = false) {
         // Abgebrochene frühere Einrichtungen entfernen (sonst lehnt Supabase eine neue ab)
         for (const f of unverified) await client.auth.mfa.unenroll({ factorId: f.id });
-        const { data, error } = await client.auth.mfa.enroll({ factorType: "totp", friendlyName: "GSRA Admin", issuer: "GSRA" });
+        const { data, error } = await client.auth.mfa.enroll({ factorType: "totp", friendlyName: member ? "GSRA" : "GSRA Admin", issuer: "GSRA" });
         if (error || !data?.totp) {
             gate.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Die Zwei-Faktor-Anmeldung konnte nicht vorbereitet werden. Bitte lade die Seite neu.';
             return false;
         }
         const intro = document.createElement("div");
         intro.innerHTML = `
-            <p>Für den Admin-Bereich ist eine Zwei-Faktor-Anmeldung Pflicht. Einmalig einrichten:</p>
+            <p>${member ? "Schütze dein Konto zusätzlich: Bei jeder Anmeldung fragt die GSRA neben dem Passwort einen Code aus deiner App ab." : "Für den Admin-Bereich ist eine Zwei-Faktor-Anmeldung Pflicht."} Einmalig einrichten:</p>
             <ol class="mfa-steps">
                 <li>Authenticator-App öffnen (z. B. Google Authenticator, Microsoft Authenticator, 1Password).</li>
                 <li>QR-Code scannen – oder den Schlüssel von Hand eingeben.</li>
@@ -142,5 +142,17 @@ window.gsraMfa = (() => {
         return waitForCode(client, codeForm(gate, { intro, button: "Einrichten" }), data.id);
     }
 
-    return { promptAfterLogin, requireForAdmin, level, incomplete };
+    // Für alle Mitglieder (Dashboard, freiwillig): einrichten bzw. ausschalten
+    async function enrollMember(client, gate) {
+        const { unverified } = await factors(client);
+        return showEnroll(client, gate, unverified, true);
+    }
+    async function disableMember(client) {
+        const { verified } = await factors(client);
+        if (!verified) return null;
+        const { error } = await client.auth.mfa.unenroll({ factorId: verified.id });
+        return error || null;
+    }
+
+    return { promptAfterLogin, requireForAdmin, level, incomplete, factors, enrollMember, disableMember };
 })();

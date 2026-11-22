@@ -31,7 +31,7 @@ export const HILFE: HilfeArtikel[] = [
       "Du findest dabei nur, was du auch sonst sehen darfst – fremde Chats bleiben privat."] },
   { id: "navigation", thema: "start", frage: "Wo finde ich welche Bereiche?",
     antwort: ["Oben in der Leiste findest du Messenger, Marktplatz und Coaching direkt, dazu Themen-Menüs: Community (Rennkalender, bald Videos), Garage (Setups und bald Stint-Planer, Telemetrie, Liveries) und Wissen (Nachschlagewerk, Hilfe-Center). Ein roter Punkt am Messenger zeigt neue Nachrichten.",
-      "Alles Persönliche – Dashboard, Abo, Unterstützen und Abmelden – steckt im Menü hinter deinem Profilbild."] },
+      "Alles Persönliche – Dashboard, Abo und Abmelden – steckt im Menü hinter deinem Profilbild."] },
 
   // Messenger
   { id: "chat-starten", thema: "messenger", frage: "Wie schreibe ich jemandem?",
@@ -100,13 +100,18 @@ export const HILFE: HilfeArtikel[] = [
     antwort: ["Unter „Abo verwalten“ oder direkt über „Verträge hier kündigen“ unten auf jeder Seite. Die Kündigung gilt zum Ende des laufenden Monats."],
     links: [{ label: "Verträge hier kündigen", href: "kuendigen.html" }] },
   { id: "unterstuetzen", thema: "abo", frage: "Wie kann ich die GSRA unterstützen?",
-    antwort: ["Über „Unterstützen“ im Profil-Menü – einmalig oder monatlich. Wer möchte, erscheint auf der Unterstützer-Wand und bekommt ein Abzeichen im Profil."],
-    links: [{ label: "Unterstützen", href: "unterstuetzen.html" }] },
+    antwort: ["Bald direkt über „Unterstützen“ im Profil-Menü – einmalig oder monatlich. Wer möchte, erscheint auf der Unterstützer-Wand und bekommt ein Abzeichen im Profil.",
+      "Bis dahin hilft uns ein Pole- oder Alliance-Abo am meisten."],
+    links: [{ label: "Zu den Abos", href: "abo.html" }] },
 
   // Sicherheit und Datenschutz
   { id: "messenger-sicher", thema: "sicherheit", frage: "Wie sicher ist der Messenger?",
     antwort: ["Alle Verbindungen sind verschlüsselt, und die Daten werden verschlüsselt gespeichert. Nur Mitglieder eines Chats können seine Nachrichten und Anhänge lesen – das prüft die Datenbank selbst, nicht nur die Webseite.",
       "Anhänge sind nur über kurzlebige Links erreichbar. Gemeldete Nachrichten kann das GSRA-Team prüfen, damit Belästigung und Betrug keine Chance haben."] },
+  { id: "zwei-faktor", thema: "sicherheit", frage: "Wie schalte ich die Zwei-Faktor-Anmeldung ein?",
+    antwort: ["Im Dashboard unter „Zwei-Faktor-Anmeldung“ auf „Einrichten“: QR-Code mit einer Authenticator-App scannen (z. B. Google Authenticator, Microsoft Authenticator, 1Password) und den 6-stelligen Code eingeben.",
+      "Ab dann fragt die GSRA bei jeder Anmeldung zusätzlich nach dem Code. Für Admins und Moderatoren ist sie Pflicht."],
+    links: [{ label: "Zum Dashboard", href: "dashboard.html" }] },
   { id: "geraete", thema: "sicherheit", frage: "Ich habe ein Gerät verloren – was tun?",
     antwort: ["Im Dashboard unter „Auf allen Geräten abmelden“ beendest du jede Anmeldung deines Kontos. Ändere danach am besten auch dein Passwort."],
     links: [{ label: "Zum Dashboard", href: "dashboard.html" }] },

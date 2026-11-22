@@ -467,6 +467,40 @@ document.addEventListener("DOMContentLoaded", async () => {
                     <span class="dash-own-meta"><i class="fa-solid fa-thumbs-up"></i> ${Number(item.likes) || 0} <i class="fa-solid fa-thumbs-down"></i> ${Number(item.dislikes) || 0}</span>
                 </a>`);
 
+        // Zwei-Faktor-Anmeldung freiwillig für alle (Admins und Moderatoren: Pflicht, nicht abschaltbar)
+        const mfaBtn = document.getElementById("mfaToggleBtn");
+        const mfaGate = document.getElementById("mfaGate");
+        const mfaStatus = document.getElementById("mfaStatus");
+        const mustHaveMfa = ["admin", "moderator"].includes(profile?.role);
+        const showMfaState = async () => {
+            if (!window.gsraMfa || !mfaBtn) return;
+            const { verified } = await window.gsraMfa.factors(client);
+            mfaStatus.textContent = verified ? "Aktiv" : "Aus";
+            mfaStatus.classList.toggle("on", Boolean(verified));
+            mfaBtn.hidden = Boolean(verified && mustHaveMfa);
+            mfaBtn.dataset.state = verified ? "on" : "off";
+            mfaBtn.innerHTML = verified ? '<i class="fa-solid fa-power-off"></i> Ausschalten' : '<i class="fa-solid fa-shield-halved"></i> Einrichten';
+        };
+        mfaBtn?.addEventListener("click", async () => {
+            if (mfaBtn.dataset.state === "on") {
+                const ok = await showDialog({ icon: "fa-shield-halved", title: "Zwei-Faktor-Anmeldung ausschalten?", danger: true,
+                    message: "Dein Konto ist dann nur noch mit dem Passwort geschützt.", confirmText: "Ausschalten", cancelText: "Abbrechen" });
+                if (!ok) return;
+                const error = await window.gsraMfa.disableMember(client);
+                if (error) return showToast("Das hat nicht geklappt. Melde dich neu an und versuche es noch einmal.", "error");
+                showToast("Zwei-Faktor-Anmeldung ist ausgeschaltet.", "success");
+                return showMfaState();
+            }
+            mfaBtn.hidden = true;
+            const done = await window.gsraMfa.enrollMember(client, mfaGate);
+            mfaGate.style.display = "none";
+            mfaGate.innerHTML = "";
+            mfaBtn.hidden = false;
+            if (done) showToast("Zwei-Faktor-Anmeldung ist eingerichtet. Ab jetzt fragt die GSRA bei der Anmeldung nach dem Code.", "success");
+            showMfaState();
+        });
+        showMfaState();
+
         // Auf allen Geräten abmelden (wie „Alle Geräte abmelden“ bei WhatsApp): beendet jede Anmeldung dieses Kontos
         document.getElementById("signOutEverywhereBtn")?.addEventListener("click", async () => {
             const ok = await showDialog({

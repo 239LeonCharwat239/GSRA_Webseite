@@ -12900,3 +12900,8 @@ header .gsra-account-menu #logoutBtn:hover { background: rgba(255, 77, 77, 0.1) 
 .wissen-fuss { max-width: 980px; margin: 30px auto 0; color: var(--text-muted); font-size: 14px; text-align: center; }
 .wissen-fuss i { color: var(--gsra-yellow); margin-right: 6px; }
 .wissen-fuss a { color: var(--gsra-yellow); }
+
+/* Dashboard: Zwei-Faktor-Anmeldung für alle */
+.dash-mfa-status { margin-left: 8px; padding: 2px 9px; background: rgba(255, 255, 255, 0.08); border-radius: 10px; color: var(--text-muted); font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; vertical-align: middle; }
+.dash-mfa-status.on { background: rgba(0, 255, 136, 0.12); color: #00e07a; }
+.dash-mfa-gate { margin-top: 14px; max-width: 520px; }

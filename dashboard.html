@@ -136,6 +136,16 @@
                 <p class="dash-hint"><i class="fa-solid fa-bolt text-yellow"></i> Marktplatz-Boni (Hervorheben, Hochschieben, Top-Anzeige) zahlst du in jedem Abo extra – direkt beim Erstellen eines Inserats.</p>
             </div>
 
+            <!-- Sicherheit: Zwei-Faktor-Anmeldung freiwillig für alle (Admins und Moderatoren: Pflicht) -->
+            <div class="card dash-danger-card dash-safe-card" id="mfaCard">
+                <div>
+                    <h3><i class="fa-solid fa-shield-halved"></i> Zwei-Faktor-Anmeldung <span class="dash-mfa-status" id="mfaStatus"></span></h3>
+                    <p>Zusätzlich zum Passwort fragt die GSRA bei der Anmeldung einen 6-stelligen Code aus einer Authenticator-App ab (z. B. Google Authenticator, Microsoft Authenticator, 1Password). Selbst wer dein Passwort kennt, kommt so nicht in dein Konto.</p>
+                    <div id="mfaGate" class="dash-mfa-gate" style="display: none;"></div>
+                </div>
+                <button type="button" id="mfaToggleBtn" class="dash-delete-btn"><i class="fa-solid fa-shield-halved"></i> Einrichten</button>
+            </div>
+
             <!-- Sicherheit: auf allen Geräten abmelden (z. B. Handy verloren, an fremdem Rechner angemeldet) -->
             <div class="card dash-danger-card dash-safe-card">
                 <div>
@@ -157,6 +167,7 @@
     </main>
 
     <script src="ui-dialogs.js"></script>
+    <script src="mfa.js"></script>
     <script src="bild-zuschnitt.js"></script>
     <script src="bewertungen.js"></script>
     <script src="captcha.js"></script>
