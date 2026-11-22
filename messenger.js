@@ -1136,7 +1136,14 @@ function setupGlobalMessageListener() {
 
             const targetChat = allChatsCache.find(c => c.id === msg.chat_id);
             if (targetChat) {
-                await updateChatLastMessageInfo(targetChat, supabase);
+                // Neue Nachricht (häufigster Fall): Sie ist automatisch das Neueste im Chat – die Vorschau kommt direkt
+                // aus der Echtzeit-Verbindung, ohne Abfrage. Reaktionen, Bearbeitungen und Löschungen (selten) fragen nach.
+                if (eventType === 'INSERT' && payload.new?.created_at) {
+                    targetChat.last_msg_time = payload.new.created_at;
+                    targetChat.last_message = payload.new.text || "[Medien]";
+                } else {
+                    await updateChatLastMessageInfo(targetChat, supabase);
+                }
 
                 if (eventType === 'INSERT' && msg.sender_id !== currentUser.id) {
                     if (targetChat.id !== activeChatId || document.hidden) {
