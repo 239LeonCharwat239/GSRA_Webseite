@@ -204,10 +204,13 @@
                     <!-- GSRA-Eingabeleiste: Werkzeugleiste (Anhang, Emoji, Sprachnachricht) · Textfeld · Senden -->
                     <form class="chat-input-area composer" id="chatForm">
                         <div class="composer-tools">
-                            <label for="imageUploadInput" class="attachment-btn composer-tool" title="Fotos & Videos anhängen">
-                                <i class="fa-solid fa-paperclip"></i>
+                            <!-- Büroklammer: Fotos, Videos, Setups (src/chat-anhang.ts) -->
+                            <div class="gsra-attach-wrap">
+                                <button type="button" id="attachMenuBtn" class="attachment-btn composer-tool" title="Anhängen: Fotos, Videos, Setups" aria-expanded="false">
+                                    <i class="fa-solid fa-paperclip"></i>
+                                </button>
                                 <input type="file" id="imageUploadInput" accept="image/*,video/*" multiple style="display: none;">
-                            </label>
+                            </div>
                             <button type="button" id="emojiToggleBtn" class="emoji-btn composer-tool" title="Emoji auswählen">
                                 <i class="fa-regular fa-face-grin"></i>
                             </button>
@@ -292,6 +295,7 @@
     <script src="messenger-social.js"></script>
     <script src="messenger-status.js"></script>
     <script src="messenger-voice.js"></script>
+    <script type="module" src="src/chat-anhang.ts"></script>
     <script type="module" src="src/suche.ts"></script>
 </body>
 </html>

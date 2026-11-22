@@ -5,6 +5,11 @@
 let currentUser = null;
 // Für auth-nav.js (läuft auf jeder Seite): angemeldeter Messenger-Nutzer, sonst null
 window.gsraMessengerUserId = () => currentUser?.id || null;
+// Für die TypeScript-Module (src/chat-anhang.ts): geöffneter Chat und „nach dem Senden“
+window.gsraMessenger = {
+    context: () => ({ chatId: activeChatId, userId: currentUser?.id || null, canPost: Boolean(activeChatId && messageInput && !messageInput.disabled) }),
+    afterSend: () => { if (activeChatId) markChatAsRead(activeChatId); loadUserChats(); }
+};
 let currentUsername = "";
 let activeChatId = null;
 let messageSubscription = null;
@@ -2978,9 +2983,12 @@ async function appendSingleMessage(msg, isSystem = false) {
     // Sprachnachricht: Abspielen mit Wellenform statt Text (Transkript zum Aufklappen)
     const isVoice = Boolean(!isDeleted && msg.audio_url && typeof renderVoiceMessage === "function");
     if (isVoice) renderVoiceMessage(bubble, msg);
+    // Setup-Datei (SQL 041): Karte mit Herunterladen bzw. direkt in den Setup-Ordner speichern
+    const isSetup = Boolean(!isDeleted && msg.file_path && msg.file_meta && window.gsraChatSetups);
+    if (isSetup) window.gsraChatSetups.renderCard(bubble, msg);
 
     let longTextDiv = null;
-    if (msg.text && msg.text !== "[Medien]" && !isVoice) {
+    if (msg.text && msg.text !== "[Medien]" && !isVoice && !(isSetup && msg.text.startsWith("[Setup] "))) {
         const textDiv = document.createElement("div");
         textDiv.className = "message-text";
         if (isSystem) {

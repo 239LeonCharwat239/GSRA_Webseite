@@ -12437,3 +12437,108 @@ body.gsra-search-open { overflow: hidden; }
     /* Der Menü-Knopf schiebt sich sonst selbst nach rechts – beide teilen sich dann den Platz und die Lupe steht mittig */
     header .gsra-search-btn + .nav-toggle { margin-left: 0; }
 }
+
+/* =========================================
+   ANHÄNGE IM CHAT: Fotos, Videos, Setups (src/chat-anhang.ts, SQL 041)
+========================================= */
+.gsra-attach-wrap { position: relative; display: inline-flex; }
+/* Eingabeleiste als eigene Ebene über dem Verlauf – sonst liegen die Nachrichten über dem Kachel-Menü */
+#chatForm.composer { z-index: 30; }
+.gsra-attach-menu {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 12px;
+    z-index: 50;
+    display: grid;
+    grid-template-columns: repeat(3, 112px);
+    gap: 10px;
+    padding: 12px;
+    background: #12141a;
+    border: 1px solid rgba(0, 85, 255, 0.45);
+    border-top: 3px solid var(--gsra-yellow);
+    border-radius: 14px;
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55), var(--blue-glow);
+    animation: gsraAttachIn 0.16s ease-out;
+}
+.gsra-attach-menu[hidden] { display: none; }
+@keyframes gsraAttachIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.gsra-attach-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 14px 8px 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    color: #fff;
+    font-family: inherit;
+    cursor: pointer;
+    transition: transform 0.15s, border-color 0.15s, background 0.15s;
+}
+.gsra-attach-tile:hover, .gsra-attach-tile:focus-visible { transform: translateY(-2px); border-color: var(--gsra-yellow); background: rgba(255, 204, 0, 0.06); outline: none; }
+.gsra-attach-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    font-size: 19px;
+}
+.gsra-attach-tile:nth-child(1) .gsra-attach-icon { background: rgba(0, 85, 255, 0.16); color: #6cb8ff; }
+.gsra-attach-tile:nth-child(2) .gsra-attach-icon { background: rgba(255, 77, 77, 0.14); color: #ff7a7a; }
+.gsra-attach-tile:nth-child(3) .gsra-attach-icon { background: rgba(255, 204, 0, 0.14); color: var(--gsra-yellow); }
+.gsra-attach-tile strong { font-size: 13px; font-weight: 800; letter-spacing: 0.3px; }
+.gsra-attach-tile small { color: var(--text-muted); font-size: 11px; text-align: center; }
+.gsra-attach-choices { flex-wrap: wrap; }
+
+/* Setup-Karte in der Nachricht */
+.gsra-setup-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: min(280px, 70vw);
+    margin: 2px 0 4px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 204, 0, 0.3);
+    border-left: 3px solid var(--gsra-yellow);
+    border-radius: 10px;
+}
+.gsra-setup-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.gsra-setup-icon {
+    flex: 0 0 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 204, 0, 0.12);
+    border-radius: 10px;
+    color: var(--gsra-yellow);
+    font-size: 17px;
+}
+.gsra-setup-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.gsra-setup-text strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.gsra-setup-text small { color: var(--text-muted); font-size: 11px; }
+.gsra-setup-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.gsra-setup-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 8px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.gsra-setup-btn:hover { border-color: rgba(255, 255, 255, 0.4); }
+.gsra-setup-btn.primary { background: var(--gsra-yellow); border-color: var(--gsra-yellow); color: #000; }
+.gsra-setup-btn.primary:hover { box-shadow: var(--yellow-glow); }
+@media (max-width: 600px) {
+    .gsra-attach-menu { grid-template-columns: repeat(3, 1fr); width: min(340px, calc(100vw - 24px)); }
+}

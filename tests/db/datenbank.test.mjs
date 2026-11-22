@@ -10,9 +10,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL] =
-    Array.from({ length: 40 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 40);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL] =
+    Array.from({ length: 41 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 41);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -2738,6 +2738,67 @@ if (SUCHE_SQL && ZAEHLER_SQL) {
         JSON.stringify(platzhalter));
     const sqlTest = await suche(ICH, "'); drop table public.messages; --");
     check("Eingaben mit SQL-Zeichen sind harmlos", !sqlTest.error && (await one(`select count(*) as n from public.messages`)).n > 0, sqlTest.error || "");
+}
+
+// --- 041: Setups im Chat – nur eigene Datei im eigenen Chat-Ordner, nur Setup-Endungen, nicht austauschbar ---
+if (CHAT_SETUPS_SQL && SUCHE_SQL) {
+    const id = (n) => `71000000-0000-0000-0000-0000000004${String(n).padStart(2, "0")}`;
+    const SEND = id(1), PART = id(2), AUSSEN = id(3), CS = id(11), ANDERER = id(12);
+    await db.exec(`
+      insert into auth.users (id) values ('${SEND}'), ('${PART}'), ('${AUSSEN}');
+      insert into public.profiles (id, username) values ('${SEND}', 'SetupSender'), ('${PART}', 'SetupPartner'), ('${AUSSEN}', 'SetupAussen');
+      insert into public.chats (id, user1_id, user2_id, title, is_public) values ('${CS}', '${SEND}', '${PART}', null, false), ('${ANDERER}', '${PART}', '${AUSSEN}', null, false);`);
+    await db.exec(readFileSync(CHAT_SETUPS_SQL, "utf8"));
+    const ctl41 = await db.exec(readFileSync(CHAT_SETUPS_SQL, "utf8")); // zweiter Lauf
+    const rows41 = ctl41[ctl41.length - 1].rows;
+    console.log("Kontrolle 041:\n  " + rows41.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+    check("Kontrolle 041: Spalten, Schutzregel, Speicher", rows41.map(r => r.ergebnis).join(",") === "bereit,bereit,ja", rows41.map(r => r.ergebnis).join(", "));
+
+    const meta = (o = {}) => JSON.stringify({ kind: "setup", sim: "iRacing", size: 2048, sub: "bmwm4gt3", ...o }).replace(/'/g, "''");
+    const send = async (uid, { chat = CS, path, name = "Spa Quali.sto", m = meta() } = {}) => as(uid, async () =>
+        q(`insert into public.messages (chat_id, sender_id, text, file_path, file_name, file_meta)
+           values ('${chat}', '${uid}', '[Setup] x', '${(path || `${chat}/${uid}/setup_1.sto`).replace(/'/g, "''")}', '${name.replace(/'/g, "''")}', '${m}'::jsonb) returning id`));
+    const ok = await send(SEND);
+    check("Setup-Datei im eigenen Chat senden", ok.error === null && ok.rows.length === 1, ok.error || "");
+    const okAcc = await send(SEND, { path: `${CS}/${SEND}/setup_2.json`, name: "monza_q.json", m: meta({ sim: "ACC", sub: "bmw_m4_gt3/monza" }) });
+    check("ACC-Setup mit Auto- und Streckenordner", okAcc.error === null, okAcc.error || "");
+    const msgId = ok.rows[0]?.id;
+
+    const fremderOrdner = await send(SEND, { path: `${CS}/${PART}/setup_3.sto` });
+    check("Datei aus dem Ordner einer anderen Person: abgelehnt", fremderOrdner.error !== null, fremderOrdner.error || "durchgelassen!");
+    const andererChat = await send(SEND, { path: `${ANDERER}/${SEND}/setup_4.sto` });
+    check("Datei aus einem anderen Chat: abgelehnt", andererChat.error !== null, andererChat.error || "durchgelassen!");
+    const punkte = await send(SEND, { path: `${CS}/${SEND}/..` });
+    check("Speichername „..“: abgelehnt", punkte.error !== null, punkte.error || "durchgelassen!");
+    const falscheEndung = await send(SEND, { name: "spa.json" });
+    check("Endung passt nicht zur Simulation: abgelehnt", /passt nicht zur Simulation/.test(falscheEndung.error || ""), falscheEndung.error || "durchgelassen!");
+    const html = await send(SEND, { name: "boese.html", m: meta({ sim: "iRacing" }) });
+    check("Keine Webseiten oder Programme als „Setup“ (.html)", html.error !== null, html.error || "durchgelassen!");
+    const gross = await send(SEND, { m: meta({ size: 6 * 1024 * 1024 }) });
+    check("Größer als 5 MB: abgelehnt", /5 MB/.test(gross.error || ""), gross.error || "durchgelassen!");
+    const trick = await send(SEND, { m: meta({ sub: "../../Windows" }) });
+    check("Ordner-Hinweis mit „..“: abgelehnt", /Ordner-Hinweis/.test(trick.error || ""), trick.error || "durchgelassen!");
+    const skript = await send(SEND, { m: meta({ sub: "<script>alert(1)</script>" }) });
+    check("Ordner-Hinweis mit Sonderzeichen: abgelehnt", skript.error !== null, skript.error || "durchgelassen!");
+    const extra = await send(SEND, { m: JSON.stringify({ kind: "setup", sim: "iRacing", size: 5, url: "https://boese.example" }) });
+    check("Zusätzliche Felder (z. B. fremder Link): abgelehnt", extra.error !== null, extra.error || "durchgelassen!");
+    const pfadName = await send(SEND, { name: "../../spa.sto" });
+    check("Dateiname mit Pfad: abgelehnt", pfadName.error !== null, pfadName.error || "durchgelassen!");
+    const aussen = await send(AUSSEN, { path: `${CS}/${AUSSEN}/setup_5.sto` });
+    check("Nicht-Mitglied kann nichts in den Chat schicken", aussen.error !== null || aussen.rows.length === 0, aussen.error || "durchgelassen!");
+
+    await as(SEND, async () => {
+        const tausch = await q(`update public.messages set file_path = '${CS}/${SEND}/anders.sto' where id = '${msgId}'`);
+        check("Anhang nachträglich austauschen: abgelehnt", /nicht nachträglich austauschen/.test(tausch.error || ""), tausch.error || "durchgelassen!");
+        const text = await q(`insert into public.messages (chat_id, sender_id, text) values ('${CS}', '${SEND}', 'Ganz normale Nachricht') returning id`);
+        check("Normale Nachrichten unverändert möglich", text.error === null, text.error || "");
+    });
+    // Entfernen (z. B. „für alle löschen“) räumt auch Name und Angaben mit ab
+    await db.exec(`update public.messages set file_path = null where id = '${msgId}'`);
+    const weg = await one(`select file_name, file_meta from public.messages where id = '${msgId}'`);
+    check("Anhang entfernen räumt Name und Angaben mit ab", weg.file_name === null && weg.file_meta === null, JSON.stringify(weg));
+    const fn = await one(`select has_function_privilege('authenticated', 'public.messages_file_guard()', 'EXECUTE') as ok`);
+    check("Schutzfunktion nicht direkt aufrufbar", fn.ok === false, String(fn.ok));
 }
 
 // --- Konto löschen (Ausbau 3) funktioniert weiterhin, die Stimmen verschwinden mit ---
