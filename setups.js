@@ -512,11 +512,12 @@ function bindHubControls() {
 
     // Aktionen in der Liste: abstimmen, herunterladen, Werte ansehen, löschen
     document.getElementById('setupList').addEventListener('click', (e) => {
-        const btn = e.target.closest('button[data-action]');
+        const btn = e.target.closest('button[data-action], a[data-action]');
         if (!btn) return;
         const setup = loadedSetups.find(s => String(s.id) === btn.dataset.id);
         if (!setup) return;
-        if (btn.dataset.action === 'like' || btn.dataset.action === 'dislike') { if (!btn.disabled) voteSetup(setup.id, btn.dataset.action); }
+        if (btn.dataset.action === 'download') countDownload(setup); // Link öffnet die Datei wie gewohnt
+        else if (btn.dataset.action === 'like' || btn.dataset.action === 'dislike') { if (!btn.disabled) voteSetup(setup.id, btn.dataset.action); }
         else if (btn.dataset.action === 'pro-download') downloadProFile(setup, btn);
         else if (btn.dataset.action === 'details') openSetupDetails(setup);
         else if (btn.dataset.action === 'reviews') openSetupDetails(setup, { reviews: true });
@@ -582,7 +583,9 @@ function renderSetups(resetPaging = true) {
     });
     items.sort(hubFilter.sort === 'new'
         ? (a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
-        : (a, b) => (Number(b.is_pro) - Number(a.is_pro)) || score(b) - score(a));
+        : hubFilter.sort === 'downloads'
+            ? (a, b) => (Number(b.download_count) || 0) - (Number(a.download_count) || 0) || score(b) - score(a)
+            : (a, b) => (Number(b.is_pro) - Number(a.is_pro)) || score(b) - score(a));
     document.getElementById('setupCount').textContent = `${items.length} ${items.length === 1 ? 'Setup' : 'Setups'}`;
     if (!items.length) {
         list.innerHTML = `<div class="sh-empty"><i class="fa-solid fa-sliders"></i><strong>Keine passenden Setups</strong><span>${loadedSetups.length ? 'Probiere eine andere Simulation oder Suche.' : 'Sei der Erste und teile dein Setup mit der Community.'}</span></div>`;
@@ -617,8 +620,12 @@ function renderSetupCard(item) {
     if (locked) action = `<a href="abo.html" class="sh-btn locked"><i class="fa-solid fa-lock"></i> Mit Pole freischalten</a>`;
     else if (manual) action = `<button type="button" class="sh-btn" data-action="details" data-id="${id}"><i class="fa-solid fa-list-check"></i> Werte ansehen</button>`;
     else if (item.is_pro) action = `<button type="button" class="sh-btn" data-action="pro-download" data-id="${id}"><i class="fa-solid fa-download"></i> Download</button>`;
-    else if (downloadUrl) action = `<a href="${escapeHtml(downloadUrl)}" download class="sh-btn"><i class="fa-solid fa-download"></i> Download</a>`;
+    else if (downloadUrl) action = `<a href="${escapeHtml(downloadUrl)}" download class="sh-btn" data-action="download" data-id="${id}"><i class="fa-solid fa-download"></i> Download</a>`;
     else action = `<span class="sh-btn disabled" title="Kein sicherer Download-Link">Download</span>`;
+    // Download-Zähler (SQL 039): erst sichtbar, wenn die Datenbank ihn kennt; Setups mit Werten statt Datei haben keinen
+    const downloads = !manual && item.download_count !== undefined && item.download_count !== null
+        ? `<span class="vote-btn sh-dl-count" title="So viele Mitglieder haben dieses Setup heruntergeladen"><i class="fa-solid fa-download"></i> <span data-downloads="${id}">${Number(item.download_count) || 0}</span></span>`
+        : '';
 
     return `
         <article class="sh-card${item.is_pro ? ' pro' : ''}${locked ? ' locked' : ''}">
@@ -637,6 +644,7 @@ function renderSetupCard(item) {
                     <button data-action="like" data-id="${id}" class="vote-btn like-btn${myVote === 1 ? ' voted' : ''}"${voteAttrs(1)}><i class="fa-solid fa-thumbs-up"></i> ${likes}</button>
                     <button data-action="dislike" data-id="${id}" class="vote-btn dislike-btn${myVote === -1 ? ' voted' : ''}"${voteAttrs(-1)}><i class="fa-solid fa-thumbs-down"></i> ${dislikes}</button>
                     <button type="button" data-action="reviews" data-id="${id}" class="vote-btn sh-review-btn" title="Bewertungen und Kommentare"><i class="fa-regular fa-comments"></i> ${reviewStats[String(item.id)]?.n || 0}</button>
+                    ${downloads}
                 </div>
                 ${action}
                 ${isOwner || isAdmin ? `<button type="button" data-action="delete" data-id="${id}" class="btn-delete" title="Setup löschen"><i class="fa-solid fa-trash-can"></i></button>` : ''}
@@ -669,7 +677,22 @@ async function downloadProFile(setup, btn) {
     }
     btn.disabled = false;
     if (!url) return showToast('Die Datei ist gerade nicht verfügbar.', 'error');
+    countDownload(setup);
     window.location.href = url;
+}
+
+// Download zählen (SQL 039): jede angemeldete Person einmal pro Setup, eigene Downloads zählen nicht.
+// Fehler (z. B. vor dem Einspielen von 039) stören den Download nicht.
+async function countDownload(setup) {
+    if (!currentUser || currentUser.id === setup.uploader_id) return;
+    try {
+        const { data, error } = await supabase.rpc('setup_register_download', { _setup_id: String(setup.id) });
+        if (error || typeof data !== 'number') return;
+        setup.download_count = data;
+        document.querySelectorAll('[data-downloads]').forEach(el => {
+            if (/** @type {HTMLElement} */ (el).dataset.downloads === String(setup.id)) el.textContent = String(data);
+        });
+    } catch (e) { /* Zählen ist nicht wichtig genug für eine Fehlermeldung */ }
 }
 
 async function openSetupDetails(setup, { reviews = false } = {}) {

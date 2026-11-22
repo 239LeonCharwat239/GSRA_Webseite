@@ -9575,6 +9575,7 @@ a.plan-badge:hover {
 
 .sh-actions {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 8px;
     margin-top: auto;
@@ -9587,6 +9588,8 @@ a.plan-badge:hover {
     gap: 4px;
     margin-right: auto;
 }
+/* Symbol und Zahl bleiben nebeneinander; wird es zu eng, rutscht der Knopf in die nächste Zeile */
+.sh-votes .vote-btn { white-space: nowrap; }
 
 .sh-btn {
     display: inline-flex;
@@ -10703,6 +10706,9 @@ select option {
 
 /* Setup Hub: Kommentare und Bewertungen */
 .sh-review-btn { color: #9ab8ff; }
+/* Download-Zähler: sieht aus wie die Knöpfe daneben, ist aber nur eine Anzeige */
+.vote-btn.sh-dl-count,
+.vote-btn.sh-dl-count:hover { cursor: default; background: rgba(255,255,255,0.05); color: var(--text-muted); }
 .sh-reviews { margin-top: 18px; }
 .sh-rev-count { color: var(--text-muted); font-weight: 400; }
 .sh-rev-summary { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }

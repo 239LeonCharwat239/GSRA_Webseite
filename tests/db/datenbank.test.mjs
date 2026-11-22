@@ -9,9 +9,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL] =
-    Array.from({ length: 38 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 38);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL] =
+    Array.from({ length: 39 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 39);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -2572,6 +2572,86 @@ if (MODERATION_SQL) {
             }
         }
     }
+}
+
+// --- 039: Setup-Zähler geschützt (Lücke: eigene Likes selbst setzen → Coach-Lizenz), Download-Zähler ---
+if (ZAEHLER_SQL && SETUPHUB_SQL) {
+    const T3 = "40000000-0000-0000-0000-000000000003"; // Tims älteres Setup
+    const D1 = "60000000-0000-0000-0000-000000000391", D2 = "60000000-0000-0000-0000-000000000392", POLE = "30000000-0000-0000-0000-000000000003";
+    await db.exec(`insert into auth.users (id) values ('${D1}'), ('${D2}') on conflict do nothing;
+                   insert into public.profiles (id, username) values ('${D1}', 'Lader1'), ('${D2}', 'Lader2') on conflict do nothing;`);
+    const counts = async (id) => one(`select coalesce(likes, 0) as l, coalesce(dislikes, 0) as d from public.setups where id = '${id}'`);
+    const orig = await counts(T3);
+    const vorher = await as(U.tim, async () => (await q(`update public.setups set likes = 500 where id = '${T3}' returning likes`)).rows[0]?.likes);
+    check("Vorher (Lücke): Eigentümer konnte die Likes des eigenen Setups selbst setzen", Number(vorher) === 500, String(vorher));
+    await db.exec(`update public.setups set likes = ${orig.l} where id = '${T3}'`);
+
+    await db.exec(readFileSync(ZAEHLER_SQL, "utf8"));
+    const ctl39 = await db.exec(readFileSync(ZAEHLER_SQL, "utf8")); // zweiter Lauf
+    const rows39 = ctl39[ctl39.length - 1].rows;
+    console.log("Kontrolle 039:\n  " + rows39.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+    check("Kontrolle 039: Zähler geschützt, Download-Zähler bereit", rows39.slice(0, 2).map(r => r.ergebnis).join(",") === "bereit,bereit", rows39.map(r => r.ergebnis).join(", "));
+
+    await as(U.tim, async () => {
+        const r = await q(`update public.setups set likes = 500, dislikes = 0, download_count = 99, car_model = 'Altes Setup (Zählertest)' where id = '${T3}' returning likes, dislikes, download_count, car_model`);
+        const row = r.rows[0];
+        check("Nachher: Eigentümer bearbeitet sein Setup, die Zähler bleiben unverändert",
+            r.error === null && row?.car_model === "Altes Setup (Zählertest)" && Number(row?.likes) === Number(orig.l) && Number(row?.dislikes) === Number(orig.d) && Number(row?.download_count) === 0,
+            r.error || JSON.stringify(row));
+    });
+    await as(D1, async () => {
+        const ins = await q(`insert into public.setups (simulation, car_model, track_name, file_url, file_name, uploader_id, likes, dislikes, download_count)
+                             values ('iRacing', 'Zählertest', 'Spa', 'https://x/z.sto', 'z.sto', '${D1}', 999, 7, 50) returning likes, dislikes, download_count`);
+        const n = ins.rows[0];
+        check("Nachher: Neues Setup startet immer bei 0 Likes, 0 Dislikes, 0 Downloads",
+            ins.error === null && Number(n?.likes) === 0 && Number(n?.dislikes) === 0 && Number(n?.download_count) === 0, ins.error || JSON.stringify(n));
+    });
+    // Ein vorhandenes öffentliches Setup eines anderen Mitglieds für die weiteren Prüfungen
+    const SX = await one(`select id::text as id, uploader_id::text as owner from public.setups
+                          where not coalesce(is_pro, false) and uploader_id is not null and uploader_id::text not in ('${D1}', '${D2}', '${POLE}')
+                          order by created_at limit 1`);
+    await as(U.admin, async () => {
+        await q(`update public.setups set likes = 777 where id = '${SX.id}'`);
+    });
+    check("Auch Website-Admins setzen Zähler nicht direkt", Number((await counts(SX.id)).l) !== 777, String((await counts(SX.id)).l));
+    const sxLikes = Number((await counts(SX.id)).l);
+    await as(D1, async () => {
+        const v = await q(`select * from public.vote_setup('${SX.id}', 1)`);
+        check("Abstimmen über die Funktion zählt weiterhin", v.error === null && v.rows[0]?.new_likes === sxLikes + 1, v.error || JSON.stringify(v.rows[0]));
+        await q(`select * from public.vote_setup('${SX.id}', 0)`);
+    });
+    check("Stimme zurücknehmen zählt weiterhin zurück", Number((await counts(SX.id)).l) === sxLikes, String((await counts(SX.id)).l));
+
+    // Download-Zähler
+    const dl = async (uid, id) => as(uid, async () => q(`select public.setup_register_download('${id}') as n`));
+    const a1 = await dl(D1, SX.id), a2 = await dl(D1, SX.id), b1 = await dl(D2, SX.id);
+    check("Download zählt einmal pro Person (zweiter Download derselben Person zählt nicht)",
+        a1.rows[0]?.n === 1 && a2.rows[0]?.n === 1 && b1.rows[0]?.n === 2, a1.error || a2.error || b1.error || JSON.stringify([a1.rows[0], a2.rows[0], b1.rows[0]]));
+    const own = await dl(SX.owner, SX.id);
+    check("Eigene Downloads zählen nicht", own.error === null && own.rows[0]?.n === 2, own.error || JSON.stringify(own.rows[0]));
+    const guest = await dl(null, SX.id);
+    check("Gäste werden nicht gezählt (Funktion für Gäste gesperrt)", guest.error !== null, guest.error || "durchgelassen!");
+    const gone = await dl(D1, "40000000-0000-0000-0000-000000000999");
+    check("Unbekanntes Setup: verständliche Meldung", /gibt es nicht mehr/.test(gone.error || ""), gone.error || "durchgelassen!");
+    await as(D1, async () => {
+        const read = await q(`select * from public.setup_downloads`);
+        check("Liste der Downloads nicht lesbar (wer was geladen hat, bleibt privat)", read.error !== null, read.error || `${read.rows.length} Zeilen sichtbar`);
+        const fake = await q(`insert into public.setup_downloads (setup_id, user_id) values ('${S2}', '${D1}')`);
+        check("Downloads nicht direkt eintragbar", fake.error !== null, fake.error || "durchgelassen!");
+    });
+    const proSetup = (await one(`select id::text as id from public.setups where is_pro order by created_at limit 1`))?.id;
+    if (proSetup) {
+        const free = await dl(D1, proSetup);
+        check("Pro Setup: ohne Abo kein Download-Zähler", /nur Abonnenten/.test(free.error || ""), free.error || "durchgelassen!");
+        const pole = await dl(POLE, proSetup);
+        check("Pro Setup: mit Abo wird gezählt", pole.error === null && pole.rows[0]?.n === 1, pole.error || JSON.stringify(pole.rows[0]));
+    }
+    await db.exec(`insert into public.user_bans (user_id, banned_until, reason) values ('${D2}', now() + interval '1 day', 'Test 039')`);
+    const banned = await dl(D2, S2);
+    check("Gesperrte Konten zählen nicht", /gesperrt/.test(banned.error || ""), banned.error || "durchgelassen!");
+    await db.exec(`delete from public.user_bans where reason = 'Test 039'`);
+    const fn = await one(`select has_function_privilege('authenticated', 'public.setups_protect_counters()', 'EXECUTE') as ok`);
+    check("Schutzfunktion nicht direkt aufrufbar", fn.ok === false, String(fn.ok));
 }
 
 // --- Konto löschen (Ausbau 3) funktioniert weiterhin, die Stimmen verschwinden mit ---
