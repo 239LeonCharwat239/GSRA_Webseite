@@ -5946,7 +5946,8 @@ textarea.gsra-dialog-input {
 .gsra-dp-day.weekend { color: #fff2b8; }
 .gsra-dp-day:hover:not(:disabled) { background: rgba(0, 85, 255, 0.22); border-color: rgba(0, 85, 255, 0.6); }
 .gsra-dp-day.today { border-color: rgba(0, 85, 255, 0.85); }
-.gsra-dp-day.selected { background: var(--gsra-yellow); border-color: var(--gsra-yellow); color: #0b0c10; font-weight: 800; }
+/* Ausgewählt bleibt sofort gelb – auch solange die Maus noch darauf steht (sonst überdeckte das Blau des Darüberfahrens) */
+.gsra-dp-day.selected, .gsra-dp-day.selected:hover:not(:disabled) { background: var(--gsra-yellow); border-color: var(--gsra-yellow); color: #0b0c10; font-weight: 800; }
 .gsra-dp-day:disabled { opacity: 0.22; cursor: not-allowed; }
 .gsra-dp-day:focus-visible, .gsra-dp-opt:focus-visible, .gsra-dp-nav:focus-visible { outline: 2px solid var(--gsra-blue); outline-offset: 1px; }
 .gsra-dp-time { display: flex; flex-direction: column; gap: 8px; }
@@ -5984,7 +5985,7 @@ textarea.gsra-dialog-input {
     cursor: pointer;
 }
 .gsra-dp-opt:hover { background: rgba(0, 85, 255, 0.22); border-color: rgba(0, 85, 255, 0.6); }
-.gsra-dp-opt.selected { background: var(--gsra-yellow); border-color: var(--gsra-yellow); color: #0b0c10; font-weight: 800; }
+.gsra-dp-opt.selected, .gsra-dp-opt.selected:hover { background: var(--gsra-yellow); border-color: var(--gsra-yellow); color: #0b0c10; font-weight: 800; }
 .gsra-dp-pop[data-type="time"] .gsra-dp-time-label { display: none; }
 .gsra-dp-foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255, 255, 255, 0.08); }
 .gsra-dp-link { margin-right: auto; padding: 6px 4px; background: none; border: none; color: var(--gsra-blue); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }

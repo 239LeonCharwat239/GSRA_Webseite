@@ -131,7 +131,7 @@ window.gsraMfa = (() => {
         intro.innerHTML = `
             <p>${member ? "Schütze dein Konto zusätzlich: Bei jeder Anmeldung fragt die GSRA neben dem Passwort einen Code aus deiner App ab." : "Für den Admin-Bereich ist eine Zwei-Faktor-Anmeldung Pflicht."} Einmalig einrichten:</p>
             <ol class="mfa-steps">
-                <li>Authenticator-App öffnen (z. B. Google Authenticator, Microsoft Authenticator, 1Password).</li>
+                <li>Eine Authenticator-App deiner Wahl auf dem Smartphone öffnen.</li>
                 <li>QR-Code scannen – oder den Schlüssel von Hand eingeben.</li>
                 <li>Den 6-stelligen Code aus der App hier eingeben.</li>
             </ol>

@@ -4,7 +4,7 @@
   "description": "GSRA – Global Simracing Alliance. Webseite mit Vite-Build (TypeScript schrittweise, siehe CLAUDE.md).",
   "type": "module",
   "engines": {
-    "node": ">=22.12"
+    "node": "24.x"
   },
   "scripts": {
     "build": "vite build",
