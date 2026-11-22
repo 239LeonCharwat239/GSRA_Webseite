@@ -536,13 +536,25 @@ const loginLinkHere = (extra = "") => {
     return `login.html?${extra}weiter=${encodeURIComponent(here)}`;
 };
 
-// Fußzeile mit Impressum, Datenschutz und Nutzungsbedingungen auf jeder Seite
+// Fußzeile auf jeder Seite: „Folge GSRA“ (außer auf der Startseite, die hat einen eigenen Bereich),
+// Impressum, Datenschutz, Nutzungsbedingungen
 function addSiteFooter() {
     if (document.getElementById("gsraSiteFooter")) return;
     const footer = document.createElement("footer");
     footer.id = "gsraSiteFooter";
     footer.className = "gsra-site-footer";
-    footer.innerHTML = `
+    const social = ["", "index"].includes(currentPageName()) ? "" : `
+        <div class="gsra-footer-social">
+            <strong>Folge <span class="text-yellow">GSRA</span></strong>
+            <div class="gsra-footer-icons">
+                <a href="https://www.instagram.com/official.gsra/" target="_blank" rel="noopener" class="icon-instagram" aria-label="Instagram"><i class="fab fa-instagram"></i></a>
+                <a href="https://www.youtube.com/@GlobalSimracingAlliance" target="_blank" rel="noopener" class="icon-youtube" aria-label="YouTube"><i class="fab fa-youtube"></i></a>
+                <a href="https://www.reddit.com/r/GSRA/" target="_blank" rel="noopener" class="icon-reddit" aria-label="Reddit"><i class="fab fa-reddit"></i></a>
+                <a href="https://discord.gg/QDMa5qUCBX" target="_blank" rel="noopener" class="icon-discord" aria-label="Discord"><i class="fab fa-discord"></i></a>
+                <a href="https://www.twitch.tv/global_simracing_alliance" target="_blank" rel="noopener" class="icon-twitch" aria-label="Twitch"><i class="fab fa-twitch"></i></a>
+            </div>
+        </div>`;
+    footer.innerHTML = `${social}
         <span>© ${new Date().getFullYear()} Global Simracing Alliance</span>
         <div class="gsra-site-footer-links">
             <a href="abo.html">Abos</a>

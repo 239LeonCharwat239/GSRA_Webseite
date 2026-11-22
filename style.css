@@ -3981,7 +3981,7 @@ emoji-picker {
 }
 
 textarea.gsra-dialog-input {
-    resize: vertical;
+    resize: none;
     min-height: 90px;
     line-height: 1.5;
     text-align: left;
@@ -4603,7 +4603,7 @@ textarea.gsra-dialog-input {
     font-family: inherit;
     font-size: 14px;
     outline: none;
-    resize: vertical;
+    resize: none;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -9689,7 +9689,7 @@ a.plan-badge:hover {
 }
 
 .sh-form textarea {
-    resize: vertical;
+    resize: none;
 }
 
 .sh-form [hidden] {
@@ -10688,7 +10688,7 @@ select option {
     cursor: pointer;
 }
 .rate-tag-btn.active { border-color: var(--gsra-blue); background: rgba(0, 85, 255, 0.2); color: #fff; }
-.rate-comment { margin-bottom: 16px; resize: vertical; }
+.rate-comment { margin-bottom: 16px; resize: none; }
 .rate-remove {
     display: block;
     margin: 12px auto 0;
@@ -10749,7 +10749,7 @@ select option {
     width: 100%;
     margin: 0 0 10px;
     padding: 10px 12px;
-    resize: vertical;
+    resize: none;
     font-family: inherit;
     font-size: 14px;
     background: #15161a;
@@ -11373,7 +11373,7 @@ select option {
     text-transform: none;
     letter-spacing: normal;
 }
-.co-field textarea { resize: vertical; }
+.co-field textarea { resize: none; }
 .co-field input[type="text"], .co-field select, .co-field textarea, .co-search {
     box-sizing: border-box;
     padding: 10px 12px;
@@ -12016,3 +12016,133 @@ select option {
     .co-actions .co-btn { flex: 1; justify-content: center; }
     .co-own { flex-direction: column; align-items: stretch; }
 }
+
+/* =========================================
+   EINHEITLICHE SEITENKÖPFE (alle Unterseiten)
+   Titel weiß mit blauem Akzentwort, Untertitel gelb, Hauptknopf mittig darunter
+========================================= */
+.hero-section, .mk-hero, .sh-hero, .abo-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    margin: 0 0 26px;
+    padding: 24px 0 8px;
+    text-align: center;
+}
+.mk-hero > div, .sh-hero > div { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.hero-title, .mk-title, .sh-hero .hero-title {
+    margin: 0;
+    font-size: 40px;
+    font-weight: 900;
+    line-height: 1.15;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text-light);
+    overflow-wrap: anywhere;
+}
+.hero-subtitle, .mk-subtitle, .sh-hero .hero-subtitle, .abo-hero .hero-subtitle {
+    max-width: 780px;
+    margin: 0 auto;
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1.5;
+    letter-spacing: 0.3px;
+    color: var(--gsra-yellow);
+}
+/* Startseite: etwas größer, Untertitel mit eigenen Farben */
+.home-hero { padding: 40px 0; margin-bottom: 40px; }
+.home-hero .hero-title { font-size: 42px; }
+.home-hero .hero-subtitle { font-size: 22px; font-weight: 700; }
+@media (max-width: 760px) {
+    .hero-title, .mk-title, .sh-hero .hero-title { font-size: 28px; letter-spacing: 2px; }
+    .hero-subtitle, .mk-subtitle, .sh-hero .hero-subtitle, .abo-hero .hero-subtitle { font-size: 16px; }
+    .home-hero .hero-title { font-size: 30px; }
+}
+
+/* Fußzeile: „Folge GSRA“ auf jeder Seite (auth-nav.js) */
+.gsra-footer-social {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 10px 22px;
+    width: 100%;
+    padding: 4px 0 14px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+.gsra-footer-social strong { color: #fff; font-size: 15px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; }
+.gsra-footer-icons { display: flex; gap: 22px; }
+.gsra-footer-icons a { font-size: 24px; color: var(--text-muted); transition: color 0.2s ease, transform 0.2s ease; }
+.gsra-site-footer .gsra-footer-icons a:hover { transform: translateY(-2px); }
+
+/* Textfelder: Größe steht fest – nirgends zum Aufziehen oder Verkleinern */
+textarea { resize: none !important; }
+
+/* Dateiauswahl im GSRA-Design (datei-auswahl.js) */
+.gsra-file {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    padding: 16px;
+    background: linear-gradient(160deg, rgba(0, 85, 255, 0.06) 0%, rgba(0, 85, 255, 0) 50%), #0f1116;
+    border: 1.5px dashed rgba(0, 85, 255, 0.55);
+    border-radius: 10px;
+    color: #e3e5eb;
+    text-align: left;
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+.gsra-file:hover, .gsra-file.drag { border-color: var(--gsra-yellow); background: rgba(255, 204, 0, 0.06); }
+.gsra-file.drag { border-style: solid; box-shadow: 0 0 0 3px rgba(255, 204, 0, 0.2); }
+.gsra-file.invalid { border-color: #ff4d4d; }
+.gsra-file.disabled { opacity: 0.5; cursor: not-allowed; }
+.gsra-file:focus-within { border-color: var(--gsra-blue); box-shadow: 0 0 0 3px rgba(0, 85, 255, 0.22); }
+.gsra-file-native {
+    position: absolute !important;
+    left: 16px;
+    bottom: 0;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    opacity: 0;
+}
+.gsra-file-body { display: flex; align-items: center; gap: 14px; }
+.gsra-file-icon {
+    flex: 0 0 44px;
+    height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 204, 0, 0.1);
+    border: 1px solid rgba(255, 204, 0, 0.35);
+    border-radius: 10px;
+    color: var(--gsra-yellow);
+    font-size: 19px;
+}
+.gsra-file-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.gsra-file-title { color: #fff; font-size: 14px; font-weight: 800; letter-spacing: 0.3px; }
+.gsra-file-hint { color: var(--text-muted); font-size: 12px; }
+.gsra-file-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.gsra-file-list:empty { display: none; }
+.gsra-file-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 100%;
+    padding: 6px 10px 6px 6px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    font-size: 12px;
+}
+.gsra-file-item img { width: 38px; height: 38px; object-fit: cover; border-radius: 6px; }
+.gsra-file-item > i { width: 38px; text-align: center; color: var(--gsra-blue); font-size: 18px; }
+.gsra-file-name { min-width: 0; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #fff; }
+.gsra-file-size { color: var(--text-muted); white-space: nowrap; }
