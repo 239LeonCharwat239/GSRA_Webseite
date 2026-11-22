@@ -1,6 +1,7 @@
 /* =========================================
    GSRA - Rennkalender: nächstes Rennen mit Countdown, Filter nach Simulation, Events nach Monat,
-   Server-Passwort kopieren. Eintragen und Löschen: Admins und Moderatoren (die Datenbank prüft das zusätzlich).
+   Server-Passwort kopieren. Eintragen, Bearbeiten und Löschen: Admins und Moderatoren
+   (die Datenbank prüft das zusätzlich, inkl. Zwei-Faktor-Code; Änderungen landen im Moderationsprotokoll).
 ========================================= */
 document.addEventListener('DOMContentLoaded', async () => {
     renderSimChips();
@@ -8,7 +9,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadEvents();
 
     document.getElementById('create-event-form')?.addEventListener('submit', handleCreateEvent);
-    document.getElementById('kalCreateBtn')?.addEventListener('click', openCreateModal);
+    document.getElementById('kalCreateBtn')?.addEventListener('click', () => openCreateModal());
     document.getElementById('kalModalClose')?.addEventListener('click', closeCreateModal);
     document.getElementById('kalModalCancel')?.addEventListener('click', closeCreateModal);
     document.getElementById('kalModal')?.addEventListener('mousedown', (e) => { if (/** @type {Element} */ (e.target).id === 'kalModal') closeCreateModal(); });
@@ -21,6 +22,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 let isAdmin = false;
 let loadedEvents = [];
+let editingEvent = null; // gesetzt, solange der Dialog ein vorhandenes Event bearbeitet
 let simFilter = 'ALL';
 const LIVE_HOURS = 6; // laufende Rennen bleiben bis 6 Stunden nach dem Start sichtbar
 
@@ -195,13 +197,22 @@ function eventCard(ev) {
         side.innerHTML = '<span class="kal-open"><i class="fa-solid fa-lock-open"></i> Ohne Passwort</span>';
     }
     if (isAdmin) {
+        const tools = document.createElement('div');
+        tools.className = 'kal-admin-tools';
+        const edit = document.createElement('button');
+        edit.type = 'button';
+        edit.className = 'kal-edit';
+        edit.title = 'Event bearbeiten';
+        edit.innerHTML = '<i class="fa-solid fa-pen"></i><span> Bearbeiten</span>';
+        edit.addEventListener('click', () => openCreateModal(ev));
         const del = document.createElement('button');
         del.type = 'button';
         del.className = 'kal-delete';
         del.title = 'Event löschen';
         del.innerHTML = '<i class="fa-solid fa-trash"></i><span> Löschen</span>';
         del.addEventListener('click', () => deleteEvent(ev.id));
-        side.appendChild(del);
+        tools.append(edit, del);
+        side.appendChild(tools);
     }
     return card;
 }
@@ -231,18 +242,41 @@ function renderNext(ev) {
         </div>`;
 }
 
-function openCreateModal() {
+// Ortszeit für ein datetime-local-Feld („2026-11-22T20:00“)
+const toLocalInput = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+
+// ev = null: neues Event eintragen; ev = Event: dieses Event bearbeiten (gleicher Dialog, vorausgefüllt)
+function openCreateModal(ev = null) {
     const modal = document.getElementById('kalModal');
     if (!modal) return;
-    // Vorschlag: morgen 20:00 Uhr
-    const dateInput = document.getElementById('ev-date');
-    if (dateInput && !dateInput.value) {
+    const form = /** @type {HTMLFormElement} */ (document.getElementById('create-event-form'));
+    const field = (id) => /** @type {HTMLInputElement} */ (document.getElementById(id));
+    // Wechsel zwischen Bearbeiten und Neu: Felder leeren, damit nichts vom anderen Event übrig bleibt
+    if (editingEvent || ev) form.reset();
+    editingEvent = ev && ev.id ? ev : null;
+
+    document.getElementById('kalModalTitle').textContent = editingEvent ? 'Event bearbeiten' : 'Neues Event eintragen';
+    document.getElementById('kalSubmit').textContent = editingEvent ? 'Änderungen speichern' : 'Event veröffentlichen';
+    document.getElementById('kalModalIcon').className = `fa-solid ${editingEvent ? 'fa-pen-to-square' : 'fa-calendar-plus'}`;
+
+    if (editingEvent) {
+        field('ev-title').value = editingEvent.title || '';
+        const sim = /** @type {HTMLSelectElement} */ (document.getElementById('ev-sim'));
+        // Ältere Events mit einer Simulation, die nicht mehr in der Liste steht, behalten ihren Wert
+        if (editingEvent.simulation && ![...sim.options].some(o => o.value === editingEvent.simulation)) sim.add(new Option(editingEvent.simulation, editingEvent.simulation));
+        sim.value = editingEvent.simulation || sim.options[0].value;
+        field('ev-track').value = editingEvent.track || '';
+        field('ev-date').value = editingEvent.event_date ? toLocalInput(new Date(editingEvent.event_date)) : '';
+        field('ev-password').value = editingEvent.server_password || editingEvent.password || '';
+        field('ev-description').value = editingEvent.description || '';
+    } else if (!field('ev-date').value) {
+        // Vorschlag: morgen 20:00 Uhr
         const d = new Date(Date.now() + 86400000);
         d.setHours(20, 0, 0, 0);
-        dateInput.value = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+        field('ev-date').value = toLocalInput(d);
     }
     modal.hidden = false;
-    document.getElementById('ev-title')?.focus();
+    field('ev-title').focus();
 }
 
 function closeCreateModal() {
@@ -278,16 +312,24 @@ async function handleCreateEvent(e) {
             return;
         }
 
-        const { error } = await supabaseClient
-            .from('events')
-            .insert([{ title, simulation, track, event_date, server_password, description }]);
+        const values = { title, simulation, track, event_date, server_password, description };
+        let error = null;
+        if (editingEvent) {
+            // Ändern: Die Datenbank lässt nur Admins/Moderatoren durch – sonst kommt keine Zeile zurück
+            const res = await supabaseClient.from('events').update(values).eq('id', editingEvent.id).select('id');
+            error = res.error || (res.data?.length ? null : { message: 'permission denied' });
+        } else {
+            error = (await supabaseClient.from('events').insert([values])).error;
+        }
 
         if (error) {
-            showToast('Fehler beim Erstellen: ' + eventErrorText(error), 'error');
+            showToast((editingEvent ? 'Fehler beim Speichern: ' : 'Fehler beim Erstellen: ') + eventErrorText(error), 'error');
         } else {
+            const wasEdit = Boolean(editingEvent);
             /** @type {HTMLFormElement} */ (document.getElementById('create-event-form')).reset();
+            editingEvent = null;
             closeCreateModal();
-            showToast('Das Event ist veröffentlicht.', 'success');
+            showToast(wasEdit ? 'Die Änderungen sind gespeichert.' : 'Das Event ist veröffentlicht.', 'success');
             await loadEvents();
         }
     } catch (err) {
