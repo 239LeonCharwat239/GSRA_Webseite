@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hilfe-Center - GSRA</title>
+    <meta name="description" content="Hilfe-Center der Global Simracing Alliance: So funktionieren Messenger, Setup Hub, Marktplatz, Coaching, Abos und Sicherheit.">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha256-7jvo3hkrl8sdc9HpXWuCux9rZYwPl8TvdX/DMZlu09M=" crossorigin="anonymous"></script>
+    <script src="supabase-client.js"></script>
+    <script src="fehler-monitor.js"></script>
+    <script src="auth-nav.js"></script>
+</head>
+<body data-wissen="hilfe">
+
+<header>
+    <div class="logo-slogan-container">
+        <a href="index.html" class="logo-link">
+            <img src="GSRA_Logo_ohne Hintergrund.png" alt="GSRA Logo" class="logo">
+        </a>
+        <div class="header-slogan">
+            <span class="text-blue">UNITED BY SPEED.</span>
+            <span class="text-yellow">DRIVEN GLOBALLY.</span>
+        </div>
+    </div>
+    <!-- Die Navigation baut auth-nav.js aus einer zentralen Liste (GSRA_NAV) -->
+    <nav>
+        <a href="index.html">Home</a>
+        <a href="messenger.html">Messenger</a>
+        <a href="login.html" class="login-btn" id="loginNavBtn">Login</a>
+        <button id="logoutBtn" class="login-btn" style="display: none;">Logout</button>
+    </nav>
+</header>
+
+    <main class="container">
+        <section class="hero-section">
+            <h1 class="hero-title">Hilfe-<span class="text-blue">Center</span></h1>
+            <p class="hero-subtitle">Alles über die GSRA kurz erklärt – vom ersten Login bis zum Setup im Spielordner.</p>
+        </section>
+
+        <section class="wissen-werkzeuge">
+            <label class="wissen-suchfeld">
+                <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                <input type="search" id="wissenSuche" maxlength="60" autocomplete="off" placeholder="Frage suchen, z. B. „Setup speichern“ oder „kündigen“" aria-label="Hilfe durchsuchen">
+            </label>
+            <div class="wissen-chips" id="wissenFilter" role="group" aria-label="Themen"></div>
+        </section>
+
+        <section id="wissenListe" class="wissen-liste" aria-live="polite"></section>
+
+        <p class="wissen-fuss"><i class="fa-solid fa-comments" aria-hidden="true"></i> Keine passende Antwort? Frag im offiziellen GSRA-Forum im <a href="messenger.html">Messenger</a> – das Team hilft dir weiter.</p>
+    </main>
+
+    <script type="module" src="src/wissen.ts"></script>
+    <script type="module" src="src/suche.ts"></script>
+</body>
+</html>

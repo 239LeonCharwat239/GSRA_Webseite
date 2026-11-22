@@ -1,4 +1,8 @@
 // GSRA – Globale Suche (SQL 040). Erste TypeScript-Datei der Webseite (Vite baut sie, siehe vite.config.ts).
+// Die Wissens-Texte (Nachschlagewerk, Hilfe) werden erst beim ersten Suchen nachgeladen – jede Seite bleibt schlank.
+type WissenDaten = typeof import("./wissen-daten");
+let wissenDaten: Promise<WissenDaten> | null = null;
+const ladeWissen = () => (wissenDaten ??= import("./wissen-daten"));
 //
 // Eine Lupe oben auf jeder Seite (auch Strg+K oder „/“) öffnet das Suchfenster. Die Treffer kommen aus einer
 // Datenbank-Funktion, die mit den Rechten der suchenden Person läuft: Gäste finden nur Öffentliches, Nachrichten
@@ -16,6 +20,7 @@ type Ergebnis = {
   marktplatz?: Inserat[]; coaching?: Coaching[]; rennen?: Rennen[];
 };
 type Treffer = { href: string; icon: string; avatar?: string | null; titel: string; unter: string; markieren: boolean };
+type WissenTreffer = { id: string; art: "begriff" | "hilfe"; titel: string; unter: string };
 
 const MIN_ZEICHEN = 2;
 const esc = (s: unknown): string =>
@@ -78,6 +83,23 @@ const RUBRIKEN: Array<{ key: keyof Ergebnis; titel: string; icon: string; alle?:
   },
 ];
 
+// Wissen (Nachschlagewerk und Hilfe-Center) wird direkt hier durchsucht – ohne Datenbank-Abfrage
+const normal = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/ß/g, "ss");
+async function sucheWissen(begriff: string): Promise<WissenTreffer[]> {
+  const q = normal(begriff);
+  if (q.length < 2) return [];
+  let daten: WissenDaten;
+  try { daten = await ladeWissen(); } catch { return []; }
+  const { BEGRIFFE, HILFE } = daten;
+  const begriffe: WissenTreffer[] = BEGRIFFE
+    .filter((b) => normal(`${b.begriff} ${b.englisch || ""} ${b.kurz}`).includes(q))
+    .map((b) => ({ id: b.id, art: "begriff", titel: b.begriff + (b.englisch ? ` (${b.englisch})` : ""), unter: `Nachschlagewerk · ${b.kurz}` }));
+  const hilfe: WissenTreffer[] = HILFE
+    .filter((a) => normal(`${a.frage} ${a.antwort.join(" ")}`).includes(q))
+    .map((a) => ({ id: a.id, art: "hilfe", titel: a.frage, unter: `Hilfe-Center · ${a.antwort[0]}` }));
+  return [...begriffe.slice(0, 4), ...hilfe.slice(0, 3)];
+}
+
 function markiere(text: string, begriff: string): string {
   const sicher = esc(text);
   const muster = esc(begriff).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -113,9 +135,12 @@ function baueOberflaeche() {
     </div>`;
   document.body.appendChild(fenster);
 
+  // Rechts zu den Werkzeugen der Navigation (auth-nav.js); gibt es die noch nicht, holt auth-nav die Lupe später dorthin
   const header = document.querySelector("header");
   const nav = header?.querySelector("nav");
-  if (header && nav) header.insertBefore(knopf, nav);
+  const werkzeuge = header?.querySelector(".gsra-nav-tools");
+  if (werkzeuge) werkzeuge.prepend(knopf);
+  else if (header && nav) header.insertBefore(knopf, nav);
   return { knopf, fenster };
 }
 
@@ -147,7 +172,7 @@ function starte() {
       </div>`;
   };
 
-  const zeige = (ergebnis: Ergebnis, begriff: string) => {
+  const zeige = (ergebnis: Ergebnis, begriff: string, wissen: WissenTreffer[]) => {
     aktiv = -1;
     const teile: string[] = [];
     for (const r of RUBRIKEN) {
@@ -163,6 +188,17 @@ function starte() {
           <i class="fa-solid fa-arrow-right gsra-search-go"></i></a>`);
       }
       if (r.alle) teile.push(`<a class="gsra-search-all" href="${esc(r.alle(begriff))}">Alle ${esc(r.titel)} zu „${esc(begriff)}“ <i class="fa-solid fa-angle-right"></i></a>`);
+      teile.push("</section>");
+    }
+    if (wissen.length) {
+      teile.push(`<section class="gsra-search-group"><h3><i class="fa-solid fa-book-open"></i> Wissen <span>${wissen.length}</span></h3>`);
+      for (const w of wissen) {
+        const href = `${w.art === "begriff" ? "nachschlagewerk" : "hilfe"}.html#${encodeURIComponent(w.id)}`;
+        teile.push(`<a class="gsra-search-item" role="option" href="${esc(href)}">
+          <span class="gsra-search-icon"><i class="fa-solid ${w.art === "begriff" ? "fa-book" : "fa-circle-question"}"></i></span>
+          <span class="gsra-search-text"><strong>${markiere(w.titel, begriff)}</strong><small>${markiere(w.unter, begriff)}</small></span>
+          <i class="fa-solid fa-arrow-right gsra-search-go"></i></a>`);
+      }
       teile.push("</section>");
     }
     if (!teile.length) {
@@ -181,10 +217,10 @@ function starte() {
     liste.classList.add("loading");
     try {
       const client = (window as any).supabaseClient;
-      const { data, error } = await client.rpc("gsra_search", { _q: begriff });
+      const [{ data, error }, wissen] = await Promise.all([client.rpc("gsra_search", { _q: begriff }), sucheWissen(begriff)]);
       if (nr !== anfrage) return; // eine neuere Eingabe ist schon unterwegs
       if (error) throw error;
-      zeige((data || {}) as Ergebnis, begriff);
+      zeige((data || {}) as Ergebnis, begriff, wissen);
     } catch {
       if (nr === anfrage) liste.innerHTML = '<div class="gsra-search-empty"><i class="fa-solid fa-triangle-exclamation"></i><strong>Die Suche ist gerade nicht erreichbar</strong><span>Bitte versuche es gleich noch einmal.</span></div>';
     } finally {

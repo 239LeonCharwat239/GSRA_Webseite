@@ -4,11 +4,15 @@
 
 const initAuthNav = async () => {
     const client = window.supabaseClient || window.supabase;
-    
+
     if (!client) {
         console.error("Supabase Client nicht gefunden!");
         return;
     }
+
+    // Navigation aus der zentralen Liste (GSRA_NAV) aufbauen – muss vor allem anderen passieren,
+    // weil die Knöpfe für Login und Abmelden dabei neu entstehen
+    buildMainNav();
 
     const loginNavBtn = document.getElementById("loginNavBtn");
     const logoutBtn = document.getElementById("logoutBtn");
@@ -18,11 +22,14 @@ const initAuthNav = async () => {
     const updateUI = (session) => {
         if (session) {
             if (loginNavBtn) loginNavBtn.style.setProperty("display", "none", "important");
-            if (logoutBtn) logoutBtn.style.setProperty("display", "inline-block", "important");
+            if (logoutBtn) logoutBtn.style.setProperty("display", "flex", "important");
         } else {
             if (loginNavBtn) loginNavBtn.style.setProperty("display", "inline-block", "important");
             if (logoutBtn) logoutBtn.style.setProperty("display", "none", "important");
         }
+        // Profil-Menü und Messenger-Symbol nur für Angemeldete
+        document.querySelectorAll(".gsra-account, .gsra-nav-tools .gsra-nav-icon[data-only-member]")
+            .forEach(el => { el.hidden = !session; });
 
         if (guestNotice && userContent) {
             if (session) {
@@ -126,7 +133,7 @@ const initAuthNav = async () => {
     let isAdmin = false;
     const isAdminPage = /admin(\.html)?$/.test(window.location.pathname);
     const checkAdminNews = async () => {
-        const link = document.querySelector('header nav a[href="admin.html"]');
+        const link = document.querySelector('header a[href="admin.html"]');
         if (!isAdmin || !link) return;
         if (isAdminPage) {
             localStorage.setItem("gsra_admin_seen_at", new Date().toISOString());
@@ -139,18 +146,21 @@ const initAuthNav = async () => {
         link.classList.toggle("nav-unread-glow", hasNews);
     };
     const showAdminLink = async (userId) => {
-        const { data } = await client.from("profiles").select("role").eq("id", userId).maybeSingle();
-        const nav = document.querySelector("header nav");
-        // Admins und Moderatoren sehen den Moderationsbereich
+        const { data } = await client.from("profiles").select("role, username, avatar_url").eq("id", userId).maybeSingle();
+        fillAccountButton(data);
+        // Admins und Moderatoren sehen den Moderationsbereich – im Profil-Menü
+        const menu = document.querySelector(".gsra-account-menu") || document.querySelector("header nav");
         isAdmin = ["admin", "moderator"].includes(data?.role);
-        if (!isAdmin || !nav) return;
-        let adminLink = nav.querySelector('a[href="admin.html"]');
+        if (!isAdmin || !menu) return;
+        let adminLink = menu.querySelector('a[href="admin.html"]');
         if (!adminLink) {
             adminLink = document.createElement("a");
             adminLink.href = "admin.html";
-            nav.insertBefore(adminLink, loginNavBtn || logoutBtn || null);
+            adminLink.setAttribute("role", "menuitem");
+            menu.insertBefore(adminLink, logoutBtn && menu.contains(logoutBtn) ? logoutBtn : null);
         }
-        adminLink.textContent = data.role === "admin" ? "Admin" : "Moderation";
+        adminLink.innerHTML = '<i class="fa-solid fa-shield-halved"></i> ';
+        adminLink.append(data.role === "admin" ? "Admin" : "Moderation");
         checkAdminNews();
         // Neue Meldungen live (wie beim Messenger) – auf der Admin-Seite wird die Liste gleich aufgefrischt
         client
@@ -492,7 +502,8 @@ const LOGIN_REQUIRED_TEXTS = {
 };
 
 // Seiten ohne Anmelde-Pflicht (Startseite, Login, Abos/Preise und Rechtstexte)
-const PUBLIC_PAGES = ["", "index", "login", "passwort-neu", "abo", "kuendigen", "impressum", "datenschutz", "nutzungsbedingungen"];
+// Seiten ohne Anmeldung (Wissen ist für alle lesbar, auch für Suchmaschinen)
+const PUBLIC_PAGES = ["", "index", "login", "passwort-neu", "abo", "kuendigen", "impressum", "datenschutz", "nutzungsbedingungen", "hilfe", "nachschlagewerk", "unterstuetzen"];
 
 // Abo-Stufen der GSRA: Paddock (kostenlos), Pole (Premium), Alliance (Team) – Abzeichen in Profilen und beim Verkäufer
 const GSRA_PLANS = {
@@ -576,6 +587,125 @@ function addSiteFooter() {
     document.body.appendChild(footer);
 }
 
+// =========================================
+// Hauptnavigation – EINE Liste für alle Seiten (Entscheidung 22.11.: Themen-Menüs)
+// Neue Unterseite = eine Zeile hier. „bald: true“ zeigt sie schon im Menü, aber noch nicht anklickbar.
+// =========================================
+const GSRA_NAV = [
+    { label: "Home", href: "index.html" },
+    // Messenger als eigener Hauptpunkt (Wunsch 22.11.); neue Nachrichten zeigt ein dezenter Punkt am Wort
+    { label: "Messenger", href: "messenger.html", id: "messengerNavBtn" },
+    { label: "Community", items: [
+        { label: "Rennkalender", href: "kalender.html", icon: "fa-flag-checkered", text: "Events, Countdown, Server-Passwörter" },
+        { label: "Videos", icon: "fa-film", text: "Rennen, Onboards und Tutorials", bald: true }
+    ] },
+    { label: "Garage", items: [
+        { label: "Setups", href: "setups.html", icon: "fa-sliders", text: "Setup Hub für alle Simulationen" },
+        { label: "Stint-Planer", icon: "fa-gas-pump", text: "Sprit, Stints und Boxenstopps planen", bald: true },
+        { label: "Telemetrie", icon: "fa-chart-line", text: "Runden vergleichen und schneller werden", bald: true },
+        { label: "Liveries", icon: "fa-palette", text: "Designs teilen und finden", bald: true }
+    ] },
+    { label: "Marktplatz", href: "marktplatz.html" },
+    { label: "Coaching", href: "coaching.html" },
+    { label: "Wissen", items: [
+        { label: "Nachschlagewerk", href: "nachschlagewerk.html", icon: "fa-book", text: "Motorsport- und Physik-Begriffe" },
+        { label: "Hilfe-Center", href: "hilfe.html", icon: "fa-circle-question", text: "So funktioniert die GSRA" }
+    ] }
+];
+// Profil-Menü (nur angemeldet); Moderation/Admin kommt bei Bedarf dazu
+const GSRA_ACCOUNT_MENU = [
+    { label: "Dashboard", href: "dashboard.html", icon: "fa-gauge-high" },
+    { label: "Abo", href: "abo.html", icon: "fa-crown" },
+    { label: "Unterstützen", href: "unterstuetzen.html", icon: "fa-heart" }
+];
+
+const navEscape = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[c]);
+
+function buildMainNav() {
+    const header = document.querySelector("header");
+    const nav = header?.querySelector("nav");
+    if (!header || !nav || nav.dataset.built) return;
+    nav.dataset.built = "1";
+    nav.classList.add("gsra-nav");
+    nav.setAttribute("aria-label", "Hauptnavigation");
+    const page = currentPageName() || "index";
+    const isHere = (href) => href && href.replace(/\.html$/, "") === page;
+
+    const entry = (it) => it.bald
+        ? `<span class="gsra-nav-item soon" aria-disabled="true"><span class="gsra-nav-item-icon"><i class="fa-solid ${it.icon}"></i></span>
+             <span class="gsra-nav-item-text"><strong>${navEscape(it.label)} <em>Bald</em></strong><small>${navEscape(it.text)}</small></span></span>`
+        : `<a class="gsra-nav-item${isHere(it.href) ? " active" : ""}" role="menuitem" href="${it.href}"${isHere(it.href) ? ' aria-current="page"' : ""}>
+             <span class="gsra-nav-item-icon"><i class="fa-solid ${it.icon}"></i></span>
+             <span class="gsra-nav-item-text"><strong>${navEscape(it.label)}</strong><small>${navEscape(it.text)}</small></span></a>`;
+
+    nav.innerHTML = GSRA_NAV.map((g, i) => {
+        if (!g.items) return `<a href="${g.href}"${g.id ? ` id="${g.id}"` : ""} class="gsra-nav-link${isHere(g.href) ? " active" : ""}"${isHere(g.href) ? ' aria-current="page"' : ""}>${navEscape(g.label)}${g.id === "messengerNavBtn" ? '<span class="gsra-nav-badge" aria-hidden="true"></span><span class="sr-only gsra-nav-badge-text"> – neue Nachrichten</span>' : ""}</a>`;
+        const active = g.items.some(it => isHere(it.href));
+        return `<div class="gsra-nav-group">
+            <button type="button" class="gsra-nav-trigger${active ? " active" : ""}" aria-expanded="false" aria-controls="gsraNavMenu${i}">${navEscape(g.label)} <i class="fa-solid fa-chevron-down"></i></button>
+            <div class="gsra-nav-menu" id="gsraNavMenu${i}" role="menu">${g.items.map(entry).join("")}</div>
+        </div>`;
+    }).join("");
+
+    // Rechts: Suche (src/suche.ts), Hilfe, Messenger, Login bzw. Profil-Menü
+    const tools = document.createElement("div");
+    tools.className = "gsra-nav-tools";
+    tools.innerHTML = `
+        <a href="hilfe.html" class="gsra-nav-icon gsra-help-btn${isHere("hilfe.html") ? " active" : ""}" title="Hilfe-Center" aria-label="Hilfe-Center"><i class="fa-solid fa-question"></i></a>
+        <a href="login.html" class="login-btn" id="loginNavBtn">Login</a>
+        <div class="gsra-nav-group gsra-account" hidden>
+            <button type="button" class="gsra-account-btn" aria-expanded="false" aria-controls="gsraAccountMenu" aria-label="Profil-Menü">
+                <span class="gsra-account-avatar"><i class="fa-solid fa-user"></i></span><i class="fa-solid fa-chevron-down"></i>
+            </button>
+            <div class="gsra-nav-menu gsra-account-menu" id="gsraAccountMenu" role="menu">
+                <div class="gsra-account-name"></div>
+                ${GSRA_ACCOUNT_MENU.map(it => `<a role="menuitem" href="${it.href}"${isHere(it.href) ? ' class="active"' : ""}><i class="fa-solid ${it.icon}"></i> ${navEscape(it.label)}</a>`).join("")}
+                <button type="button" id="logoutBtn" role="menuitem"><i class="fa-solid fa-right-from-bracket"></i> Abmelden</button>
+            </div>
+        </div>`;
+    nav.insertAdjacentElement("afterend", tools);
+    // Die Suche kann schon vor der Navigation entstanden sein – dann nach rechts zu den Werkzeugen holen
+    const search = header.querySelector(".gsra-search-btn");
+    if (search) tools.prepend(search);
+
+    // Aufklappen: Maus (Desktop) über CSS, Klick und Tastatur für alle Geräte
+    const groups = () => [...header.querySelectorAll(".gsra-nav-group")];
+    const close = (except) => groups().forEach(g => {
+        if (g === except) return;
+        g.classList.remove("open");
+        g.querySelector("button[aria-expanded]")?.setAttribute("aria-expanded", "false");
+    });
+    header.addEventListener("click", (e) => {
+        const btn = /** @type {Element} */ (e.target).closest(".gsra-nav-trigger, .gsra-account-btn");
+        if (!btn) return;
+        const group = btn.closest(".gsra-nav-group");
+        const open = !group.classList.contains("open");
+        close(group);
+        group.classList.toggle("open", open);
+        btn.setAttribute("aria-expanded", String(open));
+    });
+    document.addEventListener("click", (e) => { if (!/** @type {Element} */ (e.target).closest?.(".gsra-nav-group")) close(null); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(null); });
+}
+
+// Profilbild und Name im Profil-Menü
+function fillAccountButton(profile) {
+    const avatar = document.querySelector(".gsra-account-avatar");
+    const name = document.querySelector(".gsra-account-name");
+    if (name) name.textContent = profile?.username || "Dein Konto";
+    if (!avatar) return;
+    const url = String(profile?.avatar_url || "");
+    if (/^https:\/\//i.test(url)) {
+        const img = document.createElement("img");
+        img.src = url;
+        img.alt = "";
+        img.referrerPolicy = "no-referrer";
+        avatar.replaceChildren(img);
+    } else if (profile?.username) {
+        avatar.textContent = profile.username.trim().charAt(0).toUpperCase();
+    }
+}
+
 // Handy: Menü-Knopf blendet die Navigation ein und aus (siehe style.css, bis 900 px Breite)
 function addNavToggle() {
     const header = document.querySelector("header");
@@ -594,7 +724,8 @@ function addNavToggle() {
     };
     setOpen(false);
     toggle.addEventListener("click", () => setOpen(!header.classList.contains("nav-open")));
-    nav.addEventListener("click", (e) => { if (e.target.closest("a, button")) setOpen(false); });
+    // Links schließen das Menü; die Themen-Knöpfe klappen nur ihre Gruppe auf
+    nav.addEventListener("click", (e) => { if (e.target.closest("a")) setOpen(false); });
     document.addEventListener("click", (e) => { if (!header.contains(/** @type {Node} */ (e.target))) setOpen(false); });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") setOpen(false); });
 }

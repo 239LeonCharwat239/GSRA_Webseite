@@ -4,14 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Physik-Nachschlagewerk - GSRA</title>
+    <meta name="description" content="Motorsport- und Physik-Nachschlagewerk der GSRA: Fahrwerk, Aerodynamik, Reifen, Bremsen, Antrieb, Fahrtechnik und Renntaktik für Simracer verständlich erklärt.">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha256-7jvo3hkrl8sdc9HpXWuCux9rZYwPl8TvdX/DMZlu09M=" crossorigin="anonymous"></script>
     <script src="supabase-client.js"></script>
     <script src="fehler-monitor.js"></script>
     <script src="auth-nav.js"></script>
-</head>     
-<body>
+</head>
+<body data-wissen="nachschlagewerk">
 
 <header>
     <div class="logo-slogan-container">
@@ -19,19 +20,13 @@
             <img src="GSRA_Logo_ohne Hintergrund.png" alt="GSRA Logo" class="logo">
         </a>
         <div class="header-slogan">
-            <span class="text-blue">UNITED BY SPEED.</span> 
+            <span class="text-blue">UNITED BY SPEED.</span>
             <span class="text-yellow">DRIVEN GLOBALLY.</span>
         </div>
     </div>
-
+    <!-- Die Navigation baut auth-nav.js aus einer zentralen Liste (GSRA_NAV) -->
     <nav>
         <a href="index.html">Home</a>
-        <a href="marktplatz.html">Marktplatz</a>
-        <a href="setups.html">Setups</a>
-        <a href="coaching.html">Coaching</a>
-        <a href="nachschlagewerk.html" class="active">Nachschlagewerk</a>
-        <a href="kalender.html">Rennkalender</a>
-        <a href="dashboard.html">Dashboard</a>
         <a href="messenger.html">Messenger</a>
         <a href="login.html" class="login-btn" id="loginNavBtn">Login</a>
         <button id="logoutBtn" class="login-btn" style="display: none;">Logout</button>
@@ -39,46 +34,24 @@
 </header>
 
     <main class="container">
-        <!-- Seitenkopf -->
         <section class="hero-section">
             <h1 class="hero-title">Motorsport- &amp; Physik-<span class="text-blue">Nachschlagewerk</span></h1>
-            <p class="hero-subtitle">Technische Fachbegriffe, physikalische Zusammenhänge und Fahrzeugkomponenten präzise erklärt für den optimalen Setup- und Fahrstil-Erfolg.</p>
+            <p class="hero-subtitle">Fachbegriffe verständlich erklärt – mit Praxis-Tipps für Setup und Fahrstil.</p>
         </section>
 
-        <!-- Such- oder Filterleiste -->
-        <section style="margin-bottom: 30px;">
-            <div style="background-color: var(--gray-light); padding: 15px; border-radius: 6px; border: 1.5px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-                <span style="font-weight: bold; color: var(--text-dark);">Kategorien:</span>
-                <span style="color: var(--accent-blue); cursor: pointer; font-weight: bold;">Alle</span>
-                <span style="color: #666; cursor: pointer;">Fahrwerk</span>
-                <span style="color: #666; cursor: pointer;">Aerodynamik</span>
-                <span style="color: #666; cursor: pointer;">Reifen & Grip</span>
-                <span style="color: #666; cursor: pointer;">Telemetrie</span>
-            </div>
+        <section class="wissen-werkzeuge">
+            <label class="wissen-suchfeld">
+                <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                <input type="search" id="wissenSuche" maxlength="60" autocomplete="off" placeholder="Begriff suchen, z. B. „Untersteuern“ oder „Camber“" aria-label="Nachschlagewerk durchsuchen">
+            </label>
+            <div class="wissen-chips" id="wissenFilter" role="group" aria-label="Kategorien"></div>
+            <p class="wissen-zahl" id="wissenZahl"></p>
         </section>
 
-        <!-- Grid für Fachbegriffe -->
-        <section style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
-            <div style="background-color: var(--gray-light); padding: 25px; border-radius: 6px; border: 1.5px solid var(--border-color);">
-                <div style="font-size: 14px; color: var(--accent-blue); font-weight: bold; margin-bottom: 5px;">[Kategorie]</div>
-                <h3 style="margin-bottom: 10px; font-size: 18px; color: var(--text-dark);">[Fachbegriff / Bauteil]</h3>
-                <p style="font-size: 14px; color: #555; line-height: 1.5;">Präzise Definition, physikalische Auswirkung im Grenzbereich und direkte Relevanz für das Setup der jeweiligen Simulation.</p>
-            </div>
-
-            <div style="background-color: var(--gray-light); padding: 25px; border-radius: 6px; border: 1.5px solid var(--border-color);">
-                <div style="font-size: 14px; color: var(--accent-blue); font-weight: bold; margin-bottom: 5px;">[Kategorie]</div>
-                <h3 style="margin-bottom: 10px; font-size: 18px; color: var(--text-dark);">[Fachbegriff / Bauteil]</h3>
-                <p style="font-size: 14px; color: #555; line-height: 1.5;">Präzise Definition, physikalische Auswirkung im Grenzbereich und direkte Relevanz für das Setup der jeweiligen Simulation.</p>
-            </div>
-
-            <div style="background-color: var(--gray-light); padding: 25px; border-radius: 6px; border: 1.5px solid var(--border-color);">
-                <div style="font-size: 14px; color: var(--accent-blue); font-weight: bold; margin-bottom: 5px;">[Kategorie]</div>
-                <h3 style="margin-bottom: 10px; font-size: 18px; color: var(--text-dark);">[Fachbegriff / Bauteil]</h3>
-                <p style="font-size: 14px; color: #555; line-height: 1.5;">Präzise Definition, physikalische Auswirkung im Grenzbereich und direkte Relevanz für das Setup der jeweiligen Simulation.</p>
-            </div>
-        </section>
+        <section id="wissenListe" class="wissen-liste begriffe" aria-live="polite"></section>
     </main>
 
+    <script type="module" src="src/wissen.ts"></script>
     <script type="module" src="src/suche.ts"></script>
 </body>
 </html>

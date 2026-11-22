@@ -12548,3 +12548,355 @@ body.gsra-search-open { overflow: hidden; }
 @media (max-width: 600px) {
     .gsra-attach-menu { grid-template-columns: repeat(3, 1fr); width: min(340px, calc(100vw - 24px)); }
 }
+
+/* =========================================
+   HAUPTNAVIGATION MIT THEMEN-MENÜS (auth-nav.js → GSRA_NAV, Entscheidung 22.11.)
+========================================= */
+header .gsra-nav { flex: 1; flex-wrap: nowrap; justify-content: center; gap: 4px; }
+.gsra-nav .gsra-nav-link, .gsra-nav-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 12px;
+    background: none;
+    border: none;
+    border-radius: 8px;
+    color: var(--text-light);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: color 0.2s, background 0.2s;
+}
+.gsra-nav .gsra-nav-link::after { bottom: 2px; left: 12px; }
+.gsra-nav .gsra-nav-link:hover::after, .gsra-nav .gsra-nav-link.active::after { width: calc(100% - 24px); }
+.gsra-nav-trigger i { font-size: 9px; opacity: 0.7; transition: transform 0.2s; }
+.gsra-nav-trigger:hover, .gsra-nav-trigger.active, .gsra-nav-group.open > .gsra-nav-trigger { color: var(--gsra-blue); }
+.gsra-nav-group.open > .gsra-nav-trigger i { transform: rotate(180deg); }
+.gsra-nav-group { position: relative; }
+.gsra-nav-group[hidden], .gsra-nav-icon[hidden] { display: none !important; }
+.gsra-nav-menu {
+    position: absolute;
+    top: calc(100% + 12px);
+    left: 50%;
+    z-index: 1100;
+    display: none;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 290px;
+    padding: 8px;
+    background: #12141a;
+    border: 1px solid rgba(0, 85, 255, 0.45);
+    border-top: 3px solid var(--gsra-yellow);
+    border-radius: 12px;
+    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.6), var(--blue-glow);
+    transform: translateX(-50%);
+    text-align: left;
+}
+/* Brücke, damit das Menü beim Hinüberfahren mit der Maus nicht zuklappt */
+.gsra-nav-menu::before { content: ""; position: absolute; top: -16px; left: 0; right: 0; height: 16px; }
+@media (hover: hover) and (min-width: 901px) {
+    .gsra-nav-group:hover > .gsra-nav-menu { display: flex; }
+}
+.gsra-nav-group.open > .gsra-nav-menu { display: flex; }
+.gsra-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 10px;
+    border-radius: 9px;
+    color: #fff;
+    text-decoration: none;
+    text-transform: none;
+    letter-spacing: 0;
+}
+.gsra-nav .gsra-nav-item::after, .gsra-account-menu a::after { display: none; }
+a.gsra-nav-item:hover, a.gsra-nav-item.active { background: rgba(0, 85, 255, 0.14); color: #fff; }
+.gsra-nav-item-icon {
+    flex: 0 0 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 204, 0, 0.08);
+    border: 1px solid rgba(255, 204, 0, 0.28);
+    border-radius: 9px;
+    color: var(--gsra-yellow);
+}
+.gsra-nav-item-text { display: flex; flex-direction: column; gap: 2px; }
+.gsra-nav-item-text strong { font-size: 14px; font-weight: 800; }
+.gsra-nav-item-text small { color: var(--text-muted); font-size: 12px; font-weight: 500; }
+.gsra-nav-item.soon { opacity: 0.5; cursor: default; }
+.gsra-nav-item.soon em {
+    margin-left: 4px;
+    padding: 1px 6px;
+    background: rgba(0, 85, 255, 0.2);
+    border-radius: 6px;
+    color: #9ab8ff;
+    font-size: 10px;
+    font-style: normal;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+/* Rechts: Suche, Hilfe, Messenger, Login / Profil */
+.gsra-nav-tools { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+header .gsra-nav-tools .gsra-search-btn { margin: 0; }
+.gsra-nav-icon, .gsra-account-btn {
+    position: relative;
+    flex-shrink: 0; /* nie zusammendrücken (sonst wird der Kreis oval) */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 50%;
+    color: #fff;
+    font-size: 15px;
+    text-decoration: none;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s, box-shadow 0.2s;
+}
+.gsra-nav-icon:hover, .gsra-nav-icon.active, .gsra-account-btn:hover, .gsra-account.open .gsra-account-btn {
+    border-color: var(--gsra-yellow);
+    color: var(--gsra-yellow);
+    box-shadow: var(--yellow-glow);
+}
+.gsra-nav-icon.nav-unread-glow { border-color: #ff4d4d; color: #ff6b6b; box-shadow: 0 0 12px rgba(255, 77, 77, 0.7); }
+.gsra-nav-icon.nav-unread-glow::after {
+    content: "";
+    position: absolute;
+    top: 1px;
+    right: 1px;
+    width: 10px;
+    height: 10px;
+    background: #ff4d4d;
+    border: 2px solid #000;
+    border-radius: 50%;
+}
+.gsra-account-btn { width: auto; gap: 6px; padding: 2px 10px 2px 2px; border-radius: 22px; }
+.gsra-account-btn > i { font-size: 9px; opacity: 0.7; }
+.gsra-account-avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    overflow: hidden;
+    background: linear-gradient(135deg, var(--gsra-blue), #001f66);
+    border-radius: 50%;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 800;
+}
+.gsra-account-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.gsra-account:has(a.nav-unread-glow) .gsra-account-btn { border-color: #ff4d4d; box-shadow: 0 0 12px rgba(255, 77, 77, 0.7); }
+.gsra-account-menu { left: auto; right: 0; min-width: 230px; transform: none; }
+.gsra-account-name { padding: 6px 10px 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); color: var(--gsra-yellow); font-weight: 800; }
+.gsra-account-menu a, .gsra-account-menu #logoutBtn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    text-transform: none;
+    letter-spacing: 0;
+}
+.gsra-account-menu a i, .gsra-account-menu #logoutBtn i { width: 18px; color: var(--gsra-yellow); text-align: center; }
+.gsra-account-menu a:hover, .gsra-account-menu a.active { background: rgba(0, 85, 255, 0.14); }
+.gsra-account-menu a.nav-unread-glow { color: #ff6b6b !important; }
+/* Abmelden im Menü: schlicht statt gelber Knopf */
+header .gsra-account-menu #logoutBtn {
+    margin-top: 4px;
+    padding: 9px 10px !important;
+    background: transparent !important;
+    border: none !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 0 0 8px 8px !important;
+    color: #ff8080 !important;
+    font-size: 14px !important;
+    text-transform: none !important;
+    letter-spacing: 0 !important;
+    box-shadow: none !important;
+    transform: none !important;
+}
+header .gsra-account-menu #logoutBtn i { color: #ff8080; }
+header .gsra-account-menu #logoutBtn:hover { background: rgba(255, 77, 77, 0.1) !important; }
+
+/* Mittlere Breiten: Slogan ausblenden, damit die Menüs Platz haben */
+@media (min-width: 901px) and (max-width: 1280px) {
+    header .header-slogan { display: none; }
+    .gsra-nav .gsra-nav-link, .gsra-nav-trigger { padding: 9px 8px; font-size: 12px; letter-spacing: 0.6px; }
+}
+
+/* Handy und Tablet: Themen werden zu aufklappbaren Abschnitten im Menü */
+@media (max-width: 900px) {
+    header .gsra-nav-tools { order: 2; margin-left: auto; gap: 6px; }
+    header .nav-toggle { order: 3; margin-left: 6px; }
+    header .gsra-help-btn { display: none; }
+    header .gsra-nav-tools .login-btn { padding: 7px 12px !important; font-size: 12px !important; }
+    header .gsra-nav { justify-content: flex-start; }
+    header .gsra-nav .gsra-nav-link, header .gsra-nav-trigger {
+        justify-content: space-between;
+        width: 100%;
+        padding: 13px 2px;
+        border-bottom: 1px solid var(--border-subtle);
+        border-radius: 0;
+        font-size: 14px;
+    }
+    header .gsra-nav-group { width: 100%; }
+    header .gsra-nav-menu {
+        position: static;
+        min-width: 0;
+        margin: 6px 0 10px;
+        padding: 4px;
+        transform: none;
+        box-shadow: none;
+        border-top-width: 1px;
+    }
+    header .gsra-nav-menu::before { display: none; }
+    header .gsra-account-menu { position: absolute; top: calc(100% + 10px); right: 0; left: auto; min-width: 230px; box-shadow: 0 18px 45px rgba(0, 0, 0, 0.6); }
+}
+@media (max-width: 420px) {
+    .gsra-account-btn > i { display: none; }
+    .gsra-account-btn { padding: 2px; }
+}
+
+/* Messenger als Hauptpunkt: neue Nachrichten = dezenter roter Punkt am Wort (statt roter Leuchtschrift) */
+.gsra-nav a.gsra-nav-link.nav-unread-glow { color: var(--text-light) !important; text-shadow: none !important; }
+.gsra-nav a.gsra-nav-link.nav-unread-glow:hover, .gsra-nav a.gsra-nav-link.nav-unread-glow.active { color: var(--gsra-blue) !important; }
+.gsra-nav a.gsra-nav-link.nav-unread-glow::after { background-color: var(--gsra-blue) !important; }
+.gsra-nav a.gsra-nav-link.nav-unread-glow:not(:hover):not(.active)::after { width: 0 !important; }
+.gsra-nav-badge {
+    display: none;
+    width: 8px;
+    height: 8px;
+    margin-left: 6px;
+    background: #ff4d4d;
+    border-radius: 50%;
+    box-shadow: 0 0 0 3px rgba(255, 77, 77, 0.18);
+    vertical-align: super;
+    animation: gsraBadgePulse 2.4s ease-in-out infinite;
+}
+.gsra-nav-link.nav-unread-glow .gsra-nav-badge { display: inline-block; }
+.gsra-nav-badge-text { display: none; }
+.gsra-nav-link.nav-unread-glow .gsra-nav-badge-text { display: inline; }
+@keyframes gsraBadgePulse { 0%, 100% { box-shadow: 0 0 0 3px rgba(255, 77, 77, 0.18); } 50% { box-shadow: 0 0 0 5px rgba(255, 77, 77, 0.06); } }
+@media (prefers-reduced-motion: reduce) { .gsra-nav-badge { animation: none; } }
+.sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+@media (max-width: 900px) {
+    /* Handy: der Menü-Knopf zeigt neue Nachrichten mit einem kleinen Punkt statt rotem Leuchten */
+    header:has(nav a.nav-unread-glow) .nav-toggle { position: relative; border-color: rgba(255, 255, 255, 0.15); box-shadow: none; }
+    header:has(nav a.nav-unread-glow) .nav-toggle span { background: #fff; }
+    header:has(nav a.nav-unread-glow) .nav-toggle::after {
+        content: "";
+        position: absolute;
+        top: -3px;
+        right: -3px;
+        width: 11px;
+        height: 11px;
+        background: #ff4d4d;
+        border: 2px solid #000;
+        border-radius: 50%;
+    }
+    header .gsra-nav .gsra-nav-link .gsra-nav-badge { vertical-align: middle; }
+}
+
+/* =========================================
+   WISSEN: HILFE-CENTER UND NACHSCHLAGEWERK (src/wissen.ts)
+========================================= */
+.wissen-werkzeuge { display: flex; flex-direction: column; gap: 14px; max-width: 980px; margin: 0 auto 26px; width: 100%; }
+.wissen-suchfeld {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 13px 16px;
+    background: #12141a;
+    border: 1px solid rgba(0, 85, 255, 0.45);
+    border-radius: 12px;
+    box-shadow: var(--blue-glow);
+}
+.wissen-suchfeld i { color: var(--gsra-yellow); font-size: 17px; }
+.wissen-suchfeld input { flex: 1; min-width: 0; background: transparent; border: none; outline: none; color: #fff; font-family: inherit; font-size: 16px; }
+.wissen-suchfeld input::placeholder { color: #6d7280; }
+.wissen-suchfeld:focus-within { border-color: var(--gsra-yellow); }
+.wissen-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.wissen-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 13px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 20px;
+    color: #dfe3ea;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s, color 0.2s;
+}
+.wissen-chip i { color: var(--gsra-yellow); font-size: 12px; }
+.wissen-chip:hover { border-color: rgba(255, 204, 0, 0.6); }
+.wissen-chip.active { background: var(--gsra-yellow); border-color: var(--gsra-yellow); color: #000; }
+.wissen-chip.active i { color: #000; }
+.wissen-zahl { margin: 0; text-align: center; color: var(--text-muted); font-size: 13px; }
+.wissen-liste { display: flex; flex-direction: column; gap: 22px; max-width: 980px; margin: 0 auto; width: 100%; text-align: left; }
+.wissen-liste.begriffe { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; align-items: start; }
+.wissen-gruppe { display: flex; flex-direction: column; gap: 8px; }
+.wissen-gruppe-titel { display: flex; align-items: center; gap: 10px; margin: 0 0 4px; color: #fff; font-size: 16px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; }
+.wissen-gruppe-titel i { color: var(--gsra-yellow); }
+.wissen-gruppe-titel span { padding: 1px 8px; background: rgba(0, 85, 255, 0.18); border-radius: 10px; color: #9ab8ff; font-size: 11px; }
+.wissen-eintrag {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-left: 3px solid var(--gsra-blue);
+    border-radius: 10px;
+    transition: border-color 0.2s, box-shadow 0.3s;
+}
+.wissen-eintrag[open] { border-left-color: var(--gsra-yellow); }
+.wissen-eintrag.wissen-markiert { box-shadow: 0 0 0 2px var(--gsra-yellow), var(--yellow-glow); }
+.wissen-eintrag summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 14px 16px;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 700;
+    list-style: none;
+    cursor: pointer;
+}
+.wissen-eintrag summary::-webkit-details-marker { display: none; }
+.wissen-eintrag summary > i { flex-shrink: 0; color: var(--text-muted); font-size: 12px; transition: transform 0.2s; }
+.wissen-eintrag[open] summary > i { transform: rotate(180deg); color: var(--gsra-yellow); }
+.wissen-eintrag summary:hover { color: var(--gsra-yellow); }
+.wissen-inhalt { padding: 0 16px 14px; color: #c9cdd6; font-size: 14px; line-height: 1.6; }
+.wissen-inhalt p { margin: 0 0 8px; }
+.wissen-links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
+.wissen-link { display: inline-flex; align-items: center; gap: 6px; color: var(--gsra-yellow); font-weight: 700; font-size: 13px; text-decoration: none; }
+.wissen-link:hover { text-decoration: underline; }
+.begriff-kopf { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.begriff-kategorie { color: #6cb8ff; font-size: 11px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
+.begriff-name { color: #fff; font-size: 17px; font-weight: 900; }
+.begriff-name em { color: var(--text-muted); font-size: 13px; font-style: normal; font-weight: 600; }
+.begriff-kurz { color: #b8bdc8; font-size: 13px; font-weight: 500; line-height: 1.45; }
+.begriff-tipp { display: block; padding: 10px 12px; background: rgba(255, 204, 0, 0.07); border: 1px solid rgba(255, 204, 0, 0.25); border-radius: 8px; }
+.begriff-tipp i { margin-right: 6px; color: var(--gsra-yellow); }
+.begriff-tipp strong { color: var(--gsra-yellow); }
+.wissen-leer { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 40px 16px; color: var(--text-muted); text-align: center; }
+.wissen-leer i { font-size: 30px; color: var(--gsra-blue); }
+.wissen-leer strong { color: #fff; font-size: 16px; }
+.wissen-fuss { max-width: 980px; margin: 30px auto 0; color: var(--text-muted); font-size: 14px; text-align: center; }
+.wissen-fuss i { color: var(--gsra-yellow); margin-right: 6px; }
+.wissen-fuss a { color: var(--gsra-yellow); }
