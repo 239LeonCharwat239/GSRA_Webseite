@@ -494,6 +494,12 @@ function bindHubControls() {
     }));
     document.getElementById('sortSetups').addEventListener('change', (e) => { hubFilter.sort = e.target.value; renderSetups(); });
     let timer = null;
+    // Aus der globalen Suche: setups.html?suche=… öffnet den Setup Hub schon gefiltert
+    const linkedSearch = (new URLSearchParams(window.location.search).get('suche') || '').slice(0, 60);
+    if (linkedSearch) {
+        /** @type {HTMLInputElement} */ (document.getElementById('searchSetup')).value = linkedSearch;
+        hubFilter.search = linkedSearch.trim().toLowerCase();
+    }
     document.getElementById('searchSetup').addEventListener('input', (e) => {
         clearTimeout(timer);
         timer = setTimeout(() => { hubFilter.search = e.target.value.trim().toLowerCase(); renderSetups(); }, 200);

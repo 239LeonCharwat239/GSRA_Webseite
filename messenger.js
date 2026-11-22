@@ -987,10 +987,59 @@ async function fetchUserName(userId) {
     }
 }
 
+// Einen Chat aus der Liste öffnen – genau wie ein Klick in der Chatliste
+function openChatById(chatId) {
+    const chat = allChatsCache.find(c => String(c.id) === String(chatId));
+    if (!chat) return false;
+    const isOfficial = chat.id === officialForumChatId || Boolean(chat.title && chat.title.includes("Official"));
+    const isForumOrGroup = isOfficial || (chat.title !== null && chat.user1_id === chat.user2_id);
+    const otherUserId = chat.user1_id === currentUser.id ? chat.user2_id : chat.user1_id;
+    activeChatId = chat.id;
+    markChatAsRead(chat.id);
+    if (waWelcomeScreen) waWelcomeScreen.style.display = "none";
+    if (waChatActivePane) waChatActivePane.style.display = "flex";
+    if (isForumOrGroup) openForumChat(chat);
+    else openChat(chat.id, userNamesCache[otherUserId] || "Fahrer", chat.title);
+    renderChatsList();
+    return true;
+}
+
+// Aus der globalen Suche: Chat öffnen und zur Nachricht springen bzw. die Vorschau eines öffentlichen Forums
+async function openFromSearch(urlParams) {
+    const chatParam = urlParams.get("chat");
+    const msgParam = urlParams.get("msg");
+    const forumParam = urlParams.get("forum");
+    if (!chatParam && !forumParam) return false;
+    window.history.replaceState({}, document.title, window.location.pathname);
+    const idOk = (v) => /^[\w-]{1,64}$/.test(v || "");
+    if (chatParam && idOk(chatParam)) {
+        if (!openChatById(chatParam)) {
+            showToast("Dieser Chat ist für dich nicht (mehr) verfügbar.", "info");
+            return true;
+        }
+        if (msgParam && idOk(msgParam)) {
+            // warten, bis der Verlauf geladen ist, dann zur Nachricht (lädt bei Bedarf ältere nach)
+            for (let i = 0; i < 50 && messageWindow.chatId !== chatParam; i++) await new Promise(r => setTimeout(r, 100));
+            await jumpToMessage(msgParam);
+        }
+        return true;
+    }
+    if (forumParam && idOk(forumParam) && typeof openPublicGroupPreview === "function") {
+        if (openChatById(forumParam)) return true; // schon Mitglied
+        const { data } = await (window.supabaseClient || window.supabase).rpc("search_public_groups", { _term: urlParams.get("titel") || "" });
+        const group = (data || []).find(g => String(g.id) === forumParam);
+        if (group) openPublicGroupPreview(group);
+        else showToast("Dieses Forum ist nicht (mehr) öffentlich.", "info");
+        return true;
+    }
+    return true;
+}
+
 async function checkUrlParameters() {
     const supabase = window.supabaseClient || window.supabase;
     if (!supabase || !currentUser?.id) return;
     const urlParams = new URLSearchParams(window.location.search);
+    if (await openFromSearch(urlParams)) return;
     // Aus dem Marktplatz: vollständiges Profil einer Person öffnen (Freundschaft, Melden, Blockieren)
     const profileId = urlParams.get("profil");
     if (profileId) {

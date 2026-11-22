@@ -12282,3 +12282,158 @@ textarea { resize: none !important; }
 @media (max-width: 600px) {
     .home-events-guest { flex-direction: column; align-items: flex-start; }
 }
+
+/* =========================================
+   GLOBALE SUCHE (src/suche.ts, SQL 040)
+========================================= */
+header .gsra-search-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    margin: 0 10px 0 auto; /* rechts, direkt vor dem Menü */
+    flex: 0 0 auto;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 50%;
+    color: #fff;
+    font-size: 15px;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s, box-shadow 0.2s;
+}
+header .gsra-search-btn:hover, header .gsra-search-btn:focus-visible { border-color: var(--gsra-yellow); color: var(--gsra-yellow); box-shadow: var(--yellow-glow); outline: none; }
+body.gsra-search-open { overflow: hidden; }
+.gsra-search {
+    position: fixed;
+    inset: 0;
+    z-index: 10020; /* über Hinweiskarten und Dialogen, unter Auswahllisten */
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 9vh 16px 16px;
+    background: rgba(5, 6, 9, 0.72);
+    backdrop-filter: blur(6px);
+}
+.gsra-search[hidden] { display: none; }
+.gsra-search-panel {
+    display: flex;
+    flex-direction: column;
+    width: min(680px, 100%);
+    max-height: 78vh;
+    background: #12141a;
+    border: 1px solid rgba(0, 85, 255, 0.45);
+    border-top: 3px solid var(--gsra-yellow);
+    border-radius: 14px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), var(--blue-glow);
+    overflow: hidden;
+    text-align: left;
+}
+.gsra-search-bar { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+.gsra-search-bar > i { color: var(--gsra-yellow); font-size: 18px; }
+.gsra-search-bar input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-family: inherit;
+    font-size: 17px;
+    outline: none;
+}
+.gsra-search-bar input::placeholder { color: #6d7280; }
+.gsra-search-bar input::-webkit-search-cancel-button { display: none; }
+.gsra-search-close {
+    width: 32px;
+    height: 32px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+.gsra-search-close:hover { color: #fff; border-color: rgba(255, 255, 255, 0.3); }
+.gsra-search-results { overflow-y: auto; padding: 6px 8px 10px; transition: opacity 0.15s; }
+.gsra-search-results.loading { opacity: 0.55; }
+.gsra-search-group h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 12px 8px 6px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+}
+.gsra-search-group h3 i { color: var(--gsra-blue); }
+.gsra-search-group h3 span {
+    padding: 1px 7px;
+    background: rgba(0, 85, 255, 0.15);
+    border-radius: 10px;
+    color: #9ab8ff;
+    font-size: 10px;
+    letter-spacing: 0;
+}
+.gsra-search-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 10px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    color: #fff;
+    text-decoration: none;
+}
+.gsra-search-item:hover, .gsra-search-item.active { background: rgba(0, 85, 255, 0.12); border-color: rgba(0, 85, 255, 0.4); }
+.gsra-search-icon {
+    flex: 0 0 38px;
+    width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 204, 0, 0.08);
+    border: 1px solid rgba(255, 204, 0, 0.28);
+    border-radius: 10px;
+    color: var(--gsra-yellow);
+    overflow: hidden;
+}
+.gsra-search-icon img { width: 100%; height: 100%; object-fit: cover; }
+.gsra-search-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.gsra-search-text strong, .gsra-search-text small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gsra-search-text strong { font-size: 14px; }
+.gsra-search-text small { color: var(--text-muted); font-size: 12px; }
+.gsra-search-text mark { background: rgba(255, 204, 0, 0.22); color: var(--gsra-yellow); border-radius: 3px; padding: 0 1px; }
+.gsra-search-go { color: #5b6170; font-size: 12px; transition: transform 0.15s, color 0.15s; }
+.gsra-search-item:hover .gsra-search-go, .gsra-search-item.active .gsra-search-go { color: var(--gsra-yellow); transform: translateX(3px); }
+.gsra-search-all { display: inline-flex; align-items: center; gap: 6px; margin: 4px 10px 2px; color: var(--gsra-yellow); font-size: 12px; font-weight: 700; text-decoration: none; }
+.gsra-search-all:hover { text-decoration: underline; }
+.gsra-search-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 34px 16px; text-align: center; color: var(--text-muted); }
+.gsra-search-empty i { font-size: 26px; color: var(--gsra-blue); margin-bottom: 4px; }
+.gsra-search-empty strong { color: #fff; font-size: 15px; }
+.gsra-search-empty span { font-size: 13px; max-width: 420px; }
+.gsra-search-note { margin: 12px 10px 4px; color: var(--text-muted); font-size: 12px; }
+.gsra-search-note a { color: var(--gsra-yellow); }
+.gsra-search-foot { display: flex; gap: 16px; padding: 9px 16px; border-top: 1px solid rgba(255, 255, 255, 0.08); color: #6d7280; font-size: 11px; }
+.gsra-search-foot kbd {
+    display: inline-block;
+    min-width: 18px;
+    margin-right: 3px;
+    padding: 1px 5px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 4px;
+    color: #cfd3dc;
+    font-family: inherit;
+    font-size: 10px;
+    text-align: center;
+}
+@media (max-width: 768px) {
+    .gsra-search { padding: 0; }
+    .gsra-search-panel { width: 100%; max-height: none; height: 100%; border-radius: 0; border-left: none; border-right: none; }
+    .gsra-search-foot { display: none; }
+    header .gsra-search-btn { margin: 0 8px 0 auto; }
+    /* Der Menü-Knopf schiebt sich sonst selbst nach rechts – beide teilen sich dann den Platz und die Lupe steht mittig */
+    header .gsra-search-btn + .nav-toggle { margin-left: 0; }
+}

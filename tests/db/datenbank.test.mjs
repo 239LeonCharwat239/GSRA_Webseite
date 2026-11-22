@@ -3,19 +3,20 @@
 // Ausgangslage: absichtlich offene Altregeln wie in der ursprünglichen Datenbank.
 // Start: im Ordner tests/db „npm install“ (einmalig) und dann „npm test“.
 import { PGlite } from "@electric-sql/pglite";
+import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL] =
-    Array.from({ length: 39 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 39);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL] =
+    Array.from({ length: 40 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 40);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
-const db = new PGlite();
+const db = new PGlite({ extensions: { pg_trgm } }); // pg_trgm: Such-Indizes wie in Supabase (SQL 040)
 
 const U = {
     admin: "10000000-0000-0000-0000-000000000001", anna: "10000000-0000-0000-0000-000000000002",
@@ -2652,6 +2653,91 @@ if (ZAEHLER_SQL && SETUPHUB_SQL) {
     await db.exec(`delete from public.user_bans where reason = 'Test 039'`);
     const fn = await one(`select has_function_privilege('authenticated', 'public.setups_protect_counters()', 'EXECUTE') as ok`);
     check("Schutzfunktion nicht direkt aufrufbar", fn.ok === false, String(fn.ok));
+}
+
+// --- 040: Globale Suche – nur, was die suchende Person auch sonst sehen darf ---
+if (SUCHE_SQL && ZAEHLER_SQL) {
+    const id = (n) => `70000000-0000-0000-0000-0000000004${String(n).padStart(2, "0")}`;
+    const ICH = id(1), PARTNER = id(2), FREMD = id(3);
+    const C1 = id(11), C2 = id(12), GRP = id(13), FOR = id(14);
+    const M = (n) => id(20 + n);
+    await db.exec(`
+      insert into auth.users (id) values ('${ICH}'), ('${PARTNER}'), ('${FREMD}');
+      insert into public.profiles (id, username, gsra_id) values ('${ICH}', 'Sucherin', 904001), ('${PARTNER}', 'Max Verstappen 123', 904002), ('${FREMD}', 'Wolkenfremder', 904003);
+      insert into public.chats (id, user1_id, user2_id, title, is_public) values
+        ('${C1}', '${ICH}', '${PARTNER}', null, false),
+        ('${C2}', '${FREMD}', '${U.anna}', null, false),
+        ('${GRP}', '${FREMD}', '${FREMD}', 'Wolken-Gruppe privat', false),
+        ('${FOR}', '${FREMD}', '${FREMD}', 'Wolken-Forum', true);
+      insert into public.chat_members (chat_id, user_id, role) values ('${GRP}', '${FREMD}', 'admin'), ('${FOR}', '${FREMD}', 'admin') on conflict do nothing;
+      insert into public.messages (id, chat_id, sender_id, text, created_at) values
+        ('${M(1)}', '${C1}', '${PARTNER}', 'Schau dir die Wolke über Spa an', now() - interval '2 hours'),
+        ('${M(2)}', '${C1}', '${PARTNER}', 'Noch eine Wolke (für mich ausgeblendet)', now() - interval '1 hour'),
+        ('${M(3)}', '${C2}', '${FREMD}', 'Geheime Wolke im fremden Chat', now()),
+        ('${M(4)}', '${GRP}', '${FREMD}', 'Wolke in der privaten Gruppe', now()),
+        ('${M(5)}', '${FOR}', '${FREMD}', 'Wolke im Forum (nur für Mitglieder)', now()),
+        ('${M(6)}', '${C1}', '${ICH}', 'Diese Nachricht wurde gelöscht', now());
+      insert into public.message_hides (user_id, message_id) values ('${ICH}', '${M(2)}');
+      insert into public.setups (simulation, car_model, track_name, file_name, file_url, uploader_id) values ('iRacing', 'Porsche 911 GT3 R', 'Wolkenstein', 'w.sto', 'https://x/w.sto', '${FREMD}');
+      insert into public.marketplace (user_id, title, price, status) values ('${FREMD}', 'Wolken-Lenkrad', 100, 'aktiv'), ('${FREMD}', 'Wolken-Pedale', 50, 'verkauft');
+      insert into public.events (title, simulation, track, event_date) values ('Wolkenrennen', 'ACC', 'Monza', now() + interval '1 day'), ('Altes Wolkenrennen', 'ACC', 'Monza', now() - interval '3 days');`);
+    await db.exec(readFileSync(SUCHE_SQL, "utf8"));
+    const ctl40 = await db.exec(readFileSync(SUCHE_SQL, "utf8")); // zweiter Lauf
+    const rows40 = ctl40[ctl40.length - 1].rows;
+    console.log("Kontrolle 040:\n  " + rows40.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+    check("Kontrolle 040: Indizes, Suchfunktion, Rechte", rows40.map(r => r.ergebnis).join(",") === "bereit,bereit,ja", rows40.map(r => r.ergebnis).join(", "));
+
+    // Jeder Suchfehler zählt als eigener Fehler – kein Test soll „aus Versehen“ bestehen
+    const suche = async (uid, begriff) => as(uid, async () => {
+        const r = await q(`select public.gsra_search('${begriff.replace(/'/g, "''")}') as r`);
+        if (r.error) check(`Suche „${begriff}“ ohne Fehler`, false, r.error);
+        return r.error ? { error: r.error } : r.rows[0].r;
+    });
+    const ids = (list) => (list || []).map(x => x.id);
+
+    const ich = await suche(ICH, "Wolke");
+    check("Nachricht aus dem eigenen Chat gefunden (mit Absender und Ausschnitt)",
+        ids(ich.nachrichten).includes(M(1)) && ich.nachrichten.find(n => n.id === M(1))?.sender === "Max Verstappen 123" && /Wolke/.test(ich.nachrichten.find(n => n.id === M(1))?.snippet || ""),
+        JSON.stringify(ich.nachrichten || ich.error));
+    check("Fremde Chats, fremde private Gruppen und Foren ohne Mitgliedschaft: keine Nachrichten",
+        !ids(ich.nachrichten).some(x => [M(3), M(4), M(5)].includes(x)), JSON.stringify(ids(ich.nachrichten)));
+    check("„Für mich gelöscht“ wird nicht gefunden", !ids(ich.nachrichten).includes(M(2)), JSON.stringify(ids(ich.nachrichten)));
+    const geloescht = await suche(ICH, "gelöscht");
+    check("Gelöschte Nachrichten werden nicht gefunden", !ids(geloescht.nachrichten).includes(M(6)), JSON.stringify(ids(geloescht.nachrichten)));
+    check("Öffentliches Forum gefunden (ohne Inhalte), private fremde Gruppe nicht",
+        ids(ich.foren).includes(FOR) && ich.foren.find(f => f.id === FOR)?.is_member === false && !ids(ich.foren).includes(GRP), JSON.stringify(ich.foren));
+    check("Marktplatz ohne verkaufte Inserate", (ich.marktplatz || []).length === 1 && ich.marktplatz[0].title === "Wolken-Lenkrad", JSON.stringify(ich.marktplatz));
+    check("Rennen: nur anstehende", (ich.rennen || []).map(r => r.title).join() === "Wolkenrennen", JSON.stringify(ich.rennen));
+    check("Mitglieder: Name gefunden", ids(ich.mitglieder).includes(FREMD), JSON.stringify(ich.mitglieder));
+    const perId = await suche(ICH, "904002");
+    check("Mitglieder: GSRA-ID gefunden", ids(perId.mitglieder)[0] === PARTNER, JSON.stringify(perId.mitglieder));
+    const tipp = await suche(ICH, "Porche");
+    check("Tippfehler: „Porche“ findet „Porsche“-Setups", (tipp.setups || []).length > 0 && tipp.setups.every(s => /Porsche/.test(s.car_model)),
+        JSON.stringify((tipp.setups || []).map(s => s.car_model)));
+
+    const fremd = await suche(FREMD, "Wolke");
+    check("Die andere Seite findet ihre eigenen Nachrichten, aber nicht die aus meinem Chat",
+        ids(fremd.nachrichten).includes(M(3)) && ids(fremd.nachrichten).includes(M(4)) && !ids(fremd.nachrichten).includes(M(1)), JSON.stringify(ids(fremd.nachrichten)));
+
+    await db.exec(`insert into public.user_blocks (blocker_id, blocked_id) values ('${ICH}', '${PARTNER}')`);
+    const blockiert = await suche(ICH, "Wolke");
+    const blockName = await suche(ICH, "Verstappen");
+    check("Blockierte: weder ihre Nachrichten noch sie selbst", !ids(blockiert.nachrichten).includes(M(1)) && !ids(blockName.mitglieder).includes(PARTNER),
+        JSON.stringify({ n: ids(blockiert.nachrichten), m: ids(blockName.mitglieder) }));
+    await db.exec(`delete from public.user_blocks where blocker_id = '${ICH}'`);
+
+    const gast = await suche(null, "Wolke");
+    check("Gäste: Setups und Marktplatz, aber keine Mitglieder, Nachrichten, Foren oder Rennen",
+        (gast.setups || []).length > 0 && (gast.marktplatz || []).length > 0 && !gast.mitglieder && !gast.nachrichten && !gast.foren && !gast.rennen, JSON.stringify(gast));
+    const kurz = await suche(ICH, "W");
+    check("Ein Zeichen: keine Suche", JSON.stringify(kurz) === "{}", JSON.stringify(kurz));
+    const zwei = await suche(ICH, "Wo");
+    check("Zwei Zeichen: Rubriken ja, Nachrichten erst ab 3 Zeichen", Array.isArray(zwei.setups) && zwei.nachrichten === undefined, JSON.stringify(Object.keys(zwei)));
+    const platzhalter = await suche(ICH, "%%");
+    check("Platzhalter % liefert nicht einfach alles", (platzhalter.setups || []).length === 0 && (platzhalter.marktplatz || []).length === 0 && (platzhalter.mitglieder || []).length === 0,
+        JSON.stringify(platzhalter));
+    const sqlTest = await suche(ICH, "'); drop table public.messages; --");
+    check("Eingaben mit SQL-Zeichen sind harmlos", !sqlTest.error && (await one(`select count(*) as n from public.messages`)).n > 0, sqlTest.error || "");
 }
 
 // --- Konto löschen (Ausbau 3) funktioniert weiterhin, die Stimmen verschwinden mit ---

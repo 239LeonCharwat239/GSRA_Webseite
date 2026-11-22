@@ -82,6 +82,22 @@ for (const seite of seiten) {
   geprueft++;
 }
 
+// Neue TypeScript-Module (src/): immer mit den STRENGEN Regeln (strict) – ohne die lockeren Übergangs-Typen
+// der alten Skripte. So bleibt alles Neue von Anfang an sauber.
+const srcDateien = [];
+const sammle = (ordner) => {
+  for (const e of readdirSync(ordner, { withFileTypes: true })) {
+    if (e.isDirectory()) sammle(join(ordner, e.name));
+    else if (e.name.endsWith(".ts")) srcDateien.push(join(ordner, e.name));
+  }
+};
+try { sammle(join(ROOT, "src")); } catch { /* noch kein src/ */ }
+if (srcDateien.length) {
+  const streng = { ...optionen, strict: true, noImplicitAny: true, strictNullChecks: true, noUnusedParameters: false, moduleResolution: ts.ModuleResolutionKind.Bundler, module: ts.ModuleKind.ESNext };
+  const programm = ts.createProgram(srcDateien, streng);
+  for (const d of ts.getPreEmitDiagnostics(programm)) merke(d, "(TypeScript-Module, streng)");
+}
+
 // Dateien, die keine Seite lädt, einzeln prüfen (sonst blieben sie ungeprüft)
 for (const datei of [...alleDateien].filter((d) => !eingebunden.has(d)).sort()) {
   const programm = ts.createProgram([TYPEN, join(ROOT, datei)], optionen);
@@ -100,5 +116,5 @@ for (const f of liste) {
     console.log(zeile ? `::error file=${datei},line=${zeile},col=${spalte}::${text}` : `::error::${text}`);
   }
 }
-console.log(`\n${geprueft} Seiten, ${eingebunden.size} Skripte geprüft – ${liste.length} Fehler (TypeScript ${ts.version}).`);
+console.log(`\n${geprueft} Seiten, ${eingebunden.size} Skripte und ${srcDateien.length} TypeScript-Module (streng) geprüft – ${liste.length} Fehler (TypeScript ${ts.version}).`);
 process.exit(liste.length ? 1 : 0);
