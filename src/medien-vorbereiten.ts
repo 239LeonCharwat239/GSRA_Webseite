@@ -6,7 +6,8 @@
 //   Handy und Datenvolumen bei Supabase (ein Foto: etwa 50 KB statt 1–3 MB, ein Video: 0 statt einige MB).
 // - Videos über 8 MB oder mit mehr als 1280 px werden auf höchstens 1280 px (720p, H.264) umgerechnet – das ergibt
 //   meist ein Viertel der Größe. Die Umrechnung nutzt die Video-Hardware des Geräts (WebCodecs) über die Bibliothek
-//   „mediabunny“, die erst geladen wird, wenn wirklich ein Video verkleinert werden muss.
+//   „mediabunny“, die erst geladen wird, wenn ein Video vorbereitet wird.
+// - Metadaten (Aufnahmeort, Gerät) werden bei jedem Video entfernt – auch kleine Videos werden dafür neu verpackt.
 // - Die Speicher-Grenze von 50 MB (SQL 032) gilt weiterhin; ein Video, das auch verkleinert größer ist, wird abgelehnt.
 //
 // Der Messenger ist ein klassisches Skript und ruft window.gsraMedienVorbereiten(datei, fortschritt) auf.
@@ -88,13 +89,14 @@ export function videoAnalyse(datei: Blob): Promise<{ vorschau: Blob | null; daue
   });
 }
 
-// Video auf höchstens 1280 px (H.264) umrechnen. null = nicht möglich oder nicht kleiner → Original verwenden.
-export async function videoVerkleinern(datei: File, fortschritt?: (anteil: number) => void): Promise<File | null> {
-  if (typeof VideoEncoder === "undefined" || typeof VideoDecoder === "undefined") return null;
+// Video auf höchstens 1280 px (H.264) umrechnen – oder mit verkleinern = false nur ohne Metadaten neu verpacken.
+// null = nicht möglich (bzw. beim Verkleinern nicht kleiner) → Original verwenden.
+export async function videoVerkleinern(datei: File, fortschritt?: (anteil: number) => void, verkleinern = true): Promise<File | null> {
+  if (verkleinern && (typeof VideoEncoder === "undefined" || typeof VideoDecoder === "undefined")) return null;
   try {
     const { umrechnen } = await import("./video-umrechnen");
-    const ergebnis = await umrechnen(datei, VIDEO_SEITE, fortschritt);
-    if (!ergebnis || ergebnis.byteLength === 0 || ergebnis.byteLength >= datei.size) return null;
+    const ergebnis = await umrechnen(datei, VIDEO_SEITE, fortschritt, verkleinern);
+    if (!ergebnis || ergebnis.byteLength === 0 || (verkleinern && ergebnis.byteLength >= datei.size)) return null;
     const name = `${datei.name.replace(/\.[^.]+$/, "") || "video"}.mp4`;
     return new File([ergebnis], name, { type: "video/mp4", lastModified: Date.now() });
   } catch (err) {
@@ -113,6 +115,9 @@ export async function vorbereiten(original: File, fortschritt?: (anteil: number)
     if (original.size > VIDEO_UMRECHNEN_AB || seite > VIDEO_SEITE || seite === 0) {
       datei = (await videoVerkleinern(original, fortschritt)) ?? original;
     }
+    // Kleine Videos (und solche, die sich nicht verkleinern ließen): ohne Metadaten neu verpacken – Handys speichern
+    // dort oft den Aufnahmeort. Klappt das nicht, bleibt es beim Original.
+    if (datei === original) datei = (await videoVerkleinern(original, fortschritt, false)) ?? original;
     if (datei.size > MAX_UPLOAD) {
       throw new MedienFehler("Das Video ist auch verkleinert noch größer als 50 MB. Bitte kürze es vor dem Senden.");
     }
