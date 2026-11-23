@@ -48,9 +48,14 @@ export const HILFE: HilfeArtikel[] = [
 
   { id: "stintplaner", thema: "start", frage: "Wie nutze ich den Stint-Planer?",
     antwort: ["Unter „Garage“ findest du den Stint-Planer. Gib Renndauer (nach Zeit oder Runden), Rundenzeit, Verbrauch je Runde, Tankgröße und Reserve ein, ergänze die Zeiten für Boxengasse, Tanken, Reifen- und Fahrerwechsel und trage deine Fahrer ein – auf Wunsch mit eigener Rundenzeit.",
-      "Der Planer berechnet daraus sofort jeden Stint mit Rennzeit und echter Uhrzeit, Runden, Kraftstoff, Reifenwechseln und Boxenstopps, dazu die Fahrzeiten je Fahrer. Der Vergleich zeigt, ob sich Kraftstoffsparen lohnt. Über „Link zum Teilen kopieren“ schickst du den kompletten Plan an dein Team.",
-      "Der Stint-Planer ist Teil von Pole und Alliance und befindet sich als Vorschau im Aufbau. Geplant sind unter anderem gespeicherte Pläne im Konto, gemeinsame Teampläne, ein Live-Modus während des Rennens und die automatische Übernahme von Verbrauch und Rundenzeiten aus der Simulation über die GSRA-App."],
+      "Der Planer berechnet daraus sofort jeden Stint mit Rennzeit und echter Uhrzeit, Runden, Kraftstoff, Reifenwechseln und Boxenstopps, dazu die Fahrzeiten je Fahrer. Der Vergleich zeigt, ob sich Kraftstoffsparen lohnt, und die Empfehlungen nennen zum Beispiel, wie viel du pro Runde sparen musst, um einen Stopp zu vermeiden. Den Durchschnittsverbrauch rechnet „Verbrauch messen“ aus deinen Trainingsrunden aus.",
+      "Deine Pläne liegen in deinem Konto und werden automatisch gespeichert. Über „Team“ lädst du Mitglieder mit Pole oder Alliance per GSRA-ID ein – mit der Rolle „ansehen“ oder „bearbeiten“. Änderungen erscheinen bei allen sofort. Im Rennen trägst du unter „Live-Stand“ Rennzeit, Runde und Sprit im Tank ein; der Planer rechnet ab diesem Stand neu und zeigt, wann der nächste Stopp fällig ist. Ist eine Startzeit eingetragen, siehst du außerdem, wer laut Plan gerade fährt.",
+      "Der Stint-Planer ist Teil von Pole und Alliance und wird laufend ausgebaut. Mit der GSRA-App kommen Verbrauch, Rundenzeiten und der Live-Stand später automatisch aus der Simulation."],
     links: [{ label: "Zum Stint-Planer", href: "stintplaner.html" }, { label: "Abos ansehen", href: "abo.html" }] },
+  { id: "karriere", thema: "start", frage: "Wie fülle ich meine Karriere-Timeline aus?",
+    antwort: ["Im Dashboard unter „Meine Karriere“ trägst du deine Stationen ein: Teams, Meisterschaften, Erfolge, Rennen, Lizenzen oder sonstige Stationen – jeweils mit Jahr, optional Monat, einem Titel, einer kurzen Beschreibung und auf Wunsch einem Link (nur https). Rechts siehst du sofort, wie andere Mitglieder deine Karriere sehen.",
+      "Zusätzlich erscheinen automatische Meilensteine, die die GSRA selbst festhält: wann du beigetreten bist, wann du dein erstes Setup geteilt hast, seit wann du GSRA-Coach bist und – wenn du es öffentlich zeigst – seit wann du die GSRA unterstützt. Die Karriere ist für angemeldete Mitglieder in deinem Profil sichtbar; du kannst bis zu 40 Stationen eintragen."],
+    links: [{ label: "Zum Dashboard", href: "dashboard.html" }] },
 
   // ---------- Messenger ----------
   { id: "chat-starten", thema: "messenger", frage: "Wie beginne ich einen Chat?",

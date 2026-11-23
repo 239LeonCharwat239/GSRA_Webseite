@@ -42,7 +42,19 @@
         <!-- Zugang: Pole und Alliance (und Admins). Bis die Prüfung fertig ist, bleibt der Planer verborgen. -->
         <section id="spZugang" class="sp-zugang" aria-live="polite"><p class="sp-laden"><i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> Zugang wird geprüft …</p></section>
 
-        <p class="sp-beta" hidden><i class="fa-solid fa-flask" aria-hidden="true"></i> <strong>Vorschau:</strong> Der Stint-Planer befindet sich in Entwicklung. Später übernimmt die GSRA-App Verbrauch und Rundenzeiten automatisch aus der Simulation.</p>
+        <p class="sp-beta" hidden><i class="fa-solid fa-flask" aria-hidden="true"></i> <strong>Vorschau:</strong> Der Stint-Planer wird laufend ausgebaut. Mit der GSRA-App kommen Verbrauch, Rundenzeiten und der Live-Stand später automatisch aus der Simulation.</p>
+
+        <!-- Pläne im Konto, Team und Live-Abgleich (SQL 045) -->
+        <section class="sp-planleiste" id="spPlanLeiste" hidden>
+            <label class="sp-plan-wahl"><span>Plan</span><select id="spPlanWahl" aria-label="Plan auswählen"></select></label>
+            <label class="sp-plan-name"><span>Name des Plans</span><input id="spPlanName" type="text" maxlength="60" autocomplete="off"></label>
+            <div class="sp-plan-knoepfe">
+                <button type="button" id="spPlanNeu" class="sp-btn"><i class="fa-solid fa-plus" aria-hidden="true"></i> Neuer Plan</button>
+                <button type="button" id="spTeamKnopf" class="sp-btn"><i class="fa-solid fa-users" aria-hidden="true"></i> Team</button>
+                <button type="button" id="spPlanLoeschen" class="sp-btn gefahr" title="Plan löschen" aria-label="Plan löschen"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>
+            </div>
+            <p class="sp-status" id="spStatus" aria-live="polite"></p>
+        </section>
 
         <div class="sp-layout" hidden>
             <form id="spFormular" class="sp-formular" autocomplete="off" novalidate>
@@ -57,7 +69,22 @@
                         <label class="sp-nur-zeit"><span>Minuten</span><input name="dauerMin" type="number" min="0" max="59" step="1" inputmode="numeric"></label>
                         <label class="sp-nur-runden" hidden><span>Runden</span><input name="runden" type="number" min="1" max="5000" step="1" inputmode="numeric"></label>
                         <label class="sp-breit"><span>Start (optional, für echte Uhrzeiten)</span><input name="start" type="datetime-local"></label>
+                        <label class="sp-breit"><span>Simulation</span><input name="simulation" type="text" maxlength="40" placeholder="z. B. Le Mans Ultimate"></label>
+                        <label><span>Fahrzeug</span><input name="fahrzeug" type="text" maxlength="60" placeholder="z. B. GT3"></label>
+                        <label><span>Strecke</span><input name="strecke" type="text" maxlength="60" placeholder="z. B. Spa"></label>
+                        <label class="sp-breit"><span>Notizen fürs Team (optional)</span><textarea name="notizen" maxlength="500" rows="2" placeholder="z. B. Setup, Reifendrücke, Absprachen"></textarea></label>
                     </div>
+                </section>
+
+                <section class="sp-karte sp-live-karte">
+                    <h2><i class="fa-solid fa-satellite-dish" aria-hidden="true"></i> Live-Stand im Rennen</h2>
+                    <label class="sp-haken"><input name="liveAktiv" type="checkbox"> <span>Das Rennen läuft – ab dem aktuellen Stand neu rechnen</span></label>
+                    <div class="sp-felder sp-nur-live" hidden>
+                        <label><span>Rennzeit (h:mm)</span><input name="liveZeit" type="text" inputmode="numeric" maxlength="5" placeholder="1:25"></label>
+                        <label><span>Aktuelle Runde</span><input name="liveRunde" type="number" min="0" max="5000" step="1" inputmode="numeric"></label>
+                        <label class="sp-breit"><span>Sprit im Tank (l)</span><input name="liveSprit" type="text" inputmode="decimal" maxlength="6"></label>
+                    </div>
+                    <p class="sp-app-hinweis"><i class="fa-solid fa-mobile-screen" aria-hidden="true"></i> Mit der GSRA-App kommen diese Werte später automatisch aus der Simulation – für das ganze Team.</p>
                 </section>
 
                 <section class="sp-karte">
@@ -69,6 +96,17 @@
                         <label><span>Reserve (l)</span><input name="reserve" type="text" inputmode="decimal" maxlength="5"></label>
                         <label class="sp-breit"><span>Reifen halten (Runden, 0 = kein Wechsel)</span><input name="reifenRunden" type="number" min="0" max="2000" step="1" inputmode="numeric"></label>
                     </div>
+                    <details class="sp-messen">
+                        <summary><i class="fa-solid fa-calculator" aria-hidden="true"></i> Verbrauch messen</summary>
+                        <p>Trage nach einigen Runden im Training ein, wie viel Sprit vorher und nachher im Tank war – der Planer rechnet den Durchschnitt aus.</p>
+                        <div class="sp-felder">
+                            <label><span>Sprit vorher (l)</span><input id="spMessVorher" type="text" inputmode="decimal" maxlength="6"></label>
+                            <label><span>Sprit nachher (l)</span><input id="spMessNachher" type="text" inputmode="decimal" maxlength="6"></label>
+                            <label><span>Gefahrene Runden</span><input id="spMessRunden" type="number" min="1" max="500" step="1" inputmode="numeric"></label>
+                            <button type="button" id="spMessUebernehmen" class="sp-btn">Übernehmen</button>
+                        </div>
+                        <p class="sp-mess-ergebnis" id="spMessErgebnis" aria-live="polite"></p>
+                    </details>
                 </section>
 
                 <section class="sp-karte">

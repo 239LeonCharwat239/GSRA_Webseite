@@ -107,6 +107,41 @@
                 </div>
             </div>
 
+            <!-- Karriere-Timeline (src/karriere.ts, SQL 044): eigene Stationen, Vorschau wie im Profil -->
+            <div class="card career-card" id="careerCard" hidden>
+                <div class="dash-own-head">
+                    <h3><i class="fa-solid fa-road text-yellow"></i> Meine Karriere</h3>
+                    <span class="dash-own-link">Im Profil für Mitglieder sichtbar</span>
+                </div>
+                <div class="career-raster">
+                    <div>
+                        <form id="careerForm" class="career-form" novalidate>
+                            <div class="career-felder">
+                                <label><span>Jahr</span><input name="year" type="number" min="1950" max="2100" step="1" inputmode="numeric" required placeholder="2025"></label>
+                                <label><span>Monat (optional)</span>
+                                    <select name="month"><option value="">–</option><option value="1">Januar</option><option value="2">Februar</option><option value="3">März</option><option value="4">April</option><option value="5">Mai</option><option value="6">Juni</option><option value="7">Juli</option><option value="8">August</option><option value="9">September</option><option value="10">Oktober</option><option value="11">November</option><option value="12">Dezember</option></select>
+                                </label>
+                                <label><span>Art</span>
+                                    <select name="kind"><option value="team">Team</option><option value="meisterschaft">Meisterschaft</option><option value="erfolg">Erfolg</option><option value="rennen">Rennen</option><option value="lizenz">Lizenz</option><option value="sonstiges">Sonstige Station</option></select>
+                                </label>
+                                <label class="career-breit"><span>Titel</span><input name="title" type="text" maxlength="80" required placeholder="z. B. Fahrer im Team Nordlicht Racing"></label>
+                                <label class="career-breit"><span>Beschreibung (optional)</span><textarea name="detail" maxlength="300" rows="2" placeholder="z. B. Platz 3 in der GT3-Wertung, 12 Rennen"></textarea></label>
+                                <label class="career-breit"><span>Link (optional, https)</span><input name="link" type="url" maxlength="300" placeholder="https://"></label>
+                            </div>
+                            <div class="career-aktionen">
+                                <button type="submit" class="login-btn">Station hinzufügen</button>
+                                <button type="reset" class="dash-add-link">Abbrechen</button>
+                            </div>
+                        </form>
+                        <ul id="careerListe" class="career-liste"></ul>
+                    </div>
+                    <div class="career-vorschau-rahmen">
+                        <p class="career-vorschau-titel">So sehen andere deine Karriere</p>
+                        <div id="careerVorschau" class="gsra-profile-career"></div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Eigene Inserate und Setups im Überblick -->
             <div class="grid-2">
                 <div class="card">
@@ -180,6 +215,7 @@
     <script src="captcha.js"></script>
     <script src="dashboard.js"></script>
     <script src="abo.js"></script>
+    <script type="module" src="src/karriere.ts"></script>
     <script type="module" src="src/suche.ts"></script>
 </body>
 </html>

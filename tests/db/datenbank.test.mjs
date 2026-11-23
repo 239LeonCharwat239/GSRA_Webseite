@@ -10,9 +10,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL] =
-    Array.from({ length: 43 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 43);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL, KARRIERE_SQL, STINTPLAN_SQL] =
+    Array.from({ length: 45 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 45);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -2983,6 +2983,173 @@ if (UNTERSTUETZER_SQL && GERAET_SQL) {
     const nach = await one(`select (select count(*) from public.supporters where user_id = '${UNT}')::int as s,
                                    (select count(*) from public.support_payments where stripe_ref = 'cs_043_1' and user_id is null)::int as p`);
     check("Konto gelöscht: Eintrag weg, Zahlungsbeleg bleibt ohne Personenbezug (Buchhaltung)", nach.s === 0 && nach.p === 1, JSON.stringify(nach));
+}
+
+// --- 044: Karriere-Timeline – nur eigene Einträge, Grenzen, keine Gäste ---
+if (KARRIERE_SQL && UNTERSTUETZER_SQL) {
+    const id = (n) => `74000000-0000-0000-0000-0000000004${String(n).padStart(2, "0")}`;
+    const K1 = id(1), K2 = id(2), KB = id(3);
+    await db.exec(`
+      insert into auth.users (id, created_at) values ('${K1}', now() - interval '400 days'), ('${K2}', now()), ('${KB}', now());
+      insert into public.profiles (id, username) values ('${K1}', 'Karriere Kai'), ('${K2}', 'Leser Lars'), ('${KB}', 'Gesperrt Gabi');`);
+    await db.exec(readFileSync(KARRIERE_SQL, "utf8"));
+    const ctl44 = await db.exec(readFileSync(KARRIERE_SQL, "utf8")); // zweiter Lauf
+    const rows44 = ctl44[ctl44.length - 1].rows;
+    console.log("Kontrolle 044:\n  " + rows44.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+    check("Kontrolle 044: Tabelle, Gäste ausgeschlossen, Schutzregeln", rows44.map(r => r.ergebnis).join(",") === "bereit,ja,ja", rows44.map(r => r.ergebnis).join(", "));
+
+    const neu = (uid, felder) => as(uid, async () => q(`insert into public.career_entries (year, kind, title, detail, link)
+        values (${felder.year ?? 2024}, '${felder.kind ?? "team"}', '${(felder.title ?? "Team Blau").replace(/'/g, "''")}', ${felder.detail == null ? "null" : `'${felder.detail.replace(/'/g, "''")}'`},
+                ${felder.link == null ? "null" : `'${felder.link.replace(/'/g, "''")}'`}) returning id, user_id, title, detail`));
+    const ok1 = await neu(K1, { title: "  Langstrecken-Team Nordschleife\t", detail: "Fahrer\nund Stratege", link: "https://example.org/team" });
+    check("Eigener Eintrag wird gespeichert, gehört automatisch der eigenen Person", ok1.error === null && ok1.rows[0]?.user_id === K1, ok1.error || "");
+    check("Steuerzeichen und Rand-Leerzeichen werden entfernt", ok1.rows[0]?.title === "Langstrecken-Team Nordschleife" && ok1.rows[0]?.detail === "Fahrer und Stratege", JSON.stringify(ok1.rows[0]));
+    const eintrag = ok1.rows[0]?.id;
+    for (const [label, felder] of [
+        ["Leerer Titel", { title: "   " }],
+        ["Link ohne https (http)", { link: "http://example.org" }],
+        ["Link mit javascript:", { link: "javascript:alert(1)" }],
+        ["Link mit Anführungszeichen", { link: 'https://x.org/"><script>' }],
+        ["Jahr außerhalb 1950–2100", { year: 1800 }],
+        ["Unbekannte Art", { kind: "werbung" }],
+        ["Beschreibung über 300 Zeichen", { detail: "x".repeat(301) }]]) {
+        const r = await neu(K1, felder);
+        check(`Abgelehnt: ${label}`, r.error !== null, r.error || "durchgelassen!");
+    }
+    const fremd = await as(K2, async () => q(`insert into public.career_entries (user_id, year, kind, title) values ('${K1}', 2020, 'erfolg', 'Gefälscht') returning id`));
+    check("Niemand kann Einträge für andere Personen anlegen", fremd.error !== null, fremd.error || "durchgelassen!");
+    await as(K2, async () => {
+        const lesen = await q(`select title from public.career_entries where user_id = '${K1}'`);
+        check("Andere Mitglieder sehen die Karriere", lesen.error === null && lesen.rows.length === 1, lesen.error || JSON.stringify(lesen.rows));
+        const aendern = await q(`update public.career_entries set title = 'Übernommen' where id = '${eintrag}' returning id`);
+        check("Fremde Einträge lassen sich nicht ändern", aendern.rows.length === 0, aendern.error || JSON.stringify(aendern.rows));
+        const loeschen = await q(`delete from public.career_entries where id = '${eintrag}' returning id`);
+        check("Fremde Einträge lassen sich nicht löschen", loeschen.rows.length === 0, loeschen.error || JSON.stringify(loeschen.rows));
+    });
+    const umhaengen = await as(K1, async () => q(`update public.career_entries set user_id = '${K2}', title = 'Neuer Titel' where id = '${eintrag}' returning user_id, title`));
+    check("Eintrag lässt sich nicht einer anderen Person zuschieben", umhaengen.error !== null || umhaengen.rows[0]?.user_id === K1, umhaengen.error || JSON.stringify(umhaengen.rows));
+    await as(null, async () => {
+        const gast = await q(`select * from public.career_entries`);
+        check("Gäste sehen keine Karriere", gast.error !== null, gast.error || `${gast.rows.length} Zeilen`);
+        const m = await q(`select public.career_milestones('${K1}')`);
+        check("Gäste sehen keine Meilensteine", m.error !== null, m.error || "durchgelassen!");
+    });
+    await db.exec(`insert into public.user_bans (user_id, banned_until, reason) values ('${KB}', now() + interval '1 day', 'Test 044')`);
+    const gesperrt = await neu(KB, { title: "Spam" });
+    check("Gesperrte Konten können nichts eintragen", gesperrt.error !== null, gesperrt.error || "durchgelassen!");
+    await db.exec(`delete from public.user_bans where reason = 'Test 044'`);
+    // Grenze: höchstens 40 Einträge
+    await db.exec(`insert into public.career_entries (user_id, year, kind, title) select '${K1}', 2000 + g % 20, 'rennen', 'Rennen ' || g from generate_series(1, 39) g`);
+    const zuviel = await neu(K1, { title: "Eintrag 41" });
+    check("Höchstens 40 Einträge pro Person", /40 Karriere-Einträge/.test(zuviel.error || ""), zuviel.error || "durchgelassen!");
+    // Meilensteine
+    await db.exec(`insert into public.supporters (user_id, since, show_public) values ('${K1}', now() - interval '10 days', false) on conflict (user_id) do update set since = excluded.since, show_public = false`);
+    const ms = await as(K2, async () => (await q(`select public.career_milestones('${K1}') as m`)).rows[0]?.m);
+    check("Meilensteine: Mitglied seit vorhanden, nicht öffentliche Unterstützung bleibt verborgen",
+        Boolean(ms?.mitglied_seit) && ms?.unterstuetzer_seit === null && ms?.pro_fahrer === false, JSON.stringify(ms));
+    await db.exec(`update public.supporters set show_public = true where user_id = '${K1}'`);
+    const ms2 = await as(K2, async () => (await q(`select public.career_milestones('${K1}') as m`)).rows[0]?.m);
+    check("Meilensteine: öffentliche Unterstützung erscheint (ohne Betrag)", Boolean(ms2?.unterstuetzer_seit) && !JSON.stringify(ms2).includes("amount"), JSON.stringify(ms2));
+    const fn44 = await one(`select has_function_privilege('authenticated', 'public.career_entries_guard()', 'EXECUTE') as ok`);
+    check("Schutzfunktion nicht direkt aufrufbar", fn44.ok === false, String(fn44.ok));
+}
+
+// --- 045: Stint-Planer – nur Pole/Alliance (Datenbank prüft selbst), Team-Rollen, Versionen, Grenzen ---
+if (STINTPLAN_SQL && KARRIERE_SQL) {
+    const id = (n) => `75000000-0000-0000-0000-0000000004${String(n).padStart(2, "0")}`;
+    const EIG = id(1), MIT = id(2), FREI = id(3), BLOCK = id(4), VIEL = id(5);
+    await db.exec(`
+      insert into auth.users (id) values ('${EIG}'), ('${MIT}'), ('${FREI}'), ('${BLOCK}'), ('${VIEL}');
+      insert into public.profiles (id, username, gsra_id) values ('${EIG}', 'Planerin Pia', 945001), ('${MIT}', 'Mitfahrer Max', 945002),
+        ('${FREI}', 'Paddock Paul', 945003), ('${BLOCK}', 'Blockiert Ben', 945004), ('${VIEL}', 'Viel Vera', 945005);
+      insert into public.user_plans (user_id, status) values ('${EIG}', 'active'), ('${MIT}', 'active'), ('${BLOCK}', 'active'), ('${VIEL}', 'active');
+      insert into public.user_blocks (blocker_id, blocked_id) values ('${EIG}', '${BLOCK}');`);
+    await db.exec(readFileSync(STINTPLAN_SQL, "utf8"));
+    const ctl45 = await db.exec(readFileSync(STINTPLAN_SQL, "utf8")); // zweiter Lauf
+    const rows45 = ctl45[ctl45.length - 1].rows;
+    console.log("Kontrolle 045:\n  " + rows45.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+    check("Kontrolle 045: Tabellen, Schreiben nur über Funktionen, Gäste ausgeschlossen (Realtime im Nachbau nicht vorhanden)",
+        rows45.slice(0, 3).map(r => r.ergebnis).join(",") === "bereit,ja,ja", rows45.map(r => r.ergebnis).join(", "));
+
+    const speichern = (uid, planId, name, data, version) => as(uid, async () =>
+        q(`select public.stint_plan_save(${planId ? `'${planId}'` : "null"}, '${name}', '${JSON.stringify(data).replace(/'/g, "''")}'::jsonb, ${version ?? "null"}) as r`));
+    const angelegt = await speichern(EIG, null, "24h Spa", { tank: 100, fahrer: [{ name: "<b>Pia</b>" }] });
+    const PLAN = angelegt.rows[0]?.r?.id;
+    check("Pole-Mitglied legt einen Plan an (Version 1)", angelegt.error === null && Boolean(PLAN) && angelegt.rows[0]?.r?.version === 1, angelegt.error || JSON.stringify(angelegt.rows[0]));
+    const paddock = await speichern(FREI, null, "Gratis", {});
+    check("Ohne Pole/Alliance kein Speichern (Datenbank prüft das Abo)", /Pole und Alliance/.test(paddock.error || ""), paddock.error || "durchgelassen!");
+    await as(null, async () => {
+        const gast = await q(`select public.stint_plan_save(null, 'x', '{}'::jsonb, null)`);
+        check("Gäste können nichts speichern", gast.error !== null, gast.error || "durchgelassen!");
+        const lesen = await q(`select * from public.stint_plans`);
+        check("Gäste lesen keine Pläne", lesen.error !== null, lesen.error || `${lesen.rows.length} Zeilen`);
+    });
+    await as(EIG, async () => {
+        const direkt = await q(`insert into public.stint_plans (owner_id, name) values ('${EIG}', 'direkt') returning id`);
+        check("Pläne nicht direkt anlegbar (nur über die Funktion)", direkt.error !== null, direkt.error || "durchgelassen!");
+        const direktAendern = await q(`update public.stint_plans set name = 'x' where id = '${PLAN}' returning id`);
+        check("Pläne nicht direkt änderbar", direktAendern.error !== null, direktAendern.error || "durchgelassen!");
+        const unbekannt = await q(`select public.stint_plan_member_add('${PLAN}', 999999, 'ansehen')`);
+        check("Unbekannte GSRA-ID: verständliche Meldung", /kein Mitglied/.test(unbekannt.error || ""), unbekannt.error || "durchgelassen!");
+        const ohneAbo = await q(`select public.stint_plan_member_add('${PLAN}', 945003, 'ansehen')`);
+        check("Mitglied ohne Pole/Alliance kann nicht eingeladen werden", /kein Pole- oder Alliance-Abo/.test(ohneAbo.error || ""), ohneAbo.error || "durchgelassen!");
+        const blockiert = await q(`select public.stint_plan_member_add('${PLAN}', 945004, 'ansehen')`);
+        check("Blockierte Person kann nicht eingeladen werden", /nicht einladen/.test(blockiert.error || ""), blockiert.error || "durchgelassen!");
+        const ok = await q(`select public.stint_plan_member_add('${PLAN}', 945002, 'ansehen') as n`);
+        check("Pole-Mitglied per GSRA-ID eingeladen (Rolle: ansehen)", ok.error === null && ok.rows[0]?.n === "Mitfahrer Max", ok.error || JSON.stringify(ok.rows[0]));
+    });
+    await as(MIT, async () => {
+        const lesen = await q(`select name, data from public.stint_plans where id = '${PLAN}'`);
+        check("Teammitglied sieht den Plan", lesen.error === null && lesen.rows.length === 1, lesen.error || `${lesen.rows.length} Zeilen`);
+        const nurAnsehen = await q(`select public.stint_plan_save('${PLAN}', 'Spa', '{}'::jsonb, 1)`);
+        check("Rolle „ansehen“ kann nicht speichern", /nur ansehen/.test(nurAnsehen.error || ""), nurAnsehen.error || "durchgelassen!");
+        const einladen = await q(`select public.stint_plan_member_add('${PLAN}', 945005, 'bearbeiten')`);
+        check("Mitglieder können niemanden einladen (nur die Eigentümerin)", einladen.error !== null, einladen.error || "durchgelassen!");
+        const team = await q(`select username, role from public.stint_plan_team('${PLAN}')`);
+        check("Team-Liste mit Eigentümerin und Mitglied", team.error === null && team.rows.length === 2 && team.rows[0].role === "eigentuemer", team.error || JSON.stringify(team.rows));
+        const liste = await q(`select name, role from public.stint_plan_list()`);
+        check("Geteilter Plan erscheint in der eigenen Liste mit Rolle", liste.rows.some(r => r.name === "24h Spa" && r.role === "ansehen"), JSON.stringify(liste.rows));
+    });
+    await as(FREI, async () => {
+        const lesen = await q(`select id from public.stint_plans`);
+        check("Ohne Abo und ohne Einladung: keine fremden Pläne sichtbar", lesen.error === null && lesen.rows.length === 0, lesen.error || `${lesen.rows.length} Zeilen`);
+        const team = await q(`select * from public.stint_plan_team('${PLAN}')`);
+        check("Fremde sehen das Team nicht", team.error === null && team.rows.length === 0, team.error || `${team.rows.length} Zeilen`);
+    });
+    await as(EIG, async () => { await q(`select public.stint_plan_member_add('${PLAN}', 945002, 'bearbeiten')`); });
+    const v2 = await speichern(MIT, PLAN, "24h Spa", { tank: 110 }, 1);
+    check("Rolle „bearbeiten“ speichert (Version 2)", v2.error === null && v2.rows[0]?.r?.version === 2, v2.error || JSON.stringify(v2.rows[0]));
+    const alt = await speichern(EIG, PLAN, "24h Spa", { tank: 90 }, 1);
+    check("Veraltete Version wird abgelehnt – niemand überschreibt unbemerkt", /gerade von jemand anderem geändert/.test(alt.error || ""), alt.error || "durchgelassen!");
+    const gross = await speichern(EIG, PLAN, "Riesig", { notiz: "x".repeat(70000) }, 2);
+    check("Pläne über 64 KB werden abgelehnt", /zu groß/.test(gross.error || ""), gross.error || "durchgelassen!");
+    // Abo endet → kein Zugriff mehr, auch nicht auf geteilte Pläne
+    await db.exec(`update public.user_plans set status = 'canceled', current_period_end = now() - interval '10 days' where user_id = '${MIT}'`);
+    const ohne = await as(MIT, async () => q(`select id from public.stint_plans where id = '${PLAN}'`));
+    check("Abo beendet: geteilter Plan nicht mehr lesbar", ohne.error === null && ohne.rows.length === 0, ohne.error || `${ohne.rows.length} Zeilen`);
+    await db.exec(`update public.user_plans set status = 'active', current_period_end = null where user_id = '${MIT}'`);
+    // Gesperrt → kein Zugriff
+    await db.exec(`insert into public.user_bans (user_id, banned_until, reason) values ('${MIT}', now() + interval '1 day', 'Test 045')`);
+    const gesperrt = await as(MIT, async () => q(`select id from public.stint_plans where id = '${PLAN}'`));
+    check("Gesperrtes Konto: kein Zugriff", gesperrt.error === null && gesperrt.rows.length === 0, gesperrt.error || `${gesperrt.rows.length} Zeilen`);
+    await db.exec(`delete from public.user_bans where reason = 'Test 045'`);
+    await as(MIT, async () => {
+        const loeschen = await q(`select public.stint_plan_delete('${PLAN}')`);
+        check("Mitglied kann den Plan nicht löschen", loeschen.error !== null, loeschen.error || "durchgelassen!");
+        const austreten = await q(`select public.stint_plan_member_remove('${PLAN}', '${MIT}') as ok`);
+        check("Mitglied kann selbst austreten", austreten.error === null && austreten.rows[0]?.ok === true, austreten.error || "");
+    });
+    // Grenzen: 25 Pläne pro Person, 60 Speichervorgänge pro Minute
+    for (let i = 0; i < 25; i++) await speichern(VIEL, null, `Plan ${i}`, {});
+    const plan26 = await speichern(VIEL, null, "Plan 26", {});
+    check("Höchstens 25 eigene Pläne", /25 Stintpläne/.test(plan26.error || ""), plan26.error || "durchgelassen!");
+    const vielPlan = (await as(VIEL, async () => q(`select id from public.stint_plans order by created_at limit 1`))).rows[0]?.id;
+    let flut = null;
+    for (let i = 0; i < 40 && !flut; i++) { const r = await speichern(VIEL, vielPlan, "Flut", { i }, null); if (r.error) flut = r.error; }
+    check("Gegen Spam: höchstens 60 Speichervorgänge pro Minute", /Zu viele Speichervorgänge/.test(flut || ""), flut || "durchgelassen!");
+    const eigLoeschen = await as(EIG, async () => q(`select public.stint_plan_delete('${PLAN}') as ok`));
+    check("Eigentümerin löscht den Plan, das Team verschwindet mit",
+        eigLoeschen.error === null && Number((await one(`select count(*) as n from public.stint_plan_members where plan_id = '${PLAN}'`)).n) === 0, eigLoeschen.error || "");
 }
 
 // --- Konto löschen (Ausbau 3) funktioniert weiterhin, die Stimmen verschwinden mit ---

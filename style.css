@@ -31,6 +31,10 @@
     font-display: swap;
 }
 
+/* Ruhige Seitenwechsel: Platz für die Scroll-Leiste immer freihalten. Sonst springt die zentrierte Seite um eine
+   halbe Leistenbreite zur Seite, sobald nachgeladener Inhalt sie länger als den Bildschirm macht. */
+html { scrollbar-gutter: stable; }
+
 body {
     font-family: "Twemoji Country Flags", 'Segoe UI', system-ui, -apple-system, sans-serif;
     line-height: 1.6;
@@ -12673,6 +12677,9 @@ a.gsra-nav-item:hover, a.gsra-nav-item.active { background: rgba(0, 85, 255, 0.1
 
 /* Rechts: Suche, Hilfe, Messenger, Login / Profil */
 .gsra-nav-tools { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+/* Ruhige Seitenwechsel: Login-Knopf und Profilbild sind unterschiedlich breit – mit fester Mindestbreite bleibt das
+   Menü stehen, wenn nach der Anmeldeprüfung das eine durch das andere ersetzt wird */
+@media (min-width: 901px) { .gsra-nav-tools { min-width: 173px; justify-content: flex-end; } }
 header .gsra-nav-tools .gsra-search-btn { margin: 0; }
 .gsra-nav-icon, .gsra-account-btn {
     position: relative;
@@ -13005,6 +13012,69 @@ header .gsra-account-menu #logoutBtn:hover { background: rgba(255, 77, 77, 0.1) 
 .sp-fahrerzeit { display: flex; justify-content: space-between; gap: 12px; padding: 9px 12px; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 10px; font-size: 13px; }
 .sp-fahrerzeit span { color: var(--text-muted); text-align: right; }
 .sp-fehler { display: flex; gap: 10px; align-items: center; padding: 14px; background: rgba(255, 77, 77, 0.08); border: 1px solid rgba(255, 77, 77, 0.35); border-radius: 10px; color: #ffb3b3; }
+/* Stint-Planer Stufe 1 (23.11.): Plan-Leiste, Live-Stand, Empfehlungen, Team */
+.sp-ergebnis { position: static; }
+.sp-formular textarea, .sp-formular select, .sp-planleiste input, .sp-planleiste select, .sp-team-form input, .sp-team-form select, .sp-team-rolle {
+    width: 100%; padding: 9px 10px; background: #0f1116; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 8px; color: #fff; font-family: inherit; font-size: 14px; resize: none;
+}
+.sp-formular textarea:focus, .sp-planleiste input:focus, .sp-planleiste select:focus { outline: none; border-color: var(--gsra-blue); box-shadow: 0 0 0 3px rgba(0, 85, 255, 0.2); }
+.sp-formular :disabled { opacity: 0.6; cursor: not-allowed; }
+/* Ausgeblendete Felder (Zeit/Runden, Live-Stand) wirklich ausblenden – die Raster-Regeln würden „hidden“ sonst überstimmen */
+.sp-formular [hidden] { display: none !important; }
+.sp-planleiste { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) auto; align-items: end; gap: 10px 14px; max-width: 1200px; margin: 0 auto 18px; padding: 14px 16px; background: var(--bg-card); border: 1px solid var(--border-subtle); border-left: 3px solid var(--gsra-yellow); border-radius: 12px; text-align: left; }
+.sp-planleiste[hidden] { display: none; }
+.sp-planleiste label { display: flex; flex-direction: column; gap: 5px; color: var(--text-muted); font-size: 12px; font-weight: 600; min-width: 0; }
+.sp-plan-knoepfe { display: flex; gap: 8px; }
+.sp-btn.gefahr:hover { border-color: #ff6b6b; color: #ff6b6b; }
+.sp-btn[hidden] { display: none; }
+.sp-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.sp-status { grid-column: 1 / -1; margin: 0; color: var(--text-muted); font-size: 12px; }
+.sp-status.ok { color: #00e07a; }
+.sp-status.warn { color: var(--gsra-yellow); }
+.sp-live-karte { border-left-color: #00e07a; }
+.sp-live-karte h2 i { color: #00e07a; }
+.sp-live-karte .sp-felder { margin-top: 10px; }
+.sp-app-hinweis { margin: 10px 0 0; color: var(--text-muted); font-size: 12px; }
+.sp-app-hinweis i { color: #6f9bff; margin-right: 4px; }
+.sp-messen { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border-subtle); }
+.sp-messen summary { color: var(--gsra-yellow); font-size: 13px; font-weight: 800; cursor: pointer; }
+.sp-messen p { margin: 8px 0; color: var(--text-muted); font-size: 12px; }
+.sp-mess-ergebnis { color: #00e07a !important; font-weight: 700; }
+.sp-rennkopf { padding: 12px 14px; background: #12141a; border: 1px solid var(--border-subtle); border-radius: 12px; }
+.sp-rennkopf strong { color: #fff; font-size: 15px; }
+.sp-rennkopf p { margin: 6px 0 0; color: #c7ccd6; font-size: 13px; white-space: pre-line; overflow-wrap: anywhere; }
+.sp-jetzt { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; background: rgba(0, 85, 255, 0.1); border: 1px solid rgba(0, 85, 255, 0.45); border-radius: 12px; }
+.sp-jetzt > i { color: #6f9bff; font-size: 18px; margin-top: 2px; }
+.sp-jetzt strong { display: block; color: #fff; }
+.sp-jetzt span { color: #c7ccd6; font-size: 13px; }
+.sp-live { padding: 14px 16px; background: rgba(0, 224, 122, 0.06); border: 1px solid rgba(0, 224, 122, 0.4); border-radius: 12px; }
+.sp-live h3 { margin: 0 0 8px; color: #00e07a; font-size: 14px; font-weight: 900; letter-spacing: 0.6px; text-transform: uppercase; }
+.sp-live h3 small { color: var(--text-muted); font-size: 11px; letter-spacing: 0; text-transform: none; }
+.sp-live-liste, .sp-tipps ul, .sp-app ul { display: grid; gap: 6px; margin: 0; padding-left: 18px; color: #dfe3ea; font-size: 13px; line-height: 1.5; }
+.sp-tipps { padding: 14px 16px; background: rgba(255, 204, 0, 0.06); border: 1px solid rgba(255, 204, 0, 0.35); border-radius: 12px; }
+.sp-tipps h3, .sp-app h3 { margin: 0 0 8px; color: #fff; font-size: 14px; font-weight: 900; letter-spacing: 0.6px; text-transform: uppercase; }
+.sp-tipps h3 i { color: var(--gsra-yellow); }
+.sp-app { padding: 14px 16px; background: #12141a; border: 1px dashed rgba(0, 85, 255, 0.5); border-radius: 12px; }
+.sp-app h3 i { color: #6f9bff; }
+.sp-app ul { color: #b9c0cb; }
+.sp-tabelle tr.aktuell td { background: rgba(0, 85, 255, 0.12); }
+.sp-tabelle tr.aktuell .sp-nr::after { content: " ●"; color: #00e07a; }
+.sp-team-dialog { max-width: 520px; text-align: left; }
+.sp-team-info { margin: 0 0 12px; color: var(--text-muted); font-size: 13px; line-height: 1.5; }
+.sp-team-form { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto; gap: 8px; margin-bottom: 14px; }
+.sp-team-liste { display: grid; gap: 8px; margin: 0 0 12px; padding: 0; list-style: none; }
+.sp-team-zeile { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-subtle); border-radius: 10px; }
+.sp-team-bild { flex-shrink: 0; width: 34px; height: 34px; display: grid; place-items: center; overflow: hidden; border-radius: 50%; background: rgba(0, 85, 255, 0.2); color: #9ab8ff; font-weight: 900; }
+.sp-team-bild img { width: 100%; height: 100%; object-fit: cover; }
+.sp-team-name { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.sp-team-name strong { color: #fff; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-team-name small { color: var(--text-muted); font-size: 12px; }
+.sp-team-rolle { width: auto; padding: 6px 8px; font-size: 13px; }
+@media (max-width: 860px) {
+    .sp-planleiste { grid-template-columns: minmax(0, 1fr); }
+    .sp-plan-knoepfe { flex-wrap: wrap; }
+    .sp-team-form { grid-template-columns: minmax(0, 1fr); }
+}
 @media (max-width: 960px) {
     /* minmax(0, 1fr): die Spalte darf schmaler als ihr Inhalt werden – sonst wird rechts abgeschnitten */
     .sp-layout { grid-template-columns: minmax(0, 1fr); }
@@ -13079,4 +13149,51 @@ header .gsra-account-menu #logoutBtn:hover { background: rgba(255, 77, 77, 0.1) 
 }
 @media (max-width: 420px) {
     .ut-betraege { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* =========================================
+   KARRIERE-TIMELINE (src/karriere.ts, SQL 044) – Profil und Dashboard
+========================================= */
+.gsra-profile-career { margin: 2px 0 14px; text-align: left; }
+.gsra-profile-career[hidden] { display: none; }
+.gsra-career-titel { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; color: #fff; font-size: 13px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; }
+.gsra-career-titel > i { color: var(--gsra-yellow); }
+.gsra-career-pro { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border: 1px solid rgba(255, 204, 0, 0.5); border-radius: 3px; color: var(--gsra-yellow); font-size: 10px; letter-spacing: 0.8px; }
+.gsra-career-liste { position: relative; margin: 0; padding: 0 0 0 4px; list-style: none; }
+.gsra-career-liste::before { content: ""; position: absolute; left: 17px; top: 6px; bottom: 6px; width: 2px; background: linear-gradient(var(--gsra-blue), rgba(0, 85, 255, 0.15)); }
+.gsra-career-punkt { position: relative; display: flex; gap: 12px; padding: 0 0 12px; }
+.gsra-career-punkt.versteckt { display: none; }
+.gsra-career-icon { position: relative; z-index: 1; flex-shrink: 0; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: #0f1116; border: 2px solid var(--gsra-blue); color: #6f9bff; font-size: 12px; }
+.gsra-career-punkt.auto .gsra-career-icon { border-color: var(--gsra-yellow); color: var(--gsra-yellow); }
+.gsra-career-inhalt { min-width: 0; padding-top: 2px; }
+.gsra-career-zeit { display: block; color: var(--text-muted); font-size: 11px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; }
+.gsra-career-inhalt strong { display: block; color: #fff; font-size: 14px; line-height: 1.35; overflow-wrap: anywhere; }
+.gsra-career-inhalt p { margin: 3px 0 0; color: #c7ccd6; font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+.gsra-career-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; color: var(--gsra-yellow); font-size: 12px; font-weight: 700; text-decoration: none; }
+.gsra-career-link:hover { text-decoration: underline; }
+.gsra-career-mehr { margin-left: 40px; padding: 4px 0; background: none; border: none; color: var(--gsra-yellow); font-family: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+.career-card { text-align: left; }
+.career-card[hidden] { display: none; }
+.career-raster { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 22px; }
+.career-felder { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.career-felder label { display: flex; flex-direction: column; gap: 5px; color: var(--text-muted); font-size: 12px; font-weight: 600; }
+.career-felder .career-breit { grid-column: 1 / -1; }
+.career-felder input, .career-felder select, .career-felder textarea { width: 100%; padding: 9px 10px; background: #0f1116; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 8px; color: #fff; font-family: inherit; font-size: 14px; resize: none; }
+.career-felder input:focus, .career-felder select:focus, .career-felder textarea:focus { outline: none; border-color: var(--gsra-blue); box-shadow: 0 0 0 3px rgba(0, 85, 255, 0.2); }
+.career-aktionen { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 12px; }
+.career-liste { display: flex; flex-direction: column; gap: 6px; margin: 16px 0 0; padding: 0; list-style: none; }
+.career-zeile { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-subtle); border-radius: 9px; }
+.career-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.career-text strong { color: #fff; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.career-text small { color: var(--text-muted); font-size: 12px; }
+.career-knopf { flex-shrink: 0; width: 32px; height: 32px; display: grid; place-items: center; background: transparent; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 8px; color: #cfd5de; cursor: pointer; }
+.career-knopf:hover { border-color: var(--gsra-yellow); color: var(--gsra-yellow); }
+.career-knopf.gefahr:hover { border-color: #ff6b6b; color: #ff6b6b; }
+.career-leer { color: var(--text-muted); font-size: 13px; }
+.career-vorschau-rahmen { padding: 14px 16px; background: rgba(0, 0, 0, 0.25); border: 1px dashed var(--border-subtle); border-radius: 12px; }
+.career-vorschau-titel { margin: 0 0 10px; color: var(--text-muted); font-size: 12px; font-weight: 700; }
+.career-vorschau-rahmen .gsra-profile-career[hidden] { display: block; }
+@media (max-width: 860px) {
+    .career-raster { grid-template-columns: minmax(0, 1fr); }
+    .career-felder { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }

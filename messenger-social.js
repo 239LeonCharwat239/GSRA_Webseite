@@ -296,6 +296,15 @@ function renderProfileContent(overlay, userId, context) {
     bio.textContent = profile.bio || "";
     bio.style.display = profile.bio ? "" : "none";
     renderSocialLinks(overlay.querySelector(".gsra-profile-links"), profile.social_links);
+    // Karriere-Timeline (src/karriere.ts, SQL 044)
+    let careerBox = overlay.querySelector(".gsra-profile-career");
+    if (!careerBox) {
+        careerBox = document.createElement("div");
+        careerBox.className = "gsra-profile-career";
+        careerBox.hidden = true;
+        overlay.querySelector(".gsra-profile-links")?.after(careerBox);
+    }
+    if (typeof window.gsraRenderCareer === "function") window.gsraRenderCareer(careerBox, userId);
     // Zufriedenheit (Marktplatz, Setups, später Coaching)
     const reputation = overlay.querySelector(".gsra-profile-reputation");
     if (reputation && typeof window.gsraRenderReputation === "function" && !reputation.childElementCount) window.gsraRenderReputation(reputation, userId);

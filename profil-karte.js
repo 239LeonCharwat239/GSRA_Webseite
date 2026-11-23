@@ -25,6 +25,7 @@ async function openProfileCard(userId, { sellerName = "", itemTitle = "" } = {})
             <div class="gsra-profile-presence" style="display: none;"></div>
             <p class="gsra-profile-bio" style="display: none;"></p>
             <div class="gsra-profile-links" style="display: none;"></div>
+            <div class="gsra-profile-career" hidden></div>
             <div class="gsra-profile-reputation"></div>
             <div class="gsra-profile-coach"></div>
             <div class="gsra-profile-status profile-card-listings" style="display: none;"></div>
@@ -102,6 +103,8 @@ async function openProfileCard(userId, { sellerName = "", itemTitle = "" } = {})
     bio.textContent = profile?.bio || "";
     bio.style.display = profile?.bio ? "" : "none";
     if (typeof renderSocialLinks === "function") renderSocialLinks(overlay.querySelector(".gsra-profile-links"), profile?.social_links);
+    // Karriere-Timeline (src/karriere.ts, SQL 044) – nur für Angemeldete
+    if (me && typeof window.gsraRenderCareer === "function") window.gsraRenderCareer(overlay.querySelector(".gsra-profile-career"), userId);
     // Zufriedenheit (Marktplatz, Setups, später Coaching)
     if (typeof window.gsraRenderReputation === "function") window.gsraRenderReputation(overlay.querySelector(".gsra-profile-reputation"), userId);
     // Coaching: Bewertungen mit Kommentaren und Link zu den Coachings

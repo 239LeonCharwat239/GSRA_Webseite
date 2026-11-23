@@ -31,7 +31,7 @@ const initAuthNav = async () => {
         document.querySelectorAll(".gsra-account, .gsra-nav-tools .gsra-nav-icon[data-only-member]")
             .forEach(el => { el.hidden = !session; });
 
-        if (guestNotice && userContent) {
+        if (guestNotice && userContent && session !== "vermutet") {
             if (session) {
                 guestNotice.style.display = "none";
                 userContent.style.display = "block";
@@ -41,6 +41,12 @@ const initAuthNav = async () => {
             }
         }
     };
+
+    // Ruhiger Seitenaufbau: Liegt ein Anmelde-Token im Browser, gleich das Profil-Menü statt „Login“ zeigen.
+    // Das ist nur die Anzeige – die echte Prüfung (getSession) folgt sofort und korrigiert, falls nötig.
+    try {
+        if (Object.keys(localStorage).some(k => /^sb-.+-auth-token$/.test(k))) updateUI("vermutet");
+    } catch (e) { /* ohne Speicher: wie bisher */ }
 
     const checkLiveUnreadMessages = async (userId, registeredAt) => {
         if (!userId) return;
