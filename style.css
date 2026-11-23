@@ -12912,6 +12912,9 @@ header .gsra-account-menu #logoutBtn:hover { background: rgba(255, 77, 77, 0.1) 
 .begriff-tipp { display: block; padding: 10px 12px; background: rgba(255, 204, 0, 0.07); border: 1px solid rgba(255, 204, 0, 0.25); border-radius: 8px; }
 .begriff-tipp i { margin-right: 6px; color: var(--gsra-yellow); }
 .begriff-tipp strong { color: var(--gsra-yellow); }
+/* „Siehe auch“ unter einem Begriff (src/wissen.ts) */
+.begriff-siehe { align-items: center; gap: 8px 14px; padding-top: 4px; border-top: 1px solid var(--border-subtle); }
+.begriff-siehe-titel { color: var(--text-muted); font-size: 12px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; }
 .wissen-leer { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 40px 16px; color: var(--text-muted); text-align: center; }
 .wissen-leer i { font-size: 30px; color: var(--gsra-blue); }
 .wissen-leer strong { color: #fff; font-size: 16px; }

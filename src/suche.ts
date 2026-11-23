@@ -1,8 +1,9 @@
 // GSRA – Globale Suche (SQL 040). Erste TypeScript-Datei der Webseite (Vite baut sie, siehe vite.config.ts).
 // Die Wissens-Texte (Nachschlagewerk, Hilfe) werden erst beim ersten Suchen nachgeladen – jede Seite bleibt schlank.
-type WissenDaten = typeof import("./wissen-daten");
+type WissenDaten = { HILFE: typeof import("./wissen-daten").HILFE; BEGRIFFE: typeof import("./wissen/begriffe").BEGRIFFE };
 let wissenDaten: Promise<WissenDaten> | null = null;
-const ladeWissen = () => (wissenDaten ??= import("./wissen-daten"));
+const ladeWissen = () => (wissenDaten ??= Promise.all([import("./wissen-daten"), import("./wissen/begriffe")])
+  .then(([hilfe, begriffe]) => ({ HILFE: hilfe.HILFE, BEGRIFFE: begriffe.BEGRIFFE })));
 //
 // Eine Lupe oben auf jeder Seite (auch Strg+K oder „/“) öffnet das Suchfenster. Die Treffer kommen aus einer
 // Datenbank-Funktion, die mit den Rechten der suchenden Person läuft: Gäste finden nur Öffentliches, Nachrichten
@@ -93,7 +94,8 @@ async function sucheWissen(begriff: string): Promise<WissenTreffer[]> {
   const { BEGRIFFE, HILFE } = daten;
   const begriffe: WissenTreffer[] = BEGRIFFE
     .filter((b) => normal(`${b.begriff} ${b.englisch || ""} ${b.kurz}`).includes(q))
-    .map((b) => ({ id: b.id, art: "begriff", titel: b.begriff + (b.englisch ? ` (${b.englisch})` : ""), unter: `Nachschlagewerk · ${b.kurz}` }));
+    .map((b) => ({ id: b.id, art: "begriff", titel: b.begriff + (b.englisch && normal(b.englisch) !== normal(b.begriff) ? ` (${b.englisch})` : ""),
+      unter: `Nachschlagewerk · ${b.kurz}` }));
   const hilfe: WissenTreffer[] = HILFE
     .filter((a) => normal(`${a.frage} ${a.antwort.join(" ")}`).includes(q))
     .map((a) => ({ id: a.id, art: "hilfe", titel: a.frage, unter: `Hilfe-Center · ${a.antwort[0]}` }));
@@ -172,7 +174,7 @@ function starte() {
       </div>`;
   };
 
-  const zeige = (ergebnis: Ergebnis, begriff: string, wissen: WissenTreffer[]) => {
+  const zeige = (ergebnis: Ergebnis, begriff: string, wissen: WissenTreffer[], nurWissen = false) => {
     aktiv = -1;
     const teile: string[] = [];
     for (const r of RUBRIKEN) {
@@ -206,7 +208,8 @@ function starte() {
         <span>${begriff.length < 3 && angemeldet ? "Nachrichten werden ab 3 Zeichen durchsucht." : "Probiere einen anderen Begriff – kleine Tippfehler sind erlaubt."}</span></div>`;
       return;
     }
-    if (!angemeldet) teile.push('<p class="gsra-search-note"><i class="fa-solid fa-lock"></i> <a href="login.html">Melde dich an</a>, um auch Mitglieder, Nachrichten, Foren und Rennen zu finden.</p>');
+    if (nurWissen) teile.push('<p class="gsra-search-note"><i class="fa-solid fa-triangle-exclamation"></i> Mitglieder, Nachrichten, Setups und Inserate sind gerade nicht durchsuchbar – gezeigt werden nur Treffer aus dem Wissen.</p>');
+    else if (!angemeldet) teile.push('<p class="gsra-search-note"><i class="fa-solid fa-lock"></i> <a href="login.html">Melde dich an</a>, um auch Mitglieder, Nachrichten, Foren und Rennen zu finden.</p>');
     liste.innerHTML = teile.join("");
   };
 
@@ -217,10 +220,14 @@ function starte() {
     liste.classList.add("loading");
     try {
       const client = (window as any).supabaseClient;
-      const [{ data, error }, wissen] = await Promise.all([client.rpc("gsra_search", { _q: begriff }), sucheWissen(begriff)]);
+      // Fällt die Datenbank-Suche aus, bleiben die Treffer aus dem Wissen trotzdem sichtbar (sie kommen ohne Server aus)
+      const [{ data, error }, wissen] = await Promise.all([
+        Promise.resolve(client?.rpc("gsra_search", { _q: begriff })).then((r) => r ?? { data: null, error: true }, () => ({ data: null, error: true })),
+        sucheWissen(begriff),
+      ]);
       if (nr !== anfrage) return; // eine neuere Eingabe ist schon unterwegs
-      if (error) throw error;
-      zeige((data || {}) as Ergebnis, begriff, wissen);
+      if (error && !wissen.length) throw error;
+      zeige((error ? {} : data || {}) as Ergebnis, begriff, wissen, Boolean(error));
     } catch {
       if (nr === anfrage) liste.innerHTML = '<div class="gsra-search-empty"><i class="fa-solid fa-triangle-exclamation"></i><strong>Die Suche ist gerade nicht erreichbar</strong><span>Bitte versuche es gleich noch einmal.</span></div>';
     } finally {

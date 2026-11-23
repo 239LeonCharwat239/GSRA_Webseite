@@ -1,7 +1,8 @@
 // GSRA – Hilfe-Center (hilfe.html) und Nachschlagewerk (nachschlagewerk.html).
 // Beide Seiten: Suchfeld, Themen-Filter, aufklappbare Einträge; Links wie hilfe.html#konto öffnen den Eintrag direkt.
-// Ausgabe nur über textContent – Inhalte kommen aus src/wissen-daten.ts.
-import { BEGRIFF_KATEGORIEN, BEGRIFFE, HILFE, HILFE_THEMEN, type Begriff, type HilfeArtikel } from "./wissen-daten";
+// Ausgabe nur über textContent – Inhalte kommen aus src/wissen-daten.ts (Hilfe) und src/wissen/ (Begriffe).
+import { HILFE, HILFE_THEMEN, type HilfeArtikel } from "./wissen-daten";
+import { BEGRIFF_KATEGORIEN, BEGRIFFE, type Begriff } from "./wissen/begriffe";
 
 const normal = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/ß/g, "ss");
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, klasse = "", text?: string): HTMLElementTagNameMap[K] => {
@@ -96,6 +97,8 @@ function starteHilfe() {
 }
 
 // ---------- Nachschlagewerk ----------
+const NACH_ID = new Map(BEGRIFFE.map((b) => [b.id, b]));
+
 function begriffKarte(b: Begriff): HTMLDetailsElement {
   const d = el("details", "wissen-eintrag begriff");
   d.dataset.id = b.id;
@@ -103,16 +106,32 @@ function begriffKarte(b: Begriff): HTMLDetailsElement {
   const kopf = el("span", "begriff-kopf");
   kopf.append(el("small", "begriff-kategorie", b.kategorie));
   const name = el("strong", "begriff-name", b.begriff);
-  if (b.englisch) name.appendChild(el("em", "", ` · ${b.englisch}`));
+  if (b.englisch && normal(b.englisch) !== normal(b.begriff)) name.appendChild(el("em", "", ` · ${b.englisch}`));
   kopf.append(name, el("span", "begriff-kurz", b.kurz));
   s.append(kopf, icon("fa-chevron-down"));
   const inhalt = el("div", "wissen-inhalt");
-  inhalt.appendChild(el("p", "", b.text));
-  if (b.tipp) {
-    const tipp = el("p", "begriff-tipp");
-    tipp.append(icon("fa-screwdriver-wrench"), el("strong", "", "Praxis-Tipp: "), b.tipp);
-    inhalt.appendChild(tipp);
-  }
+  // Inhalt erst beim ersten Aufklappen bauen – bei über 300 Begriffen bleibt die Seite so schnell
+  d.addEventListener("toggle", () => {
+    if (!d.open || inhalt.childElementCount) return;
+    b.text.forEach((absatz) => inhalt.appendChild(el("p", "", absatz)));
+    if (b.tipp) {
+      const tipp = el("p", "begriff-tipp");
+      tipp.append(icon("fa-screwdriver-wrench"), el("strong", "", "Praxis-Tipp: "), b.tipp);
+      inhalt.appendChild(tipp);
+    }
+    const verwandt = (b.siehe || []).map((id) => NACH_ID.get(id)).filter((x): x is Begriff => Boolean(x));
+    if (verwandt.length) {
+      const l = el("div", "wissen-links begriff-siehe");
+      l.appendChild(el("span", "begriff-siehe-titel", "Siehe auch:"));
+      verwandt.forEach((v) => {
+        const link = el("a", "wissen-link", v.begriff);
+        link.href = `#${v.id}`;
+        link.prepend(icon("fa-arrow-right"));
+        l.appendChild(link);
+      });
+      inhalt.appendChild(l);
+    }
+  });
   d.append(s, inhalt);
   return d;
 }
@@ -125,12 +144,14 @@ function starteNachschlagewerk() {
   const f: Filter = { suche: "", thema: "alle" };
   const kategorien = [{ key: "alle", label: "Alle" }, ...BEGRIFF_KATEGORIEN.map((k) => ({ key: k, label: k }))];
   const sortiert = [...BEGRIFFE].sort((a, b) => a.begriff.localeCompare(b.begriff, "de"));
+  const suchIndex = new Map(sortiert.map((b) => [b.id, normal(`${b.begriff} ${b.englisch || ""} ${b.kurz} ${b.text.join(" ")} ${b.tipp || ""}`)]));
+  const suchtext = (b: Begriff) => suchIndex.get(b.id) || "";
 
   const zeige = () => {
     chips(chipBox, kategorien, () => f.thema, (k) => { f.thema = k; zeige(); });
     const q = normal(f.suche);
     const treffer = sortiert.filter((b) => (f.thema === "alle" || b.kategorie === f.thema)
-      && (!q || normal(`${b.begriff} ${b.englisch || ""} ${b.kurz} ${b.text} ${b.tipp || ""}`).includes(q)));
+      && (!q || suchtext(b).includes(q)));
     if (zaehler) zaehler.textContent = `${treffer.length} ${treffer.length === 1 ? "Begriff" : "Begriffe"}`;
     if (!treffer.length) {
       const leer = el("div", "wissen-leer");
@@ -143,9 +164,20 @@ function starteNachschlagewerk() {
   };
   let timer: number | undefined;
   eingabe.addEventListener("input", () => { window.clearTimeout(timer); timer = window.setTimeout(() => { f.suche = eingabe.value.trim(); zeige(); }, 150); });
+  // „Siehe auch“ und direkte Links: Ist der Begriff gerade herausgefiltert, Filter und Suche zurücksetzen
+  const springe = () => {
+    const id = decodeURIComponent(location.hash.slice(1));
+    if (NACH_ID.has(id) && !liste.querySelector(`details[data-id="${id}"]`)) {
+      f.thema = "alle";
+      f.suche = "";
+      eingabe.value = "";
+      zeige();
+    }
+    oeffneAusAdresse(liste);
+  };
   zeige();
-  oeffneAusAdresse(liste);
-  window.addEventListener("hashchange", () => oeffneAusAdresse(liste));
+  springe();
+  window.addEventListener("hashchange", springe);
 }
 
 const seite = document.body.dataset.wissen;

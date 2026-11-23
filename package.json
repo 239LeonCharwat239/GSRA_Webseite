@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "vite build",
-    "pruefen": "node tests/typ/pruefen.mjs",
+    "pruefen": "node tests/typ/pruefen.mjs && node tests/wissen/begriffe.mjs",
     "vorschau": "vite preview"
   },
   "devDependencies": {
