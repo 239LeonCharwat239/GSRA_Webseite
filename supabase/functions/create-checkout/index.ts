@@ -1,6 +1,7 @@
 // GSRA – Supabase Edge Function „create-checkout“
-// Startet eine Stripe-Bezahlseite für Marktplatz-Boni und Abos. Die Preise stehen nur hier auf dem Server:
-// Der Browser schickt nur, WAS gekauft werden soll (kind, ggf. listing_id), nie einen Betrag.
+// Startet eine Stripe-Bezahlseite für Marktplatz-Boni, Abos und Unterstützungen. Die Preise stehen nur hier auf dem
+// Server: Der Browser schickt nur, WAS gekauft werden soll (kind, ggf. listing_id), nie einen Betrag. Einzige Ausnahme
+// ist die Unterstützung (SQL 043): Dort wählt die Person den Betrag in ganzen Euro, die Grenzen prüft der Server.
 // Benötigte Secrets in Supabase: STRIPE_SECRET_KEY (sk_test_… bzw. später sk_live_…), optional SITE_URL.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -16,6 +17,13 @@ const PRODUCTS: Record<string, Product> = {
 
 const BOOST_COLUMN: Record<string, string> = { highlight: "highlighted", top: "top_ad", bump: "bump_since" };
 
+// Unterstützung (SQL 043): Den Betrag wählt die Person in ganzen Euro, die Grenzen legt nur der Server fest
+type Support = { name: string; min: number; max: number; mode: "payment" | "subscription"; kind: "einmalig" | "monatlich" };
+const SUPPORT: Record<string, Support> = {
+  support_once: { name: "Unterstützung der GSRA", min: 3, max: 500, mode: "payment", kind: "einmalig" },
+  support_monthly: { name: "Monatliche Unterstützung der GSRA", min: 2, max: 100, mode: "subscription", kind: "monatlich" },
+};
+
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -24,6 +32,65 @@ const cors = {
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
+
+// Bezahlseite für eine Unterstützung (einmalig oder monatlich). Beträge erscheinen nirgends öffentlich.
+async function supportCheckout(req: Request, body: Record<string, unknown>, support: Support, stripeKey: string, site: string) {
+  const euro = Number(body.amount_eur);
+  if (!Number.isInteger(euro) || euro < support.min || euro > support.max) {
+    return json({ error: `Bitte wähle einen ganzen Betrag zwischen ${support.min} € und ${support.max} €.` }, 400);
+  }
+  const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+  const { data: { user } } = await admin.auth.getUser(token);
+  if (!user) return json({ error: "Bitte melde dich an." }, 401);
+  const { data: banned } = await admin.from("user_bans").select("id, banned_until, lifted_at").eq("user_id", user.id).is("lifted_at", null);
+  if ((banned || []).some((b) => !b.banned_until || new Date(b.banned_until) > new Date())) {
+    return json({ error: "Dein Konto ist gesperrt." }, 403);
+  }
+  // Höchstens eine laufende monatliche Unterstützung pro Person (ändern oder beenden über „Abo verwalten“)
+  if (support.mode === "subscription") {
+    const { data: current } = await admin.from("supporters").select("monthly_status").eq("user_id", user.id).maybeSingle();
+    if (["active", "trialing", "past_due"].includes(current?.monthly_status || "")) {
+      return json({ error: "Du unterstützt die GSRA bereits monatlich. Ändern oder beenden kannst du das unter „Abo verwalten“." }, 400);
+    }
+  }
+  const { data: customer } = await admin.from("billing_customers").select("stripe_customer_id").eq("user_id", user.id).maybeSingle();
+
+  const params = new URLSearchParams();
+  params.set("mode", support.mode);
+  params.set("locale", "de");
+  params.set("success_url", `${site}/unterstuetzen.html?unterstuetzung=danke`);
+  params.set("cancel_url", `${site}/unterstuetzen.html?unterstuetzung=abbruch`);
+  params.set("client_reference_id", user.id);
+  params.set("line_items[0][quantity]", "1");
+  params.set("line_items[0][price_data][currency]", "eur");
+  params.set("line_items[0][price_data][unit_amount]", String(euro * 100));
+  params.set("line_items[0][price_data][product_data][name]", support.name);
+  params.set("metadata[kind]", "support");
+  params.set("metadata[support_kind]", support.kind);
+  params.set("metadata[user_id]", user.id);
+  if (support.mode === "subscription") {
+    params.set("line_items[0][price_data][recurring][interval]", "month");
+    params.set("subscription_data[metadata][kind]", "support");
+    params.set("subscription_data[metadata][user_id]", user.id);
+  } else if (!customer) {
+    params.set("customer_creation", "always");
+  }
+  if (customer?.stripe_customer_id) params.set("customer", customer.stripe_customer_id);
+  else if (user.email) params.set("customer_email", user.email);
+
+  const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${stripeKey}`, "Content-Type": "application/x-www-form-urlencoded" },
+    body: params,
+  });
+  const session = await res.json();
+  if (!res.ok) {
+    console.error("Stripe-Fehler:", session?.error?.message);
+    return json({ error: "Die Bezahlseite konnte nicht geöffnet werden. Bitte versuche es später erneut." }, 502);
+  }
+  return json({ url: session.url });
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -36,6 +103,8 @@ Deno.serve(async (req) => {
 
     // Boni: ein oder mehrere (kinds: ["highlight", "top"]), Abos: genau eines (kind: "pole" | "alliance")
     const body = await req.json().catch(() => ({}));
+    const support = SUPPORT[String(body.kind || "")];
+    if (support) return await supportCheckout(req, body, support, stripeKey, site);
     const { listing_id } = body;
     const kinds: string[] = Array.isArray(body.kinds) ? [...new Set(body.kinds.map(String))] : [String(body.kind || "")];
     const kind = kinds[0];

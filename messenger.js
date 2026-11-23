@@ -601,7 +601,14 @@ function openMediaViewer(items, startIndex) {
         items.forEach((item, idx) => {
             const thumb = document.createElement("div");
             thumb.className = "wa-viewer-thumb";
-            if (isVideoUrl(item.url)) {
+            if (item.thumb) {
+                // Vorschaubild statt Original: Die Leiste lädt nur wenige Kilobyte pro Medium
+                const img = document.createElement("img");
+                img.dataset.src = item.thumb;
+                img.alt = `Medium ${idx + 1}`;
+                thumb.appendChild(img);
+                if (item.video ?? isVideoUrl(item.url)) thumb.insertAdjacentHTML("beforeend", '<i class="fa-solid fa-play"></i>');
+            } else if (item.video ?? isVideoUrl(item.url)) {
                 const vid = document.createElement("video");
                 vid.dataset.src = `${item.url}#t=0.1`;
                 vid.preload = "metadata";
@@ -631,7 +638,7 @@ function showViewerItem(index) {
     viewerIndex = index;
     const item = viewerItems[index];
     const url = item.url;
-    const isVideo = isVideoUrl(url);
+    const isVideo = item.video ?? isVideoUrl(url);
 
     // Absender und Zeitpunkt der Nachricht, zu der das aktuelle Medium gehört
     if (viewerSenderName) viewerSenderName.innerText = item.sender;
@@ -2914,8 +2921,13 @@ async function appendSingleMessage(msg, isSystem = false) {
     }
 
     if (!isDeleted && msg.image_url) {
-        const toShow = (u) => (window.gsraChatMedia ? window.gsraChatMedia.url(u) : u);
-        const urls = msg.image_url.split(",").map(u => u.trim()).filter(Boolean).map(toShow);
+        const media = window.gsraChatMedia;
+        const toShow = (u) => (media ? media.url(u) : u);
+        const rawUrls = msg.image_url.split(",").map(u => u.trim()).filter(Boolean);
+        const urls = rawUrls.map(toShow);
+        // Neue Anhänge haben ein kleines Vorschaubild; der Chat zeigt nur das, das Original lädt erst im Betrachter
+        const thumbs = rawUrls.map(u => { const t = media?.thumbOf?.(u); return t ? toShow(t) : null; });
+        const durations = rawUrls.map(u => media?.durationOf?.(u) ?? null);
         const displayCount = Math.min(urls.length, 4);
         const gridContainer = document.createElement("div");
         gridContainer.className = `wa-media-grid count-${displayCount}`;
@@ -2927,11 +2939,14 @@ async function appendSingleMessage(msg, isSystem = false) {
         // Alle Medien des Chats chronologisch sammeln – der Betrachter blättert durch den ganzen Chat
         const mediaList = chatMediaItems;
         const albumStart = mediaList.length;
-        urls.forEach((url, albumIndex) => mediaList.push({ url, msgId: msg.id, sender: senderName, date: dateObj, albumIndex, albumSize: urls.length }));
+        // Video oder Foto an der gespeicherten Adresse erkennen (der kurzlebige Link hat nicht immer eine Dateiendung)
+        const videoFlags = rawUrls.map((u, i) => isVideoUrl(u) || isVideoUrl(urls[i]));
+        urls.forEach((url, albumIndex) => mediaList.push({ url, thumb: thumbs[albumIndex], video: videoFlags[albumIndex], msgId: msg.id, sender: senderName, date: dateObj, albumIndex, albumSize: urls.length }));
 
         for (let i = 0; i < displayCount; i++) {
             const cleanUrl = urls[i];
-            const isVideo = isVideoUrl(cleanUrl);
+            const thumbUrl = thumbs[i];
+            const isVideo = videoFlags[i];
             const hasMoreOverlay = (i === 3 && urls.length > 4);
 
             // Fotos und Videos nutzen dieselbe einheitliche Kachel
@@ -2939,33 +2954,45 @@ async function appendSingleMessage(msg, isSystem = false) {
             tile.className = `wa-media-item${isVideo ? " is-video" : ""}${hasMoreOverlay ? " has-more" : ""}`;
 
             if (isVideo) {
-                const videoElem = document.createElement("video");
-                videoElem.src = `${cleanUrl}#t=0.1`;
-                videoElem.preload = "metadata";
-                videoElem.muted = true;
-                videoElem.playsInline = true;
-                tile.appendChild(videoElem);
+                const durationTag = document.createElement("div");
+                durationTag.className = "wa-media-duration";
+                durationTag.innerHTML = '<i class="fa-solid fa-video"></i>';
+                if (thumbUrl) {
+                    // Nur das Standbild – das Video selbst lädt erst beim Abspielen im Betrachter
+                    const poster = document.createElement("img");
+                    poster.src = thumbUrl;
+                    poster.alt = "Video";
+                    poster.loading = "lazy";
+                    poster.decoding = "async";
+                    tile.appendChild(poster);
+                    if (durations[i]) durationTag.innerHTML = `<i class="fa-solid fa-video"></i> ${formatDuration(durations[i])}`;
+                } else {
+                    const videoElem = document.createElement("video");
+                    videoElem.src = `${cleanUrl}#t=0.1`;
+                    videoElem.preload = "metadata";
+                    videoElem.muted = true;
+                    videoElem.playsInline = true;
+                    tile.appendChild(videoElem);
+                    videoElem.addEventListener("loadedmetadata", () => {
+                        if (isFinite(videoElem.duration)) {
+                            durationTag.innerHTML = `<i class="fa-solid fa-video"></i> ${formatDuration(videoElem.duration)}`;
+                        }
+                    });
+                }
 
                 if (!hasMoreOverlay) {
                     const playIcon = document.createElement("div");
                     playIcon.className = "wa-media-play";
                     playIcon.innerHTML = '<i class="fa-solid fa-play"></i>';
                     tile.appendChild(playIcon);
-
-                    const durationTag = document.createElement("div");
-                    durationTag.className = "wa-media-duration";
-                    durationTag.innerHTML = '<i class="fa-solid fa-video"></i>';
-                    videoElem.addEventListener("loadedmetadata", () => {
-                        if (isFinite(videoElem.duration)) {
-                            durationTag.innerHTML = `<i class="fa-solid fa-video"></i> ${formatDuration(videoElem.duration)}`;
-                        }
-                    });
                     tile.appendChild(durationTag);
                 }
             } else {
                 const img = document.createElement("img");
-                img.src = cleanUrl;
+                img.src = thumbUrl || cleanUrl;
                 img.alt = "Bild";
+                img.loading = "lazy";
+                img.decoding = "async";
                 tile.appendChild(img);
             }
 
@@ -3217,10 +3244,13 @@ if (chatForm) {
 
         if ((!text && files.length === 0) || !activeChatId || !currentUser?.id || !supabase) return;
 
-        const MAX_FILE_SIZE = 200 * 1024 * 1024;
+        // Grenzen: Fotos höchstens 50 MB (Speicher, SQL 032); Videos bis 1 GB, sie werden vor dem Hochladen verkleinert
+        const MAX_FILE_SIZE = 50 * 1024 * 1024;
+        const MAX_VIDEO_INPUT = 1024 * 1024 * 1024;
         for (const file of files) {
-            if (file.size > MAX_FILE_SIZE) {
-                showToast("Dein Medium konnte nicht hochgeladen werden, da die Datei das Dateigrößenlimit überschreitet.", "error");
+            const limit = file.type.startsWith("video/") && window.gsraMedienVorbereiten ? MAX_VIDEO_INPUT : MAX_FILE_SIZE;
+            if (file.size > limit) {
+                showToast(file.type.startsWith("video/") ? "Das Video ist zu groß. Bitte kürze es vor dem Senden." : "Die Datei ist größer als 50 MB und kann nicht gesendet werden.", "error");
                 return;
             }
         }
@@ -3254,16 +3284,42 @@ if (chatForm) {
             }
 
             let mediaUrls = [];
-            for (const original of files) {
-                // Fotos verkleinern (höchstens 1920 px, ohne Standortdaten); Videos bleiben unverändert
-                const file = window.gsraShrinkImage ? await window.gsraShrinkImage(original, 1920) : original;
-                const fileExt = file.name.split('.').pop();
-                const baseName = `chat_${Date.now()}_${Math.random().toString(36).substring(2,7)}.${fileExt}`;
+            const storage = supabase.storage.from("chat_attachments");
+            const pathFor = (name) => window.gsraChatMedia ? window.gsraChatMedia.uploadPath(activeChatId, currentUser.id, name) : name;
+            for (const [index, original] of files.entries()) {
+                // Fotos verkleinern (höchstens 1920 px, ohne Standortdaten)
+                let file = window.gsraShrinkImage ? await window.gsraShrinkImage(original, 1920) : original;
+                let thumb = null;
+                let duration = null;
+                // Vorschaubild für Fotos und Videos, große Videos auf 720p verkleinern (src/medien-vorbereiten.ts)
+                if (window.gsraMedienVorbereiten) {
+                    const showProgress = (share) => {
+                        if (!sendBtn) return;
+                        const total = Math.round(((index + share) / files.length) * 100);
+                        sendBtn.innerHTML = `<span class="send-progress">${total}%</span>`;
+                    };
+                    if (file.type.startsWith("video/")) showToast("Das Video wird für den Versand verkleinert …", "info");
+                    const prepared = await window.gsraMedienVorbereiten(file, showProgress);
+                    file = prepared.datei;
+                    thumb = prepared.vorschau;
+                    duration = prepared.dauer;
+                    if (sendBtn) sendBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i>`;
+                }
+                const ext = (file.type === "video/mp4" ? "mp4" : String(file.name.split(".").pop() || "")).toLowerCase();
+                const fileExt = /^[a-z0-9]{1,5}$/.test(ext) ? ext : "bin";
+                const id = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+                // Erst das Vorschaubild; klappt es, bekommt das Original den Namen „chatv_…“ (= hat Vorschau, siehe chat-medien.js)
+                let prefix = "chat_";
+                if (thumb) {
+                    const { error: thumbErr } = await storage.upload(pathFor(`chatv_${id}.vorschau.jpg`), thumb, { contentType: "image/jpeg" });
+                    if (!thumbErr) prefix = "chatv_";
+                }
+                const durationPart = prefix === "chatv_" && duration ? `_${Math.min(99999, Math.round(duration))}s` : "";
                 // Privater Speicher (SQL 032): Ordner des Chats und eigener Unterordner
-                const fileName = window.gsraChatMedia ? window.gsraChatMedia.uploadPath(activeChatId, currentUser.id, baseName) : baseName;
-                const { error: uploadErr } = await supabase.storage.from("chat_attachments").upload(fileName, file);
+                const fileName = pathFor(`${prefix}${id}${durationPart}.${fileExt}`);
+                const { error: uploadErr } = await storage.upload(fileName, file, { contentType: file.type || undefined });
                 if (uploadErr) throw uploadErr;
-                const { data: pubData } = supabase.storage.from("chat_attachments").getPublicUrl(fileName);
+                const { data: pubData } = storage.getPublicUrl(fileName);
                 mediaUrls.push(pubData.publicUrl);
             }
 
@@ -3295,7 +3351,8 @@ if (chatForm) {
             loadUserChats();
         } catch (err) {
             console.error("Fehler beim Senden:", err);
-            showToast(/^Zu viele/.test(err?.message || "") ? err.message : "Fehler beim Verarbeiten der Nachricht. Bitte versuche es erneut.", "error");
+            const ownMessage = /^Zu viele/.test(err?.message || "") || (window.gsraMedienFehler && err instanceof window.gsraMedienFehler);
+            showToast(ownMessage ? err.message : "Fehler beim Verarbeiten der Nachricht. Bitte versuche es erneut.", "error");
         } finally {
             if (sendBtn) {
                 sendBtn.disabled = false;

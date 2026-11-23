@@ -10,9 +10,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL] =
-    Array.from({ length: 41 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 41);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL] =
+    Array.from({ length: 43 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 43);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -2799,6 +2799,190 @@ if (CHAT_SETUPS_SQL && SUCHE_SQL) {
     check("Anhang entfernen räumt Name und Angaben mit ab", weg.file_name === null && weg.file_meta === null, JSON.stringify(weg));
     const fn = await one(`select has_function_privilege('authenticated', 'public.messages_file_guard()', 'EXECUTE') as ok`);
     check("Schutzfunktion nicht direkt aufrufbar", fn.ok === false, String(fn.ok));
+}
+
+// --- 042: E-Mail bei neuem Gerät – Prüfung nur für den Server, erstes Gerät still, neues Gerät genau ein Hinweis ---
+if (GERAET_SQL && CHAT_SETUPS_SQL) {
+    const id = (n) => `72000000-0000-0000-0000-0000000004${String(n).padStart(2, "0")}`;
+    const NEU = id(1), ALT = id(2), FLUT = id(3);
+    const UA = {
+        winChrome: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
+        winChromeNeu: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
+        winEdge: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0",
+        iphone: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1",
+        ipad: "Mozilla/5.0 (iPad; CPU OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1",
+        android: "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36",
+        samsung: "Mozilla/5.0 (Linux; Android 14; SM-X710) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/26.0 Chrome/122.0.0.0 Safari/537.36",
+        linuxFirefox: "Mozilla/5.0 (X11; Linux x86_64; rv:144.0) Gecko/20100101 Firefox/144.0",
+        mac: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15",
+    };
+    // auth.sessions wie in Supabase (nur die Spalten, die 042 liest)
+    await db.exec(`
+      create table if not exists auth.sessions (id uuid primary key default gen_random_uuid(), user_id uuid references auth.users(id) on delete cascade,
+        created_at timestamptz default now(), updated_at timestamptz, user_agent text, ip inet);
+      insert into auth.users (id) values ('${NEU}'), ('${ALT}'), ('${FLUT}');
+      insert into public.profiles (id, username) values ('${NEU}', 'Neufahrer'), ('${ALT}', 'Altfahrer'), ('${FLUT}', 'Flutfahrer');
+      insert into auth.sessions (user_id, user_agent, ip, created_at) values ('${ALT}', '${UA.winChrome}', '84.132.10.20', now() - interval '3 days');`);
+    await db.exec(readFileSync(GERAET_SQL, "utf8"));
+    const ctl42 = await db.exec(readFileSync(GERAET_SQL, "utf8")); // zweiter Lauf
+    const rows42 = ctl42[ctl42.length - 1].rows;
+    console.log("Kontrolle 042:\n  " + rows42.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+    check("Kontrolle 042: Tabellen, nur Server, Anmeldungen lesbar (Zeitplan braucht pg_cron)",
+        rows42.slice(0, 3).map(r => r.ergebnis).join(",") === "bereit,ja,ja", rows42.map(r => r.ergebnis).join(", "));
+
+    const label = async (ua) => (await one(`select public.device_label('${ua}') as l`)).l;
+    check("Gerätebeschreibung: Chrome auf Windows", await label(UA.winChrome) === "Chrome auf Windows (Computer)", await label(UA.winChrome));
+    check("Gerätebeschreibung: Edge wird nicht als Chrome erkannt", await label(UA.winEdge) === "Edge auf Windows (Computer)", await label(UA.winEdge));
+    check("Gerätebeschreibung: iPhone, iPad, Android-Handy, Samsung-Tablet, Mac",
+        [await label(UA.iphone), await label(UA.ipad), await label(UA.android), await label(UA.samsung), await label(UA.mac)].join(" | ")
+        === "Safari auf iOS (Handy) | Safari auf iOS (Tablet) | Chrome auf Android (Handy) | Samsung Internet auf Android (Tablet) | Safari auf macOS (Computer)",
+        [await label(UA.iphone), await label(UA.ipad), await label(UA.android), await label(UA.samsung), await label(UA.mac)].join(" | "));
+    const hint = await one(`select public.ip_hint('84.132.10.20') as v4, public.ip_hint('2a02:810d:1:2::5') as v6, public.ip_hint(null) as leer`);
+    check("Netzwerk-Hinweis nur gekürzt (84.132.x.x, 2a02:810d:…)", hint.v4 === "84.132.x.x" && hint.v6 === "2a02:810d:…" && hint.leer === null, JSON.stringify(hint));
+    const seeded = await one(`select count(*)::int as n from public.known_devices where user_id = '${ALT}' and label = 'Chrome auf Windows (Computer)'`);
+    check("Beim Einspielen: Geräte laufender Sitzungen gelten als bekannt (keine E-Mail-Welle)", seeded.n === 1, String(seeded.n));
+
+    const login = (uid, ua, ip = "91.12.3.4") => db.exec(`insert into auth.sessions (user_id, user_agent, ip) values ('${uid}', '${ua.replace(/'/g, "''")}', '${ip}')`);
+    const run = async () => { await db.exec(`update public.device_scan set last_run = '-infinity'`); return (await one(`select public.device_alert_run() as r`)).r; };
+
+    await login(NEU, UA.linuxFirefox);
+    const r1 = await run();
+    const neuGeraete = Number((await one(`select count(*) as n from public.known_devices where user_id = '${NEU}'`)).n);
+    check("Erste Anmeldung eines Kontos: Gerät still gemerkt, keine E-Mail", r1.lauf === true && r1.hinweise.length === 0 && neuGeraete === 1, JSON.stringify(r1));
+
+    await login(ALT, UA.winChromeNeu);
+    const r2 = await run();
+    check("Bekanntes Gerät (nur neuere Browser-Version): keine E-Mail", r2.hinweise.length === 0, JSON.stringify(r2));
+
+    await login(ALT, UA.iphone, "91.12.3.4");
+    const r3 = await run();
+    const h = r3.hinweise[0] || {};
+    check("Neues Gerät: genau ein Hinweis mit Gerät, gekürztem Netz und Name",
+        r3.hinweise.length === 1 && h.geraet === "Safari auf iOS (Handy)" && h.netz === "91.12.x.x" && h.name === "Altfahrer" && h.user_id === ALT,
+        JSON.stringify(r3));
+    const r4 = await run();
+    check("Kein zweites Mal für denselben Hinweis", r4.hinweise.length === 0, JSON.stringify(r4));
+    const ipLeft = Number((await one(`select count(*) as n from public.device_alerts where ip_hint is not null`)).n);
+    check("Netzwerk-Hinweis nach dem Versand gelöscht", ipLeft === 0, String(ipLeft));
+    const gesperrt = await one(`select public.device_alert_run() as r`);
+    check("Höchstens ein Lauf pro Minute (zweiter Aufruf sofort danach läuft nicht)", gesperrt.r.lauf === false, JSON.stringify(gesperrt.r));
+
+    await login(FLUT, UA.winChrome);
+    await run();
+    for (const ua of [UA.iphone, UA.ipad, UA.android, UA.samsung, UA.mac]) await login(FLUT, ua);
+    const flut = await run();
+    check("Höchstens 3 E-Mails pro Konto und Stunde (5 neue Geräte → 3 Hinweise)", flut.hinweise.filter(x => x.user_id === FLUT).length === 3, String(flut.hinweise.length));
+
+    await as(ALT, async () => {
+        const eigen = await q(`select label from public.known_devices`);
+        check("Mitglied sieht nur die eigenen Geräte", eigen.error === null && eigen.rows.length === 2, eigen.error || JSON.stringify(eigen.rows));
+        const fremd = await q(`select label from public.known_devices where user_id = '${FLUT}'`);
+        check("Geräte anderer Mitglieder unsichtbar", fremd.rows.length === 0, JSON.stringify(fremd.rows));
+        const lauf = await q(`select public.device_alert_run()`);
+        check("Mitglied kann die Prüfung nicht selbst auslösen", lauf.error !== null, lauf.error || "durchgelassen!");
+        const hinweise = await q(`select * from public.device_alerts`);
+        check("Mitglied kann keine Hinweise lesen", hinweise.error !== null, hinweise.error || "durchgelassen!");
+        const faelschen = await q(`insert into public.known_devices (user_id, label) values ('${ALT}', 'Gefälschtes Gerät')`);
+        check("Mitglied kann sich kein Gerät als bekannt eintragen", faelschen.error !== null, faelschen.error || "durchgelassen!");
+        const sitzungen = await q(`select * from auth.sessions`);
+        check("Anmeldungen (auth.sessions) für Mitglieder nicht lesbar", sitzungen.error !== null || sitzungen.rows.length === 0, sitzungen.error || `${sitzungen.rows.length} Zeilen`);
+    });
+    await as(null, async () => {
+        const gast = await q(`select public.device_alert_run()`);
+        check("Gast kann die Prüfung nicht auslösen", gast.error !== null, gast.error || "durchgelassen!");
+        const geraete = await q(`select * from public.known_devices`);
+        check("Gast sieht keine Geräte", geraete.error !== null || geraete.rows.length === 0, geraete.error || `${geraete.rows.length} Zeilen`);
+    });
+    await db.exec(`delete from auth.users where id = '${NEU}'`);
+    const rest = Number((await one(`select count(*) as n from public.known_devices where user_id = '${NEU}'`)).n);
+    check("Konto gelöscht: Geräte verschwinden mit", rest === 0, String(rest));
+}
+
+// --- 043: Unterstützen – Beträge privat, Wand nur freiwillig, Verbuchen nur durch den Server ---
+if (UNTERSTUETZER_SQL && GERAET_SQL) {
+    const id = (n) => `73000000-0000-0000-0000-0000000004${String(n).padStart(2, "0")}`;
+    const UNT = id(1), STILL = id(2), NIE = id(3), SPERR = id(4);
+    await db.exec(`
+      insert into auth.users (id) values ('${UNT}'), ('${STILL}'), ('${NIE}'), ('${SPERR}');
+      insert into public.profiles (id, username) values ('${UNT}', 'Unterstützer Uwe'), ('${STILL}', 'Stille Stefanie'), ('${NIE}', 'Noch Nicht'), ('${SPERR}', 'Gesperrter Gerd');`);
+    await db.exec(readFileSync(UNTERSTUETZER_SQL, "utf8"));
+    const ctl43 = await db.exec(readFileSync(UNTERSTUETZER_SQL, "utf8")); // zweiter Lauf
+    const rows43 = ctl43[ctl43.length - 1].rows;
+    console.log("Kontrolle 043:\n  " + rows43.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+    check("Kontrolle 043: Tabellen, Beträge privat, nur Server, Kündigung", rows43.map(r => r.ergebnis).join(",") === "bereit,ja,ja,bereit", rows43.map(r => r.ergebnis).join(", "));
+
+    const apply = (ref, uid, kind = "einmalig", cents = 1000) => one(`select public.stripe_apply_support('${ref}', '${uid}', '${kind}', ${cents}, 'eur', 'cus_${ref}') as r`);
+    const vorher = await as(NIE, async () => (await q(`select public.my_support() as s`)).rows[0]?.s);
+    check("Ohne Unterstützung: Status „kein Unterstützer“", vorher?.unterstuetzer === false && vorher?.oeffentlich === false, JSON.stringify(vorher));
+    await as(NIE, async () => {
+        const sicht = await q(`select public.set_supporter_visibility(true) as v`);
+        check("Sichtbarkeit lässt sich schon vor der ersten Unterstützung wählen", sicht.error === null && sicht.rows[0]?.v === true, sicht.error || "");
+    });
+    const wandLeer = await as(null, async () => q(`select username from public.supporter_wall()`));
+    check("Wer noch nicht unterstützt hat, steht nicht auf der Wand (auch wenn „zeigen“ an ist)",
+        wandLeer.error === null && !wandLeer.rows.some(r => r.username === "Noch Nicht"), wandLeer.error || JSON.stringify(wandLeer.rows));
+
+    check("Server verbucht eine einmalige Unterstützung", (await apply("cs_043_1", UNT)).r === "verbucht");
+    check("Dieselbe Zahlung wird nicht doppelt verbucht", (await apply("cs_043_1", UNT)).r === "bereits verbucht");
+    await apply("cs_043_2", STILL, "einmalig", 2500);
+    await apply("cs_043_3", SPERR, "einmalig", 500);
+    await as(UNT, async () => { await q(`select public.set_supporter_visibility(true)`); });
+    await as(SPERR, async () => { await q(`select public.set_supporter_visibility(true)`); });
+    await db.exec(`insert into public.user_bans (user_id, banned_until, reason) values ('${SPERR}', now() + interval '1 day', 'Test 043')`);
+
+    await as(null, async () => {
+        const wand = await q(`select * from public.supporter_wall()`);
+        const namen = wand.rows.map(r => r.username);
+        check("Gäste sehen die Unterstützerwand", wand.error === null && namen.includes("Unterstützer Uwe"), wand.error || JSON.stringify(namen));
+        check("Wand zeigt nur, wer es eingeschaltet hat (nicht die stille Unterstützerin)", !namen.includes("Stille Stefanie"), JSON.stringify(namen));
+        check("Gesperrte Konten erscheinen nicht auf der Wand", !namen.includes("Gesperrter Gerd"), JSON.stringify(namen));
+        const spalten = Object.keys(wand.rows[0] || {}).sort().join(",");
+        check("Wand enthält keine Beträge (nur Name, Profilbild, Monat)", spalten === "avatar_url,seit,username", spalten);
+        const badges = await q(`select * from public.supporter_badges(array['${UNT}', '${STILL}', '${NIE}']::uuid[])`);
+        check("Abzeichen nur für öffentliche Unterstützer", badges.error === null && badges.rows.length === 1 && Object.values(badges.rows[0])[0] === UNT,
+            badges.error || JSON.stringify(badges.rows));
+        const status = await q(`select public.my_support()`);
+        check("Gast: kein eigener Status abrufbar", status.error !== null, status.error || "durchgelassen!");
+        const sicht = await q(`select public.set_supporter_visibility(true)`);
+        check("Gast: Sichtbarkeit nicht änderbar", sicht.error !== null, sicht.error || "durchgelassen!");
+        const zahl = await q(`select * from public.support_payments`);
+        check("Gast: Zahlungen nicht lesbar", zahl.error !== null, zahl.error || `${zahl.rows.length} Zeilen`);
+    });
+    await as(STILL, async () => {
+        const zahl = await q(`select amount_cents from public.support_payments`);
+        check("Mitglied: Beträge nicht lesbar (auch nicht die eigenen)", zahl.error !== null, zahl.error || `${zahl.rows.length} Zeilen`);
+        const tab = await q(`select * from public.supporters`);
+        check("Mitglied: Tabelle der Unterstützer nicht direkt lesbar", tab.error !== null, tab.error || `${tab.rows.length} Zeilen`);
+        const selbst = await q(`select public.stripe_apply_support('cs_fake', '${STILL}', 'einmalig', 1, 'eur', null)`);
+        check("Mitglied kann sich nicht selbst als Unterstützer verbuchen", selbst.error !== null, selbst.error || "durchgelassen!");
+        const direkt = await q(`insert into public.supporters (user_id, since, show_public) values ('${STILL}', now(), true)`);
+        check("Mitglied kann sich nicht direkt eintragen", direkt.error !== null, direkt.error || "durchgelassen!");
+        const s = (await q(`select public.my_support() as s`)).rows[0]?.s;
+        check("Eigener Status: Unterstützer, nicht öffentlich, kein monatlicher Betrag sichtbar",
+            s?.unterstuetzer === true && s?.oeffentlich === false && !("betrag" in (s || {})) && !("amount_cents" in (s || {})), JSON.stringify(s));
+    });
+    await as(SPERR, async () => {
+        const aus = await q(`select public.set_supporter_visibility(false)`);
+        check("Gesperrtes Konto kann die Sichtbarkeit nicht ändern", /gesperrt/.test(aus.error || ""), aus.error || "durchgelassen!");
+    });
+    await db.exec(`delete from public.user_bans where reason = 'Test 043'`);
+
+    // Monatlich: Abo-Stand von Stripe; eine alte, beendete Unterstützung überschreibt keine laufende
+    await one(`select public.stripe_sync_support('sub_043_neu', '${STILL}', 'cus_043', 'active', now() + interval '30 days', false)`);
+    await one(`select public.stripe_sync_support('sub_043_alt', '${STILL}', 'cus_043', 'canceled', now() - interval '5 days', false)`);
+    const monat = await as(STILL, async () => (await q(`select public.my_support() as s`)).rows[0]?.s);
+    check("Monatliche Unterstützung läuft; altes beendetes Abo überschreibt sie nicht", monat?.monatlich === true && monat?.gekuendigt === false, JSON.stringify(monat));
+    await one(`select public.stripe_sync_support('sub_043_neu', '${STILL}', 'cus_043', 'active', now() + interval '30 days', true)`);
+    const gekuendigt = await as(STILL, async () => (await q(`select public.my_support() as s`)).rows[0]?.s);
+    check("Gekündigt zum Laufzeitende wird angezeigt", gekuendigt?.monatlich === true && gekuendigt?.gekuendigt === true, JSON.stringify(gekuendigt));
+    const neuMonat = await one(`select public.stripe_sync_support('sub_043_x', '${NIE}', null, 'active', now() + interval '30 days', false) as r`);
+    const nieStatus = await as(NIE, async () => (await q(`select public.my_support() as s`)).rows[0]?.s);
+    check("Erstes monatliches Abo macht zum Unterstützer", neuMonat.r === "abgeglichen" && nieStatus?.unterstuetzer === true && nieStatus?.monatlich === true, JSON.stringify(nieStatus));
+
+    await db.exec(`delete from auth.users where id = '${UNT}'`);
+    const nach = await one(`select (select count(*) from public.supporters where user_id = '${UNT}')::int as s,
+                                   (select count(*) from public.support_payments where stripe_ref = 'cs_043_1' and user_id is null)::int as p`);
+    check("Konto gelöscht: Eintrag weg, Zahlungsbeleg bleibt ohne Personenbezug (Buchhaltung)", nach.s === 0 && nach.p === 1, JSON.stringify(nach));
 }
 
 // --- Konto löschen (Ausbau 3) funktioniert weiterhin, die Stimmen verschwinden mit ---

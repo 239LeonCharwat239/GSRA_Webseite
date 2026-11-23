@@ -30,10 +30,14 @@ Deno.serve(async (req) => {
     const { data: customer } = await admin.from("billing_customers").select("stripe_customer_id").eq("user_id", user.id).maybeSingle();
     if (!customer?.stripe_customer_id) return json({ error: "Zu deinem Konto gibt es noch keine Zahlungen." }, 404);
 
+    // Zurück auf die Seite, von der aus das Portal geöffnet wurde (nur feste eigene Seiten, kein freier Link)
+    const body = await req.json().catch(() => ({}));
+    const returnPage = body?.return_page === "unterstuetzen" ? "unterstuetzen.html" : "abo.html";
+
     const res = await fetch("https://api.stripe.com/v1/billing_portal/sessions", {
       method: "POST",
       headers: { Authorization: `Bearer ${stripeKey}`, "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ customer: customer.stripe_customer_id, return_url: `${site}/abo.html`, locale: "de" }),
+      body: new URLSearchParams({ customer: customer.stripe_customer_id, return_url: `${site}/${returnPage}`, locale: "de" }),
     });
     const portal = await res.json();
     if (!res.ok) {

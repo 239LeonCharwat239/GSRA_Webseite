@@ -7940,6 +7940,28 @@ a.plan-badge:hover {
     filter: brightness(1.2);
 }
 
+/* Dashboard: bekannte Geräte (SQL 042) */
+.dash-device-card[hidden] { display: none; }
+.dash-device-card { text-align: left; }
+.dash-device-card h3 { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; }
+.dash-device-card h3 i { color: var(--gsra-yellow); }
+.dash-device-card > p { margin: 0 0 12px; color: var(--text-muted); font-size: 14px; line-height: 1.55; }
+.dash-device-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.dash-device-list li { display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-subtle); border-radius: 10px; min-width: 0; }
+.dash-device-list li > i { flex-shrink: 0; width: 22px; color: #6f9bff; font-size: 18px; text-align: center; }
+.dash-device-list span { display: flex; flex-direction: column; min-width: 0; }
+.dash-device-list strong { color: #fff; font-size: 14px; }
+.dash-device-list small { color: var(--text-muted); font-size: 12px; }
+.dash-device-list .dash-device-empty { color: var(--text-muted); font-size: 13px; }
+
+/* Unterstützer-Abzeichen (SQL 043) – neben dem Abo-Abzeichen */
+.plan-badge.supporter {
+    margin-left: 6px;
+    border-color: rgba(255, 92, 120, 0.6);
+    background: rgba(255, 92, 120, 0.1);
+    color: #ff7a93;
+}
+
 @media (max-width: 600px) {
     .mk-top {
         padding: 12px;
@@ -12449,6 +12471,8 @@ body.gsra-search-open { overflow: hidden; }
    ANHÄNGE IM CHAT: Fotos, Videos, Setups (src/chat-anhang.ts, SQL 041)
 ========================================= */
 .gsra-attach-wrap { position: relative; display: inline-flex; }
+/* Fortschritt beim Verkleinern von Videos (src/medien-vorbereiten.ts) im Senden-Knopf */
+.send-progress { font-size: 11px; font-weight: 800; letter-spacing: 0; font-variant-numeric: tabular-nums; }
 /* Eingabeleiste als eigene Ebene über dem Verlauf – sonst liegen die Nachrichten über dem Kachel-Menü */
 #chatForm.composer { z-index: 30; }
 .gsra-attach-menu {
@@ -12906,6 +12930,15 @@ header .gsra-account-menu #logoutBtn:hover { background: rgba(255, 77, 77, 0.1) 
 .gsra-nav-item-text em.vorschau { margin-left: 4px; padding: 1px 6px; background: rgba(255, 204, 0, 0.16); border-radius: 6px; color: var(--gsra-yellow); font-size: 10px; font-style: normal; letter-spacing: 0.5px; text-transform: uppercase; }
 .sp-beta { max-width: 1200px; margin: 0 auto 18px; padding: 10px 14px; background: rgba(255, 204, 0, 0.07); border: 1px solid rgba(255, 204, 0, 0.3); border-radius: 10px; color: #dfe3ea; font-size: 13px; text-align: left; }
 .sp-beta i { color: var(--gsra-yellow); margin-right: 4px; }
+.sp-beta[hidden], .sp-layout[hidden] { display: none; }
+.sp-zugang { max-width: 640px; margin: 0 auto 40px; }
+.sp-laden { color: var(--text-muted); text-align: center; }
+.sp-sperre { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 30px 24px; background: var(--bg-card); border: 1px solid rgba(255, 204, 0, 0.35); border-radius: 14px; text-align: center; }
+.sp-sperre > i { font-size: 30px; color: var(--gsra-yellow); }
+.sp-sperre h2 { margin: 0; color: #fff; font-size: 20px; }
+.sp-sperre p { margin: 0; color: #cfd5de; line-height: 1.6; }
+.sp-sperre-liste { margin: 4px 0 8px; padding: 0; list-style: none; display: grid; gap: 6px; text-align: left; color: #dfe3ea; font-size: 14px; }
+.sp-sperre-liste li::before { content: "\f00c"; font-family: "Font Awesome 6 Free"; font-weight: 900; color: var(--gsra-yellow); margin-right: 8px; }
 .sp-layout { display: grid; grid-template-columns: minmax(320px, 420px) 1fr; gap: 20px; max-width: 1200px; margin: 0 auto; text-align: left; align-items: start; }
 .sp-formular { display: flex; flex-direction: column; gap: 14px; }
 .sp-karte { padding: 14px 16px; background: var(--bg-card); border: 1px solid var(--border-subtle); border-left: 3px solid var(--gsra-blue); border-radius: 12px; }
@@ -12981,4 +13014,66 @@ header .gsra-account-menu #logoutBtn:hover { background: rgba(255, 77, 77, 0.1) 
     .sp-felder { grid-template-columns: 1fr; }
     .sp-fahrer-zeile { grid-template-columns: 1fr 34px; }
     .sp-fahrer-zeile .sp-fahrer-zeit { grid-column: 1 / 2; }
+}
+
+/* =========================================
+   UNTERSTÜTZEN (unterstuetzen.html, src/unterstuetzen.ts, SQL 043)
+========================================= */
+.ut-page { text-align: left; }
+.ut-layout { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 20px; max-width: 1100px; margin: 0 auto 28px; align-items: start; }
+.ut-karte { padding: 20px; background: var(--bg-card); border: 1px solid var(--border-subtle); border-left: 3px solid var(--gsra-blue); border-radius: 14px; }
+.ut-karte h2, .ut-wand h2 { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; color: #fff; font-size: 15px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; }
+.ut-karte h2 i, .ut-wand h2 i { color: var(--gsra-yellow); }
+.ut-formular { display: flex; flex-direction: column; gap: 14px; border-left-color: var(--gsra-yellow); }
+.ut-umschalter { display: grid; grid-template-columns: 1fr 1fr; padding: 4px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border-subtle); border-radius: 10px; }
+.ut-umschalter label { position: relative; padding: 9px 10px; border-radius: 7px; color: var(--text-muted); font-weight: 800; text-align: center; cursor: pointer; }
+.ut-umschalter input { position: absolute; opacity: 0; pointer-events: none; }
+.ut-umschalter label:has(input:checked) { background: var(--gsra-yellow); color: #0b0c10; }
+.ut-umschalter label:has(input:focus-visible) { outline: 2px solid var(--gsra-blue); outline-offset: 2px; }
+.ut-betraege { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.ut-betrag { padding: 12px 6px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 10px; color: #fff; font-family: inherit; font-size: 15px; font-weight: 800; cursor: pointer; }
+.ut-betrag:hover { border-color: var(--gsra-yellow); }
+.ut-betrag.aktiv, .ut-betrag.aktiv:hover { background: rgba(255, 204, 0, 0.14); border-color: var(--gsra-yellow); color: var(--gsra-yellow); }
+.ut-eigen { display: flex; flex-direction: column; gap: 6px; color: var(--text-muted); font-size: 12px; font-weight: 600; }
+.ut-eigen input { width: 100%; padding: 10px 12px; background: #0f1116; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 9px; color: #fff; font-family: inherit; font-size: 15px; font-weight: 700; }
+.ut-eigen input:focus { outline: none; border-color: var(--gsra-blue); box-shadow: 0 0 0 3px rgba(0, 85, 255, 0.2); }
+.ut-haken { display: flex; align-items: flex-start; gap: 10px; color: #cfd5de; font-size: 13px; line-height: 1.5; cursor: pointer; }
+.ut-haken input { flex-shrink: 0; width: 18px; height: 18px; margin-top: 2px; accent-color: var(--gsra-yellow); }
+.ut-haken.klein { font-size: 13px; align-items: center; }
+.ut-haken.klein input { margin-top: 0; }
+.ut-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 16px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 9px; color: #fff; font-family: inherit; font-size: 14px; font-weight: 800; cursor: pointer; }
+.ut-btn:hover { border-color: var(--gsra-yellow); color: var(--gsra-yellow); }
+.ut-btn.primaer { background: var(--gsra-yellow); border-color: var(--gsra-yellow); color: #0b0c10; font-size: 15px; padding: 13px 18px; }
+.ut-btn.primaer:hover { box-shadow: var(--yellow-glow); color: #0b0c10; }
+.ut-btn:disabled { opacity: 0.6; cursor: wait; }
+.ut-hinweis { margin: 0; color: var(--text-muted); font-size: 12px; line-height: 1.6; }
+.ut-hinweis a { color: var(--gsra-yellow); }
+.ut-liste { display: flex; flex-direction: column; gap: 14px; margin: 0; padding: 0; list-style: none; }
+.ut-liste li { display: flex; gap: 12px; align-items: flex-start; }
+.ut-liste li > i { flex-shrink: 0; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 9px; background: rgba(0, 85, 255, 0.14); color: #6f9bff; }
+.ut-liste strong { display: block; color: #fff; font-size: 14px; margin-bottom: 2px; }
+.ut-liste span { color: #b9c0cb; font-size: 13px; line-height: 1.55; }
+.ut-danke, .ut-mein { display: flex; flex-direction: column; gap: 8px; max-width: 1100px; margin: 0 auto 18px; padding: 14px 18px; border-radius: 12px; background: rgba(255, 92, 120, 0.08); border: 1px solid rgba(255, 92, 120, 0.35); color: #e8ebf0; }
+.ut-danke { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.ut-danke i, .ut-mein-kopf i { color: #ff7a93; }
+.ut-danke span { color: #cfd5de; font-size: 13px; }
+.ut-danke[hidden], .ut-mein[hidden] { display: none; }
+.ut-mein-kopf { display: flex; align-items: center; gap: 10px; }
+.ut-mein p { margin: 0; color: #cfd5de; font-size: 14px; }
+.ut-mein-aktionen { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+.ut-wand { max-width: 1100px; margin: 0 auto 40px; }
+.ut-wand-text { margin: -6px 0 14px; color: var(--text-muted); font-size: 14px; }
+.ut-wand-liste { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.ut-person { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 12px; min-width: 0; }
+.ut-avatar { flex-shrink: 0; width: 38px; height: 38px; display: grid; place-items: center; overflow: hidden; border-radius: 50%; background: rgba(255, 92, 120, 0.15); color: #ff7a93; font-weight: 900; }
+.ut-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.ut-person-text { display: flex; flex-direction: column; min-width: 0; }
+.ut-person-text strong { color: #fff; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ut-person-text small { color: var(--text-muted); font-size: 12px; }
+.ut-leer { grid-column: 1 / -1; margin: 0; padding: 18px; border: 1px dashed var(--border-subtle); border-radius: 12px; color: var(--text-muted); text-align: center; }
+@media (max-width: 860px) {
+    .ut-layout { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 420px) {
+    .ut-betraege { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

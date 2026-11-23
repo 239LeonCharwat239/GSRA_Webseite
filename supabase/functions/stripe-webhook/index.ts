@@ -1,6 +1,6 @@
 // GSRA – Supabase Edge Function „stripe-webhook“
 // Stripe meldet hier abgeschlossene Zahlungen und Änderungen an Abos. Jede Meldung wird mit dem
-// Webhook-Signaturschlüssel geprüft; erst dann werden Boni bzw. Abos in der Datenbank eingetragen.
+// Webhook-Signaturschlüssel geprüft; erst dann werden Boni, Abos bzw. Unterstützungen (SQL 043) eingetragen.
 // Benötigte Secrets in Supabase: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET (whsec_…).
 // Wichtig: Bei dieser Funktion „Verify JWT“ ausschalten – Stripe schickt keinen Supabase-Schlüssel mit.
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -39,9 +39,24 @@ Deno.serve(async (req) => {
   const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const stripeKey = Deno.env.get("STRIPE_SECRET_KEY") || "";
 
+  const customerOf = (obj: Record<string, any>) => (typeof obj.customer === "string" ? obj.customer : obj.customer?.id ?? null);
+
   const syncSubscription = async (sub: Record<string, any>) => {
     const kind = sub.metadata?.kind;
     const user = sub.metadata?.user_id;
+    // Monatliche Unterstützung (SQL 043): eigener Abgleich, kein Abo mit Vorteilen
+    if (kind === "support" && user) {
+      const { error } = await db.rpc("stripe_sync_support", {
+        _subscription_id: sub.id,
+        _user: user,
+        _customer_id: customerOf(sub),
+        _status: sub.status,
+        _period_end: periodEnd(sub),
+        _cancel_at_period_end: Boolean(sub.cancel_at_period_end || sub.cancel_at),
+      });
+      if (error) throw new Error(error.message);
+      return;
+    }
     if (!["pole", "alliance"].includes(kind) || !user) return;
     const { error } = await db.rpc("stripe_sync_subscription", {
       _subscription_id: sub.id,
@@ -65,6 +80,25 @@ Deno.serve(async (req) => {
         const user = session.metadata?.user_id;
         if (!kind || !user) break;
         if (session.mode === "payment" && session.payment_status !== "paid") break; // z. B. Lastschrift noch offen
+        // Unterstützung (SQL 043): Zahlung einmal verbuchen; bei „monatlich“ zusätzlich den Abo-Stand holen
+        if (kind === "support") {
+          const { error } = await db.rpc("stripe_apply_support", {
+            _ref: session.id,
+            _user: user,
+            _kind: session.mode === "subscription" ? "monatlich" : "einmalig",
+            _amount_cents: session.amount_total ?? null,
+            _currency: session.currency ?? null,
+            _customer_id: customerOf(session),
+          });
+          if (error) throw new Error(error.message);
+          if (session.mode === "subscription" && session.subscription && stripeKey) {
+            const res = await fetch(`https://api.stripe.com/v1/subscriptions/${session.subscription}`, {
+              headers: { Authorization: `Bearer ${stripeKey}` },
+            });
+            if (res.ok) await syncSubscription(await res.json());
+          }
+          break;
+        }
         // Mehrere Boni in einer Zahlung: jeder Bonus wird einzeln verbucht (Beträge hat create-checkout mitgegeben)
         const kinds = String(session.metadata?.kinds || kind).split(",").filter(Boolean);
         const amounts = String(session.metadata?.amounts || "").split(",").map((a) => Number(a) || null);

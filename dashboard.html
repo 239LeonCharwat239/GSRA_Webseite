@@ -155,6 +155,13 @@
                 <button type="button" id="signOutEverywhereBtn" class="dash-delete-btn"><i class="fa-solid fa-right-from-bracket"></i> Überall abmelden</button>
             </div>
 
+            <!-- Sicherheit: bekannte Geräte (SQL 042) – bei einer Anmeldung mit einem anderen Gerät kommt eine E-Mail -->
+            <div class="card dash-device-card" id="knownDevicesCard" hidden>
+                <h3><i class="fa-solid fa-laptop-code"></i> Deine Geräte</h3>
+                <p>Diese Geräte kennt die GSRA von deinen Anmeldungen. Meldet sich jemand mit einem anderen Gerät bei deinem Konto an, erhältst du sofort eine E-Mail. Kommt dir ein Eintrag fremd vor, lege ein neues Passwort fest und melde dich überall ab.</p>
+                <ul id="knownDevices" class="dash-device-list"></ul>
+            </div>
+
             <!-- Konto löschen: Passwort bestätigen, dann endgültig löschen -->
             <div class="card dash-danger-card">
                 <div>

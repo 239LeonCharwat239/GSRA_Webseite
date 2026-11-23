@@ -49,8 +49,8 @@ export const HILFE: HilfeArtikel[] = [
   { id: "stintplaner", thema: "start", frage: "Wie nutze ich den Stint-Planer?",
     antwort: ["Unter „Garage“ findest du den Stint-Planer. Gib Renndauer (nach Zeit oder Runden), Rundenzeit, Verbrauch je Runde, Tankgröße und Reserve ein, ergänze die Zeiten für Boxengasse, Tanken, Reifen- und Fahrerwechsel und trage deine Fahrer ein – auf Wunsch mit eigener Rundenzeit.",
       "Der Planer berechnet daraus sofort jeden Stint mit Rennzeit und echter Uhrzeit, Runden, Kraftstoff, Reifenwechseln und Boxenstopps, dazu die Fahrzeiten je Fahrer. Der Vergleich zeigt, ob sich Kraftstoffsparen lohnt. Über „Link zum Teilen kopieren“ schickst du den kompletten Plan an dein Team.",
-      "Der Stint-Planer ist eine Vorschau. Künftig übernimmt die GSRA-App Verbrauch und Rundenzeiten automatisch aus der Simulation."],
-    links: [{ label: "Zum Stint-Planer", href: "stintplaner.html" }] },
+      "Der Stint-Planer ist Teil von Pole und Alliance und befindet sich als Vorschau im Aufbau. Geplant sind unter anderem gespeicherte Pläne im Konto, gemeinsame Teampläne, ein Live-Modus während des Rennens und die automatische Übernahme von Verbrauch und Rundenzeiten aus der Simulation über die GSRA-App."],
+    links: [{ label: "Zum Stint-Planer", href: "stintplaner.html" }, { label: "Abos ansehen", href: "abo.html" }] },
 
   // ---------- Messenger ----------
   { id: "chat-starten", thema: "messenger", frage: "Wie beginne ich einen Chat?",
@@ -149,7 +149,7 @@ export const HILFE: HilfeArtikel[] = [
 
   // ---------- Abos und Zahlungen ----------
   { id: "abos", thema: "abo", frage: "Welche Abos gibt es?",
-    antwort: ["Paddock ist kostenlos und umfasst Messenger, Marktplatz und den Setup Hub. Pole richtet sich an ambitionierte Fahrer und schaltet unter anderem Pro Setups sowie künftig Telemetrie-Tool und Stint-Planer frei; zudem entfällt die Servicegebühr beim Coaching. Alliance bietet alle Pole-Vorteile für Teams mit bis zu zehn Personen – jede Person nutzt dabei ihr eigenes Konto.",
+    antwort: ["Paddock ist kostenlos und umfasst Messenger, Marktplatz und den Setup Hub. Pole richtet sich an ambitionierte Fahrer und schaltet unter anderem Pro Setups und den Stint-Planer frei, künftig auch das Telemetrie-Tool; zudem entfällt die Servicegebühr beim Coaching. Alliance bietet alle Pole-Vorteile für Teams mit bis zu zehn Personen – jede Person nutzt dabei ihr eigenes Konto.",
       "Abos werden monatlich abgerechnet und lassen sich jederzeit zum Ende des laufenden Monats kündigen."],
     links: [{ label: "Zu den Abos", href: "abo.html" }] },
   { id: "alliance-team", thema: "abo", frage: "Wie verwalte ich ein Alliance-Team?",

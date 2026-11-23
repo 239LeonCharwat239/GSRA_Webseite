@@ -22,6 +22,31 @@
     }
     const fresh = (entry) => Boolean(entry) && entry.expires - Date.now() > RENEW_BEFORE;
 
+    // ---------- Vorschaubilder (src/medien-vorbereiten.ts) ----------
+    // Neue Fotos und Videos heißen „chatv_<Zeit>_<Zufall>[_<Sekunden>s].<Endung>“; daneben liegt ein kleines
+    // „chatv_<Zeit>_<Zufall>.vorschau.jpg“. Der Chat zeigt nur die Vorschau, das Original lädt erst beim Öffnen.
+    // Ältere Anhänge („chat_…“) haben keine Vorschau und erscheinen wie bisher.
+    const WITH_THUMB = /^(chatv_\d+_[a-z0-9]+)(?:_(\d{1,5})s)?\.[A-Za-z0-9]{1,5}$/;
+    function thumbPathOf(path) {
+        if (!path) return null;
+        const slash = path.lastIndexOf("/");
+        const match = WITH_THUMB.exec(path.slice(slash + 1));
+        return match ? `${path.slice(0, slash + 1)}${match[1]}.vorschau.jpg` : null;
+    }
+    // Adresse des Vorschaubilds (gleiche Form wie die gespeicherte Adresse) – oder null, wenn es keins gibt
+    function thumbOf(address) {
+        const thumb = thumbPathOf(pathOf(address));
+        if (!thumb) return null;
+        const text = String(address);
+        return `${text.slice(0, text.indexOf(MARK) + MARK.length)}${thumb}`;
+    }
+    // Videolänge in Sekunden aus dem Dateinamen (spart das Vorladen des Videos nur für die Längenangabe)
+    function durationOf(address) {
+        const path = pathOf(address);
+        const match = path && WITH_THUMB.exec(path.slice(path.lastIndexOf("/") + 1));
+        return match && match[2] ? Number(match[2]) : null;
+    }
+
     // ---------- Gerätespeicher (wie bei WhatsApp): Fotos und Sprachnachrichten nur einmal pro Gerät laden ----------
     // Anhänge ändern sich nie (jeder hat einen eigenen Namen) – einmal geladen, kommen sie danach aus dem Browser-Speicher.
     // Das spart Ladezeit und vor allem Datenvolumen bei Supabase. Videos laufen weiter als Stream (zu groß).
@@ -73,7 +98,9 @@
 
     // Links für mehrere Anhänge auf einmal holen (nur fehlende oder bald ablaufende); zuerst im Gerätespeicher nachsehen
     async function sign(addresses) {
-        let paths = [...new Set((addresses || []).map(pathOf).filter(Boolean))].filter(p => !fresh(cache.get(p)));
+        // Zu jedem neuen Anhang gehört ein Vorschaubild – beide Links kommen in derselben Anfrage
+        const all = (addresses || []).map(pathOf).filter(Boolean).flatMap(p => [p, thumbPathOf(p)]).filter(Boolean);
+        let paths = [...new Set(all)].filter(p => !fresh(cache.get(p)));
         if (!paths.length) return;
         await fromDevice(paths);
         paths = paths.filter(p => !fresh(cache.get(p)));
@@ -87,7 +114,8 @@
                     const url = item?.signedUrl || item?.signedURL;
                     if (url && item.path && !item.error) {
                         cache.set(item.path, { url, expires: Date.now() + LIFETIME * 1000 });
-                        setTimeout(() => keepOnDevice(item.path, url), 1500);
+                        // Originale mit Vorschaubild nicht im Hintergrund laden – das wäre genau der Download, den die Vorschau spart
+                        if (!thumbPathOf(item.path)) setTimeout(() => keepOnDevice(item.path, url), 1500);
                     }
                 });
             } catch (e) { /* ohne Link bleibt die gespeicherte Adresse */ }
@@ -109,6 +137,6 @@
     // Speicherort neuer Anhänge: <Chat-ID>/<eigene Nutzer-ID>/<Datei>
     const uploadPath = (chatId, userId, fileName) => `${chatId}/${userId}/${fileName}`;
 
-    window.gsraChatMedia = { sign, url, signOne, uploadPath, pathOf };
+    window.gsraChatMedia = { sign, url, signOne, uploadPath, pathOf, thumbOf, durationOf };
     window.gsraChatMediaClear = clearDevice;
 })();

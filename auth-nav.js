@@ -496,7 +496,8 @@ const LOGIN_REQUIRED_TEXTS = {
     setups: ["die Setups", "Mit deinem GSRA-Konto lädst du Setups herunter und teilst deine eigenen mit der Community."],
     coaching: ["das Coaching", "Mit deinem GSRA-Konto buchst du Coachings bei erfahrenen Fahrern – oder wirst mit der GSRA-Coach-Lizenz selbst Coach."],
     nachschlagewerk: ["das Nachschlagewerk", "Mit deinem GSRA-Konto hast du Zugriff auf das komplette Sim-Racing-Wissen der GSRA."],
-    kalender: ["den Rennkalender", "Mit deinem GSRA-Konto siehst du alle Rennen und Events der GSRA-Community."],
+    stintplaner: ["den Stint-Planer", "Der Stint-Planer ist Teil von Pole und Alliance: Kraftstoff, Stints, Reifen- und Fahrerwechsel für Langstreckenrennen in Sekunden geplant."],
+    kalender: ["den Rennkalender","Mit deinem GSRA-Konto siehst du alle Rennen und Events der GSRA-Community."],
     dashboard: ["dein Dashboard", "Im Dashboard verwaltest du dein Profil, dein Profilbild und deine GSRA-ID."],
     admin: ["den Admin-Bereich", "Der Admin-Bereich ist nur für Administratoren der GSRA."]
 };
@@ -548,7 +549,25 @@ window.showPlanBadge = async (target, userId, { link = true } = {}) => {
     badge.innerHTML = `<i class="fa-solid ${GSRA_PLANS[plan].icon}"></i>`;
     badge.append(` ${GSRA_PLANS[plan].name}`);
     target.replaceChildren(badge);
+    // Unterstützer-Abzeichen (SQL 043): nur, wer es selbst eingeschaltet hat – nie mit Betrag
+    if (await isPublicSupporter(client, userId) && target.dataset.planUser === userId && !target.querySelector(".plan-badge.supporter")) {
+        const heart = document.createElement(link ? "a" : "span");
+        if (link) heart.href = "unterstuetzen.html";
+        heart.className = "plan-badge supporter";
+        heart.title = "Unterstützt die GSRA";
+        heart.innerHTML = '<i class="fa-solid fa-heart"></i>';
+        heart.append(" Unterstützer");
+        target.append(heart);
+    }
 };
+const supporterCache = new Map();
+function isPublicSupporter(client, userId) {
+    if (!supporterCache.has(userId)) {
+        supporterCache.set(userId, client.rpc("supporter_badges", { _users: [userId] })
+            .then(({ data, error }) => !error && Array.isArray(data) && data.length > 0, () => false));
+    }
+    return supporterCache.get(userId);
+}
 const currentPageName = () => (window.location.pathname.split("/").pop() || "").replace(/\.html$/, "").toLowerCase();
 
 // Login-Link, der nach der Anmeldung zur aktuellen Seite zurückführt
@@ -579,6 +598,7 @@ function addSiteFooter() {
         <span>© ${new Date().getFullYear()} Global Simracing Alliance</span>
         <div class="gsra-site-footer-links">
             <a href="abo.html">Abos</a>
+            <a href="unterstuetzen.html">Unterstützen</a>
             <a href="kuendigen.html" class="gsra-footer-cancel">Verträge hier kündigen</a>
             <a href="impressum.html">Impressum</a>
             <a href="datenschutz.html">Datenschutz</a>
@@ -615,9 +635,9 @@ const GSRA_NAV = [
 // Profil-Menü (nur angemeldet); Moderation/Admin kommt bei Bedarf dazu
 const GSRA_ACCOUNT_MENU = [
     { label: "Dashboard", href: "dashboard.html", icon: "fa-gauge-high" },
-    { label: "Abo", href: "abo.html", icon: "fa-crown" }
-    // „Unterstützen“ (unterstuetzen.html) kommt mit der Stripe-Funktion dazu – entschieden 22.11.: einmalig + monatlich,
-    // freiwillig mit Namen auf der Unterstützer-Wand und Abzeichen im Profil
+    { label: "Abo", href: "abo.html", icon: "fa-crown" },
+    // Entschieden 22.11.: einmalig + monatlich, freiwillig mit Namen auf der Unterstützerwand und Abzeichen (SQL 043)
+    { label: "Unterstützen", href: "unterstuetzen.html", icon: "fa-heart" }
 ];
 
 const navEscape = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[c]);

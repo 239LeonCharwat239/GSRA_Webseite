@@ -24,7 +24,8 @@
     form.addEventListener("change", toggleFields);
     // Aus dem Dashboard bzw. von der Abo-Seite: Vertrag schon ausgewählt (kuendigen.html?vertrag=pole)
     const preset = new URLSearchParams(window.location.search).get("vertrag");
-    const presetRadio = preset && form.querySelector(`input[name="contract"][value="${preset === "alliance" ? "alliance" : "pole"}"]`);
+    const presetValue = ["alliance", "unterstuetzung"].includes(preset || "") ? preset : "pole";
+    const presetRadio = preset && form.querySelector(`input[name="contract"][value="${presetValue}"]`);
     if (presetRadio) presetRadio.checked = true;
     const dateInput = /** @type {HTMLInputElement} */ (document.getElementById("kdDate"));
     dateInput.min = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
@@ -38,11 +39,17 @@
         document.getElementById("kdEmail").value = user.email || "";
         const { data: profile } = await client.from("profiles").select("username, gsra_id").eq("id", user.id).maybeSingle();
         if (profile) document.getElementById("kdAccount").value = profile.gsra_id ? `${profile.username || ""} (GSRA-ID #${profile.gsra_id})`.trim() : (profile.username || "");
-        const { data: m, error } = await client.rpc("my_membership");
+        const [{ data: m, error }, support] = await Promise.all([client.rpc("my_membership"), client.rpc("my_support")]);
         if (error || !m) return;
+        // Monatliche Unterstützung (SQL 043) – ohne das SQL einfach nicht vorhanden
+        const s = support?.error ? null : support?.data;
         // Nur gebuchte und noch nicht gekündigte Verträge sind wählbar (der Server prüft das zusätzlich)
         const owned = new Set();
-        const notes = { pole: "nicht gebucht", alliance: "nicht gebucht" };
+        const notes = { pole: "nicht gebucht", alliance: "nicht gebucht", unterstuetzung: "nicht gebucht" };
+        if (s?.monatlich) {
+            if (s.gekuendigt) notes.unterstuetzung = `bereits beendet zum ${day(s.monatlich_bis)}`;
+            else owned.add("unterstuetzung");
+        }
         if (m.plan === "pole" && m.pole) {
             if (m.pole.cancel_at_period_end) notes.pole = `bereits gekündigt zum ${day(m.pole.current_period_end)}`;
             else owned.add("pole");
@@ -75,6 +82,9 @@
         }
         if (m.plan === "alliance" && m.team?.is_owner) {
             rows.push(["alliance", `GSRA Alliance (Teamleitung) · ${m.team.cancel_at_period_end ? `bereits gekündigt zum ${day(m.team.current_period_end)}` : `läuft bis ${day(m.team.current_period_end)} und verlängert sich monatlich`}`]);
+        }
+        if (s?.monatlich) {
+            rows.push(["unterstuetzung", `Monatliche Unterstützung · ${s.gekuendigt ? `bereits beendet zum ${day(s.monatlich_bis)}` : `läuft bis ${day(s.monatlich_bis)} und verlängert sich monatlich`}`]);
         }
         if (m.plan === "alliance" && m.team && !m.team.is_owner) {
             rows.push(["", `Du bist Mitglied im Alliance-Team von ${m.team.owner_name || "deiner Teamleitung"}. Kündigen kann nur die Teamleitung – du kannst das Team aber jederzeit auf der Abo-Seite verlassen.`]);

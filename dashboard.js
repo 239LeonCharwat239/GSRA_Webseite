@@ -517,6 +517,38 @@ document.addEventListener("DOMContentLoaded", async () => {
             window.location.href = "login.html";
         });
 
+        // Bekannte Geräte (SQL 042): Meldet sich jemand mit einem anderen Gerät an, kommt eine E-Mail
+        (async () => {
+            const box = document.getElementById("knownDevices");
+            const card = document.getElementById("knownDevicesCard");
+            if (!box || !card) return;
+            const { data, error } = await client.from("known_devices").select("label, first_seen, last_seen").order("last_seen", { ascending: false }).limit(30);
+            if (error) return; // SQL 042 noch nicht ausgeführt: Karte bleibt verborgen
+            const day = (iso) => new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+            box.replaceChildren();
+            if (!data?.length) {
+                const empty = document.createElement("li");
+                empty.className = "dash-device-empty";
+                empty.textContent = "Noch keine Geräte erfasst – sie erscheinen nach deiner nächsten Anmeldung.";
+                box.appendChild(empty);
+            }
+            (data || []).forEach(d => {
+                const li = document.createElement("li");
+                const icon = document.createElement("i");
+                icon.className = `fa-solid ${/Handy/.test(d.label) ? "fa-mobile-screen" : /Tablet/.test(d.label) ? "fa-tablet-screen-button" : "fa-desktop"}`;
+                icon.setAttribute("aria-hidden", "true");
+                const text = document.createElement("span");
+                const name = document.createElement("strong");
+                name.textContent = d.label;
+                const when = document.createElement("small");
+                when.textContent = `zuletzt angemeldet am ${day(d.last_seen)} · bekannt seit ${day(d.first_seen)}`;
+                text.append(name, when);
+                li.append(icon, text);
+                box.appendChild(li);
+            });
+            card.hidden = false;
+        })();
+
         // Konto löschen: Passwort bestätigen, dann endgültig löschen (die Datenbank prüft, dass das Passwort gerade eben bestätigt wurde)
         const deleteAccountBtn = document.getElementById("deleteAccountBtn");
         if (deleteAccountBtn) {

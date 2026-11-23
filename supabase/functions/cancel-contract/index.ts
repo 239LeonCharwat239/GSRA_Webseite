@@ -18,6 +18,7 @@ const json = (body: unknown, status = 200) =>
 const CONTRACTS: Record<string, string> = {
   pole: "GSRA Pole (8,49 € pro Monat)",
   alliance: "GSRA Alliance (39,99 € pro Monat)",
+  unterstuetzung: "Monatliche Unterstützung der GSRA (Betrag nach deiner Wahl)",
 };
 const KINDS: Record<string, string> = {
   ordentlich: "Ordentliche Kündigung",
@@ -105,6 +106,15 @@ Deno.serve(async (req) => {
         const { data: membership } = await db.from("team_members").select("team_id").eq("user_id", userId).maybeSingle();
         memberOnly = Boolean(membership);
       }
+    } else if (userId && contract === "unterstuetzung") {
+      // Monatliche Unterstützung (SQL 043)
+      const { data } = await db.from("supporters").select("monthly_subscription_id, monthly_status, monthly_period_end, monthly_cancel_at_period_end")
+        .eq("user_id", userId).maybeSingle();
+      if (data?.monthly_subscription_id && ACTIVE.includes(data.monthly_status || "")) {
+        subscriptionId = data.monthly_subscription_id;
+        periodEnd = data.monthly_period_end;
+        alreadyCancelled = Boolean(data.monthly_cancel_at_period_end);
+      }
     }
 
     const receivedAt = new Date();
@@ -154,7 +164,11 @@ Deno.serve(async (req) => {
         effectiveAt = seconds ? new Date(seconds * 1000).toISOString() : periodEnd;
         if (kind === "ausserordentlich") status = "pruefung";
         // Sofort als gekündigt markieren (die Bestätigung von Stripe per Webhook kommt einige Sekunden später)
-        await db.from(contract === "pole" ? "user_plans" : "teams").update({ cancel_at_period_end: true }).eq("stripe_subscription_id", subscriptionId);
+        if (contract === "unterstuetzung") {
+          await db.from("supporters").update({ monthly_cancel_at_period_end: true }).eq("monthly_subscription_id", subscriptionId);
+        } else {
+          await db.from(contract === "pole" ? "user_plans" : "teams").update({ cancel_at_period_end: true }).eq("stripe_subscription_id", subscriptionId);
+        }
       } else {
         console.error("Stripe-Fehler:", sub?.error?.message);
         status = "fehler";

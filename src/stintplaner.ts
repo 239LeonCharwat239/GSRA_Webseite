@@ -334,9 +334,68 @@ function planLaden(): Plan {
   return { ...STANDARD };
 }
 
-function starten() {
+// ---------- Zugang: Teil von Pole und Alliance ----------
+// Der Rechner läuft komplett im Browser; die Sperre hier ist deshalb nur die Oberfläche. Sobald Pläne im Konto
+// gespeichert oder im Team geteilt werden, prüft die Datenbank das Abo selbst (plan_of in den Zugriffsregeln).
+type Zugang = "frei" | "gast" | "gesperrt" | "fehler";
+
+async function zugangPruefen(): Promise<Zugang> {
+  const sb = (window as any).supabaseClient;
+  if (!sb) return "fehler";
+  try {
+    const { data } = await sb.auth.getSession();
+    const user = data?.session?.user;
+    if (!user) return "gast";
+    const [plan, profil] = await Promise.all([
+      sb.rpc("plan_of", { _user: user.id }),
+      sb.from("profiles").select("role").eq("id", user.id).maybeSingle(),
+    ]);
+    if (plan.error) return "fehler";
+    if (plan.data === "pole" || plan.data === "alliance" || profil.data?.role === "admin") return "frei";
+    return "gesperrt";
+  } catch {
+    return "fehler";
+  }
+}
+
+function sperreZeigen(ziel: HTMLElement, art: Exclude<Zugang, "frei">) {
+  ziel.replaceChildren();
+  if (art === "gast") return; // die Anmelde-Karte über der Seite kommt aus auth-nav.js
+  const karte = el("div", "sp-sperre");
+  const icon = el("i", `fa-solid ${art === "fehler" ? "fa-triangle-exclamation" : "fa-lock"}`);
+  icon.setAttribute("aria-hidden", "true");
+  karte.append(icon);
+  if (art === "fehler") {
+    karte.append(el("h2", "", "Der Zugang konnte nicht geprüft werden"),
+      el("p", "", "Bitte lade die Seite neu. Bleibt die Meldung, versuche es in ein paar Minuten noch einmal."));
+    const neu = el("button", "sp-btn primaer", "Neu laden");
+    neu.type = "button";
+    neu.addEventListener("click", () => location.reload());
+    karte.append(neu);
+  } else {
+    karte.append(el("h2", "", "Der Stint-Planer ist Teil von Pole und Alliance"),
+      el("p", "", "Plane Kraftstoff, Stints, Reifen- und Fahrerwechsel für Langstreckenrennen – mit echter Uhrzeit, Fahrzeiten je Fahrer und dem Vergleich „Vollgas gegen Sprit sparen“. Mit Pole oder Alliance ist der Planer für dich freigeschaltet."));
+    const liste = el("ul", "sp-sperre-liste");
+    for (const punkt of ["Rennen nach Zeit oder Runden, mit Startuhrzeit", "Bis zu 8 Fahrer mit eigener Rundenzeit",
+      "Kraftstoff, Reifen und Boxenstopps je Stint", "Plan per Link mit dem Team teilen"]) {
+      liste.append(el("li", "", punkt));
+    }
+    const abo = el("a", "sp-btn primaer", "Abos ansehen");
+    abo.href = "abo.html";
+    karte.append(liste, abo);
+  }
+  ziel.append(karte);
+}
+
+async function starten() {
   const form = document.getElementById("spFormular") as HTMLFormElement | null;
-  if (!form) return;
+  const zugangBox = document.getElementById("spZugang");
+  if (!form || !zugangBox) return;
+  const zugang = await zugangPruefen();
+  if (zugang !== "frei") { sperreZeigen(zugangBox, zugang); return; }
+  zugangBox.remove();
+  document.querySelector<HTMLElement>(".sp-beta")?.removeAttribute("hidden");
+  document.querySelector<HTMLElement>(".sp-layout")?.removeAttribute("hidden");
   formularFuellen(planLaden());
   form.addEventListener("input", aktualisieren);
   form.addEventListener("change", aktualisieren);
@@ -356,5 +415,5 @@ function starten() {
   aktualisieren();
 }
 
-if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", starten);
-else starten();
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => void starten());
+else void starten();

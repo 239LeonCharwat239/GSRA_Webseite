@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GSRA unterstützen - GSRA</title>
+    <meta name="description" content="Unterstütze die Global Simracing Alliance einmalig oder monatlich – freiwillig, mit Namen auf der Unterstützerwand, wenn du möchtest.">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha256-7jvo3hkrl8sdc9HpXWuCux9rZYwPl8TvdX/DMZlu09M=" crossorigin="anonymous"></script>
+    <script src="supabase-client.js"></script>
+    <script src="fehler-monitor.js"></script>
+    <script src="auth-nav.js"></script>
+</head>
+<body>
+
+<header>
+    <div class="logo-slogan-container">
+        <a href="index.html" class="logo-link">
+            <img src="GSRA_Logo_ohne Hintergrund.png" alt="GSRA Logo" class="logo">
+        </a>
+        <div class="header-slogan">
+            <span class="text-blue">UNITED BY SPEED.</span>
+            <span class="text-yellow">DRIVEN GLOBALLY.</span>
+        </div>
+    </div>
+    <!-- Die Navigation baut auth-nav.js aus einer zentralen Liste (GSRA_NAV) -->
+    <nav>
+        <a href="index.html">Home</a>
+        <a href="messenger.html">Messenger</a>
+        <a href="login.html" class="login-btn" id="loginNavBtn">Login</a>
+        <button id="logoutBtn" class="login-btn" style="display: none;">Logout</button>
+    </nav>
+</header>
+
+    <main class="container ut-page">
+        <section class="hero-section">
+            <h1 class="hero-title">GSRA <span class="text-blue">unterstützen</span></h1>
+            <p class="hero-subtitle">Die GSRA wird von Simracern für Simracer gebaut – ohne Werbung und ohne Verkauf von Daten. Mit deiner Unterstützung finanzierst du Server, Speicher und neue Werkzeuge für die ganze Community.</p>
+        </section>
+
+        <!-- Dank nach der Bezahlung und eigener Stand (füllt src/unterstuetzen.ts) -->
+        <section id="utDanke" class="ut-danke" hidden></section>
+        <section id="utMein" class="ut-mein" hidden></section>
+
+        <div class="ut-layout">
+            <section class="ut-karte ut-formular" aria-labelledby="utFormTitel">
+                <h2 id="utFormTitel"><i class="fa-solid fa-heart" aria-hidden="true"></i> Deine Unterstützung</h2>
+                <div class="ut-umschalter" role="radiogroup" aria-label="Art der Unterstützung">
+                    <label><input type="radio" name="art" value="support_once" checked> Einmalig</label>
+                    <label><input type="radio" name="art" value="support_monthly"> Monatlich</label>
+                </div>
+                <div class="ut-betraege" id="utBetraege" role="radiogroup" aria-label="Betrag"></div>
+                <label class="ut-eigen">
+                    <span id="utEigenText">Eigener Betrag in Euro</span>
+                    <input id="utEigen" type="number" inputmode="numeric" step="1" min="3" max="500" placeholder="z. B. 15">
+                </label>
+                <label class="ut-haken">
+                    <input type="checkbox" id="utOeffentlich">
+                    <span>Meinen Fahrernamen auf der Unterstützerwand zeigen und das Unterstützer-Abzeichen im Profil tragen. Beträge erscheinen nie öffentlich.</span>
+                </label>
+                <button type="button" id="utWeiter" class="ut-btn primaer"><i class="fa-solid fa-lock" aria-hidden="true"></i> <span>Weiter zur sicheren Bezahlung</span></button>
+                <p class="ut-hinweis" id="utHinweis">Die Unterstützung ist freiwillig und schaltet keine Funktionen frei – dafür gibt es die Abos. Die monatliche Unterstützung verlängert sich jeden Monat und lässt sich jederzeit zum Monatsende beenden: unter „Abo verwalten“ oder über <a href="kuendigen.html?vertrag=unterstuetzung">Verträge hier kündigen</a>. Sichere Bezahlung über Stripe.</p>
+            </section>
+
+            <section class="ut-karte ut-wofuer" aria-labelledby="utWofuerTitel">
+                <h2 id="utWofuerTitel"><i class="fa-solid fa-screwdriver-wrench" aria-hidden="true"></i> Wofür deine Unterstützung eingesetzt wird</h2>
+                <ul class="ut-liste">
+                    <li><i class="fa-solid fa-server" aria-hidden="true"></i><div><strong>Betrieb der Plattform</strong><span>Datenbank, Speicher für Fotos, Videos und Setups, E-Mails und der sichere Betrieb rund um die Uhr.</span></div></li>
+                    <li><i class="fa-solid fa-gauge-high" aria-hidden="true"></i><div><strong>Neue Werkzeuge</strong><span>Stint-Planer, Telemetrie, die GSRA-App und alles, was den Rennalltag einfacher macht.</span></div></li>
+                    <li><i class="fa-solid fa-shield-halved" aria-hidden="true"></i><div><strong>Sicherheit und Datenschutz</strong><span>Regelmäßige Prüfungen, Schutz der Konten und Daten, die nur dort liegen, wo sie hingehören.</span></div></li>
+                    <li><i class="fa-solid fa-flag-checkered" aria-hidden="true"></i><div><strong>Community und Events</strong><span>Rennen, Ligen und Aktionen, die die Simracing-Community zusammenbringen.</span></div></li>
+                </ul>
+            </section>
+        </div>
+
+        <section class="ut-wand" aria-labelledby="utWandTitel">
+            <h2 id="utWandTitel"><i class="fa-solid fa-heart" aria-hidden="true"></i> Unterstützerwand</h2>
+            <p class="ut-wand-text">Danke an alle, die die GSRA möglich machen. Hier stehen alle, die ihren Namen zeigen möchten – ohne Beträge.</p>
+            <div id="utWand" class="ut-wand-liste" aria-live="polite"><p class="ut-leer">Wird geladen …</p></div>
+        </section>
+    </main>
+
+    <script src="ui-dialogs.js"></script>
+    <script type="module" src="src/unterstuetzen.ts"></script>
+    <script type="module" src="src/suche.ts"></script>
+</body>
+</html>
