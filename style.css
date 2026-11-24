@@ -7483,17 +7483,17 @@ button.dash-avatar:hover,
     color: #000;
 }
 
-/* Dezente Trennung zur Schnellwahl (Ungelesen, Favoriten) – nur ein feiner, ausblendender Strich */
 /* Keine Trennlinie mehr: „Ungelesen“ und „Favoriten“ stehen als eigene, dezente Kacheln mit etwas Abstand –
-   so ist die Gruppe klar getrennt, ohne dass ein Strich ins Auge fällt */
+   so ist die Gruppe klar getrennt, ohne dass ein Strich ins Auge fällt.
+   Grau gilt nur, solange der Filter AUS ist – sonst würde das Grau beim Darüberfahren das Gelb überdecken */
 .wa-pill-divider { flex: 0 0 6px; width: 6px; background: none; }
-.wa-filter-pills .wa-pill-icon::before {
+.wa-filter-pills .wa-pill-icon:not(.active)::before {
     background: rgba(255, 255, 255, 0.045);
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
-    transform: none;
-    border-radius: 8px;
 }
-.wa-filter-pills .wa-pill-icon:hover::before { background: rgba(255, 255, 255, 0.09); }
+.wa-filter-pills .wa-pill-icon::before { transform: none; border-radius: 8px; }
+.wa-filter-pills .wa-pill-icon:not(.active):hover::before { background: rgba(255, 255, 255, 0.09); }
+.wa-filter-pills .wa-pill-icon.active:hover::before { filter: brightness(1.08); }
 
 /* Schmale Chatliste (z. B. am PC neben dem Chat): Der gewählte Bereich zeigt Symbol und Wort und wird breiter,
    die anderen nur ihr Symbol (Name als Tooltip) – nichts wird abgeschnitten */
