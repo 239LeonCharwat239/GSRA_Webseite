@@ -382,9 +382,10 @@ const initAuthNav = async () => {
         touchPresence();
         markDelivered();
         presenceTimer = setInterval(() => {
-            if (document.hidden) return; // versteckter Tab: keine Abfragen (weniger Datenvolumen); beim Zurückkommen sofort
+            // Lebenszeichen auch im Hintergrund (wer in der Simulation fährt, bleibt „online · spielt gerade …“);
+            // nur die Admin-Hinweise ruhen im versteckten Tab und kommen beim Zurückkommen
             touchPresence();
-            checkAdminNews();
+            if (!document.hidden) checkAdminNews();
         }, 60000);
         document.addEventListener("visibilitychange", () => {
             if (!document.hidden) touchPresence();
@@ -547,8 +548,9 @@ window.lastSeenInfo = async (userId) => {
     const day = seen.toDateString() === new Date().toDateString() ? "heute"
         : seen.toDateString() === new Date(Date.now() - 86400000).toDateString() ? "gestern" : null;
     const time = seen.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
-    const minutes = Math.round((Date.now() - seen.getTime()) / 60000);
-    if (data.exact && minutes < 60) return { online: false, text: `Zuletzt online vor ${Math.max(1, minutes)} Min.` };
+    const minutes = Math.floor((Date.now() - seen.getTime()) / 60000);
+    if (data.exact && minutes < 2) return { online: false, text: "Zuletzt online gerade eben" };
+    if (data.exact && minutes < 60) return { online: false, text: `Zuletzt online vor ${minutes} Min.` };
     if (day) return { online: false, text: data.exact ? `Zuletzt online ${day} um ${time}` : `Zuletzt online ${day}` };
     return { online: false, text: `Zuletzt online am ${seen.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })}` };
 };

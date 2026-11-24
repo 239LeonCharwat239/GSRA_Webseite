@@ -41,9 +41,10 @@ async function refreshPresenceFor(userId) {
     if (data) presenceByUser.set(userId, data);
 }
 
+// Online: Lebenszeichen in den letzten 3 Minuten und nicht abgemeldet (offline_at, SQL 049)
 function isUserOnline(userId) {
     const p = presenceByUser.get(userId);
-    return Boolean(p && Date.now() - new Date(p.last_seen_at).getTime() < ONLINE_WINDOW_MS);
+    return Boolean(p && !p.offline_at && Date.now() - new Date(p.last_seen_at).getTime() < ONLINE_WINDOW_MS);
 }
 
 function currentGameOf(userId) {
@@ -55,7 +56,9 @@ function lastSeenText(userId) {
     if (!p) return "";
     if (isUserOnline(userId)) return "online";
     const seen = new Date(p.last_seen_at);
-    const minutes = Math.max(1, Math.round((Date.now() - seen.getTime()) / 60000));
+    // Unter 2 Minuten „gerade eben“, danach volle Minuten („vor 2 Min.“, „vor 3 Min.“ …)
+    const minutes = Math.floor((Date.now() - seen.getTime()) / 60000);
+    if (minutes < 2) return "zuletzt online gerade eben";
     if (minutes < 60) return `zuletzt online vor ${minutes} Min.`;
     const time = seen.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
     if (seen.toDateString() === new Date().toDateString()) return `zuletzt online heute um ${time}`;

@@ -10,9 +10,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL, KARRIERE_SQL, STINTPLAN_SQL, LIVERIES_SQL, CHATSICHER_SQL, AUFRAEUMEN_SQL] =
-    Array.from({ length: 48 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 48);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL, KARRIERE_SQL, STINTPLAN_SQL, LIVERIES_SQL, CHATSICHER_SQL, AUFRAEUMEN_SQL, ONLINE_SQL] =
+    Array.from({ length: 49 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 49);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -3489,6 +3489,38 @@ if (AUFRAEUMEN_SQL && CHATSICHER_SQL) {
         const gast = await q(`select public.race_engineer_save('Gast', null, 'kumpel', 'normal', 'ruhig', 'de', '{}'::jsonb)`);
         check("Gäste haben keinen Renningenieur", gast.error !== null, gast.error || "durchgelassen!");
     });
+}
+
+// --- 049: „Zuletzt online“ ab dem Abmelden (eigener Zeitpunkt statt künstlich zurückgesetzter Aktivität) ---
+if (ONLINE_SQL && AUFRAEUMEN_SQL) {
+    const id = (n) => `79000000-0000-0000-0000-0000000004${String(n).padStart(2, "0")}`;
+    const P = id(1), F = id(2), X = id(3);
+    await db.exec(`
+      insert into auth.users (id) values ('${P}'), ('${F}'), ('${X}');
+      insert into public.profiles (id, username) values ('${P}', 'Presence Pia'), ('${F}', 'Freund Fritz'), ('${X}', 'Fremder Xaver');
+      insert into public.friendships (user_id, friend_id, status) values ('${P}', '${F}', 'accepted');`);
+    await db.exec(readFileSync(ONLINE_SQL, "utf8"));
+    const ctl49 = await db.exec(readFileSync(ONLINE_SQL, "utf8")); // zweiter Lauf
+    const rows49 = ctl49[ctl49.length - 1].rows;
+    console.log("Kontrolle 049:\n  " + rows49.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+    check("Kontrolle 049: bereit, Gäste ausgeschlossen", rows49.map(r => r.ergebnis).join(",") === "bereit,ja", rows49.map(r => r.ergebnis).join(", "));
+    await as(P, async () => { await q(`select public.touch_presence()`); });
+    const sicht = async () => (await as(F, async () => q(`select public.last_seen_of('${P}') as r`))).rows[0]?.r;
+    const an = await sicht();
+    check("Lebenszeichen: Freund sieht „online“", an?.online === true && an?.exact === true, JSON.stringify(an));
+    await as(P, async () => { await q(`select public.touch_presence(null, false, true)`); });
+    const aus = await sicht();
+    const sekunden = (Date.now() - new Date(aus?.last_seen_at).getTime()) / 1000;
+    check("Abmelden: sofort offline, zuletzt online = jetzt (nicht 3 Minuten zurück)", aus?.online === false && sekunden < 30, JSON.stringify(aus));
+    const zeile = await one(`select offline_at, current_game from public.user_presence where user_id = '${P}'`);
+    check("Abmelde-Zeitpunkt gespeichert, Spielstatus entfernt", zeile.offline_at !== null && zeile.current_game === null, JSON.stringify(zeile));
+    await as(P, async () => { await q(`select public.touch_presence()`); });
+    check("Wieder angemeldet: online, Abmelde-Zeitpunkt gelöscht", (await sicht())?.online === true
+        && (await one(`select offline_at from public.user_presence where user_id = '${P}'`)).offline_at === null);
+    const fremd = (await as(X, async () => q(`select public.last_seen_of('${P}') as r`))).rows[0]?.r;
+    check("Fremde sehen weiterhin nur den Tag (keine genaue Zeit)", fremd?.exact === false, JSON.stringify(fremd));
+    const gast = await as(null, async () => q(`select public.last_seen_of('${P}')`));
+    check("Gäste sehen keinen Online-Status", gast.error !== null, gast.error || "durchgelassen!");
 }
 
 // --- Konto löschen (Ausbau 3) funktioniert weiterhin, die Stimmen verschwinden mit ---

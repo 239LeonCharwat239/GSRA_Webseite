@@ -7483,15 +7483,13 @@ button.dash-avatar:hover,
     color: #000;
 }
 
+/* Dezente Trennung zur Schnellwahl (Ungelesen, Favoriten) – nur ein feiner, ausblendender Strich */
 .wa-pill-divider {
-    width: 2px;
-    height: 18px;
-    margin: 0 3px;
+    width: 1px;
+    height: 20px;
+    margin: 0 4px;
     flex-shrink: 0;
-    border-radius: 2px;
-    background: linear-gradient(180deg, var(--gsra-blue), var(--gsra-yellow));
-    opacity: 0.55;
-    transform: skewX(-12deg);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.16) 50%, rgba(255, 255, 255, 0));
 }
 
 /* Schmale Chatliste (z. B. am PC neben dem Chat): Der gewählte Bereich zeigt Symbol und Wort und wird breiter,

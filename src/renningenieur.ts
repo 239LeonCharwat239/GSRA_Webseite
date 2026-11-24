@@ -128,11 +128,13 @@ function probefunkTexte(e: Einstellungen): string[] {
 // ---------------------------------------------------------
 // Sprachausgabe (Browser, auf dem Gerät)
 // ---------------------------------------------------------
+// Die natürlichste verfügbare Stimme des Browsers wählen: neuronale/Online-Stimmen zuerst, dann Cloud-Stimmen des
+// Browsers, zuletzt die einfachen Systemstimmen (die klingen am stärksten nach Roboter)
 function stimmeWaehlen(sprache: string): SpeechSynthesisVoice | null {
-  const stimmen = window.speechSynthesis?.getVoices?.() || [];
   const code = sprache === "en" ? "en" : "de";
-  return stimmen.find((v) => v.lang.toLowerCase().startsWith(code) && /natural|neural|online/i.test(v.name))
-    || stimmen.find((v) => v.lang.toLowerCase().startsWith(code)) || null;
+  const stimmen = (window.speechSynthesis?.getVoices?.() || []).filter((v) => v.lang.toLowerCase().startsWith(code));
+  const rang = (v: SpeechSynthesisVoice) => (/natural|neural/i.test(v.name) ? 0 : /online/i.test(v.name) ? 1 : !v.localService ? 2 : 3);
+  return stimmen.sort((a, b) => rang(a) - rang(b))[0] || null;
 }
 
 function sprechen(text: string, e: Einstellungen): Promise<void> {
