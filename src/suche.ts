@@ -16,9 +16,17 @@ type Forum = { id: string; title: string; is_public: boolean; is_member: boolean
 type Nachricht = { id: string; chat_id: string; created_at: string; chat_title: string | null; partner: string | null; sender: string | null; mine: boolean; snippet: string };
 type Coaching = { id: string; coach_id: string; title: string; category: string | null; simulation: string | null; price_cents: number; coach: string | null };
 type Rennen = { id: string; title: string | null; simulation: string | null; track: string | null; event_date: string };
+type Livery = { id: string; painter_id: string; title: string; price_from_cents: number | null; image: string | null; painter: string | null };
+type Video = { id: string; uploader_id: string; title: string; thumbnail: string | null; created_at: string; creator: string | null };
 type Ergebnis = {
   mitglieder?: Mitglied[]; nachrichten?: Nachricht[]; foren?: Forum[]; setups?: Setup[];
-  marktplatz?: Inserat[]; coaching?: Coaching[]; rennen?: Rennen[];
+  marktplatz?: Inserat[]; coaching?: Coaching[]; liveries?: Livery[]; videos?: Video[]; rennen?: Rennen[];
+};
+// Öffentliche Bilder aus dem Speicher (Video-Vorschaubilder, Livery-Beispielbilder) – nur eigene Pfade, nie fremde Adressen
+const speicherBild = (bucket: "videos" | "liveries", pfad: string | null): string | null => {
+  if (!pfad || !/^[0-9a-f-]{36}\/[\w.-]+$/i.test(pfad)) return null;
+  const sb = (window as unknown as { supabaseClient?: { storage: { from: (b: string) => { getPublicUrl: (p: string) => { data: { publicUrl: string } } } } } }).supabaseClient;
+  return sb ? sicherBild(sb.storage.from(bucket).getPublicUrl(pfad).data.publicUrl) : null;
 };
 type Treffer = { href: string; icon: string; avatar?: string | null; titel: string; unter: string; markieren: boolean };
 type WissenTreffer = { id: string; art: "begriff" | "hilfe"; titel: string; unter: string };
@@ -76,6 +84,17 @@ const RUBRIKEN: Array<{ key: keyof Ergebnis; titel: string; icon: string; alle?:
     key: "coaching", titel: "Coaching", icon: "fa-chalkboard-user",
     treffer: (c: Coaching) => ({ href: `coaching.html?coach=${encodeURIComponent(c.coach_id)}`, icon: "fa-chalkboard-user",
       titel: c.title, unter: [c.coach ? `mit ${c.coach}` : null, c.category, c.simulation, euro(c.price_cents)].filter(Boolean).join(" · "), markieren: true }),
+  },
+  {
+    key: "liveries", titel: "Liveries", icon: "fa-palette", alle: (q) => `liveries.html?suche=${encodeURIComponent(q)}`,
+    treffer: (l: Livery) => ({ href: `liveries.html?angebot=${encodeURIComponent(l.id)}`, icon: "fa-palette",
+      avatar: speicherBild("liveries", l.image ? l.image.replace(/\.(jpe?g|png|webp)$/i, ".vorschau.jpg") : null),
+      titel: l.title, unter: [l.painter ? `von ${l.painter}` : null, l.price_from_cents != null ? `ab ${euro(l.price_from_cents)}` : "Preis auf Anfrage"].filter(Boolean).join(" · "), markieren: true }),
+  },
+  {
+    key: "videos", titel: "Videos", icon: "fa-film", alle: (q) => `videos.html?suche=${encodeURIComponent(q)}`,
+    treffer: (v: Video) => ({ href: `videos.html?video=${encodeURIComponent(v.id)}`, icon: "fa-film", avatar: speicherBild("videos", v.thumbnail),
+      titel: v.title, unter: [v.creator ? `von ${v.creator}` : null, datum(v.created_at)].filter(Boolean).join(" · "), markieren: true }),
   },
   {
     key: "rennen", titel: "Rennen", icon: "fa-flag-checkered",

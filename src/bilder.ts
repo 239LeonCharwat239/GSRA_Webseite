@@ -9,11 +9,29 @@
 
 export const CACHE_EIN_JAHR = "31536000"; // Dateinamen sind eindeutig – Browser dürfen sie lange zwischenspeichern
 
-async function bitmapVon(datei: Blob): Promise<ImageBitmap | null> {
-  if (typeof createImageBitmap !== "function" || !/^image\/(jpeg|png|webp)$/.test(datei.type)) return null;
+type Quelle = { bild: CanvasImageSource; width: number; height: number; close: () => void };
+
+// Bild lesen: zuerst schnell über createImageBitmap, sonst (ältere Browser, manche Handys) über ein <img>-Element
+async function bitmapVon(datei: Blob): Promise<Quelle | null> {
+  if (!/^image\/(jpeg|png|webp)$/.test(datei.type)) return null;
+  if (typeof createImageBitmap === "function") {
+    try {
+      const b = await createImageBitmap(datei, { imageOrientation: "from-image" });
+      return { bild: b, width: b.width, height: b.height, close: () => b.close() };
+    } catch {
+      /* weiter mit dem Ausweichweg */
+    }
+  }
+  const adresse = URL.createObjectURL(datei);
   try {
-    return await createImageBitmap(datei, { imageOrientation: "from-image" });
+    const img = new Image();
+    img.decoding = "async";
+    img.src = adresse;
+    await img.decode();
+    if (!img.naturalWidth || !img.naturalHeight) return null;
+    return { bild: img, width: img.naturalWidth, height: img.naturalHeight, close: () => URL.revokeObjectURL(adresse) };
   } catch {
+    URL.revokeObjectURL(adresse);
     return null;
   }
 }
@@ -37,7 +55,7 @@ export async function kachel(datei: Blob, breite: number, hoehe: number, qualita
     const h = bild.height * faktor;
     ctx.fillStyle = "#0b0f19"; // transparente PNG nicht schwarz-grau, sondern im Seiten-Dunkelblau
     ctx.fillRect(0, 0, breite, hoehe);
-    ctx.drawImage(bild, (breite - w) / 2, (hoehe - h) / 2, w, h);
+    ctx.drawImage(bild.bild, (breite - w) / 2, (hoehe - h) / 2, w, h);
     return await alsJpeg(canvas, qualitaet);
   } finally {
     bild.close();
@@ -57,7 +75,7 @@ export async function vorschau(datei: Blob, maxSeite = 640, qualitaet = 0.78): P
     if (!ctx) return null;
     ctx.fillStyle = "#0b0f19";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(bild, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bild.bild, 0, 0, canvas.width, canvas.height);
     return await alsJpeg(canvas, qualitaet);
   } finally {
     bild.close();

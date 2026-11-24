@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Renningenieur | GSRA</title>
+    <meta name="description" content="Dein KI-Renningenieur der GSRA: Funk im Rennen, Live-Daten, Coaching und ein Gedächtnis, das dich kennenlernt.">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha256-7jvo3hkrl8sdc9HpXWuCux9rZYwPl8TvdX/DMZlu09M=" crossorigin="anonymous"></script>
+    <script src="supabase-client.js"></script>
+    <script src="fehler-monitor.js"></script>
+    <script src="auth-nav.js"></script>
+</head>
+<body>
+
+<header>
+    <div class="logo-slogan-container">
+        <a href="index.html" class="logo-link">
+            <img src="GSRA_Logo_ohne Hintergrund.png" alt="GSRA Logo" class="logo">
+        </a>
+        <div class="header-slogan">
+            <span class="text-blue">UNITED BY SPEED.</span>
+            <span class="text-yellow">DRIVEN GLOBALLY.</span>
+        </div>
+    </div>
+    <!-- Die Navigation baut auth-nav.js aus einer zentralen Liste (GSRA_NAV) -->
+    <nav>
+        <a href="index.html">Home</a>
+        <a href="messenger.html">Messenger</a>
+        <a href="login.html" class="login-btn" id="loginNavBtn">Login</a>
+        <button id="logoutBtn" class="login-btn" style="display: none;">Logout</button>
+    </nav>
+</header>
+
+    <div class="container co-page re-page">
+        <section class="hero-section co-hero">
+            <h1 class="hero-title">DEIN <span class="text-blue">RENNINGENIEUR</span></h1>
+            <p class="hero-subtitle">Er kennt deinen Stintplan, deine Telemetrie und dich – und spricht mit dir wie ein echter Renningenieur.</p>
+            <div class="co-stats"><span class="co-stat re-status"><i class="fa-solid fa-flask"></i> <strong>In Entwicklung</strong> · startet mit der GSRA-App</span></div>
+        </section>
+
+        <ol class="co-steps" aria-label="Was dein Renningenieur kann">
+            <li><span class="co-step-num">1</span><i class="fa-solid fa-headset"></i><div><strong>Funk per Knopfdruck</strong><span>Frag frei heraus – „Wie heißt der Fahrer vor mir?“ oder „Reicht der Sprit?“.</span></div></li>
+            <li><span class="co-step-num">2</span><i class="fa-solid fa-gauge-high"></i><div><strong>Live-Daten</strong><span>Sprit, Abstände, Reifen, Flaggen und Wetter direkt aus der Simulation.</span></div></li>
+            <li><span class="co-step-num">3</span><i class="fa-solid fa-chart-line"></i><div><strong>Coaching im Rennen</strong><span>„Kurve 4 zehn Meter später bremsen“ – aus deiner Telemetrie berechnet.</span></div></li>
+            <li><span class="co-step-num">4</span><i class="fa-solid fa-brain"></i><div><strong>Lernt dich kennen</strong><span>Merkt sich deine Vorlieben, Ziele und Stärken – du bestimmst, was.</span></div></li>
+        </ol>
+
+        <div class="re-raster">
+            <!-- Persönlichkeit (SQL 048: race_engineer_settings) -->
+            <section class="re-karte" aria-labelledby="reTitelPers">
+                <h2 id="reTitelPers"><i class="fa-solid fa-user-gear"></i> Persönlichkeit</h2>
+                <form id="reForm" class="co-form" novalidate autocomplete="off">
+                    <label class="co-field"><span>Name deines Renningenieurs</span>
+                        <input type="text" name="name" maxlength="24" required placeholder="z. B. Kim"></label>
+                    <label class="co-field"><span>So nennt er dich <small>(optional)</small></span>
+                        <input type="text" name="rufname" maxlength="24" placeholder="z. B. dein Vorname"></label>
+                    <fieldset class="co-field co-wide re-wahl"><legend>Art</legend>
+                        <div class="re-optionen" data-name="art">
+                            <label><input type="radio" name="art" value="kumpel"><span><strong>Kumpel</strong><small>locker, freundschaftlich, mit Humor</small></span></label>
+                            <label><input type="radio" name="art" value="profi"><span><strong>Profi</strong><small>sachlich, präzise, wie im Werksteam</small></span></label>
+                            <label><input type="radio" name="art" value="motivator"><span><strong>Motivator</strong><small>pusht dich, feiert jede Bestzeit</small></span></label>
+                            <label><input type="radio" name="art" value="knapp"><span><strong>Knapp</strong><small>nur Zahlen, kein Wort zu viel</small></span></label>
+                        </div>
+                    </fieldset>
+                    <label class="co-field"><span>Gesprächigkeit</span>
+                        <select name="gespraechig">
+                            <option value="still">Still – nur das Wichtigste</option>
+                            <option value="normal">Normal</option>
+                            <option value="viel">Gesprächig – erklärt gern</option>
+                        </select></label>
+                    <label class="co-field"><span>Stimme</span>
+                        <select name="stimme">
+                            <option value="ruhig">Ruhig</option>
+                            <option value="energisch">Energisch</option>
+                            <option value="tief">Tief</option>
+                            <option value="hell">Hell</option>
+                        </select></label>
+                    <label class="co-field"><span>Sprache</span>
+                        <select name="sprache">
+                            <option value="de">Deutsch</option>
+                            <option value="en">Englisch</option>
+                        </select></label>
+                    <fieldset class="co-field co-wide re-wahl"><legend>Worüber er dich informiert</legend>
+                        <div class="co-cats" id="reThemen"></div>
+                    </fieldset>
+                    <div class="gsra-dialog-actions co-wide re-aktionen">
+                        <button type="button" class="gsra-dialog-btn secondary" id="reProbe"><i class="fa-solid fa-tower-broadcast"></i> Probefunk</button>
+                        <button type="submit" class="gsra-dialog-btn primary"><i class="fa-solid fa-floppy-disk"></i> Speichern</button>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Probefunk: Beispiel mit erfundenen Rennwerten, gesprochen über die Sprachausgabe des Browsers -->
+            <section class="re-karte re-funk" aria-labelledby="reTitelFunk">
+                <h2 id="reTitelFunk"><i class="fa-solid fa-tower-broadcast"></i> Funk <small>Vorschau mit Beispieldaten</small></h2>
+                <div class="re-funk-kopf">
+                    <span class="re-funk-led" id="reLed" aria-hidden="true"></span>
+                    <strong id="reFunkName">Kim</strong>
+                    <span class="re-funk-kanal">Kanal 1 · Box</span>
+                </div>
+                <div class="re-funk-verlauf" id="reVerlauf" aria-live="polite"></div>
+                <div class="re-fragen" id="reFragen" aria-label="Beispielfragen"></div>
+                <p class="co-form-note"><i class="fa-solid fa-circle-info"></i> Im Rennen kommen die Antworten aus den Live-Daten deiner Simulation und von einer KI, die frei mit dir spricht. Hier hörst du, wie er klingen wird.</p>
+            </section>
+        </div>
+
+        <!-- Gedächtnis (SQL 048: race_engineer_memory) -->
+        <section class="re-karte re-gedaechtnis" aria-labelledby="reTitelGed">
+            <h2 id="reTitelGed"><i class="fa-solid fa-brain"></i> Gedächtnis <small id="reGedAnzahl"></small></h2>
+            <p class="re-text">Was du hier einträgst, weiß dein Renningenieur über dich – später lernt er im Rennen dazu. Nur du siehst diese Einträge und kannst jeden jederzeit löschen.</p>
+            <form id="reMerkenForm" class="re-merken" autocomplete="off">
+                <select name="art" aria-label="Art des Eintrags">
+                    <option value="vorliebe">Vorliebe</option>
+                    <option value="ziel">Ziel</option>
+                    <option value="staerke">Stärke</option>
+                    <option value="schwaeche">Daran arbeite ich</option>
+                    <option value="notiz">Notiz</option>
+                </select>
+                <input type="text" name="text" maxlength="200" placeholder="z. B. Sag mir Abstände nur auf Geraden" aria-label="Was soll er sich merken?">
+                <button type="submit" class="co-btn primary"><i class="fa-solid fa-plus"></i> Merken</button>
+            </form>
+            <ul class="re-liste" id="reGedaechtnis"></ul>
+        </section>
+
+        <!-- So entsteht er (Fahrplan, siehe Bestandsaufnahme) -->
+        <section class="re-karte" aria-labelledby="reTitelPlan">
+            <h2 id="reTitelPlan"><i class="fa-solid fa-route"></i> So entsteht dein Renningenieur</h2>
+            <ol class="re-plan">
+                <li class="fertig"><strong>Persönlichkeit und Gedächtnis</strong><span>Name, Art, Stimme, Themen und was er über dich weiß – heute schon einstellbar.</span></li>
+                <li><strong>GSRA-App für den PC</strong><span>Liest die Live-Daten aus der Simulation und zeichnet deine Runden auf.</span></li>
+                <li><strong>Telemetrie und Stint-Planer live</strong><span>Verbrauch, Rundenzeiten, Reifen und Boxenfenster automatisch.</span></li>
+                <li><strong>Funk im Rennen</strong><span>Sprechtaste am Lenkrad, freie Fragen, Ansagen zu Sprit, Abständen und Flaggen.</span></li>
+                <li><strong>Coaching und Rennberichte</strong><span>Bremspunkte, Lift and Coast und deine größten Zeitgewinne – nach jedem Rennen.</span></li>
+            </ol>
+            <p class="co-form-note"><i class="fa-solid fa-crown"></i> Der Renningenieur wird Teil von Pole und Alliance. Das Mikrofon hört nur, solange du die Sprechtaste drückst; Aufnahmen werden nicht gespeichert.</p>
+        </section>
+    </div>
+
+    <script src="ui-dialogs.js"></script>
+    <script type="module" src="src/renningenieur.ts"></script>
+    <script type="module" src="src/suche.ts"></script>
+</body>
+</html>

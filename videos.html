@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Videos - GSRA</title>
+    <title>Videos | GSRA</title>
     <meta name="description" content="Videos der GSRA: Hotlaps, Onboards, Rennen und Tutorials unserer Pro-Fahrer.">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
@@ -33,53 +33,63 @@
     </nav>
 </header>
 
-    <main class="container vd-seite">
-        <section class="hero-section">
-            <h1 class="hero-title"><span class="text-blue">Videos</span></h1>
+    <!-- Aufbau wie Coaching und Liveries: Kopf, Werkzeugzeile, Karten, Veröffentlichen als Dialog -->
+    <div class="container co-page vd-page">
+
+        <section class="hero-section co-hero">
+            <h1 class="hero-title">GSRA <span class="text-blue">VIDEOS</span></h1>
             <p class="hero-subtitle">Hotlaps, Onboards, Rennen und Tutorials – die neuesten Videos unserer Pro-Fahrer.</p>
+            <div id="vdStats" class="co-stats" hidden></div>
         </section>
 
-        <!-- Nur für Pro-Fahrer und Admins sichtbar (SQL 046 prüft das zusätzlich) -->
-        <section class="card vd-neu" id="vdNeuKarte" hidden>
-            <button type="button" class="vd-neu-kopf" id="vdNeuAuf" aria-expanded="false" aria-controls="vdForm">
-                <i class="fa-solid fa-circle-plus" aria-hidden="true"></i> Video veröffentlichen
-            </button>
-            <form id="vdForm" class="vd-form" hidden novalidate autocomplete="off">
-                <div class="vd-form-raster">
-                    <div class="vd-form-felder">
-                        <label><span>Link zum Video</span><input name="url" type="url" inputmode="url" maxlength="500" required placeholder="https://…"></label>
-                        <label><span>Titel</span><input name="title" type="text" maxlength="100" required placeholder="z. B. Hotlap Interlagos – GT3"></label>
-                        <label><span>Text <small>(freiwillig)</small></span><textarea name="description" rows="4" maxlength="1500" placeholder="Heute fahren wir in Brasilien …"></textarea></label>
-                        <label><span>Hashtags <small>(bis zu 10, z. B. #Hotlap #GT3)</small></span><input name="tags" type="text" maxlength="200" placeholder="#Hotlap #Fast #Alliance"></label>
-                    </div>
-                    <div class="vd-form-bild">
-                        <span class="vd-label">Vorschaubild <small>(16:9, wird verkleinert)</small></span>
-                        <div class="vd-vorschau" id="vdVorschau"><i class="fa-solid fa-image" aria-hidden="true"></i><span>Noch kein Bild</span></div>
-                        <label class="vd-bild-wahl"><i class="fa-solid fa-upload" aria-hidden="true"></i> Bild auswählen
-                            <input type="file" id="vdDatei" accept="image/jpeg,image/png,image/webp" hidden></label>
-                    </div>
-                </div>
-                <div class="vd-form-aktionen">
-                    <button type="submit" class="lv-btn primaer"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i> Veröffentlichen</button>
-                    <button type="button" class="lv-btn" id="vdAbbrechen">Abbrechen</button>
-                </div>
-            </form>
-        </section>
-
-        <!-- Kopfzeile: Überschrift, gewählter Hashtag (per Klick auf einen Hashtag im Video) und kleine Suche -->
-        <div class="gsra-werkzeugzeile" aria-label="Videos filtern">
-            <h2 class="gsra-werkzeugzeile-titel"><i class="fa-solid fa-film" aria-hidden="true"></i> Neueste Videos <small id="vdAnzahl"></small></h2>
-            <div class="gsra-werkzeugzeile-rechts">
-                <button type="button" class="gsra-filter-chip" id="vdTagFilter" hidden></button>
-                <label class="gsra-mini-suche"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
-                    <input type="search" id="vdSuche" placeholder="Suchen" maxlength="60" autocomplete="off" aria-label="Videos durchsuchen"></label>
+        <div class="co-toolbar">
+            <h2 class="vd-titel"><i class="fa-solid fa-film"></i> Neueste Videos <small id="vdAnzahl"></small></h2>
+            <div class="co-toolbar-right">
+                <input type="search" id="vdSuche" class="co-search" placeholder="Titel, Creator oder GSRA-ID …" aria-label="Videos nach Titel, Creator oder GSRA-ID durchsuchen" maxlength="60" autocomplete="off">
+                <button type="button" id="vdNeu" class="co-primary-btn" hidden><i class="fa-solid fa-plus"></i> Video veröffentlichen</button>
             </div>
         </div>
 
-        <section id="vdListe" class="vd-liste" aria-live="polite"></section>
-    </main>
+        <!-- Gefundener Creator (Name oder GSRA-ID) bzw. gewählter Hashtag -->
+        <div id="vdFilter" class="vd-filter-zeile" hidden></div>
+
+        <section id="vdListe" class="co-grid vd-grid" aria-live="polite">
+            <div class="co-empty"><i class="fa-solid fa-spinner fa-spin"></i> Lade Videos …</div>
+        </section>
+    </div>
+
+    <!-- Video veröffentlichen (nur Pro-Fahrer und Admins – die Datenbank prüft das zusätzlich, SQL 046) -->
+    <div id="vdModal" class="gsra-dialog-overlay" hidden>
+        <div class="gsra-dialog co-dialog vd-dialog" role="dialog" aria-modal="true" aria-labelledby="vdFormTitel">
+            <button type="button" class="gsra-dialog-close" data-close="vdModal" title="Schließen"><i class="fa-solid fa-xmark"></i></button>
+            <div class="gsra-dialog-icon"><i class="fa-solid fa-film"></i></div>
+            <h3 class="gsra-dialog-title" id="vdFormTitel">Video veröffentlichen</h3>
+            <form id="vdForm" class="co-form" novalidate autocomplete="off">
+                <label class="co-field co-wide"><span>Link zum Video</span>
+                    <input type="url" name="url" inputmode="url" maxlength="500" required placeholder="https://…"></label>
+                <label class="co-field co-wide"><span>Titel</span>
+                    <input type="text" name="title" maxlength="100" required placeholder="z. B. Hotlap Interlagos – GT3"></label>
+                <div class="co-field co-wide"><span>Vorschaubild <small>(wird auf 16:9 zugeschnitten und verkleinert – ohne Bild erscheint der Titel)</small></span>
+                    <label class="vd-vorschau" id="vdVorschau">
+                        <span class="vd-vorschau-leer"><i class="fa-solid fa-image"></i><strong>Bild auswählen oder hierher ziehen</strong><small>JPG, PNG oder WebP</small></span>
+                        <input type="file" id="vdDatei" accept="image/jpeg,image/png,image/webp" hidden>
+                    </label>
+                </div>
+                <label class="co-field co-wide"><span>Text <small>(optional)</small></span>
+                    <textarea name="description" rows="4" maxlength="1500" placeholder="Heute fahren wir in Brasilien – eine Hotlap mit Setup-Tipps …"></textarea></label>
+                <label class="co-field co-wide"><span>Hashtags <small>(optional, bis zu 10 – auch aus dem Text, z. B. #Hotlap)</small></span>
+                    <input type="text" name="tags" maxlength="200" placeholder="#Hotlap #GT3 #Interlagos"></label>
+                <p class="co-form-note co-wide"><i class="fa-solid fa-shield-halved"></i> Gespeichert wird nur das Vorschaubild. Ein Klick öffnet das Video in einem neuen Tab auf der Plattform deines Kanals.</p>
+                <div class="gsra-dialog-actions co-wide">
+                    <button type="button" class="gsra-dialog-btn secondary" data-close="vdModal">Abbrechen</button>
+                    <button type="submit" class="gsra-dialog-btn primary">Veröffentlichen</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <script src="ui-dialogs.js"></script>
+    <script src="bewertungen.js"></script>
     <script src="profil-karte.js"></script>
     <script type="module" src="src/videos.ts"></script>
     <script type="module" src="src/karriere.ts"></script>

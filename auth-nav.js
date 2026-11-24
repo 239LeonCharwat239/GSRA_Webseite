@@ -644,6 +644,7 @@ const GSRA_NAV = [
         { label: "Setups", href: "setups.html", icon: "fa-sliders", text: "Setup Hub für alle Simulationen" },
         { label: "Stint-Planer", href: "stintplaner.html", icon: "fa-gas-pump", text: "Sprit, Stints und Boxenstopps planen", vorschau: true },
         { label: "Telemetrie", icon: "fa-chart-line", text: "Runden vergleichen und schneller werden", bald: true },
+        { label: "Renningenieur", href: "renningenieur.html", icon: "fa-headset", text: "Dein KI-Renningenieur", vorschau: true },
         { label: "Liveries", href: "liveries.html", icon: "fa-palette", text: "Painter für dein Design finden" }
     ] },
     { label: "Marktplatz", href: "marktplatz.html" },

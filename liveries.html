@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Liveries - GSRA</title>
+    <title>Liveries | GSRA</title>
     <meta name="description" content="Liveries der GSRA: Painter aus der Community gestalten dein Design für Formelfahrzeuge, Prototypen, GT-Fahrzeuge und mehr.">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
@@ -33,62 +33,125 @@
     </nav>
 </header>
 
-    <main class="container lv-seite">
-        <section class="hero-section">
-            <h1 class="hero-title"><span class="text-blue">Liveries</span></h1>
-            <p class="hero-subtitle">Painter aus der Community gestalten dein Design – vom Formelfahrzeug bis zum GT-Fahrzeug.</p>
+    <!-- Aufbau wie die Coaching-Seite (gleiche Bausteine): Schritte, Reiter, Filter, Karten, Formular als Dialog -->
+    <div class="container co-page lv-page">
+
+        <section class="hero-section co-hero">
+            <h1 class="hero-title">GSRA <span class="text-blue">LIVERIES</span></h1>
+            <p class="hero-subtitle">Dein Auto, dein Design – Painter aus der Community gestalten deine Livery.</p>
+            <div id="lvStats" class="co-stats" hidden></div>
         </section>
 
-        <section class="lv-hinweis" aria-label="So funktioniert es">
-            <div><i class="fa-solid fa-palette" aria-hidden="true"></i><span><strong>Painter finden</strong> Stöbere in den Angeboten und sieh dir Beispiele an.</span></div>
-            <div><i class="fa-solid fa-comments" aria-hidden="true"></i><span><strong>Im Messenger absprechen</strong> Wunsch, Entwürfe, Korrekturen und Preis klärt ihr direkt miteinander.</span></div>
-            <div><i class="fa-solid fa-handshake" aria-hidden="true"></i><span><strong>Selbst bezahlen</strong> Die Bezahlung regelt ihr untereinander – die GSRA ist dabei nicht Vertragspartner.</span></div>
-        </section>
+        <ol class="co-steps" aria-label="So bekommst du deine Livery">
+            <li><span class="co-step-num">1</span><i class="fa-solid fa-magnifying-glass"></i><div><strong>Painter finden</strong><span>Nach Fahrzeugklasse, Simulation, Preis und Lieferzeit filtern.</span></div></li>
+            <li><span class="co-step-num">2</span><i class="fa-solid fa-comments"></i><div><strong>Im Messenger anfragen</strong><span>Farben, Startnummer, Sponsoren und Wünsche besprechen.</span></div></li>
+            <li><span class="co-step-num">3</span><i class="fa-solid fa-pen-ruler"></i><div><strong>Entwürfe abstimmen</strong><span>Korrekturrunden und Lieferung direkt mit dem Painter.</span></div></li>
+            <li><span class="co-step-num">4</span><i class="fa-solid fa-handshake"></i><div><strong>Untereinander bezahlen</strong><span>Die GSRA ist nicht Vertragspartner – zahlt nur, wem ihr vertraut.</span></div></li>
+        </ol>
 
-        <!-- Kopfzeile: Überschrift, Fahrzeugklasse, Simulation und kleine Suche in einer Zeile -->
-        <div class="gsra-werkzeugzeile" aria-label="Angebote filtern">
-            <h2 class="gsra-werkzeugzeile-titel"><i class="fa-solid fa-palette" aria-hidden="true"></i> Angebote <small id="lvAnzahl"></small></h2>
-            <div class="gsra-werkzeugzeile-rechts">
-                <select id="lvKlasse" class="gsra-mini-auswahl" aria-label="Fahrzeugklasse"><option value="">Alle Klassen</option></select>
-                <select id="lvSim" class="gsra-mini-auswahl" aria-label="Simulation"><option value="">Alle Simulationen</option></select>
-                <label class="gsra-mini-suche"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
-                    <input type="search" id="lvSuche" placeholder="Suchen" maxlength="60" autocomplete="off" aria-label="Painter oder Angebot suchen"></label>
-            </div>
+        <div class="co-tabs" role="tablist">
+            <button type="button" class="co-tab active" data-tab="angebote" role="tab"><i class="fa-solid fa-palette"></i> Painter</button>
+            <button type="button" class="co-tab co-tab-pro" data-tab="pro" role="tab"><i class="fa-solid fa-crown"></i> Pro-Painter</button>
+            <button type="button" class="co-tab" data-tab="painter" role="tab"><i class="fa-solid fa-brush"></i> Als Painter</button>
         </div>
 
-        <section id="lvListe" class="lv-liste" aria-live="polite"></section>
-
-        <!-- Eigener Painter-Bereich: Lizenz holen, Angebote anlegen und verwalten (SQL 046) -->
-        <section class="card lv-mein" id="lvMein" hidden>
-            <h2><i class="fa-solid fa-brush" aria-hidden="true"></i> Dein Painter-Bereich <span id="lvStatusBadge"></span></h2>
-            <div id="lvMeinInhalt"></div>
-
-            <form id="lvForm" class="lv-form" hidden novalidate autocomplete="off">
-                <h3 id="lvFormTitel">Neues Angebot</h3>
-                <label><span>Titel</span><input name="title" type="text" maxlength="80" required placeholder="z. B. GT3- und Prototypen-Designs mit Sponsor-Paket"></label>
-                <label><span>Beschreibung <small>(was du anbietest, Ablauf, Anzahl Korrekturen, Dateien)</small></span>
-                    <textarea name="description" rows="5" maxlength="2000"></textarea></label>
-                <fieldset><legend>Fahrzeugklassen</legend><div class="lv-chips" id="lvFormKlassen"></div></fieldset>
-                <fieldset><legend>Simulationen</legend><div class="lv-chips" id="lvFormSims"></div></fieldset>
-                <div class="lv-form-reihe">
-                    <label><span>Preis ab (€, freiwillig)</span><input name="price" type="text" inputmode="decimal" maxlength="7" placeholder="z. B. 40"></label>
-                    <label><span>Lieferzeit (Tage, freiwillig)</span><input name="days" type="text" inputmode="numeric" maxlength="3" placeholder="z. B. 7"></label>
+        <!-- Suche und Filter (gelten für „Painter“ und „Pro-Painter“) -->
+        <div id="lvFilterArea" class="co-filter-area">
+            <div class="co-toolbar">
+                <div id="lvKlassen" class="co-cats" role="group" aria-label="Nach Fahrzeugklasse filtern"></div>
+                <div class="co-toolbar-right">
+                    <input type="search" id="lvSuche" class="co-search" placeholder="Suche: Painter, Fahrzeug, Stil …" aria-label="Liveries durchsuchen" maxlength="60" autocomplete="off">
+                    <button type="button" id="lvAnbieten" class="co-primary-btn"><i class="fa-solid fa-plus"></i> Livery anbieten</button>
                 </div>
-                <fieldset><legend>Beispielbilder <small>(bis zu 6, werden verkleinert und ohne Standortdaten gespeichert)</small></legend>
-                    <div class="lv-bilder" id="lvFormBilder"></div>
-                    <label class="lv-bild-wahl"><i class="fa-solid fa-image" aria-hidden="true"></i> Bilder auswählen
-                        <input type="file" id="lvFormDatei" accept="image/jpeg,image/png,image/webp" multiple hidden></label>
-                </fieldset>
-                <label class="lv-check"><input name="active" type="checkbox" checked> Angebot sichtbar</label>
-                <div class="lv-form-aktionen">
-                    <button type="submit" class="lv-btn primaer"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Speichern</button>
-                    <button type="button" class="lv-btn" id="lvFormAbbrechen">Abbrechen</button>
+            </div>
+            <section class="mk-toolbar co-filters" aria-label="Liveries filtern und sortieren">
+                <select id="lvSim" title="Simulation" aria-label="Simulation"><option value="">Alle Simulationen</option></select>
+                <div class="mk-price">
+                    <input type="number" id="lvMinPreis" min="0" step="1" placeholder="Preis von" aria-label="Preis von (Euro)">
+                    <span>–</span>
+                    <input type="number" id="lvMaxPreis" min="0" step="1" placeholder="bis €" aria-label="Preis bis (Euro)">
+                </div>
+                <select id="lvLieferzeit" title="Lieferzeit" aria-label="Lieferzeit">
+                    <option value="">Jede Lieferzeit</option>
+                    <option value="3">bis 3 Tage</option>
+                    <option value="7">bis 7 Tage</option>
+                    <option value="14">bis 14 Tage</option>
+                </select>
+                <select id="lvSort" title="Sortierung" aria-label="Sortierung">
+                    <option value="neu">Neueste zuerst</option>
+                    <option value="preis-auf">Preis aufsteigend</option>
+                    <option value="preis-ab">Preis absteigend</option>
+                    <option value="schnell">Schnellste Lieferung</option>
+                </select>
+                <button type="button" id="lvReset" class="mk-reset"><i class="fa-solid fa-rotate-left"></i> Zurücksetzen</button>
+            </section>
+        </div>
+
+        <section class="co-panel" data-panel="angebote">
+            <p id="lvInfo" class="co-result-info" aria-live="polite"></p>
+            <div id="lvListe" class="co-grid"><div class="co-empty"><i class="fa-solid fa-spinner fa-spin"></i> Lade Liveries …</div></div>
+        </section>
+
+        <section class="co-panel co-pro" data-panel="pro" hidden>
+            <div class="co-pro-intro">
+                <i class="fa-solid fa-crown"></i>
+                <div>
+                    <h2>Pro-Painter</h2>
+                    <p>Painter, die die GSRA persönlich ausgewählt hat. Angefragt und abgesprochen wird genauso wie bei allen Paintern – direkt im Messenger.</p>
+                </div>
+            </div>
+            <p id="lvProInfo" class="co-result-info" aria-live="polite"></p>
+            <div id="lvProListe" class="co-grid"></div>
+        </section>
+
+        <section class="co-panel" data-panel="painter" hidden>
+            <div id="lvLizenz" class="co-license" hidden></div>
+            <div class="lv-mein-kopf">
+                <h2><i class="fa-solid fa-brush"></i> Deine Angebote <small id="lvMeineAnzahl"></small></h2>
+                <button type="button" id="lvAnbieten2" class="co-btn primary" hidden><i class="fa-solid fa-plus"></i> Neue Livery anbieten</button>
+            </div>
+            <div id="lvMeine" class="co-grid"></div>
+        </section>
+    </div>
+
+    <!-- Livery anbieten / bearbeiten -->
+    <div id="lvModal" class="gsra-dialog-overlay" hidden>
+        <div class="gsra-dialog co-dialog lv-dialog" role="dialog" aria-modal="true" aria-labelledby="lvFormTitel">
+            <button type="button" class="gsra-dialog-close" data-close="lvModal" title="Schließen"><i class="fa-solid fa-xmark"></i></button>
+            <div class="gsra-dialog-icon"><i class="fa-solid fa-palette"></i></div>
+            <h3 class="gsra-dialog-title" id="lvFormTitel">Livery anbieten</h3>
+            <form id="lvForm" class="co-form" novalidate autocomplete="off">
+                <label class="co-field co-wide"><span>Titel</span>
+                    <input type="text" name="title" maxlength="80" required placeholder="z. B. GT3- und Prototypen-Designs mit Sponsor-Paket"></label>
+                <div class="co-field co-wide"><span>Beispielbilder <small>(bis zu 6 – das erste ist das Titelbild)</small></span>
+                    <div class="lv-upload" id="lvBilder"></div>
+                    <label class="lv-dropzone" id="lvDrop">
+                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                        <strong>Bilder hierher ziehen oder auswählen</strong>
+                        <small>JPG, PNG oder WebP · werden auf deinem Gerät verkleinert und ohne Standortdaten gespeichert</small>
+                        <input type="file" id="lvDatei" accept="image/jpeg,image/png,image/webp" multiple hidden>
+                    </label>
+                </div>
+                <fieldset class="co-field co-wide lv-auswahl"><legend>Fahrzeugklassen <small>(mindestens eine)</small></legend><div class="co-cats" id="lvFormKlassen"></div></fieldset>
+                <fieldset class="co-field co-wide lv-auswahl"><legend>Simulationen</legend><div class="co-cats" id="lvFormSims"></div></fieldset>
+                <label class="co-field"><span>Preis ab in € <small>(optional)</small></span>
+                    <input type="text" name="price" inputmode="decimal" maxlength="7" placeholder="z. B. 40"></label>
+                <label class="co-field"><span>Lieferzeit in Tagen <small>(optional)</small></span>
+                    <input type="text" name="days" inputmode="numeric" maxlength="3" placeholder="z. B. 7"></label>
+                <label class="co-field co-wide"><span>Beschreibung <small>(optional)</small></span>
+                    <textarea name="description" rows="5" maxlength="2000" placeholder="Was gestaltest du? Wie läuft es ab (Entwurf, Korrekturrunden, Dateien)? Was brauchst du vom Kunden?"></textarea></label>
+                <label class="co-check co-wide"><input type="checkbox" name="active" checked> <span>Angebot sichtbar (kann jederzeit pausiert werden)</span></label>
+                <p class="co-form-note co-wide"><i class="fa-solid fa-handshake"></i> Absprachen und Bezahlung regelst du direkt mit deinen Kunden im Messenger – die GSRA ist dabei nicht Vertragspartner.</p>
+                <div class="gsra-dialog-actions co-wide">
+                    <button type="button" class="gsra-dialog-btn secondary" data-close="lvModal">Abbrechen</button>
+                    <button type="submit" class="gsra-dialog-btn primary">Speichern</button>
                 </div>
             </form>
-        </section>
-    </main>
+        </div>
+    </div>
 
     <script src="ui-dialogs.js"></script>
+    <script src="bewertungen.js"></script>
     <script src="profil-karte.js"></script>
     <script type="module" src="src/liveries.ts"></script>
     <script type="module" src="src/karriere.ts"></script>

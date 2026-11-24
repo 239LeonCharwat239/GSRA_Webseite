@@ -10,9 +10,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL, KARRIERE_SQL, STINTPLAN_SQL, LIVERIES_SQL, CHATSICHER_SQL] =
-    Array.from({ length: 47 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 47);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL, KARRIERE_SQL, STINTPLAN_SQL, LIVERIES_SQL, CHATSICHER_SQL, AUFRAEUMEN_SQL] =
+    Array.from({ length: 48 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 48);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -3379,6 +3379,116 @@ if (CHATSICHER_SQL && LIVERIES_SQL) {
     check("Gäste sehen keine Anmeldungen", gastListe.error !== null, gastListe.error || "durchgelassen!");
     const bListe = await mitAnspruch(B, { session_id: S_B }, async () => q(`select * from public.my_sessions()`));
     check("Jeder sieht nur die eigenen Anmeldungen", bListe.rows.length === 1 && bListe.rows[0].id === S_B, JSON.stringify(bListe.rows));
+}
+
+// --- 048: Speicher aufräumen, Suche mit Videos/Liveries, Renningenieur (Einstellungen, Gedächtnis) ---
+if (AUFRAEUMEN_SQL && CHATSICHER_SQL) {
+    const id = (n) => `78000000-0000-0000-0000-0000000004${String(n).padStart(2, "0")}`;
+    const A = id(1), B = id(2), PRO = id(3), CH = id(4);
+    const URL = (p) => `https://x.supabase.co/storage/v1/object/public/chat_attachments/${p}`;
+    await db.exec(`
+      insert into auth.users (id) values ('${A}'), ('${B}'), ('${PRO}');
+      insert into public.profiles (id, username, gsra_id, avatar_url) values ('${A}', 'Aufraeum Anna', 948001, 'https://x.supabase.co/storage/v1/object/public/avatars/${A}/111_k.png'),
+        ('${B}', 'Bernd Beispiel', 948002, null), ('${PRO}', 'Video Valentin', 948003, null);
+      insert into public.pro_creators (user_id) values ('${PRO}');
+      insert into public.chats (id, user1_id, user2_id) values ('${CH}', '${A}', '${B}');`);
+    await db.exec(readFileSync(AUFRAEUMEN_SQL, "utf8"));
+    const ctl48 = await db.exec(readFileSync(AUFRAEUMEN_SQL, "utf8")); // zweiter Lauf
+    const rows48 = ctl48[ctl48.length - 1].rows;
+    console.log("Kontrolle 048:\n  " + rows48.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+    check("Kontrolle 048: Warteschlange, nur Server, Suche, Renningenieur (Zeitplan braucht pg_cron)",
+        rows48.slice(0, 4).map(r => r.ergebnis).join(",") === "bereit,ja,bereit,bereit", rows48.map(r => r.ergebnis).join(", "));
+
+    const offen = async () => (await db.query(`select bucket, path from public.storage_cleanup_queue where done_at is null order by path`)).rows.map(r => `${r.bucket}:${r.path}`);
+    // Chat-Anhänge: erst nach Ablauf der Beweissicherung und nur, wenn nichts sie mehr nutzt
+    const P1 = `${CH}/${A}/chatv_100_abc12_7s.mp4`, P2 = `${CH}/${A}/chat_200_def34.jpg`;
+    await as(A, async () => {
+        await q(`insert into public.messages (id, chat_id, sender_id, text, image_url) values
+          ('78000000-0000-0000-0000-0000000005a1', '${CH}', '${A}', '[Medien]', '${URL(P1)}'),
+          ('78000000-0000-0000-0000-0000000005a2', '${CH}', '${A}', '[Medien]', '${URL(P2)}')`);
+    });
+    await db.exec(`delete from public.messages where id = '78000000-0000-0000-0000-0000000005a1'`);
+    check("Gelöschte Nachricht: Anhang noch nicht vorgemerkt (Beweissicherung läuft)", !(await offen()).some(p => p.includes("chatv_100")), JSON.stringify(await offen()));
+    await db.exec(`update public.message_history set changed_at = now() - interval '200 days' where message_id::text = '78000000-0000-0000-0000-0000000005a1'`);
+    const genommen = (await db.query(`select bucket, path from public.storage_cleanup_take(50)`)).rows.map(r => r.path);
+    check("Nach 180 Tagen: Video und sein Vorschaubild zum Löschen vorgemerkt",
+        genommen.includes(P1) && genommen.includes(`${CH}/${A}/chatv_100_abc12.vorschau.jpg`), JSON.stringify(genommen));
+    check("Noch genutzter Anhang bleibt", !genommen.includes(P2), JSON.stringify(genommen));
+    // Bearbeitete Nachricht mit gleichem Bild: Kopie läuft ab, Bild wird aber noch genutzt
+    await as(A, async () => { await q(`update public.messages set text = 'mit Text' where id = '78000000-0000-0000-0000-0000000005a2'`); });
+    await db.exec(`update public.message_history set changed_at = now() - interval '200 days' where message_id::text = '78000000-0000-0000-0000-0000000005a2';
+                   delete from public.message_history where changed_at < now() - interval '180 days'`);
+    check("Bearbeitete Nachricht: Bild bleibt, solange die Nachricht es zeigt", !(await offen()).some(p => p.includes("chat_200")), JSON.stringify(await offen()));
+    const fertig = await db.query(`select public.storage_cleanup_done(array(select id from public.storage_cleanup_queue where path like '%chatv_100%')) as n`);
+    check("Erledigte Dateien werden vermerkt", Number(fertig.rows[0].n) === 2, String(fertig.rows[0].n));
+    // Profilbild ersetzt → altes Bild und kleine Fassung
+    await as(A, async () => { await q(`update public.profiles set avatar_url = 'https://x.supabase.co/storage/v1/object/public/avatars/${A}/222_k.png' where id = '${A}'`); });
+    const nachAvatar = await offen();
+    check("Altes Profilbild und kleine Fassung vorgemerkt", nachAvatar.includes(`avatars:${A}/111_k.png`) && nachAvatar.includes(`avatars:${A}/111_k.klein.jpg`), JSON.stringify(nachAvatar));
+    // Fremde Profilbild-Adresse wird nicht vorgemerkt (nur der eigene Ordner)
+    await as(A, async () => { await q(`update public.profiles set avatar_url = 'https://x.supabase.co/storage/v1/object/public/avatars/${B}/999.png' where id = '${A}'`); });
+    await as(A, async () => { await q(`update public.profiles set avatar_url = null where id = '${A}'`); });
+    check("Fremder Ordner im Profilbild wird nie vorgemerkt", !(await offen()).some(p => p.includes(`${B}/999`)), JSON.stringify(await offen()));
+    // Rechte: nur der Server
+    await as(A, async () => {
+        const take = await q(`select * from public.storage_cleanup_take(5)`);
+        check("Mitglieder können nicht aufräumen lassen", take.error !== null, take.error || "durchgelassen!");
+        const lesen = await q(`select * from public.storage_cleanup_queue`);
+        check("Warteschlange für Mitglieder nicht lesbar", lesen.error !== null, lesen.error || "durchgelassen!");
+        const einreihen = await q(`select public.storage_cleanup_enqueue('avatars', '${B}/fremd.png', 'x')`);
+        check("Mitglieder können keine fremden Dateien vormerken", einreihen.error !== null, einreihen.error || "durchgelassen!");
+    });
+    // Video gelöscht → Vorschaubild
+    const vid = await as(PRO, async () => q(`select public.video_save(null, 'https://video.example/aufraeumen', 'Aufräum-Video', 'Kurzer Text', array['Test'], '${PRO}/v1.jpg') as id`));
+    await as(PRO, async () => { await q(`select public.video_delete('${vid.rows[0]?.id}')`); });
+    check("Gelöschtes Video: Vorschaubild vorgemerkt", (await offen()).includes(`videos:${PRO}/v1.jpg`), JSON.stringify(await offen()));
+
+    // Suche: Videos (auch über die GSRA-ID des Creators) und Liveries – nur für Angemeldete
+    await as(PRO, async () => { await q(`select public.video_save(null, 'https://video.example/suche', 'Hotlap Suzuka', 'Schnelle Runde', array['Suzuka'], null)`); });
+    const suche = await as(B, async () => q(`select public.gsra_search('Suzuka') as r`));
+    check("Suche findet Videos", (suche.rows[0]?.r?.videos || []).some(v => v.title === "Hotlap Suzuka"), JSON.stringify(suche.rows[0]?.r?.videos));
+    const sucheId = await as(B, async () => q(`select public.gsra_search('948003') as r`));
+    check("Suche findet Videos über die GSRA-ID des Creators", (sucheId.rows[0]?.r?.videos || []).length >= 1, JSON.stringify(sucheId.rows[0]?.r?.videos));
+    const sucheLivery = await as(B, async () => q(`select public.gsra_search('Prototypen') as r`));
+    check("Suche liefert die Rubrik Liveries", Array.isArray(sucheLivery.rows[0]?.r?.liveries), JSON.stringify(sucheLivery.rows[0]?.r));
+    const gastSuche = await as(null, async () => q(`select public.gsra_search('Suzuka') as r`));
+    check("Gäste finden keine Videos und Liveries", !gastSuche.rows[0]?.r?.videos && !gastSuche.rows[0]?.r?.liveries, JSON.stringify(gastSuche.rows[0]?.r));
+
+    // Renningenieur
+    await as(A, async () => {
+        const ok = await q(`select public.race_engineer_save(' <b>Toni</b> ', 'Anna', 'kumpel', 'viel', 'ruhig', 'de', '{"sprit": false, "boese": true}'::jsonb)`);
+        check("Renningenieur-Einstellungen gespeichert", ok.error === null, ok.error || "");
+        const s = (await q(`select name, rufname, themen from public.race_engineer_settings`)).rows[0];
+        check("Name bereinigt, unbekannte Themen verworfen", s?.name === "bToni/b" && s?.themen?.sprit === false && !("boese" in (s?.themen || {})), JSON.stringify(s));
+        const falsch = await q(`select public.race_engineer_save('Toni', null, 'boese', 'viel', 'ruhig', 'de', '{}'::jsonb)`);
+        check("Nur bekannte Arten", falsch.error !== null, falsch.error || "durchgelassen!");
+        const leer = await q(`select public.race_engineer_save('   ', null, 'kumpel', 'viel', 'ruhig', 'de', '{}'::jsonb)`);
+        check("Name ist Pflicht", /Namen/.test(leer.error || ""), leer.error || "durchgelassen!");
+        const direkt = await q(`insert into public.race_engineer_settings (user_id, name) values ('${A}', 'Direkt')`);
+        check("Einstellungen nicht direkt schreibbar", direkt.error !== null, direkt.error || "durchgelassen!");
+        const m = await q(`select public.race_engineer_remember('vorliebe', 'Mag kurze Ansagen in schnellen Kurven') as id`);
+        check("Gedächtnis: Eintrag angelegt", m.error === null && Boolean(m.rows[0]?.id), m.error || "");
+        const mArt = await q(`select public.race_engineer_remember('geheim', 'x y')`);
+        check("Gedächtnis: nur bekannte Arten", mArt.error !== null, mArt.error || "durchgelassen!");
+        const direktM = await q(`insert into public.race_engineer_memory (user_id, art, text) values ('${A}', 'notiz', 'direkt')`);
+        check("Gedächtnis nicht direkt schreibbar", direktM.error !== null, direktM.error || "durchgelassen!");
+    });
+    await as(B, async () => {
+        const fremd = await q(`select * from public.race_engineer_settings`);
+        check("Fremde Renningenieur-Einstellungen nicht sichtbar", fremd.error === null && fremd.rows.length === 0, fremd.error || `${fremd.rows.length} Zeilen`);
+        const fremdM = await q(`select * from public.race_engineer_memory`);
+        check("Fremdes Gedächtnis nicht sichtbar", fremdM.error === null && fremdM.rows.length === 0, fremdM.error || `${fremdM.rows.length} Zeilen`);
+        const del = await q(`delete from public.race_engineer_memory returning id`);
+        check("Fremdes Gedächtnis nicht löschbar", del.rows.length === 0, `${del.rows.length} gelöscht`);
+    });
+    await as(A, async () => {
+        const del = await q(`delete from public.race_engineer_memory returning id`);
+        check("Eigenes Gedächtnis löschbar", del.error === null && del.rows.length === 1, del.error || `${del.rows.length}`);
+    });
+    await as(null, async () => {
+        const gast = await q(`select public.race_engineer_save('Gast', null, 'kumpel', 'normal', 'ruhig', 'de', '{}'::jsonb)`);
+        check("Gäste haben keinen Renningenieur", gast.error !== null, gast.error || "durchgelassen!");
+    });
 }
 
 // --- Konto löschen (Ausbau 3) funktioniert weiterhin, die Stimmen verschwinden mit ---

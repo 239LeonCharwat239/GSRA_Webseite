@@ -1,9 +1,9 @@
-// GSRA – Liveries (Garage), SQL 046, Entscheidungen vom 24.11.2026.
-// Wie Coachings, nur ohne Bezahlung über die GSRA: Painter stellen Angebote ein (Fahrzeugklassen, Simulationen,
-// Preis ab, Lieferzeit, Beispielbilder), Kunden fragen im Messenger an und regeln Bezahlung und Korrekturen selbst.
+// GSRA – Liveries (Garage), SQL 046/048. Überarbeitet 24.11.2026: gleicher Aufbau wie die Coaching-Seite
+// (Schritte, Reiter „Painter / Pro-Painter / Als Painter“, Kategorien, Suche, Filterzeile, Karten, Formular als Dialog).
 // Painter wird, wer die Voraussetzungen der Coach-Lizenz erfüllt oder schon Coach ist; Pro-Painter trägt das
-// Admin-Team ein. Alle Texte gehen mit textContent auf die Seite; Links in Beschreibungen öffnen erst nach dem
-// Warnhinweis (src/links.ts). Bilder werden auf dem Gerät verkleinert und ohne Standortdaten gespeichert.
+// Admin-Team ein. Angefragt wird im Messenger, bezahlt untereinander – die GSRA ist nicht Vertragspartner.
+// Alle Texte gehen mit textContent auf die Seite; Links in Beschreibungen öffnen erst nach dem Warnhinweis
+// (src/links.ts). Bilder werden auf dem Gerät verkleinert und ohne Standortdaten gespeichert (src/bilder.ts).
 import "./links";
 import { CACHE_EIN_JAHR, vorschau } from "./bilder";
 import { dialog, profilZeigen, supabaseClient, toast } from "./fenster";
@@ -13,7 +13,7 @@ type Angebot = {
   id: string; painter_id: string; title: string; description: string; classes: Klasse[]; simulations: string[];
   price_from_cents: number | null; delivery_days: number | null; images: string[]; active: boolean; updated_at: string;
 };
-type Profil = { id: string; username: string | null; avatar_url: string | null; gsra_id: number | null; role?: string | null };
+type Profil = { id: string; username: string | null; avatar_url: string | null; gsra_id: number | null };
 type Fortschritt = { mitglied_tage: number; setup_punkte: number; bewertungen: number; schnitt: number; alle: boolean;
   erfuellt: { dauer: boolean; setups: boolean; bewertungen: boolean; verhalten: boolean } };
 type Status = { aktiv: boolean; pro: boolean; coach: boolean; erteilt_am: string | null;
@@ -21,15 +21,10 @@ type Status = { aktiv: boolean; pro: boolean; coach: boolean; erteilt_am: string
   regeln: { mitglied_tage: number; setup_punkte: number; bewertungen: number; schnitt: number; ruhe_tage: number };
   fortschritt: Fortschritt };
 type Fehler = { message: string } | null;
-type Antwort<T> = Promise<{ data: T | null; error: Fehler }>;
-type Abfrage = {
-  select: (s: string) => Abfrage; eq: (k: string, v: unknown) => Abfrage; in: (k: string, v: unknown[]) => Abfrage;
-  order: (k: string, o?: { ascending: boolean }) => Abfrage; limit: (n: number) => Abfrage;
-  maybeSingle: () => Antwort<unknown>; then: Promise<{ data: unknown; error: Fehler }>["then"];
-};
+type Ergebnis<T> = { data: T | null; error: Fehler };
 type Client = {
-  from: (t: string) => Abfrage;
-  rpc: (name: string, args?: Record<string, unknown>) => Antwort<unknown>;
+  from: (t: string) => any;
+  rpc: (name: string, args?: Record<string, unknown>) => Promise<Ergebnis<unknown>>;
   auth: { getSession: () => Promise<{ data: { session: { user: { id: string } } | null } }> };
   storage: { from: (b: string) => {
     upload: (p: string, d: Blob, o: Record<string, string>) => Promise<{ error: Fehler }>;
@@ -38,9 +33,16 @@ type Client = {
   } };
 };
 
-export const KLASSEN: Record<Klasse, string> = {
-  formel: "Formelfahrzeuge", prototyp: "Prototypen", gt: "GT-Fahrzeuge", tourenwagen: "Tourenwagen", cup: "Markenpokale",
-  stockcar: "Stock Cars", rallye: "Rallye & Rallycross", kart: "Kart", sonstige: "Sonstige",
+export const KLASSEN: Record<Klasse, { text: string; icon: string }> = {
+  formel: { text: "Formelfahrzeuge", icon: "fa-flag-checkered" },
+  prototyp: { text: "Prototypen", icon: "fa-gauge-high" },
+  gt: { text: "GT-Fahrzeuge", icon: "fa-car" },
+  tourenwagen: { text: "Tourenwagen", icon: "fa-car-side" },
+  cup: { text: "Markenpokale", icon: "fa-trophy" },
+  stockcar: { text: "Stock Cars", icon: "fa-road" },
+  rallye: { text: "Rallye & Rallycross", icon: "fa-mountain" },
+  kart: { text: "Kart", icon: "fa-circle-dot" },
+  sonstige: { text: "Sonstige", icon: "fa-palette" },
 };
 const SIMULATIONEN = ["iRacing", "Assetto Corsa Competizione", "Le Mans Ultimate", "Assetto Corsa", "Assetto Corsa EVO",
   "Automobilista 2", "rFactor 2", "RaceRoom", "Gran Turismo 7", "Forza Motorsport", "F1 25", "BeamNG.drive"];
@@ -49,15 +51,21 @@ const MAX_ANGEBOTE = 5;
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T | null;
 const client = () => supabaseClient<Client>();
-
-const fehlt = (e: Fehler) => /could not find the function|schema cache|does not exist/i.test(e?.message || "");
 const euro = (cent: number) => (cent / 100).toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: cent % 100 ? 2 : 0 });
+const datum = (iso: string) => new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, klasse = "", text = "") => {
   const e = document.createElement(tag);
   if (klasse) e.className = klasse;
   if (text) e.textContent = text;
   return e;
 };
+const iconText = <K extends keyof HTMLElementTagNameMap>(tag: K, klasse: string, icon: string, text: string) => {
+  const e = el(tag, klasse);
+  e.innerHTML = `<i class="fa-solid ${icon}" aria-hidden="true"></i> `;
+  e.append(text);
+  return e;
+};
+const fehlt = (e: Fehler) => /could not find the function|schema cache|does not exist/i.test(e?.message || "");
 
 const zustand = {
   ich: null as string | null,
@@ -66,15 +74,33 @@ const zustand = {
   angebote: [] as Angebot[],
   profile: new Map<string, Profil>(),
   proPainter: new Set<string>(),
-  filter: { klasse: "" as Klasse | "", sim: "", suche: "" },
+  tab: "angebote" as "angebote" | "pro" | "painter",
+  filter: { klasse: "" as Klasse | "", sim: "", suche: "", min: NaN, max: NaN, tage: 0, sort: "neu" },
   bearbeiten: null as Angebot | null,
   formBilder: [] as { pfad: string; neu: boolean }[],
   entfernteBilder: [] as string[],
+  laedt: 0,
 };
 
 const bildUrl = (pfad: string) => client()?.storage.from("liveries").getPublicUrl(pfad).data.publicUrl || "";
 const vorschauPfad = (pfad: string) => pfad.replace(/\.(jpe?g|png|webp)$/i, ".vorschau.jpg");
 const nameVon = (id: string) => zustand.profile.get(id)?.username || "Painter";
+const istPro = (id: string) => zustand.proPainter.has(id);
+
+function avatar(id: string): HTMLElement {
+  const a = el("span", "co-avatar");
+  const url = zustand.profile.get(id)?.avatar_url || "";
+  if (/^https:\/\//i.test(url)) {
+    const img = el("img");
+    img.src = (window as unknown as { gsraAvatarKlein?: (u: string) => string }).gsraAvatarKlein?.(url) || url;
+    img.alt = "";
+    img.loading = "lazy";
+    a.appendChild(img);
+  } else {
+    a.textContent = nameVon(id).trim().charAt(0).toUpperCase() || "?";
+  }
+  return a;
+}
 
 // ---------------------------------------------------------
 // Laden
@@ -82,114 +108,251 @@ const nameVon = (id: string) => zustand.profile.get(id)?.username || "Painter";
 async function laden() {
   const sb = client();
   if (!sb) return;
-  const liste = $("lvListe");
-  if (liste) liste.innerHTML = '<p class="lv-leer"><i class="fa-solid fa-spinner fa-spin"></i> Angebote werden geladen …</p>';
-  const { data, error } = await (sb.from("livery_offers").select("*").order("updated_at", { ascending: false }).limit(200) as unknown as Promise<{ data: Angebot[] | null; error: Fehler }>);
+  const { data, error } = await sb.from("livery_offers").select("*").order("updated_at", { ascending: false }).limit(300) as Ergebnis<Angebot[]>;
   if (error) {
-    if (liste) liste.innerHTML = `<p class="lv-leer">${fehlt(error) ? "Die Liveries sind gleich verfügbar – die Datenbank wird gerade aktualisiert." : "Die Angebote konnten nicht geladen werden."}</p>`;
+    const liste = $("lvListe");
+    if (liste) liste.innerHTML = `<div class="co-empty">${fehlt(error) ? "Die Liveries sind gleich verfügbar – die Datenbank wird gerade aktualisiert." : "Die Liveries konnten nicht geladen werden."}</div>`;
     return;
   }
   zustand.angebote = data || [];
-  const ids = [...new Set(zustand.angebote.map((a) => a.painter_id))];
-  if (ids.length) {
-    const [profile, pros] = await Promise.all([
-      sb.from("profiles").select("id, username, avatar_url, gsra_id").in("id", ids) as unknown as Promise<{ data: Profil[] | null }>,
-      sb.from("pro_painters").select("user_id") as unknown as Promise<{ data: { user_id: string }[] | null }>,
-    ]);
-    (profile.data || []).forEach((p) => zustand.profile.set(p.id, p));
-    zustand.proPainter = new Set((pros.data || []).map((p) => p.user_id));
-  }
+  const ids = [...new Set([...zustand.angebote.map((a) => a.painter_id), ...(zustand.ich ? [zustand.ich] : [])])];
+  const [profile, pros] = await Promise.all([
+    ids.length ? sb.from("profiles").select("id, username, avatar_url, gsra_id").in("id", ids) as Promise<Ergebnis<Profil[]>> : Promise.resolve({ data: [], error: null }),
+    sb.from("pro_painters").select("user_id") as Promise<Ergebnis<{ user_id: string }[]>>,
+  ]);
+  (profile.data || []).forEach((p) => zustand.profile.set(p.id, p));
+  zustand.proPainter = new Set((pros.data || []).map((p) => p.user_id));
+  statistik();
   zeigen();
 }
 
+function statistik() {
+  const box = $("lvStats");
+  if (!box) return;
+  const aktiv = zustand.angebote.filter((a) => a.active);
+  const painter = new Set(aktiv.map((a) => a.painter_id));
+  const stat = (icon: string, zahl: number, text: string) => {
+    const s = el("span", "co-stat");
+    s.innerHTML = `<i class="fa-solid ${icon}" aria-hidden="true"></i> `;
+    s.append(el("strong", "", String(zahl)), ` ${text}`);
+    return s;
+  };
+  box.replaceChildren(stat("fa-brush", painter.size, painter.size === 1 ? "Painter" : "Painter"),
+    stat("fa-palette", aktiv.length, aktiv.length === 1 ? "Angebot" : "Angebote"),
+    stat("fa-crown", [...painter].filter(istPro).length, "Pro-Painter"));
+  box.hidden = !aktiv.length;
+}
+
 // ---------------------------------------------------------
-// Übersicht
+// Filter und Übersicht
 // ---------------------------------------------------------
 function passt(a: Angebot) {
   const f = zustand.filter;
-  if (!a.active && a.painter_id !== zustand.ich) return false;
+  if (!a.active) return false;
   if (f.klasse && !a.classes.includes(f.klasse)) return false;
   if (f.sim && !a.simulations.includes(f.sim)) return false;
+  const preis = a.price_from_cents == null ? null : a.price_from_cents / 100;
+  if (Number.isFinite(f.min) && (preis == null || preis < f.min)) return false;
+  if (Number.isFinite(f.max) && preis != null && preis > f.max) return false;
+  if (f.tage && (a.delivery_days == null || a.delivery_days > f.tage)) return false;
   if (f.suche) {
-    const t = `${a.title} ${a.description} ${nameVon(a.painter_id)}`.toLowerCase();
-    if (!f.suche.toLowerCase().split(/\s+/).every((w) => t.includes(w))) return false;
+    const p = zustand.profile.get(a.painter_id);
+    const t = `${a.title} ${a.description} ${p?.username || ""} ${a.simulations.join(" ")} ${a.classes.map((k) => KLASSEN[k]?.text || "").join(" ")}`.toLowerCase();
+    if (!f.suche.toLowerCase().split(/\s+/).filter(Boolean).every((w) => t.includes(w))) return false;
   }
   return true;
 }
 
-function karte(a: Angebot): HTMLElement {
-  const k = el("article", `lv-karte${a.active ? "" : " pausiert"}`);
-  k.tabIndex = 0;
-  k.setAttribute("role", "button");
-  k.setAttribute("aria-label", `${a.title} von ${nameVon(a.painter_id)} – Details öffnen`);
-  const bild = el("div", "lv-karte-bild");
+function sortiert(liste: Angebot[]) {
+  const s = zustand.filter.sort;
+  const preis = (a: Angebot) => a.price_from_cents ?? Number.POSITIVE_INFINITY;
+  return [...liste].sort((a, b) =>
+    s === "preis-auf" ? preis(a) - preis(b)
+      : s === "preis-ab" ? (b.price_from_cents ?? -1) - (a.price_from_cents ?? -1)
+        : s === "schnell" ? (a.delivery_days ?? 999) - (b.delivery_days ?? 999)
+          : b.updated_at.localeCompare(a.updated_at));
+}
+
+function karte(a: Angebot, eigen = false): HTMLElement {
+  const pro = istPro(a.painter_id);
+  const k = el("article", `co-card lv-card${pro ? " pro" : ""}${a.active ? "" : " pausiert"}`);
+  if (pro) k.appendChild(iconText("span", "co-pro-ribbon", "fa-crown", "Pro-Painter"));
+
+  const bild = el("button", "lv-card-bild");
+  bild.type = "button";
+  bild.setAttribute("aria-label", `${a.title} – Details und Beispielbilder`);
   if (a.images[0]) {
     const img = el("img");
     img.src = bildUrl(vorschauPfad(a.images[0]));
     img.alt = "";
     img.loading = "lazy";
-    img.addEventListener("error", () => { if (!img.dataset.voll) { img.dataset.voll = "1"; img.src = bildUrl(a.images[0]); } }, { once: false });
+    img.addEventListener("error", () => { if (!img.dataset.voll) { img.dataset.voll = "1"; img.src = bildUrl(a.images[0]); } });
     bild.appendChild(img);
   } else {
-    bild.innerHTML = '<i class="fa-solid fa-palette" aria-hidden="true"></i>';
+    bild.appendChild(iconText("span", "lv-card-leer", "fa-palette", "Noch keine Beispielbilder"));
   }
-  if (a.images.length > 1) bild.appendChild(el("span", "lv-anzahl", `${a.images.length} Bilder`));
-  if (!a.active) bild.appendChild(el("span", "lv-pausiert", "Pausiert"));
-  const body = el("div", "lv-karte-text");
-  const wer = el("div", "lv-painter");
-  wer.appendChild(el("span", "", nameVon(a.painter_id)));
-  if (zustand.proPainter.has(a.painter_id)) wer.appendChild(el("em", "lv-pro", "Pro-Painter"));
-  body.append(wer, el("h3", "", a.title));
-  const klassen = el("div", "lv-tags");
-  a.classes.forEach((c) => klassen.appendChild(el("span", "", KLASSEN[c] || c)));
-  body.appendChild(klassen);
-  const fuss = el("div", "lv-karte-fuss");
-  fuss.appendChild(el("strong", "", a.price_from_cents != null ? `ab ${euro(a.price_from_cents)}` : "Preis auf Anfrage"));
-  if (a.delivery_days) fuss.appendChild(el("span", "", `ca. ${a.delivery_days} ${a.delivery_days === 1 ? "Tag" : "Tage"}`));
-  body.appendChild(fuss);
-  k.append(bild, body);
-  const oeffnen = () => details(a);
-  k.addEventListener("click", oeffnen);
-  k.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); oeffnen(); } });
+  if (a.images.length > 1) bild.appendChild(iconText("span", "lv-card-zahl", "fa-images", String(a.images.length)));
+  if (!a.active) bild.appendChild(el("span", "lv-card-pause", "Pausiert"));
+  bild.addEventListener("click", () => details(a));
+  k.appendChild(bild);
+
+  const kopf = el("div", "co-card-head");
+  const wer = el("button", "co-coach");
+  wer.type = "button";
+  wer.title = "Profil ansehen";
+  wer.appendChild(avatar(a.painter_id));
+  const t = el("span", "co-coach-text");
+  t.appendChild(el("strong", "", nameVon(a.painter_id)));
+  t.appendChild(el("small", "", pro ? "Pro-Painter der GSRA" : "GSRA-Painter"));
+  wer.appendChild(t);
+  wer.addEventListener("click", () => profilZeigen(a.painter_id));
+  kopf.appendChild(wer);
+  const erste = a.classes[0];
+  if (erste) kopf.appendChild(iconText("span", "co-cat", KLASSEN[erste]?.icon || "fa-tag", KLASSEN[erste]?.text || erste));
+  k.appendChild(kopf);
+
+  k.appendChild(el("h3", "co-card-title", a.title));
+  const meta = el("div", "co-meta");
+  if (a.classes.length > 1) meta.appendChild(iconText("span", "", "fa-layer-group", a.classes.slice(1).map((c) => KLASSEN[c]?.text || c).join(", ")));
+  if (a.simulations.length) meta.appendChild(iconText("span", "", "fa-gamepad", a.simulations.slice(0, 3).join(", ") + (a.simulations.length > 3 ? ` +${a.simulations.length - 3}` : "")));
+  if (a.delivery_days) meta.appendChild(iconText("span", "", "fa-clock", `ca. ${a.delivery_days} ${a.delivery_days === 1 ? "Tag" : "Tage"}`));
+  if (meta.childElementCount) k.appendChild(meta);
+  if (a.description) k.appendChild(el("p", "co-desc", a.description));
+
+  const fuss = el("div", "co-card-foot");
+  const preis = el("div", "co-price");
+  preis.appendChild(el("span", "co-price-main", a.price_from_cents != null ? `ab ${euro(a.price_from_cents)}` : "auf Anfrage"));
+  preis.appendChild(el("span", "co-price-note", "Bezahlung untereinander"));
+  fuss.appendChild(preis);
+  const aktionen = el("div", "co-actions");
+  if (eigen) {
+    const knopf = (icon: string, text: string, fn: () => void, extra = "") => {
+      const b = iconText("button", `co-btn ${extra}`.trim(), icon, text);
+      b.type = "button";
+      b.addEventListener("click", fn);
+      aktionen.appendChild(b);
+    };
+    knopf("fa-pen", "Bearbeiten", () => formOeffnen(a));
+    knopf(a.active ? "fa-pause" : "fa-play", a.active ? "Pausieren" : "Aktivieren", () => void umschalten(a));
+    knopf("fa-trash", "Löschen", () => void loeschen(a), "danger");
+  } else {
+    const ansehen = iconText("button", "co-btn", "fa-images", "Ansehen");
+    ansehen.type = "button";
+    ansehen.addEventListener("click", () => details(a));
+    aktionen.appendChild(ansehen);
+    if (a.painter_id !== zustand.ich) {
+      const anfragen = iconText("a", "co-btn primary", "fa-comment", "Anfragen");
+      (anfragen as HTMLAnchorElement).href = anfrageLink(a);
+      aktionen.appendChild(anfragen);
+    }
+  }
+  fuss.appendChild(aktionen);
+  k.appendChild(fuss);
   return k;
 }
 
-function zeigen() {
-  const liste = $("lvListe");
-  if (!liste) return;
-  const treffer = zustand.angebote.filter(passt);
-  const anzahl = $("lvAnzahl");
-  if (anzahl) anzahl.textContent = zustand.angebote.length ? String(treffer.length) : "";
-  liste.replaceChildren();
-  if (!treffer.length) {
-    liste.appendChild(el("p", "lv-leer", zustand.angebote.length
-      ? "Keine Angebote zu diesem Filter. Probiere eine andere Klasse oder Simulation."
-      : "Noch keine Livery-Angebote. Bist du Painter? Lege unten dein erstes Angebot an."));
-    return;
+const anfrageLink = (a: Angebot) => `messenger.html?sellerId=${encodeURIComponent(a.painter_id)}&sellerName=${encodeURIComponent(nameVon(a.painter_id))}&itemTitle=${encodeURIComponent(`Livery: ${a.title}`)}`;
+
+function leer(text: string, knopf?: { text: string; fn: () => void }) {
+  const box = el("div", "co-empty");
+  box.appendChild(el("span", "", text));
+  if (knopf) {
+    const b = el("button", "co-btn primary", knopf.text);
+    b.type = "button";
+    b.addEventListener("click", knopf.fn);
+    box.append(" ", b);
   }
-  treffer.forEach((a) => liste.appendChild(karte(a)));
+  return box;
+}
+
+function zeigen() {
+  const alle = sortiert(zustand.angebote.filter(passt));
+  const info = (id: string, n: number, gesamt: number) => {
+    const p = $(id);
+    if (p) p.textContent = gesamt ? `${n} von ${gesamt} ${gesamt === 1 ? "Angebot" : "Angeboten"}` : "";
+  };
+  const aktivGesamt = zustand.angebote.filter((a) => a.active);
+  const liste = $("lvListe");
+  if (liste) {
+    liste.replaceChildren(...alle.map((a) => karte(a)));
+    if (!alle.length) liste.appendChild(leer(aktivGesamt.length ? "Keine Liveries zu diesen Filtern." : "Noch keine Livery-Angebote – sei der erste Painter!",
+      aktivGesamt.length ? { text: "Filter zurücksetzen", fn: filterZuruecksetzen } : { text: "Livery anbieten", fn: anbietenKlick }));
+  }
+  info("lvInfo", alle.length, aktivGesamt.length);
+  const pros = alle.filter((a) => istPro(a.painter_id));
+  const proListe = $("lvProListe");
+  if (proListe) {
+    proListe.replaceChildren(...pros.map((a) => karte(a)));
+    if (!pros.length) proListe.appendChild(leer("Noch keine Angebote von Pro-Paintern."));
+  }
+  info("lvProInfo", pros.length, aktivGesamt.filter((a) => istPro(a.painter_id)).length);
+  meineZeigen();
 }
 
 function filterAufbauen() {
-  const klasse = $<HTMLSelectElement>("lvKlasse");
-  (Object.keys(KLASSEN) as Klasse[]).forEach((k) => { const o = el("option", "", KLASSEN[k]); o.value = k; klasse?.appendChild(o); });
-  klasse?.addEventListener("change", () => { zustand.filter.klasse = klasse.value as Klasse | ""; zeigen(); });
+  const chips = $("lvKlassen");
+  const chip = (wert: Klasse | "", text: string, icon: string) => {
+    const b = iconText("button", `co-chip${zustand.filter.klasse === wert ? " active" : ""}`, icon, text);
+    b.type = "button";
+    b.setAttribute("aria-pressed", String(zustand.filter.klasse === wert));
+    b.addEventListener("click", () => {
+      zustand.filter.klasse = wert;
+      chips?.querySelectorAll(".co-chip").forEach((c) => { c.classList.remove("active"); c.setAttribute("aria-pressed", "false"); });
+      b.classList.add("active");
+      b.setAttribute("aria-pressed", "true");
+      zeigen();
+    });
+    return b;
+  };
+  chips?.replaceChildren(chip("", "Alle", "fa-layer-group"), ...(Object.keys(KLASSEN) as Klasse[]).map((k) => chip(k, KLASSEN[k].text, KLASSEN[k].icon)));
   const sim = $<HTMLSelectElement>("lvSim");
   SIMULATIONEN.forEach((s) => { const o = el("option", "", s); o.value = s; sim?.appendChild(o); });
-  sim?.addEventListener("change", () => { zustand.filter.sim = sim.value; zeigen(); });
+  const neu = () => {
+    zustand.filter.sim = sim?.value || "";
+    zustand.filter.min = parseFloat($<HTMLInputElement>("lvMinPreis")?.value || "");
+    zustand.filter.max = parseFloat($<HTMLInputElement>("lvMaxPreis")?.value || "");
+    zustand.filter.tage = Number($<HTMLSelectElement>("lvLieferzeit")?.value || 0);
+    zustand.filter.sort = $<HTMLSelectElement>("lvSort")?.value || "neu";
+    zeigen();
+  };
+  ["lvSim", "lvLieferzeit", "lvSort"].forEach((id) => $(id)?.addEventListener("change", neu));
+  ["lvMinPreis", "lvMaxPreis"].forEach((id) => $(id)?.addEventListener("input", neu));
   const suche = $<HTMLInputElement>("lvSuche");
   let t = 0;
   suche?.addEventListener("input", () => { window.clearTimeout(t); t = window.setTimeout(() => { zustand.filter.suche = suche.value.trim(); zeigen(); }, 200); });
+  $("lvReset")?.addEventListener("click", filterZuruecksetzen);
+}
+
+function filterZuruecksetzen() {
+  zustand.filter = { klasse: "", sim: "", suche: "", min: NaN, max: NaN, tage: 0, sort: "neu" };
+  ["lvSuche", "lvMinPreis", "lvMaxPreis"].forEach((id) => { const i = $<HTMLInputElement>(id); if (i) i.value = ""; });
+  ["lvSim", "lvLieferzeit"].forEach((id) => { const s = $<HTMLSelectElement>(id); if (s) s.value = ""; });
+  const sort = $<HTMLSelectElement>("lvSort");
+  if (sort) sort.value = "neu";
+  filterAufbauenChips();
+  zeigen();
+}
+const filterAufbauenChips = () => $("lvKlassen")?.querySelectorAll(".co-chip").forEach((c, i) => c.classList.toggle("active", i === 0));
+
+function tabWechseln(tab: typeof zustand.tab) {
+  zustand.tab = tab;
+  document.querySelectorAll<HTMLElement>(".co-tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+  document.querySelectorAll<HTMLElement>(".co-panel").forEach((p) => { p.hidden = p.dataset.panel !== tab; });
+  const filter = $("lvFilterArea");
+  if (filter) filter.hidden = tab === "painter";
+  const url = new URL(location.href);
+  if (tab === "angebote") url.searchParams.delete("tab"); else url.searchParams.set("tab", tab);
+  history.replaceState(null, "", url);
 }
 
 // ---------------------------------------------------------
-// Details (Bilder, Beschreibung, Anfrage im Messenger)
+// Details (Bilder, Beschreibung, Anfrage)
 // ---------------------------------------------------------
 function details(a: Angebot) {
   document.getElementById("lvDetails")?.remove();
   const overlay = el("div", "gsra-dialog-overlay");
   overlay.id = "lvDetails";
-  const box = el("div", "gsra-dialog lv-details");
+  const box = el("div", "gsra-dialog co-dialog lv-details");
   box.setAttribute("role", "dialog");
   box.setAttribute("aria-modal", "true");
   box.setAttribute("aria-label", a.title);
@@ -200,63 +363,69 @@ function details(a: Angebot) {
   box.appendChild(zu);
 
   if (a.images.length) {
-    const gross = el("img", "lv-details-bild");
+    const buehne = el("div", "lv-buehne");
+    const gross = el("img");
     gross.alt = `Beispiel: ${a.title}`;
     gross.src = bildUrl(a.images[0]);
-    box.appendChild(gross);
+    buehne.appendChild(gross);
+    box.appendChild(buehne);
     if (a.images.length > 1) {
-      const leiste = el("div", "lv-details-leiste");
+      const leiste = el("div", "lv-leiste");
       a.images.forEach((p, i) => {
-        const t = el("img");
-        t.src = bildUrl(vorschauPfad(p));
-        t.alt = `Bild ${i + 1}`;
-        t.loading = "lazy";
-        t.tabIndex = 0;
-        if (i === 0) t.classList.add("aktiv");
-        const wahl = () => { gross.src = bildUrl(p); leiste.querySelectorAll("img").forEach((x) => x.classList.remove("aktiv")); t.classList.add("aktiv"); };
-        t.addEventListener("click", wahl);
-        t.addEventListener("keydown", (e) => { if (e.key === "Enter") wahl(); });
+        const t = el("button", i === 0 ? "aktiv" : "");
+        t.type = "button";
+        t.setAttribute("aria-label", `Bild ${i + 1}`);
+        const img = el("img");
+        img.src = bildUrl(vorschauPfad(p));
+        img.alt = "";
+        img.loading = "lazy";
+        t.appendChild(img);
+        t.addEventListener("click", () => { gross.src = bildUrl(p); leiste.querySelectorAll("button").forEach((x) => x.classList.remove("aktiv")); t.classList.add("aktiv"); });
         leiste.appendChild(t);
       });
       box.appendChild(leiste);
     }
   }
-  const kopf = el("div", "lv-details-kopf");
-  const wer = el("button", "lv-painter-link");
+  const kopf = el("div", "co-card-head");
+  const wer = el("button", "co-coach");
   wer.type = "button";
-  wer.textContent = nameVon(a.painter_id);
-  wer.title = "Profil ansehen";
+  wer.appendChild(avatar(a.painter_id));
+  const t = el("span", "co-coach-text");
+  t.appendChild(el("strong", "", nameVon(a.painter_id)));
+  t.appendChild(el("small", "", `${istPro(a.painter_id) ? "Pro-Painter" : "GSRA-Painter"} · aktualisiert ${datum(a.updated_at)}`));
+  wer.appendChild(t);
   wer.addEventListener("click", () => profilZeigen(a.painter_id));
   kopf.appendChild(wer);
-  if (zustand.proPainter.has(a.painter_id)) kopf.appendChild(el("em", "lv-pro", "Pro-Painter"));
-  box.append(kopf, el("h3", "gsra-dialog-title", a.title));
-  const fakten = el("div", "lv-tags");
-  a.classes.forEach((c) => fakten.appendChild(el("span", "", KLASSEN[c] || c)));
-  a.simulations.forEach((s) => fakten.appendChild(el("span", "sim", s)));
-  box.appendChild(fakten);
-  const preis = el("p", "lv-details-preis");
-  preis.textContent = `${a.price_from_cents != null ? `ab ${euro(a.price_from_cents)}` : "Preis auf Anfrage"}${a.delivery_days ? ` · Lieferzeit ca. ${a.delivery_days} ${a.delivery_days === 1 ? "Tag" : "Tage"}` : ""}`;
-  box.appendChild(preis);
+  box.append(kopf, el("h3", "gsra-dialog-title lv-details-titel", a.title));
+  const meta = el("div", "co-meta");
+  a.classes.forEach((c) => meta.appendChild(iconText("span", "", KLASSEN[c]?.icon || "fa-tag", KLASSEN[c]?.text || c)));
+  if (a.simulations.length) meta.appendChild(iconText("span", "", "fa-gamepad", a.simulations.join(", ")));
+  if (a.delivery_days) meta.appendChild(iconText("span", "", "fa-clock", `Lieferzeit ca. ${a.delivery_days} ${a.delivery_days === 1 ? "Tag" : "Tage"}`));
+  box.appendChild(meta);
   if (a.description) {
     const text = el("p", "lv-details-text");
     if (window.gsraTextMitLinks) window.gsraTextMitLinks(text, a.description);
     else text.textContent = a.description;
     box.appendChild(text);
   }
-  box.appendChild(el("p", "lv-details-hinweis",
-    "Bezahlung und Absprachen regelt ihr direkt miteinander – die GSRA ist nicht Vertragspartner. Vereinbart Entwürfe und Korrekturen vorher und zahlt nur Personen, denen ihr vertraut."));
+  const preis = el("div", "co-price");
+  preis.appendChild(el("span", "co-price-main", a.price_from_cents != null ? `ab ${euro(a.price_from_cents)}` : "Preis auf Anfrage"));
+  box.appendChild(preis);
+  box.appendChild(iconText("p", "co-form-note", "fa-handshake",
+    "Absprachen und Bezahlung regelt ihr direkt miteinander – die GSRA ist nicht Vertragspartner. Vereinbart Entwurf, Korrekturrunden und Lieferung vorher und zahlt nur, wem ihr vertraut."));
 
   const aktionen = el("div", "gsra-dialog-actions");
   if (a.painter_id !== zustand.ich) {
-    const anfragen = el("a", "gsra-dialog-btn primary");
-    anfragen.href = `messenger.html?sellerId=${encodeURIComponent(a.painter_id)}&sellerName=${encodeURIComponent(nameVon(a.painter_id))}&itemTitle=${encodeURIComponent(`Livery: ${a.title}`)}`;
-    anfragen.innerHTML = '<i class="fa-solid fa-comment"></i> Im Messenger anfragen';
+    const anfragen = iconText("a", "gsra-dialog-btn primary", "fa-comment", "Im Messenger anfragen");
+    (anfragen as HTMLAnchorElement).href = anfrageLink(a);
     aktionen.appendChild(anfragen);
+  } else {
+    const bearbeiten = iconText("button", "gsra-dialog-btn primary", "fa-pen", "Bearbeiten");
+    bearbeiten.addEventListener("click", () => { schliessen(); formOeffnen(a); });
+    aktionen.appendChild(bearbeiten);
   }
   if (zustand.moderator && a.painter_id !== zustand.ich) {
-    const weg = el("button", "gsra-dialog-btn secondary");
-    weg.type = "button";
-    weg.innerHTML = '<i class="fa-solid fa-trash"></i> Angebot entfernen (Moderation)';
+    const weg = iconText("button", "gsra-dialog-btn secondary", "fa-trash", "Entfernen (Moderation)");
     weg.addEventListener("click", async () => {
       const ok = await dialog({ icon: "fa-trash", title: "Angebot entfernen?", message: "Das Angebot wird gelöscht; der Schritt steht im Moderationsprotokoll.",
         confirmText: "Entfernen", cancelText: "Abbrechen", danger: true });
@@ -265,11 +434,11 @@ function details(a: Angebot) {
       if (error) { toast(error.message, "error"); return; }
       schliessen();
       toast("Das Angebot wurde entfernt.", "success");
-      void laden();
+      void neuLaden();
     });
     aktionen.appendChild(weg);
   }
-  if (aktionen.children.length) box.appendChild(aktionen);
+  box.appendChild(aktionen);
   overlay.appendChild(box);
   const schliessen = () => { overlay.remove(); document.removeEventListener("keydown", esc); };
   const esc = (e: KeyboardEvent) => { if (e.key === "Escape") schliessen(); };
@@ -281,99 +450,140 @@ function details(a: Angebot) {
 }
 
 // ---------------------------------------------------------
-// Eigener Painter-Bereich
+// Als Painter: Lizenz, eigene Angebote
 // ---------------------------------------------------------
-async function meinBereich() {
+async function statusLaden() {
   const sb = client();
-  const box = $("lvMein");
-  const inhalt = $("lvMeinInhalt");
-  const badge = $("lvStatusBadge");
-  if (!sb || !box || !inhalt || !zustand.ich) return;
+  if (!sb || !zustand.ich) return;
   const { data, error } = await sb.rpc("painter_status", { _user: zustand.ich });
-  if (error) return; // SQL 046 fehlt noch: Bereich bleibt verborgen
-  const s = data as Status;
-  zustand.status = s;
-  box.hidden = false;
-  inhalt.replaceChildren();
-  if (badge) {
-    badge.className = s.aktiv ? "lv-status aktiv" : "lv-status";
-    badge.textContent = s.aktiv ? (s.pro ? "Pro-Painter" : "Painter") : "noch keine Lizenz";
-  }
+  zustand.status = error ? null : (data as Status);
+  lizenzBox();
+  meineZeigen();
+}
 
+function lizenzBox() {
+  const box = $("lvLizenz");
+  const s = zustand.status;
+  if (!box) return;
+  box.hidden = !s;
+  if (!s) return;
+  box.className = `co-license ${s.aktiv ? "active" : ""}`;
+  box.replaceChildren();
+  const kopf = el("div", "co-payout-head");
+  kopf.innerHTML = `<i class="fa-solid ${s.aktiv ? "fa-brush" : "fa-award"}"></i>`;
+  const text = el("div", "co-payout-text");
+  const erfuellt = Object.values(s.fortschritt?.erfuellt || {}).filter(Boolean).length;
   if (s.aktiv) {
-    const eigene = zustand.angebote.filter((a) => a.painter_id === zustand.ich);
-    inhalt.appendChild(el("p", "lv-mein-text", eigene.length
-      ? "Deine Angebote. Pausierte Angebote sieht nur du."
-      : "Lege dein erstes Angebot an: Welche Fahrzeugklassen gestaltest du, für welche Simulationen, ab welchem Preis?"));
-    const liste = el("ul", "lv-mein-liste");
-    eigene.forEach((a) => {
-      const li = el("li");
-      const t = el("span", "lv-mein-titel", a.title);
-      if (!a.active) t.appendChild(el("em", "lv-pausiert-text", " (pausiert)"));
-      const knoepfe = el("span", "lv-mein-knoepfe");
-      const knopf = (icon: string, text: string, fn: () => void) => {
-        const b = el("button", "lv-btn klein");
-        b.type = "button";
-        b.innerHTML = `<i class="fa-solid ${icon}" aria-hidden="true"></i> `;
-        b.append(text);
-        b.addEventListener("click", fn);
-        knoepfe.appendChild(b);
-      };
-      knopf("fa-pen", "Bearbeiten", () => formOeffnen(a));
-      knopf(a.active ? "fa-pause" : "fa-play", a.active ? "Pausieren" : "Aktivieren", () => void umschalten(a));
-      knopf("fa-trash", "Löschen", () => void loeschen(a));
-      li.append(t, knoepfe);
-      liste.appendChild(li);
-    });
-    inhalt.appendChild(liste);
-    if (eigene.length < MAX_ANGEBOTE) {
-      const neu = el("button", "lv-btn primaer");
-      neu.type = "button";
-      neu.innerHTML = '<i class="fa-solid fa-plus" aria-hidden="true"></i> Neues Angebot';
-      neu.addEventListener("click", () => formOeffnen(null));
-      inhalt.appendChild(neu);
-    } else {
-      inhalt.appendChild(el("p", "lv-mein-text", `Du hast die höchstens ${MAX_ANGEBOTE} Angebote angelegt.`));
-    }
-    return;
+    text.appendChild(el("strong", "", s.pro ? "Pro-Painter der GSRA" : "GSRA-Painter-Lizenz aktiv"));
+    text.appendChild(el("span", "", s.pro && !s.erteilt_am
+      ? "Die GSRA hat dich als Pro-Painter ausgewählt: Du bietest ohne Lizenz an und erscheinst bei den Pro-Paintern. Verwarnungen oder Sperren stoppen die Angebote automatisch."
+      : `Seit ${s.erteilt_am ? datum(s.erteilt_am) : "–"}. Bleib fair und zuverlässig: Verwarnungen oder Sperren pausieren deine Angebote automatisch.`));
+  } else if (s.entzogen && !s.entzogen.automatisch) {
+    box.classList.add("banned");
+    text.appendChild(el("strong", "", "Painter-Lizenz entzogen"));
+    text.appendChild(el("span", "", `Das Moderationsteam hat deine Lizenz am ${datum(s.entzogen.am)} entzogen. Begründung: ${s.entzogen.grund || "–"}`));
+  } else {
+    text.appendChild(el("strong", "", s.entzogen ? "Painter-Lizenz ruht" : "Noch keine Painter-Lizenz"));
+    text.appendChild(el("span", "", s.coach
+      ? "Du bist GSRA-Coach – damit kannst du dir die Painter-Lizenz sofort holen."
+      : `${erfuellt} von 4 Voraussetzungen erfüllt – die gleichen wie für die Coach-Lizenz. Ein Abo ist nicht nötig.`));
   }
+  kopf.appendChild(text);
+  const aktionen = el("div", "co-actions");
+  const knopf = s.aktiv
+    ? iconText("button", "co-btn primary", "fa-plus", "Livery anbieten")
+    : iconText("button", `co-btn ${s.entzogen && !s.entzogen.automatisch ? "" : "primary"}`, "fa-list-check", "Voraussetzungen ansehen");
+  knopf.addEventListener("click", s.aktiv ? () => formOeffnen(null) : lizenzDialog);
+  aktionen.appendChild(knopf);
+  box.append(kopf, aktionen);
+}
 
-  if (s.entzogen && !s.entzogen.automatisch) {
-    inhalt.appendChild(el("p", "lv-mein-text warnung",
-      `Deine Painter-Lizenz wurde vom Moderationsteam entzogen${s.entzogen.grund ? ` (Grund: ${s.entzogen.grund})` : ""}. Bei Fragen wende dich bitte an die GSRA.`));
-    return;
-  }
-  // Voraussetzungen wie bei der Coach-Lizenz
+function lizenzDialog() {
+  const s = zustand.status;
+  if (!s) { toast("Melde dich an, um Painter zu werden.", "info"); return; }
+  document.getElementById("lvLizenzDialog")?.remove();
+  const overlay = el("div", "gsra-dialog-overlay");
+  overlay.id = "lvLizenzDialog";
+  const box = el("div", "gsra-dialog co-dialog co-license-dialog");
+  box.setAttribute("role", "dialog");
+  box.setAttribute("aria-modal", "true");
+  box.innerHTML = '<button type="button" class="gsra-dialog-close" title="Schließen"><i class="fa-solid fa-xmark"></i></button><div class="gsra-dialog-icon"><i class="fa-solid fa-brush"></i></div>';
+  box.appendChild(el("h3", "gsra-dialog-title", "GSRA-Painter-Lizenz"));
+  const body = el("div", "co-license-body");
+  body.appendChild(el("p", "co-license-intro", "Painter wird man bei der GSRA über Leistung in der Community – mit denselben Voraussetzungen wie für die Coach-Lizenz. Bist du schon Coach, geht es sofort."));
   const r = s.regeln;
   const f = s.fortschritt;
-  inhalt.appendChild(el("p", "lv-mein-text", s.entzogen?.automatisch
-    ? "Deine Painter-Lizenz ruht wegen einer Verwarnung oder Sperre. Sobald du die Voraussetzungen wieder erfüllst, kannst du sie neu holen."
-    : "Painter wird, wer die Voraussetzungen der Coach-Lizenz erfüllt – oder schon Coach ist. Dann kannst du hier Angebote einstellen."));
-  const punkte = el("ul", "lv-voraus");
-  const punkt = (ok: boolean, text: string) => {
-    const li = el("li", ok ? "ok" : "");
-    li.innerHTML = `<i class="fa-solid ${ok ? "fa-circle-check" : "fa-circle"}" aria-hidden="true"></i> `;
-    li.append(text);
-    punkte.appendChild(li);
+  const ok = f?.erfuellt || { dauer: false, setups: false, bewertungen: false, verhalten: false };
+  const liste = el("ul", "co-criteria");
+  const punkt = (fertig: boolean, titel: string, detail: string) => {
+    const li = el("li", fertig ? "done" : "");
+    li.innerHTML = `<i class="fa-solid ${fertig ? "fa-circle-check" : "fa-circle"}"></i>`;
+    const t = el("span");
+    t.append(el("strong", "", titel), el("small", "", detail));
+    li.appendChild(t);
+    liste.appendChild(li);
   };
-  punkt(f.erfuellt.dauer, `Mindestens ${r.mitglied_tage} Tage Mitglied (bisher ${f.mitglied_tage})`);
-  punkt(f.erfuellt.setups, `Mindestens ${r.setup_punkte} Setup-Punkte (bisher ${f.setup_punkte})`);
-  punkt(f.erfuellt.bewertungen, `Mindestens ${r.bewertungen} Bewertungen mit Ø „Ideal“ (bisher ${f.bewertungen}, Ø ${String(f.schnitt).replace(".", ",")})`);
-  punkt(f.erfuellt.verhalten, `Keine Verwarnung oder Sperre in den letzten ${r.ruhe_tage} Tagen`);
-  punkt(s.coach, "oder: aktive Coach-Lizenz");
-  inhalt.appendChild(punkte);
-  const holen = el("button", "lv-btn primaer");
+  punkt(ok.dauer, `Mindestens ${Math.round(r.mitglied_tage / 30)} Monate Mitglied`, `${Math.min(f.mitglied_tage, r.mitglied_tage)} von ${r.mitglied_tage} Tagen`);
+  punkt(ok.setups, `${r.setup_punkte} Setup-Punkte`, `${f.setup_punkte} von ${r.setup_punkte} Punkten (Likes minus Dislikes deiner Setups)`);
+  punkt(ok.bewertungen, `${r.bewertungen} Bewertungen mit Ø „Ideal“`, `${f.bewertungen} Bewertung${f.bewertungen === 1 ? "" : "en"} (Marktplatz und Setups)`);
+  punkt(ok.verhalten, "Faires Verhalten", `Keine Sperre und keine Verwarnung in den letzten ${r.ruhe_tage} Tagen`);
+  punkt(s.coach, "oder: GSRA-Coach", s.coach ? "Du bist Coach – das genügt." : "Mit aktiver Coach-Lizenz gilt alles als erfüllt.");
+  body.appendChild(liste);
+  box.appendChild(body);
+  const gesperrt = Boolean(s.entzogen && !s.entzogen.automatisch);
+  const bereit = !gesperrt && (f.alle || s.coach);
+  const aktionen = el("div", "gsra-dialog-actions");
+  const zu = el("button", "gsra-dialog-btn secondary", "Schließen");
+  zu.type = "button";
+  const holen = el("button", "gsra-dialog-btn primary", s.aktiv ? "Du bist schon Painter" : bereit ? "Lizenz holen" : "Noch nicht alles erfüllt");
   holen.type = "button";
-  holen.disabled = !(f.alle || s.coach);
-  holen.innerHTML = '<i class="fa-solid fa-id-badge" aria-hidden="true"></i> Painter-Lizenz holen';
+  holen.disabled = s.aktiv || !bereit;
   holen.addEventListener("click", async () => {
     holen.disabled = true;
-    const { error: e } = await client()!.rpc("painter_claim_license");
-    if (e) { holen.disabled = false; toast(e.message, "error"); return; }
-    toast("Willkommen als Painter! Du kannst jetzt Angebote einstellen.", "success");
-    void meinBereich();
+    const { error } = await client()!.rpc("painter_claim_license");
+    if (error) { holen.disabled = false; toast(error.message, "error"); return; }
+    schliessen();
+    toast("Glückwunsch – du bist jetzt GSRA-Painter!", "success");
+    await statusLaden();
+    tabWechseln("painter");
   });
-  inhalt.appendChild(holen);
+  aktionen.append(zu, holen);
+  box.appendChild(aktionen);
+  overlay.appendChild(box);
+  const schliessen = () => overlay.remove();
+  zu.addEventListener("click", schliessen);
+  box.querySelector(".gsra-dialog-close")?.addEventListener("click", schliessen);
+  overlay.addEventListener("mousedown", (e) => { if (e.target === overlay) schliessen(); });
+  document.body.appendChild(overlay);
+}
+
+function meineZeigen() {
+  const box = $("lvMeine");
+  if (!box || !zustand.ich) return;
+  const eigene = zustand.angebote.filter((a) => a.painter_id === zustand.ich);
+  const anzahl = $("lvMeineAnzahl");
+  if (anzahl) anzahl.textContent = `${eigene.length} von ${MAX_ANGEBOTE}`;
+  const neu = $("lvAnbieten2");
+  if (neu) neu.hidden = !zustand.status?.aktiv || eigene.length >= MAX_ANGEBOTE;
+  box.replaceChildren(...eigene.map((a) => karte(a, true)));
+  if (!eigene.length) box.appendChild(leer(zustand.status?.aktiv
+    ? "Du hast noch kein Angebot. Zeig mit Beispielbildern, was du gestaltest."
+    : "Sobald du Painter bist, verwaltest du hier deine Angebote."));
+}
+
+function anbietenKlick() {
+  if (!zustand.ich) { toast("Melde dich an, um Liveries anzubieten.", "info"); return; }
+  if (zustand.status?.aktiv) {
+    if (zustand.angebote.filter((a) => a.painter_id === zustand.ich).length >= MAX_ANGEBOTE) {
+      toast(`Du hast schon ${MAX_ANGEBOTE} Angebote. Bearbeite oder lösche eines.`, "info");
+      tabWechseln("painter");
+      return;
+    }
+    formOeffnen(null);
+  } else {
+    tabWechseln("painter");
+    lizenzDialog();
+  }
 }
 
 async function umschalten(a: Angebot) {
@@ -383,113 +593,158 @@ async function umschalten(a: Angebot) {
   });
   if (error) { toast(error.message, "error"); return; }
   toast(a.active ? "Das Angebot ist pausiert." : "Das Angebot ist wieder sichtbar.", "success");
-  await laden();
-  void meinBereich();
-}
-
-async function bilderLoeschen(pfade: string[]) {
-  if (!pfade.length) return;
-  await client()?.storage.from("liveries").remove(pfade.flatMap((p) => [p, vorschauPfad(p)])).catch(() => undefined);
+  await neuLaden();
 }
 
 async function loeschen(a: Angebot) {
   const ok = await dialog({ icon: "fa-trash", title: "Angebot löschen?", message: `„${a.title}“ und seine Beispielbilder werden endgültig gelöscht.`,
     confirmText: "Löschen", cancelText: "Abbrechen", danger: true });
   if (!ok) return;
-  const { data, error } = await client()!.rpc("livery_offer_delete", { _id: a.id });
+  const { error } = await client()!.rpc("livery_offer_delete", { _id: a.id });
   if (error) { toast(error.message, "error"); return; }
-  await bilderLoeschen((data as string[] | null) || []);
-  toast("Das Angebot wurde gelöscht.", "success");
+  toast("Das Angebot wurde gelöscht.", "success"); // Bilder räumt die Datenbank auf (SQL 048)
+  await neuLaden();
+}
+
+async function neuLaden() {
   await laden();
-  void meinBereich();
+  lizenzBox();
 }
 
 // ---------------------------------------------------------
 // Formular: anlegen und bearbeiten
 // ---------------------------------------------------------
-function chipsAufbauen(box: HTMLElement | null, name: string, werte: [string, string][], gewaehlt: string[]) {
+function auswahlChips(box: HTMLElement | null, name: string, werte: { wert: string; text: string; icon?: string }[], gewaehlt: string[]) {
   if (!box) return;
-  box.replaceChildren();
-  werte.forEach(([wert, text]) => {
-    const l = el("label", "lv-chip-check");
+  box.replaceChildren(...werte.map(({ wert, text, icon }) => {
+    const l = el("label", `co-chip lv-chip${gewaehlt.includes(wert) ? " active" : ""}`);
     const i = el("input");
     i.type = "checkbox";
     i.name = name;
     i.value = wert;
     i.checked = gewaehlt.includes(wert);
-    l.append(i, el("span", "", text));
-    box.appendChild(l);
-  });
+    i.addEventListener("change", () => l.classList.toggle("active", i.checked));
+    l.appendChild(i);
+    if (icon) l.insertAdjacentHTML("beforeend", `<i class="fa-solid ${icon}" aria-hidden="true"></i>`);
+    l.append(` ${text}`);
+    return l;
+  }));
 }
 
 function bilderZeigen() {
-  const box = $("lvFormBilder");
+  const box = $("lvBilder");
+  const drop = $("lvDrop");
   if (!box) return;
   box.replaceChildren();
   zustand.formBilder.forEach((b, i) => {
-    const fig = el("figure");
+    const fig = el("figure", i === 0 ? "titel" : "");
     const img = el("img");
     img.src = bildUrl(vorschauPfad(b.pfad));
     img.alt = `Beispielbild ${i + 1}`;
-    const weg = el("button", "lv-bild-weg");
+    fig.appendChild(img);
+    if (i === 0) fig.appendChild(el("figcaption", "", "Titelbild"));
+    const leiste = el("div", "lv-bild-knoepfe");
+    if (i > 0) {
+      const vor = el("button", "", "");
+      vor.type = "button";
+      vor.title = "Als Titelbild";
+      vor.innerHTML = '<i class="fa-solid fa-star"></i>';
+      vor.addEventListener("click", () => { zustand.formBilder.unshift(...zustand.formBilder.splice(i, 1)); bilderZeigen(); });
+      leiste.appendChild(vor);
+    }
+    const weg = el("button", "weg");
     weg.type = "button";
     weg.title = "Bild entfernen";
     weg.innerHTML = '<i class="fa-solid fa-xmark"></i>';
     weg.addEventListener("click", () => {
       zustand.formBilder.splice(i, 1);
-      if (b.neu) void bilderLoeschen([b.pfad]);
+      if (b.neu) void client()?.storage.from("liveries").remove([b.pfad, vorschauPfad(b.pfad)]);
       else zustand.entfernteBilder.push(b.pfad);
       bilderZeigen();
     });
-    fig.append(img, weg);
+    leiste.appendChild(weg);
+    fig.appendChild(leiste);
     box.appendChild(fig);
   });
+  if (zustand.laedt) {
+    const lade = el("figure", "laedt");
+    lade.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+    lade.appendChild(el("figcaption", "", "wird verkleinert …"));
+    box.appendChild(lade);
+  }
+  if (drop) drop.hidden = zustand.formBilder.length + zustand.laedt >= MAX_BILDER;
 }
 
 function formOeffnen(a: Angebot | null) {
+  const modal = $("lvModal");
   const form = $<HTMLFormElement>("lvForm");
-  if (!form) return;
+  if (!modal || !form) return;
   zustand.bearbeiten = a;
   zustand.formBilder = (a?.images || []).map((p) => ({ pfad: p, neu: false }));
   zustand.entfernteBilder = [];
   form.reset();
-  $("lvFormTitel")!.textContent = a ? "Angebot bearbeiten" : "Neues Angebot";
+  $("lvFormTitel")!.textContent = a ? "Livery-Angebot bearbeiten" : "Livery anbieten";
   (form.elements.namedItem("title") as HTMLInputElement).value = a?.title || "";
   (form.elements.namedItem("description") as HTMLTextAreaElement).value = a?.description || "";
   (form.elements.namedItem("price") as HTMLInputElement).value = a?.price_from_cents != null ? String(a.price_from_cents / 100).replace(".", ",") : "";
   (form.elements.namedItem("days") as HTMLInputElement).value = a?.delivery_days ? String(a.delivery_days) : "";
   (form.elements.namedItem("active") as HTMLInputElement).checked = a ? a.active : true;
-  chipsAufbauen($("lvFormKlassen"), "klasse", Object.entries(KLASSEN), a?.classes || []);
-  chipsAufbauen($("lvFormSims"), "sim", SIMULATIONEN.map((s) => [s, s]), a?.simulations || []);
+  auswahlChips($("lvFormKlassen"), "klasse", (Object.keys(KLASSEN) as Klasse[]).map((k) => ({ wert: k, text: KLASSEN[k].text, icon: KLASSEN[k].icon })), a?.classes || []);
+  auswahlChips($("lvFormSims"), "sim", SIMULATIONEN.map((s) => ({ wert: s, text: s })), a?.simulations || []);
   bilderZeigen();
-  form.hidden = false;
-  form.scrollIntoView({ behavior: "smooth", block: "start" });
+  modal.hidden = false;
+  document.body.style.overflow = "hidden";
+  (form.elements.namedItem("title") as HTMLInputElement).focus();
 }
 
-async function bilderHochladen(dateien: FileList) {
+function formSchliessen() {
+  const modal = $("lvModal");
+  // Hochgeladene, aber nicht gespeicherte Bilder wieder entfernen – nichts Verwaistes liegen lassen
+  const neu = zustand.formBilder.filter((b) => b.neu).flatMap((b) => [b.pfad, vorschauPfad(b.pfad)]);
+  if (neu.length) void client()?.storage.from("liveries").remove(neu);
+  zustand.formBilder = [];
+  if (modal) modal.hidden = true;
+  document.body.style.overflow = "";
+}
+
+async function bilderHochladen(dateien: File[]) {
   const sb = client();
   if (!sb || !zustand.ich) return;
-  const frei = MAX_BILDER - zustand.formBilder.length;
+  const frei = MAX_BILDER - zustand.formBilder.length - zustand.laedt;
   if (frei <= 0) { toast(`Höchstens ${MAX_BILDER} Beispielbilder.`, "error"); return; }
-  for (const datei of Array.from(dateien).slice(0, frei)) {
-    if (!/^image\/(jpeg|png|webp)$/.test(datei.type)) { toast("Bitte nur Bilder (JPG, PNG oder WebP).", "error"); continue; }
-    if (datei.size > 40 * 1024 * 1024) { toast("Ein Bild ist zu groß (höchstens 40 MB vor dem Verkleinern).", "error"); continue; }
-    const [gross, klein] = await Promise.all([vorschau(datei, 1920, 0.86), vorschau(datei, 640, 0.78)]);
-    if (!gross || !klein) { toast("Ein Bild konnte nicht verarbeitet werden.", "error"); continue; }
-    if (gross.size > 3 * 1024 * 1024) { toast("Ein Bild ist auch verkleinert noch größer als 3 MB.", "error"); continue; }
-    const pfad = `${zustand.ich}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`;
-    const optionen = { contentType: "image/jpeg", cacheControl: CACHE_EIN_JAHR };
-    const a = await sb.storage.from("liveries").upload(vorschauPfad(pfad), klein, optionen);
-    const b = a.error ? a : await sb.storage.from("liveries").upload(pfad, gross, optionen);
-    if (b.error) { toast(`Das Bild konnte nicht hochgeladen werden: ${b.error.message}`, "error"); continue; }
-    zustand.formBilder.push({ pfad, neu: true });
+  const auswahl = dateien.filter((d) => /^image\/(jpeg|png|webp)$/.test(d.type)).slice(0, frei);
+  if (auswahl.length < dateien.length) toast("Nur JPG, PNG oder WebP – und höchstens 6 Bilder.", "info");
+  for (const datei of auswahl) {
+    zustand.laedt++;
     bilderZeigen();
+    try {
+      if (datei.size > 40 * 1024 * 1024) throw new Error("Ein Bild ist zu groß (höchstens 40 MB vor dem Verkleinern).");
+      const [gross, klein] = await Promise.all([vorschau(datei, 1920, 0.86), vorschau(datei, 640, 0.78)]);
+      if (!gross || !klein) throw new Error("Ein Bild konnte nicht verarbeitet werden. Versuche es mit einem anderen Bild.");
+      if (gross.size > 3 * 1024 * 1024) throw new Error("Ein Bild ist auch verkleinert noch größer als 3 MB.");
+      const pfad = `${zustand.ich}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`;
+      const optionen = { contentType: "image/jpeg", cacheControl: CACHE_EIN_JAHR };
+      const a = await sb.storage.from("liveries").upload(vorschauPfad(pfad), klein, optionen);
+      if (a.error) throw new Error(`Hochladen fehlgeschlagen: ${a.error.message}`);
+      const b = await sb.storage.from("liveries").upload(pfad, gross, optionen);
+      if (b.error) {
+        void sb.storage.from("liveries").remove([vorschauPfad(pfad)]);
+        throw new Error(`Hochladen fehlgeschlagen: ${b.error.message}`);
+      }
+      zustand.formBilder.push({ pfad, neu: true });
+    } catch (err) {
+      toast((err as Error).message, "error");
+    } finally {
+      zustand.laedt--;
+      bilderZeigen();
+    }
   }
 }
 
 async function speichern(e: SubmitEvent) {
   e.preventDefault();
   const form = e.currentTarget as HTMLFormElement;
+  if (zustand.laedt) { toast("Bitte warte, bis alle Bilder hochgeladen sind.", "info"); return; }
   const wert = (n: string) => (form.elements.namedItem(n) as HTMLInputElement).value.trim();
   const klassen = Array.from(form.querySelectorAll<HTMLInputElement>('input[name="klasse"]:checked')).map((i) => i.value);
   const sims = Array.from(form.querySelectorAll<HTMLInputElement>('input[name="sim"]:checked')).map((i) => i.value);
@@ -509,20 +764,32 @@ async function speichern(e: SubmitEvent) {
   });
   if (knopf) knopf.disabled = false;
   if (error) { toast(error.message, "error"); return; }
-  await bilderLoeschen(zustand.entfernteBilder);
-  form.hidden = true;
-  zustand.formBilder = [];
-  toast("Dein Angebot ist gespeichert.", "success");
-  await laden();
-  void meinBereich();
+  zustand.formBilder = []; // gespeichert – nichts mehr aufräumen; entfernte alte Bilder räumt die Datenbank auf (SQL 048)
+  formSchliessen();
+  toast(zustand.bearbeiten ? "Dein Angebot ist aktualisiert." : "Dein Angebot ist online.", "success");
+  await neuLaden();
+  tabWechseln("painter");
 }
 
-function formAbbrechen() {
-  const form = $<HTMLFormElement>("lvForm");
-  // Schon hochgeladene, aber nicht gespeicherte Bilder wieder entfernen – nichts Verwaistes liegen lassen
-  void bilderLoeschen(zustand.formBilder.filter((b) => b.neu).map((b) => b.pfad));
-  zustand.formBilder = [];
-  if (form) form.hidden = true;
+function formEinrichten() {
+  $("lvForm")?.addEventListener("submit", (e) => void speichern(e as SubmitEvent));
+  document.querySelectorAll<HTMLElement>('[data-close="lvModal"]').forEach((b) => b.addEventListener("click", formSchliessen));
+  $("lvModal")?.addEventListener("mousedown", (e) => { if (e.target === e.currentTarget) formSchliessen(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("lvModal")?.hidden) formSchliessen(); });
+  const datei = $<HTMLInputElement>("lvDatei");
+  datei?.addEventListener("change", async () => {
+    if (datei.files?.length) await bilderHochladen(Array.from(datei.files));
+    datei.value = "";
+  });
+  const drop = $("lvDrop");
+  drop?.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("drag"); });
+  ["dragleave", "dragend"].forEach((t) => drop?.addEventListener(t, () => drop.classList.remove("drag")));
+  drop?.addEventListener("drop", (e) => {
+    e.preventDefault();
+    drop.classList.remove("drag");
+    const dateien = Array.from((e as DragEvent).dataTransfer?.files || []);
+    if (dateien.length) void bilderHochladen(dateien);
+  });
 }
 
 // ---------------------------------------------------------
@@ -532,20 +799,30 @@ async function starten() {
   const sb = client();
   if (!sb) return;
   filterAufbauen();
+  formEinrichten();
+  document.querySelectorAll<HTMLElement>(".co-tab").forEach((b) => b.addEventListener("click", () => tabWechseln(b.dataset.tab as typeof zustand.tab)));
+  $("lvAnbieten")?.addEventListener("click", anbietenKlick);
+  $("lvAnbieten2")?.addEventListener("click", () => formOeffnen(null));
+  const params = new URLSearchParams(location.search);
+  const suche = params.get("suche");
+  if (suche) {
+    zustand.filter.suche = suche.slice(0, 60);
+    const i = $<HTMLInputElement>("lvSuche");
+    if (i) i.value = zustand.filter.suche;
+  }
+  const tab = params.get("tab");
+  if (tab === "pro" || tab === "painter") tabWechseln(tab);
+
   const { data } = await sb.auth.getSession();
   zustand.ich = data.session?.user.id || null;
   if (!zustand.ich) return; // Gäste: Hinweis zur Anmeldung zeigt auth-nav.js
-  const ich = await (sb.from("profiles").select("role").eq("id", zustand.ich).maybeSingle() as Antwort<{ role: string | null }>);
+  const ich = await sb.from("profiles").select("role").eq("id", zustand.ich).maybeSingle() as Ergebnis<{ role: string | null }>;
   zustand.moderator = ["moderator", "admin"].includes(ich.data?.role || "");
   await laden();
-  void meinBereich();
-  $("lvForm")?.addEventListener("submit", (e) => void speichern(e as SubmitEvent));
-  $("lvFormAbbrechen")?.addEventListener("click", formAbbrechen);
-  const datei = $<HTMLInputElement>("lvFormDatei");
-  datei?.addEventListener("change", async () => {
-    if (datei.files?.length) await bilderHochladen(datei.files);
-    datei.value = "";
-  });
+  await statusLaden();
+  const angebot = params.get("angebot");
+  const ziel = angebot ? zustand.angebote.find((a) => a.id === angebot) : null;
+  if (ziel) details(ziel);
 }
 
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => void starten());
