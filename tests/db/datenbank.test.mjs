@@ -10,9 +10,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL, KARRIERE_SQL, STINTPLAN_SQL, LIVERIES_SQL, CHATSICHER_SQL, AUFRAEUMEN_SQL, ONLINE_SQL] =
-    Array.from({ length: 49 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 49);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL, KARRIERE_SQL, STINTPLAN_SQL, LIVERIES_SQL, CHATSICHER_SQL, AUFRAEUMEN_SQL, ONLINE_SQL, RE_STIL_SQL] =
+    Array.from({ length: 50 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 50);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -3521,6 +3521,48 @@ if (ONLINE_SQL && AUFRAEUMEN_SQL) {
     check("Fremde sehen weiterhin nur den Tag (keine genaue Zeit)", fremd?.exact === false, JSON.stringify(fremd));
     const gast = await as(null, async () => q(`select public.last_seen_of('${P}')`));
     check("Gäste sehen keinen Online-Status", gast.error !== null, gast.error || "durchgelassen!");
+}
+
+// --- 050: Renningenieur – Art „locker“ (Jugendsprache), Sprachen vorbereitet, verständliche Ablehnungen ---
+if (RE_STIL_SQL && AUFRAEUMEN_SQL) {
+    const id = (n) => `79000000-0000-0000-0000-0000000005${String(n).padStart(2, "0")}`;
+    const R = id(1), G = id(2);
+    await db.exec(`
+      insert into auth.users (id) values ('${R}'), ('${G}');
+      insert into public.profiles (id, username) values ('${R}', 'Rennrita Fuenfzig'), ('${G}', 'Gabi Sperrfuenfzig');`);
+    // Vorher-Test: „locker“ ist vor 050 nicht erlaubt
+    const vorher = await as(R, async () => q(`select public.race_engineer_save('Kim', null, 'locker', 'normal', 'ruhig', 'de', '{}'::jsonb)`));
+    check("Vor 050: Art „locker“ abgelehnt (Lücke nachgewiesen)", vorher.error !== null, vorher.error || "durchgelassen");
+    await db.exec(readFileSync(RE_STIL_SQL, "utf8"));
+    const ctl50 = await db.exec(readFileSync(RE_STIL_SQL, "utf8")); // zweiter Lauf
+    const rows50 = ctl50[ctl50.length - 1].rows;
+    console.log("Kontrolle 050:\n  " + rows50.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+    check("Kontrolle 050: bereit, Gäste ausgeschlossen", rows50.map(r => r.ergebnis).join(",") === "bereit,ja", rows50.map(r => r.ergebnis).join(", "));
+    const regeln = await one(`select count(*)::int as n from pg_constraint where conrelid = 'public.race_engineer_settings'::regclass and contype = 'c' and conname in ('race_engineer_settings_art_check', 'race_engineer_settings_sprache_check')`);
+    check("Zweimal ausgeführt: genau je eine Regel für Art und Sprache", regeln.n === 2, String(regeln.n));
+    await as(R, async () => {
+        const ok = await q(`select public.race_engineer_save('Kim', 'Rita', 'locker', 'viel', 'energisch', 'fr', '{"sprit": "ja", "flaggen": false}'::jsonb)`);
+        check("Art „locker“ und Sprache Französisch speicherbar", ok.error === null, ok.error || "");
+        const s = (await q(`select art, sprache, themen from public.race_engineer_settings`)).rows[0];
+        check("Gespeichert: locker, fr; Text statt Wahr/Falsch → Standard", s?.art === "locker" && s?.sprache === "fr" && s?.themen?.sprit === true && s?.themen?.flaggen === false, JSON.stringify(s));
+        for (const [werte, muster] of [["'boese', 'normal', 'ruhig', 'de'", /Unbekannte Art/], ["'profi', 'laut', 'ruhig', 'de'", /Gesprächigkeit/],
+                                         ["'profi', 'normal', 'roboter', 'de'", /Stimme/], ["'profi', 'normal', 'ruhig', 'xx'", /Sprache/]]) {
+            const r = await q(`select public.race_engineer_save('Kim', null, ${werte}, '{}'::jsonb)`);
+            check(`Verständliche Ablehnung (${muster.source})`, muster.test(r.error || ""), r.error || "durchgelassen!");
+        }
+        const liste = await q(`select public.race_engineer_save('Kim', null, 'profi', 'normal', 'ruhig', 'de', '[1, 2]'::jsonb)`);
+        check("Themen müssen eine Auswahl-Liste (Objekt) sein", /Themen/.test(liste.error || ""), liste.error || "durchgelassen!");
+        const direkt = await q(`update public.race_engineer_settings set art = 'profi' returning user_id`);
+        check("Einstellungen weiterhin nicht direkt änderbar", direkt.error !== null || direkt.rows.length === 0, direkt.error || `${direkt.rows.length} geändert`);
+    });
+    const roh = await q(`insert into public.race_engineer_settings (user_id, name, art) values ('${G}', 'X', 'boese')`);
+    check("Datenbank-Regel lehnt unbekannte Arten auch ohne Funktion ab", roh.error !== null, roh.error || "durchgelassen!");
+    await db.exec(`insert into public.user_bans (user_id, banned_until, reason) values ('${G}', now() + interval '1 day', 'Test 050')`);
+    const gesperrt = await as(G, async () => q(`select public.race_engineer_save('Kim', null, 'locker', 'normal', 'ruhig', 'de', '{}'::jsonb)`));
+    check("Gesperrte Konten: kein Renningenieur", /gesperrt/.test(gesperrt.error || ""), gesperrt.error || "durchgelassen!");
+    await db.exec(`delete from public.user_bans where reason = 'Test 050'`);
+    const gast = await as(null, async () => q(`select public.race_engineer_save('Gast', null, 'locker', 'normal', 'ruhig', 'de', '{}'::jsonb)`));
+    check("Gäste: kein Renningenieur", gast.error !== null, gast.error || "durchgelassen!");
 }
 
 // --- Konto löschen (Ausbau 3) funktioniert weiterhin, die Stimmen verschwinden mit ---

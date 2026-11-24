@@ -5,6 +5,8 @@
 # 3) TypeScript-Prüfung (Teil 2): jede Seite mit genau ihren Skripten – Typfehler, fehlende Funktionen,
 #    ungenutzter und unerreichbarer Code (tests/typ/pruefen.mjs, Einstellungen in tsconfig.json) – und der
 #    Build wie auf Vercel (Vite): veröffentlicht wird nur dist/, ohne interne Dateien.
+# 4) GSRA-App (Ordner app/): TypeScript streng, Logik-Tests (Runden, Sprit, Vergleich) und der Telemetrie-Leser
+#    in Rust (kaputte und zufällige Daten, gleichzeitiges Schreiben) – ohne Fenster, deshalb auch unter Linux.
 # Schlägt etwas fehl, zeigt GitHub ein rotes Kreuz am Commit (und in GitHub Desktop), bevor jemand es live nutzt.
 # Absicherung: nur Leserechte, Aktionen auf eine feste Version (Commit) gepinnt, Pakete exakt nach package-lock.json.
 name: Prüfungen
@@ -110,3 +112,29 @@ jobs:
           if [ "$seiten" != "$quelle" ]; then echo "::error::Es fehlen Seiten im Build ($seiten von $quelle)"; fehler=1; fi
           for f in *.js; do [ -f "dist/$f" ] || { echo "::error::dist/$f fehlt"; fehler=1; }; done
           exit $fehler
+
+  app:
+    name: GSRA-App (TypeScript, Logik-Tests, Telemetrie-Leser)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Abhängigkeiten (exakt nach package-lock.json, ohne Installationsskripte)
+        working-directory: app
+        run: npm ci --ignore-scripts
+      - name: TypeScript (streng)
+        working-directory: app
+        run: npm run pruefen
+      - name: Logik-Tests (Runden, Sprit, Vergleich, Demo)
+        working-directory: app
+        run: npm test
+      - name: Telemetrie-Leser in Rust (exakt nach Cargo.lock)
+        working-directory: app
+        run: cargo test -p gsra-telemetrie --locked

@@ -7,7 +7,7 @@
 // Alles wird mit textContent ausgegeben; geschrieben wird nur über geprüfte Datenbank-Funktionen.
 import { dialog, supabaseClient, toast } from "./fenster";
 
-type Art = "kumpel" | "profi" | "motivator" | "knapp";
+type Art = "kumpel" | "profi" | "motivator" | "knapp" | "locker";
 type Thema = "sprit" | "abstaende" | "flaggen" | "reifen" | "coaching" | "wetter";
 type Einstellungen = { name: string; rufname: string | null; art: Art; gespraechig: "still" | "normal" | "viel";
   stimme: "ruhig" | "energisch" | "tief" | "hell"; sprache: "de" | "en"; themen: Record<Thema, boolean> };
@@ -51,57 +51,67 @@ const ANSAGEN: Record<Thema, Record<Art, string>> = {
     profi: "Kraftstoff für sieben Runden. Boxenstopp in Runde 23.",
     motivator: "Sprit passt perfekt, sieben Runden Reserve! Bis Runde 23 kannst du voll angreifen.",
     knapp: "Sprit: sieben Runden. Box Runde 23.",
+    locker: "Sprit ist safe – noch sieben Runden drin. In Runde 23 kommst du rein, ganz easy.",
   },
   abstaende: {
     kumpel: "Startnummer 27 ist 1,2 Sekunden vor dir, und du holst pro Runde zwei Zehntel. Das wird was.",
     profi: "Abstand nach vorn 1,2 Sekunden, Tendenz minus zwei Zehntel pro Runde. Nach hinten 2,0 stabil.",
     motivator: "Nur noch 1,2 Sekunden auf die 27 – du bist schneller, hol ihn dir!",
     knapp: "Vorne 1,2. Hinten 2,0.",
+    locker: "Die 27 ist 1,2 vor dir und du holst zwei Zehntel pro Runde. Der ist fällig, no cap.",
   },
   flaggen: {
     kumpel: "Achtung, Gelb in Sektor 2 – Unfall in Kurve 9. Fahr rechts vorbei und lass es kurz ruhig angehen.",
     profi: "Gelbe Flagge Sektor 2, Fahrzeug in Kurve 9 links. Überholverbot.",
     motivator: "Gelb in Sektor 2, Kurve 9 – kurz vorsichtig, danach gehört die Strecke wieder dir!",
     knapp: "Gelb Sektor 2. Kurve 9 links.",
+    locker: "Yo, Gelb in Sektor 2 – in Kurve 9 steht einer links. Kurz chillen und rechts vorbei.",
   },
   reifen: {
     kumpel: "Vorne links wird es warm, 92 Grad. Nimm in den schnellen Rechtskurven ein bisschen Druck raus.",
     profi: "Reifen vorne links 92 Grad, oberhalb des Fensters. Last in schnellen Rechtskurven reduzieren.",
     motivator: "Reifen sind noch top – nur vorne links etwas heiß. Ein bisschen sauberer, dann hält das bis zum Stopp!",
     knapp: "Vorne links 92 Grad. Rechtskurven schonen.",
+    locker: "Vorne links wird's spicy, 92 Grad. In den schnellen Rechtskurven bisschen smoother, dann passt das.",
   },
   coaching: {
     kumpel: "Kleiner Tipp: In Kurve 4 kannst du etwa zehn Meter später bremsen – deine Bestzeit zeigt, dass da Luft ist.",
     profi: "Kurve 4: Bremspunkt zehn Meter später möglich, Potenzial etwa eine Zehntel.",
     motivator: "In Kurve 4 liegt noch eine Zehntel – zehn Meter später bremsen, du kannst das!",
     knapp: "Kurve 4: zehn Meter später bremsen.",
+    locker: "In Kurve 4 geht noch was – zehn Meter später bremsen. Deine Bestzeit sagt, da ist easy eine Zehntel drin.",
   },
   wetter: {
     kumpel: "Regen kommt in etwa zwölf Minuten. Wir bleiben draußen, ich sag dir rechtzeitig Bescheid.",
     profi: "Regen in etwa zwölf Minuten erwartet. Wir bleiben auf Slicks, Wechselpunkt beobachte ich.",
     motivator: "Regen in zwölf Minuten – genau dein Wetter. Ich sag dir, wann wir wechseln!",
     knapp: "Regen in zwölf Minuten. Draußen bleiben.",
+    locker: "Regen kommt in so zwölf Minuten. Wir bleiben draußen, ich sag dir Bescheid, wenn's ernst wird.",
   },
 };
 const FRAGEN: Array<{ frage: string; thema: Thema; antwort: Record<Art, string> }> = [
   { frage: "Wie viel Sprit habe ich noch?", thema: "sprit", antwort: {
     kumpel: "Noch 18,4 Liter – das reicht für sieben Runden. Bis zum Stopp brauchst du dir keinen Kopf zu machen.",
     profi: "18,4 Liter, sieben Runden bei aktuellem Verbrauch. Stopp in Runde 23 bleibt.",
-    motivator: "18,4 Liter, sieben Runden – genug, um weiter Druck zu machen!", knapp: "18,4 Liter. Sieben Runden." } },
+    motivator: "18,4 Liter, sieben Runden – genug, um weiter Druck zu machen!", knapp: "18,4 Liter. Sieben Runden.",
+    locker: "18,4 Liter – reicht locker für sieben Runden. Mach dir da null Stress." } },
   { frage: "Wie heißt der Fahrer vor mir?", thema: "abstaende", antwort: {
     kumpel: "Vor dir fährt die Startnummer 27 – im Rennen sage ich dir hier seinen Namen aus der Startliste. Er ist 1,2 Sekunden weg und in Sektor 3 langsamer als du.",
     profi: "Vor dir Startnummer 27, 1,2 Sekunden. Im Rennen nenne ich den Namen aus der Startliste. Er verliert in Sektor 3.",
     motivator: "Startnummer 27 – den Namen sage ich dir im Rennen live. Und er ist in Sektor 3 langsamer als du!",
-    knapp: "Startnummer 27. 1,2 Sekunden." } },
+    knapp: "Startnummer 27. 1,2 Sekunden.",
+    locker: "Vor dir ist die 27 – im Rennen sag ich dir hier den Namen aus der Startliste. 1,2 weg und in Sektor 3 langsamer als du. Den holst du dir." } },
   { frage: "Wie sind meine Reifen?", thema: "reifen", antwort: {
     kumpel: "Drücke passen, hinten beide im Fenster. Nur vorne links ist mit 92 Grad etwas heiß – sonst alles im grünen Bereich.",
     profi: "Heißdrücke im Zielbereich. Vorne links 92 Grad, übrige zwischen 82 und 86.",
-    motivator: "Die Reifen sind gut drauf – vorne links nur ein Tick heiß. Weiter so!", knapp: "Vorne links 92 Grad. Rest gut." } },
+    motivator: "Die Reifen sind gut drauf – vorne links nur ein Tick heiß. Weiter so!", knapp: "Vorne links 92 Grad. Rest gut.",
+    locker: "Reifen sind on point, nur vorne links mit 92 Grad bisschen heiß. Der Rest passt komplett." } },
   { frage: "Erklär mir kurz Trail Braking.", thema: "coaching", antwort: {
     kumpel: "Klar: Du bremst hart an und lässt die Bremse beim Einlenken langsam los. So bleibt Gewicht auf der Vorderachse und das Auto lenkt besser ein.",
     profi: "Bremsdruck beim Einlenken schrittweise abbauen. Die Last bleibt auf der Vorderachse, das Auto dreht williger in die Kurve.",
     motivator: "Spät und hart bremsen, dann die Bremse sanft bis in die Kurve mitnehmen – damit holst du richtig Zeit!",
-    knapp: "Bremse beim Einlenken langsam lösen. Mehr Grip vorne." } },
+    knapp: "Bremse beim Einlenken langsam lösen. Mehr Grip vorne.",
+    locker: "Easy: Hart anbremsen und beim Einlenken die Bremse langsam aufmachen. Dann bleibt Gewicht vorne und die Karre lenkt viel williger ein." } },
 ];
 
 function anrede(e: Einstellungen): string {
@@ -110,6 +120,7 @@ function anrede(e: Einstellungen): string {
     case "profi": return `${r ? `${r}, ` : ""}hier ist ${e.name}.`;
     case "motivator": return `${r ? `${r}! ` : ""}${e.name} hier – stark gefahren bisher!`;
     case "knapp": return `${e.name}.`;
+    case "locker": return `Yo${r ? ` ${r}` : ""}, ${e.name} am Funk.`;
     default: return `Hey${r ? ` ${r}` : ""}, ${e.name} hier.`;
   }
 }
@@ -120,7 +131,7 @@ function probefunkTexte(e: Einstellungen): string[] {
   const zeilen = [anrede(e), ...themen.slice(0, anzahl).map((t) => ANSAGEN[t][e.art])];
   if (e.gespraechig === "viel") {
     zeilen.push({ kumpel: "Bleib locker, wir machen das zusammen.", profi: "Weiter so, Rundenzeiten konstant.",
-      motivator: "Du fährst ein richtig starkes Rennen – weiter so!", knapp: "Weiter." }[e.art]);
+      motivator: "Du fährst ein richtig starkes Rennen – weiter so!", knapp: "Weiter.", locker: "Läuft bei dir – bleib dran!" }[e.art]);
   }
   return zeilen;
 }

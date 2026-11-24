@@ -1,0 +1,15 @@
+[package]
+name = "gsra-app"
+version = "0.1.0"
+description = "GSRA – Live-Telemetrie, Rundenvergleich und Renningenieur"
+edition = "2021"
+license = "UNLICENSED"
+publish = false
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+gsra-telemetrie = { path = "../telemetrie" }

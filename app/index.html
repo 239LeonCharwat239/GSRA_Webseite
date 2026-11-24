@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GSRA Telemetrie</title>
+  <link rel="stylesheet" href="/src/stil.css">
+</head>
+<body>
+  <header class="kopf">
+    <div class="marke">
+      <img src="/gsra-logo.png" alt="GSRA" class="logo">
+      <div class="marke-text"><strong>GSRA</strong><span>Telemetrie</span></div>
+    </div>
+    <nav class="reiter" role="tablist" aria-label="Bereiche">
+      <button type="button" role="tab" data-reiter="live" aria-selected="true">Live</button>
+      <button type="button" role="tab" data-reiter="runden" aria-selected="false">Runden <span class="anzahl" id="rundenAnzahl">0</span></button>
+      <button type="button" role="tab" data-reiter="vergleich" aria-selected="false">Vergleich</button>
+      <button type="button" role="tab" data-reiter="sprit" aria-selected="false">Sprit &amp; Stint</button>
+    </nav>
+    <div class="verbindung">
+      <span class="led" id="led" aria-hidden="true"></span>
+      <span id="statusText">Starte …</span>
+      <select id="zeitraffer" aria-label="Zeitraffer der Demo" hidden>
+        <option value="1">Echtzeit</option>
+        <option value="4">4× schneller</option>
+        <option value="12">12× schneller</option>
+      </select>
+      <button class="knopf" id="demoKnopf" type="button">Demo starten</button>
+    </div>
+  </header>
+  <p class="sitzung" id="sitzungText"></p>
+
+  <main>
+    <!-- LIVE -->
+    <section class="seite aktiv" data-seite="live" aria-label="Live">
+      <div class="raster">
+        <div class="kachel gross"><span class="titel">Tempo</span><strong id="lTempo">–</strong><small>km/h</small></div>
+        <div class="kachel gross"><span class="titel">Gang</span><strong id="lGang">–</strong><div class="balken drehzahl"><i id="lDrehzahl"></i></div><small id="lDrehzahlText">U/min</small></div>
+        <div class="kachel gross delta"><span class="titel">Delta zur Besten</span><strong id="lDelta">–</strong><small id="lDeltaInfo">Noch keine gültige Runde</small></div>
+        <div class="kachel"><span class="titel">Pedale</span>
+          <div class="pedale"><div class="pedal"><div class="balken senkrecht gas"><i id="lGas"></i></div><small>Gas</small></div><div class="pedal"><div class="balken senkrecht bremse"><i id="lBremse"></i></div><small>Bremse</small></div></div>
+        </div>
+        <div class="kachel"><span class="titel">Runde</span><strong id="lRunde">–</strong><small id="lRundenzeit">&nbsp;</small></div>
+        <div class="kachel"><span class="titel">Letzte Runde</span><strong id="lLetzte">–</strong><small id="lBeste">&nbsp;</small></div>
+        <div class="kachel"><span class="titel">Sprit</span><strong id="lSprit">–</strong><small id="lSpritInfo">&nbsp;</small></div>
+      </div>
+      <div class="karte">
+        <h2>Die letzten 10 Sekunden <small><span class="punkt weiss"></span>Tempo <span class="punkt gruen"></span>Gas <span class="punkt rot"></span>Bremse</small></h2>
+        <canvas id="lVerlauf" class="verlauf"></canvas>
+      </div>
+      <div class="karte funk">
+        <h2>Nach der Runde <small>Kurz gesagt</small></h2>
+        <p id="lFunkText">Fahr eine Runde – danach sage ich dir, wo du Zeit liegen lässt.</p>
+      </div>
+    </section>
+
+    <!-- RUNDEN -->
+    <section class="seite" data-seite="runden" aria-label="Runden">
+      <div class="karte">
+        <h2>Deine Runden <small>Ungültig sind Runden mit Boxengasse, Zurücksetzen oder Datenlücke</small></h2>
+        <p class="leer" id="rLeer">Noch keine Runde. Fahr los – oder starte die Demo oben rechts.</p>
+        <table class="tabelle" id="rTabelle" hidden>
+          <thead><tr><th>Runde</th><th>Zeit</th><th>zur Besten</th><th>Sprit</th><th>Status</th><th></th></tr></thead>
+          <tbody id="rZeilen"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- VERGLEICH -->
+    <section class="seite" data-seite="vergleich" aria-label="Vergleich">
+      <div class="leiste">
+        <label>Referenz <select id="vRef"></select></label>
+        <label>Vergleich <select id="vX"></select></label>
+        <div class="umschalter" role="tablist" aria-label="Ansicht">
+          <button type="button" role="tab" data-ebene="kurz" aria-selected="true">Kurz gesagt</button>
+          <button type="button" role="tab" data-ebene="genau" aria-selected="false">Genau hinsehen</button>
+        </div>
+      </div>
+      <p class="leer" id="vLeer">Für einen Vergleich brauchst du zwei aufgezeichnete Runden. Fahr los – oder starte die Demo.</p>
+      <div id="vKurz" hidden>
+        <p class="zusammenfassung" id="vZusammen"></p>
+        <div class="befunde" id="vBefunde"></div>
+        <div class="staerken" id="vStaerken"></div>
+        <p class="hinweis">Die Kurven nummeriert die App selbst anhand der Bremszonen – die Nummern können von der offiziellen Zählung der Strecke abweichen.</p>
+      </div>
+      <div id="vGenau" hidden>
+        <div class="leiste klein">
+          <span class="legende"><span class="punkt blau"></span>Referenz <span class="punkt gelb"></span>Vergleich</span>
+          <span id="vBereich" class="bereich">Ganze Runde</span>
+          <button type="button" id="vGanz" class="knopf leise" hidden>Ganze Runde zeigen</button>
+          <span class="tipp">Ziehen = hineinzoomen · Doppelklick = ganze Runde</span>
+        </div>
+        <div class="diagramme" id="vDiagramme"></div>
+      </div>
+    </section>
+
+    <!-- SPRIT & STINT -->
+    <section class="seite" data-seite="sprit" aria-label="Sprit und Stint">
+      <div class="raster">
+        <div class="kachel"><span class="titel">Im Tank</span><strong id="sTank">–</strong><small>Liter</small></div>
+        <div class="kachel"><span class="titel">Verbrauch pro Runde</span><strong id="sVerbrauch">–</strong><small id="sVerbrauchInfo">Schnitt der letzten 5 sauberen Runden</small></div>
+        <div class="kachel"><span class="titel">Reicht für</span><strong id="sReicht">–</strong><small>Runden</small></div>
+        <div class="kachel"><span class="titel">Rundenzeit im Schnitt</span><strong id="sSchnitt">–</strong><small>letzte 5 gültigen Runden</small></div>
+      </div>
+      <form class="karte" id="sForm" autocomplete="off" novalidate>
+        <h2>Bis zum Ziel</h2>
+        <div class="felder">
+          <label>Rennen endet nach
+            <select name="art"><option value="zeit">Zeit</option><option value="runden">Runden</option></select></label>
+          <label><span id="sRestLabel">Restzeit in Minuten</span>
+            <input name="rest" type="number" inputmode="decimal" min="0" max="1440" step="1" value="30"></label>
+          <label>Reserve in Runden
+            <input name="reserve" type="number" inputmode="decimal" min="0" max="5" step="0.1" value="0.5"></label>
+        </div>
+        <div class="ergebnis" id="sErgebnis" aria-live="polite"></div>
+      </form>
+      <p class="hinweis">Ganze Rennen mit Fahrerwechseln planst du im Stint-Planer auf der GSRA-Webseite. Bald übernimmt er deine gemessenen Werte direkt aus der App.</p>
+    </section>
+  </main>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
