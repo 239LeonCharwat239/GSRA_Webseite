@@ -7485,11 +7485,12 @@ button.dash-avatar:hover,
 
 /* Dezente Trennung zur Schnellwahl (Ungelesen, Favoriten) – nur ein feiner, ausblendender Strich */
 .wa-pill-divider {
-    width: 1px;
-    height: 20px;
-    margin: 0 4px;
+    width: 2px;
+    height: 22px;
+    margin: 0 5px;
     flex-shrink: 0;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.16) 50%, rgba(255, 255, 255, 0));
+    border-radius: 2px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.28) 50%, rgba(255, 255, 255, 0));
 }
 
 /* Schmale Chatliste (z. B. am PC neben dem Chat): Der gewählte Bereich zeigt Symbol und Wort und wird breiter,
@@ -11496,7 +11497,8 @@ select option {
     letter-spacing: normal;
 }
 .co-field textarea { resize: none; }
-.co-field input[type="text"], .co-field select, .co-field textarea, .co-search {
+.co-field input[type="text"], .co-field input[type="url"], .co-field input[type="number"], .co-field input[type="search"],
+.co-field select, .co-field textarea, .co-search, .re-merken input, .re-merken select {
     box-sizing: border-box;
     padding: 10px 12px;
     background: #0b0c10;
@@ -11506,8 +11508,10 @@ select option {
     outline: none;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
-.co-field input[type="text"], .co-field select, .co-search { height: 42px; }
-.co-field input[type="text"]:focus, .co-field select:focus, .co-field textarea:focus, .co-search:focus {
+.co-field input[type="text"], .co-field input[type="url"], .co-field input[type="number"], .co-field input[type="search"],
+.co-field select, .co-search, .re-merken input, .re-merken select { height: 42px; }
+.co-field input[type="text"]:focus, .co-field input[type="url"]:focus, .co-field input[type="number"]:focus, .co-field input[type="search"]:focus,
+.co-field select:focus, .co-field textarea:focus, .co-search:focus, .re-merken input:focus, .re-merken select:focus {
     border-color: var(--gsra-blue);
     box-shadow: 0 0 0 3px rgba(0, 85, 255, 0.22);
 }
@@ -13477,8 +13481,10 @@ header .gsra-account-menu #logoutBtn:hover { background: rgba(255, 77, 77, 0.1) 
 
 /* Gedächtnis */
 .re-merken { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-.re-merken select { flex: 0 0 170px; }
-.re-merken input { flex: 1 1 240px; min-width: 0; margin: 0; }
+.re-merken select { flex: 0 0 190px; margin: 0; font-family: inherit; font-size: 14px; cursor: pointer; }
+.re-merken input { flex: 1 1 240px; min-width: 0; margin: 0; font-family: inherit; font-size: 14px; }
+.re-merken input::placeholder { color: #6f7785; }
+.re-merken .co-btn { height: 42px; }
 .re-liste { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .re-liste li { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 12px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 10px; }
 .re-liste li.re-leer { color: var(--text-muted); font-size: 14px; }

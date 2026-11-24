@@ -255,7 +255,11 @@ async function gedaechtnisLaden() {
 function gedaechtnisZeigen() {
   const liste = $("reGedaechtnis");
   const anzahl = $("reGedAnzahl");
-  if (anzahl) anzahl.textContent = zustand.gedaechtnis.length ? `${zustand.gedaechtnis.length} von 100` : "";
+  if (anzahl) {
+    // Höchstens 100 Einträge (SQL 048) – so bleibt das Gedächtnis überschaubar und schnell
+    anzahl.textContent = zustand.gedaechtnis.length ? `${zustand.gedaechtnis.length} von höchstens 100 Einträgen` : "";
+    anzahl.title = "Dein Renningenieur kann sich bis zu 100 Dinge über dich merken. Ältere Einträge kannst du jederzeit löschen.";
+  }
   if (!liste) return;
   liste.replaceChildren();
   if (!zustand.gedaechtnis.length) {
