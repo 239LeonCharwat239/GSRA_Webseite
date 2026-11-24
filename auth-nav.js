@@ -382,6 +382,7 @@ const initAuthNav = async () => {
         touchPresence();
         markDelivered();
         presenceTimer = setInterval(() => {
+            if (document.hidden) return; // versteckter Tab: keine Abfragen (weniger Datenvolumen); beim Zurückkommen sofort
             touchPresence();
             checkAdminNews();
         }, 60000);
@@ -389,23 +390,37 @@ const initAuthNav = async () => {
             if (!document.hidden) touchPresence();
         });
 
-        client
-            .channel('global_nav_unread_channel')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
-                if (payload.new && payload.new.sender_id !== session.user.id) {
-                    checkLiveUnreadMessages(session.user.id, session.user.created_at);
-                    markDelivered();
-                }
-            })
-            .subscribe();
-
+        // Live-Verbindungen der Navigation; im Hintergrund-Tab nach 3 Minuten getrennt (supabase-client.js)
+        let navChannels = [];
+        const startNavChannels = () => {
+            navChannels = [
+                client
+                    .channel('global_nav_unread_channel')
+                    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+                        if (payload.new && payload.new.sender_id !== session.user.id) {
+                            checkLiveUnreadMessages(session.user.id, session.user.created_at);
+                            markDelivered();
+                        }
+                    })
+                    .subscribe(),
+                client
+                    .channel("gsra_friendships_channel")
+                    .on("postgres_changes", { event: "*", schema: "public", table: "friendships", filter: `user_id=eq.${session.user.id}` }, (payload) => {
+                        if (payload.new?.status === "accepted") checkAcceptedRequests(session.user.id);
+                    })
+                    .subscribe()
+            ];
+        };
+        startNavChannels();
         checkAcceptedRequests(session.user.id);
-        client
-            .channel("gsra_friendships_channel")
-            .on("postgres_changes", { event: "*", schema: "public", table: "friendships", filter: `user_id=eq.${session.user.id}` }, (payload) => {
-                if (payload.new?.status === "accepted") checkAcceptedRequests(session.user.id);
-            })
-            .subscribe();
+        if (window.gsraHintergrund) window.gsraHintergrund(() => {
+            navChannels.forEach(ch => client.removeChannel(ch));
+            navChannels = [];
+        }, () => {
+            startNavChannels();
+            checkLiveUnreadMessages(session.user.id, session.user.created_at);
+            checkAcceptedRequests(session.user.id);
+        });
     }
 
     client.auth.onAuthStateChange((_event, session) => {
@@ -623,13 +638,13 @@ const GSRA_NAV = [
     { label: "Messenger", href: "messenger.html", id: "messengerNavBtn" },
     { label: "Community", items: [
         { label: "Rennkalender", href: "kalender.html", icon: "fa-flag-checkered", text: "Events, Countdown, Server-Passwörter" },
-        { label: "Videos", icon: "fa-film", text: "Rennen, Onboards und Tutorials", bald: true }
+        { label: "Videos", href: "videos.html", icon: "fa-film", text: "Neue Videos unserer Pro-Fahrer" }
     ] },
     { label: "Garage", items: [
         { label: "Setups", href: "setups.html", icon: "fa-sliders", text: "Setup Hub für alle Simulationen" },
         { label: "Stint-Planer", href: "stintplaner.html", icon: "fa-gas-pump", text: "Sprit, Stints und Boxenstopps planen", vorschau: true },
         { label: "Telemetrie", icon: "fa-chart-line", text: "Runden vergleichen und schneller werden", bald: true },
-        { label: "Liveries", icon: "fa-palette", text: "Designs teilen und finden", bald: true }
+        { label: "Liveries", href: "liveries.html", icon: "fa-palette", text: "Painter für dein Design finden" }
     ] },
     { label: "Marktplatz", href: "marktplatz.html" },
     { label: "Coaching", href: "coaching.html" },
@@ -727,7 +742,7 @@ function fillAccountButton(profile) {
     const url = String(profile?.avatar_url || "");
     if (/^https:\/\//i.test(url)) {
         const img = document.createElement("img");
-        img.src = url;
+        img.src = window.gsraAvatarKlein ? window.gsraAvatarKlein(url) : url; // kleine Fassung (128 px) genügt fürs Menü
         img.alt = "";
         img.referrerPolicy = "no-referrer";
         avatar.replaceChildren(img);

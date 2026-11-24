@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Liveries - GSRA</title>
+    <meta name="description" content="Liveries der GSRA: Painter aus der Community gestalten dein Design für Formelfahrzeuge, Prototypen, GT-Fahrzeuge und mehr.">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha256-7jvo3hkrl8sdc9HpXWuCux9rZYwPl8TvdX/DMZlu09M=" crossorigin="anonymous"></script>
+    <script src="supabase-client.js"></script>
+    <script src="fehler-monitor.js"></script>
+    <script src="auth-nav.js"></script>
+</head>
+<body>
+
+<header>
+    <div class="logo-slogan-container">
+        <a href="index.html" class="logo-link">
+            <img src="GSRA_Logo_ohne Hintergrund.png" alt="GSRA Logo" class="logo">
+        </a>
+        <div class="header-slogan">
+            <span class="text-blue">UNITED BY SPEED.</span>
+            <span class="text-yellow">DRIVEN GLOBALLY.</span>
+        </div>
+    </div>
+    <!-- Die Navigation baut auth-nav.js aus einer zentralen Liste (GSRA_NAV) -->
+    <nav>
+        <a href="index.html">Home</a>
+        <a href="messenger.html">Messenger</a>
+        <a href="login.html" class="login-btn" id="loginNavBtn">Login</a>
+        <button id="logoutBtn" class="login-btn" style="display: none;">Logout</button>
+    </nav>
+</header>
+
+    <main class="container lv-seite">
+        <section class="hero-section">
+            <h1 class="hero-title"><span class="text-blue">Liveries</span></h1>
+            <p class="hero-subtitle">Painter aus der Community gestalten dein Design – vom Formelfahrzeug bis zum GT-Fahrzeug.</p>
+        </section>
+
+        <section class="lv-hinweis" aria-label="So funktioniert es">
+            <div><i class="fa-solid fa-palette" aria-hidden="true"></i><span><strong>Painter finden</strong> Stöbere in den Angeboten und sieh dir Beispiele an.</span></div>
+            <div><i class="fa-solid fa-comments" aria-hidden="true"></i><span><strong>Im Messenger absprechen</strong> Wunsch, Entwürfe, Korrekturen und Preis klärt ihr direkt miteinander.</span></div>
+            <div><i class="fa-solid fa-handshake" aria-hidden="true"></i><span><strong>Selbst bezahlen</strong> Die Bezahlung regelt ihr untereinander – die GSRA ist dabei nicht Vertragspartner.</span></div>
+        </section>
+
+        <!-- Kopfzeile: Überschrift, Fahrzeugklasse, Simulation und kleine Suche in einer Zeile -->
+        <div class="gsra-werkzeugzeile" aria-label="Angebote filtern">
+            <h2 class="gsra-werkzeugzeile-titel"><i class="fa-solid fa-palette" aria-hidden="true"></i> Angebote <small id="lvAnzahl"></small></h2>
+            <div class="gsra-werkzeugzeile-rechts">
+                <select id="lvKlasse" class="gsra-mini-auswahl" aria-label="Fahrzeugklasse"><option value="">Alle Klassen</option></select>
+                <select id="lvSim" class="gsra-mini-auswahl" aria-label="Simulation"><option value="">Alle Simulationen</option></select>
+                <label class="gsra-mini-suche"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                    <input type="search" id="lvSuche" placeholder="Suchen" maxlength="60" autocomplete="off" aria-label="Painter oder Angebot suchen"></label>
+            </div>
+        </div>
+
+        <section id="lvListe" class="lv-liste" aria-live="polite"></section>
+
+        <!-- Eigener Painter-Bereich: Lizenz holen, Angebote anlegen und verwalten (SQL 046) -->
+        <section class="card lv-mein" id="lvMein" hidden>
+            <h2><i class="fa-solid fa-brush" aria-hidden="true"></i> Dein Painter-Bereich <span id="lvStatusBadge"></span></h2>
+            <div id="lvMeinInhalt"></div>
+
+            <form id="lvForm" class="lv-form" hidden novalidate autocomplete="off">
+                <h3 id="lvFormTitel">Neues Angebot</h3>
+                <label><span>Titel</span><input name="title" type="text" maxlength="80" required placeholder="z. B. GT3- und Prototypen-Designs mit Sponsor-Paket"></label>
+                <label><span>Beschreibung <small>(was du anbietest, Ablauf, Anzahl Korrekturen, Dateien)</small></span>
+                    <textarea name="description" rows="5" maxlength="2000"></textarea></label>
+                <fieldset><legend>Fahrzeugklassen</legend><div class="lv-chips" id="lvFormKlassen"></div></fieldset>
+                <fieldset><legend>Simulationen</legend><div class="lv-chips" id="lvFormSims"></div></fieldset>
+                <div class="lv-form-reihe">
+                    <label><span>Preis ab (€, freiwillig)</span><input name="price" type="text" inputmode="decimal" maxlength="7" placeholder="z. B. 40"></label>
+                    <label><span>Lieferzeit (Tage, freiwillig)</span><input name="days" type="text" inputmode="numeric" maxlength="3" placeholder="z. B. 7"></label>
+                </div>
+                <fieldset><legend>Beispielbilder <small>(bis zu 6, werden verkleinert und ohne Standortdaten gespeichert)</small></legend>
+                    <div class="lv-bilder" id="lvFormBilder"></div>
+                    <label class="lv-bild-wahl"><i class="fa-solid fa-image" aria-hidden="true"></i> Bilder auswählen
+                        <input type="file" id="lvFormDatei" accept="image/jpeg,image/png,image/webp" multiple hidden></label>
+                </fieldset>
+                <label class="lv-check"><input name="active" type="checkbox" checked> Angebot sichtbar</label>
+                <div class="lv-form-aktionen">
+                    <button type="submit" class="lv-btn primaer"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Speichern</button>
+                    <button type="button" class="lv-btn" id="lvFormAbbrechen">Abbrechen</button>
+                </div>
+            </form>
+        </section>
+    </main>
+
+    <script src="ui-dialogs.js"></script>
+    <script src="profil-karte.js"></script>
+    <script type="module" src="src/liveries.ts"></script>
+    <script type="module" src="src/karriere.ts"></script>
+    <script type="module" src="src/suche.ts"></script>
+</body>
+</html>

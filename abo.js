@@ -16,14 +16,18 @@
     const PLAN_CARDS = [
         { plan: "paddock", icon: "fa-flag-checkered", for: "Für alle Fahrer der Community", price: "0 €", per: "kostenlos",
           features: [["Messenger, Gruppen und Foren"], ["Marktplatz: kaufen und verkaufen"], ["Setups herunterladen und teilen"],
-                     ["Nachschlagewerk und Rennkalender"], ["Pro Setups", "", true], ["Telemetry-Tool", "", true], ["Stint-Planer", "", true],
-                     ["Weitere exklusive Features", "", true]] },
+                     ["Coachings buchen", "10 % Servicegebühr"], ["Liveries: Painter finden oder selbst anbieten"], ["Videos unserer Pro-Fahrer"],
+                     ["Karriere-Timeline im Profil"], ["Nachschlagewerk, Hilfe-Center und Rennkalender"],
+                     ["Pro Setups", "", true], ["Stint-Planer", "", true], ["Telemetry-Tool", "", true], ["Coachings ohne Servicegebühr", "", true],
+                     ["Dein Name im Visibility-Header", "", true], ["Weitere exklusive Features", "", true]] },
         { plan: "pole", icon: "fa-stopwatch", ribbon: "Für Ehrgeizige", for: "Für ambitionierte Fahrer", price: "8,49 €", per: "pro Monat",
-          features: [["Alles aus Paddock"], ["Pro Setups"], ["Telemetry-Tool", "in Entwicklung"], ["Stint-Planer", "mit Team und Live-Stand"],
-                     ["Alle weiteren exklusiven Features"], ["Pole-Abzeichen im Profil"]] },
+          features: [["Alles aus Paddock"], ["Pro Setups"], ["Stint-Planer", "mit Team, Live-Stand und Empfehlungen"], ["Telemetry-Tool", "in Entwicklung"],
+                     ["Coachings ohne Servicegebühr"], ["Visibility-Header", "dein Name schwebt für alle sichtbar durch die Kopfzeile"],
+                     ["Pole-Abzeichen im Profil"], ["Alle weiteren exklusiven Features"]] },
         { plan: "alliance", icon: "fa-people-group", for: "Für Teams mit bis zu 10 Personen", price: "39,99 €", per: "pro Monat · ca. 4 € pro Person",
           save: "<strong>Über die Hälfte gespart:</strong> 10 × Pole kosten 84,90 € im Monat – mit Alliance spart ihr 44,91 €.",
           features: [["Alle Pole-Vorteile für bis zu 10 Personen"], ["Jede Person nutzt ihr eigenes GSRA-Konto"],
+                     ["Gemeinsame Stintpläne fürs ganze Team"], ["Visibility-Header für alle im Team"],
                      ["Mitglieder per Freundesliste, GSRA-ID oder Einladungslink"], ["Alliance-Abzeichen im Profil"]] }
     ];
 

@@ -13,6 +13,11 @@ export const BEGRIFF_KATEGORIEN = [
   "Fahrtechnik & Fahrdynamik",
   "Renntaktik, Strategie & Regeln",
   "Simracing & Telemetrie",
+  "Telemetrie & Datenanalyse",
+  "Elektrik, Sensorik & Cockpit",
+  "Strecke, Asphalt & Wetter",
+  "Rennklassen & Fahrzeugkonzepte",
+  "Rennbetrieb, Sicherheit & Team",
 ] as const;
 
 export type Kategorie = (typeof BEGRIFF_KATEGORIEN)[number];

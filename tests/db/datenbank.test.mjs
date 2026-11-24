@@ -10,9 +10,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL, KARRIERE_SQL, STINTPLAN_SQL] =
-    Array.from({ length: 45 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 45);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL, KARRIERE_SQL, STINTPLAN_SQL, LIVERIES_SQL, CHATSICHER_SQL] =
+    Array.from({ length: 47 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 47);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -3150,6 +3150,235 @@ if (STINTPLAN_SQL && KARRIERE_SQL) {
     const eigLoeschen = await as(EIG, async () => q(`select public.stint_plan_delete('${PLAN}') as ok`));
     check("Eigentümerin löscht den Plan, das Team verschwindet mit",
         eigLoeschen.error === null && Number((await one(`select count(*) as n from public.stint_plan_members where plan_id = '${PLAN}'`)).n) === 0, eigLoeschen.error || "");
+}
+
+// Anmeldung mit vollständigen Ansprüchen (Zwei-Faktor-Stufe, Sitzung) für 046/047
+const mitAnspruch = (uid, claims, fn) => as(uid, async () => {
+    await db.exec(`set request.jwt.claims = '${JSON.stringify({ sub: uid, ...claims })}'`);
+    try { return await fn(); } finally { await db.exec(`set request.jwt.claims = ''`); }
+});
+
+// --- 046: Liveries (Painter-Lizenz wie Coach, Pro-Painter durch Admins) und Videos (nur Pro-Fahrer und Admins) ---
+if (LIVERIES_SQL && STINTPLAN_SQL) {
+    const id = (n) => `76000000-0000-0000-0000-0000000004${String(n).padStart(2, "0")}`;
+    const COACH = id(1), NEU = id(2), PROP = id(3), PROF = id(4), MOD6 = id(5), ABO = id(6);
+    await db.exec(`
+      insert into auth.users (id) values ('${COACH}'), ('${NEU}'), ('${PROP}'), ('${PROF}'), ('${MOD6}'), ('${ABO}');
+      insert into public.profiles (id, username, gsra_id) values ('${COACH}', 'Coach Clara', 946001), ('${NEU}', 'Neuling Nils', 946002),
+        ('${PROP}', 'Pro-Painter Paula', 946003), ('${PROF}', 'Pro-Fahrer Felix', 946004), ('${MOD6}', 'Moderator Mo', 946005), ('${ABO}', 'Abo Anton', 946006);
+      update public.profiles set role = 'moderator' where id = '${MOD6}';
+      insert into public.coach_licenses (user_id, granted_at) values ('${COACH}', now());
+      insert into public.pro_creators (user_id) values ('${PROF}');
+      insert into public.user_plans (user_id, status) values ('${ABO}', 'active');`);
+    await db.exec(readFileSync(LIVERIES_SQL, "utf8"));
+    const ctl46 = await db.exec(readFileSync(LIVERIES_SQL, "utf8")); // zweiter Lauf
+    const rows46 = ctl46[ctl46.length - 1].rows;
+    console.log("Kontrolle 046:\n  " + rows46.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+    check("Kontrolle 046: bereit, Schreiben nur über Funktionen, Gäste ausgeschlossen, Speicher bereit",
+        rows46.map(r => r.ergebnis).join(",") === "bereit,ja,ja,bereit", rows46.map(r => r.ergebnis).join(", "));
+
+    const angebot = (uid, title = "GT3-Designs", extra = "") => as(uid, async () => q(
+        `select public.livery_offer_save(null, '${title}', 'Beschreibung', array['gt','prototyp'], array['iRacing','<b>x</b>'], 15000, 7, ${extra || "'{}'"}::text[], true) as id`));
+    // Ohne Lizenz kein Angebot; Lizenz nur mit Voraussetzungen (hier: aktive Coach-Lizenz)
+    const ohne = await angebot(NEU);
+    check("Ohne Painter-Lizenz kein Livery-Angebot", /Painter mit Lizenz/.test(ohne.error || ""), ohne.error || "durchgelassen!");
+    const claimNeu = await as(NEU, async () => q(`select public.painter_claim_license() as r`));
+    check("Painter-Lizenz nur mit den Voraussetzungen der Coach-Lizenz", /noch nicht alle Voraussetzungen/.test(claimNeu.error || ""), claimNeu.error || "durchgelassen!");
+    const claimCoach = await as(COACH, async () => q(`select public.painter_claim_license() as r`));
+    check("Wer Coach ist, bekommt die Painter-Lizenz", claimCoach.error === null && claimCoach.rows[0]?.r === "erteilt", claimCoach.error || JSON.stringify(claimCoach.rows[0]));
+    const a1 = await angebot(COACH);
+    const OFFER = a1.rows[0]?.id;
+    check("Painter legt ein Angebot an", a1.error === null && Boolean(OFFER), a1.error || "");
+    const gespeichert = await one(`select simulations, painter_id from public.livery_offers where id = '${OFFER}'`);
+    check("Simulationen mit Schadcode werden verworfen", JSON.stringify(gespeichert.simulations) === '["iRacing"]', JSON.stringify(gespeichert.simulations));
+    const fremdesBild = await angebot(COACH, "Bild", `array['${NEU}/x.jpg']`);
+    check("Beispielbilder nur aus dem eigenen Ordner", /Ungültiges Beispielbild/.test(fremdesBild.error || ""), fremdesBild.error || "durchgelassen!");
+    const falscheKlasse = await as(COACH, async () => q(`select public.livery_offer_save(null, 'Klasse', '', array['panzer'], '{}', null, null, '{}', true)`));
+    check("Nur bekannte Fahrzeugklassen", falscheKlasse.error !== null, falscheKlasse.error || "durchgelassen!");
+    await as(COACH, async () => {
+        const direkt = await q(`insert into public.livery_offers (painter_id, title, classes) values ('${COACH}', 'Direkt', array['gt'])`);
+        check("Angebote nicht direkt anlegbar (nur über die Funktion)", direkt.error !== null, direkt.error || "durchgelassen!");
+        const aendern = await q(`update public.livery_offers set active = true where id = '${OFFER}' returning id`);
+        check("Angebote nicht direkt änderbar", aendern.error !== null, aendern.error || "durchgelassen!");
+        const lizenz = await q(`insert into public.painter_licenses (user_id, granted_at) values ('${NEU}', now())`);
+        check("Lizenzen nicht selbst eintragbar", lizenz.error !== null, lizenz.error || "durchgelassen!");
+    });
+    for (let i = 0; i < 4; i++) await angebot(COACH, `Angebot ${i}`);
+    const sechstes = await angebot(COACH, "Zu viel");
+    check("Höchstens 5 Angebote je Painter", /höchstens 5/.test(sechstes.error || ""), sechstes.error || "durchgelassen!");
+    await as(NEU, async () => {
+        const sicht = await q(`select id from public.livery_offers where id = '${OFFER}'`);
+        check("Mitglieder sehen aktive Angebote", sicht.error === null && sicht.rows.length === 1, sicht.error || `${sicht.rows.length} Zeilen`);
+        const fremd = await q(`select public.livery_offer_delete('${OFFER}')`);
+        check("Fremde Angebote nicht löschbar", /gehört dir nicht/.test(fremd.error || ""), fremd.error || "durchgelassen!");
+        const hoch = await q(`select public.gsra_upload_allowed('liveries', '${NEU}/bild.jpg') as ok`);
+        check("Ohne Lizenz kein Hochladen von Beispielbildern", hoch.rows[0]?.ok === false, JSON.stringify(hoch.rows[0]));
+    });
+    await as(null, async () => {
+        const gast = await q(`select id from public.livery_offers`);
+        check("Gäste sehen keine Livery-Angebote", gast.error !== null, gast.error || `${gast.rows.length} Zeilen`);
+    });
+    // Pro-Painter: nur Admins tragen ein (mit Zwei-Faktor), dann ohne Lizenz anbieten
+    const selbstPro = await as(PROP, async () => q(`insert into public.pro_painters (user_id) values ('${PROP}')`));
+    check("Niemand macht sich selbst zum Pro-Painter", selbstPro.error !== null, selbstPro.error || "durchgelassen!");
+    const proEin = await mitAnspruch(U.admin, { aal: "aal2" }, async () => q(`insert into public.pro_painters (user_id) values ('${PROP}')`));
+    check("Admin trägt Pro-Painter ein", proEin.error === null, proEin.error || "");
+    const proLog = await one(`select count(*) as n from public.moderation_log where action = 'pro_painter_hinzugefuegt' and target_user = '${PROP}'`);
+    check("Eintragen steht im Moderationsprotokoll", Number(proLog.n) === 1, String(proLog.n));
+    const proAngebot = await angebot(PROP, "Pro-Livery");
+    check("Pro-Painter bietet ohne Lizenz an", proAngebot.error === null, proAngebot.error || "");
+    // Moderation: entziehen pausiert die Angebote
+    const modOhneGrund = await mitAnspruch(MOD6, { aal: "aal2" }, async () => q(`select public.painter_license_revoke('${COACH}', 'x')`));
+    check("Entzug nur mit Begründung", /Begründung/.test(modOhneGrund.error || ""), modOhneGrund.error || "durchgelassen!");
+    const modEntzug = await mitAnspruch(MOD6, { aal: "aal2" }, async () => q(`select public.painter_license_revoke('${COACH}', 'Fremde Designs als eigene ausgegeben')`));
+    check("Moderation entzieht die Painter-Lizenz", modEntzug.error === null, modEntzug.error || "");
+    const pausiert = await one(`select count(*) filter (where active) as aktiv from public.livery_offers where painter_id = '${COACH}'`);
+    check("Nach Entzug sind alle Angebote pausiert", Number(pausiert.aktiv) === 0, String(pausiert.aktiv));
+    const wiederHolen = await as(COACH, async () => q(`select public.painter_claim_license()`));
+    check("Nach Entzug durch die Moderation kein neues Holen", /vom Moderationsteam entzogen/.test(wiederHolen.error || ""), wiederHolen.error || "durchgelassen!");
+    const nichtSichtbar = await as(NEU, async () => q(`select id from public.livery_offers where painter_id = '${COACH}'`));
+    check("Angebote ohne aktive Lizenz sind unsichtbar", nichtSichtbar.rows.length === 0, `${nichtSichtbar.rows.length} Zeilen`);
+    const nutzerEntzug = await as(NEU, async () => q(`select public.painter_license_revoke('${PROP}', 'Ich mag das nicht')`));
+    check("Normale Mitglieder können keine Lizenz entziehen", /Moderationsteam/.test(nutzerEntzug.error || ""), nutzerEntzug.error || "durchgelassen!");
+    // Verwarnung: Pro-Painter wird automatisch gestoppt
+    await db.exec(`insert into public.user_warnings (user_id, text) values ('${PROP}', 'Test 046')`);
+    check("Verwarnung stoppt auch Pro-Painter automatisch", (await one(`select public.painter_active('${PROP}') as a`)).a === false);
+
+    // Videos
+    const video = (uid, url = "https://video.example/watch?v=1", thumb = "null") => as(uid, async () => q(
+        `select public.video_save(null, '${url}', 'Hotlap in Interlagos', 'Heute fahren wir in Brasilien', array['#Fast','Allianz','<script>','Fast'], ${thumb}) as id`));
+    const vAbo = await video(ABO);
+    check("Abo-Mitglieder können keine Videos veröffentlichen", /Pro-Fahrer und Admins/.test(vAbo.error || ""), vAbo.error || "durchgelassen!");
+    const vMod = await mitAnspruch(MOD6, { aal: "aal2" }, async () => q(`select public.video_save(null, 'https://video.example/a', 'Titel', '', '{}', null)`));
+    check("Moderatoren können keine Videos veröffentlichen", /Pro-Fahrer und Admins/.test(vMod.error || ""), vMod.error || "durchgelassen!");
+    const vPro = await video(PROF);
+    const VID = vPro.rows[0]?.id;
+    check("Pro-Fahrer veröffentlicht ein Video", vPro.error === null && Boolean(VID), vPro.error || "");
+    const tags = (await one(`select tags from public.pro_videos where id = '${VID}'`)).tags;
+    check("Hashtags bereinigt (ohne #, ohne Schadcode, ohne Doppelte)", JSON.stringify(tags) === '["Fast","Allianz"]', JSON.stringify(tags));
+    const vHttp = await video(PROF, "javascript:alert(1)");
+    check("Nur https-Links", /https:\/\//.test(vHttp.error || ""), vHttp.error || "durchgelassen!");
+    const vBild = await video(PROF, "https://video.example/b", `'${NEU}/x.jpg'`);
+    check("Vorschaubild nur aus dem eigenen Ordner", /Ungültiges Vorschaubild/.test(vBild.error || ""), vBild.error || "durchgelassen!");
+    const vAdmin = await mitAnspruch(U.admin, { aal: "aal2" }, async () => q(`select public.video_save(null, 'https://video.example/c', 'Admin-Video', '', '{}', null) as id`));
+    check("Admins veröffentlichen Videos", vAdmin.error === null, vAdmin.error || "");
+    await as(NEU, async () => {
+        const sicht = await q(`select title from public.pro_videos`);
+        check("Alle Mitglieder sehen die Videos", sicht.error === null && sicht.rows.length >= 2, sicht.error || `${sicht.rows.length} Zeilen`);
+        const direkt = await q(`insert into public.pro_videos (url, title) values ('https://x.example/aa', 'Direkt')`);
+        check("Videos nicht direkt anlegbar", direkt.error !== null, direkt.error || "durchgelassen!");
+        const loeschen = await q(`select public.video_delete('${VID}')`);
+        check("Fremde Videos nicht löschbar", /gehört dir nicht/.test(loeschen.error || ""), loeschen.error || "durchgelassen!");
+    });
+    await as(null, async () => {
+        const gast = await q(`select id from public.pro_videos`);
+        check("Gäste sehen keine Videos (Seite nur mit Anmeldung)", gast.error !== null, gast.error || `${gast.rows.length} Zeilen`);
+    });
+    // Pro-Status weg → Videos verschwinden aus der Liste
+    await db.exec(`delete from public.pro_creators where user_id = '${PROF}'`);
+    const weg = await as(NEU, async () => q(`select id from public.pro_videos where id = '${VID}'`));
+    check("Ohne Pro-Status sind die Videos nicht mehr sichtbar", weg.rows.length === 0, `${weg.rows.length} Zeilen`);
+    await db.exec(`insert into public.pro_creators (user_id) values ('${PROF}')`);
+    const modLoescht = await mitAnspruch(MOD6, { aal: "aal2" }, async () => q(`select public.video_delete('${VID}') as t`));
+    check("Moderation kann Videos entfernen (mit Protokoll)", modLoescht.error === null
+        && Number((await one(`select count(*) as n from public.moderation_log where action = 'video_geloescht'`)).n) === 1, modLoescht.error || "");
+    const bucketOk = await as(PROF, async () => q(`select public.gsra_upload_allowed('videos', '${PROF}/v.jpg') as a, public.gsra_upload_allowed('videos', '${NEU}/v.jpg') as b`));
+    check("Vorschaubilder nur in den eigenen Ordner", bucketOk.rows[0]?.a === true && bucketOk.rows[0]?.b === false, JSON.stringify(bucketOk.rows[0]));
+    const fnIntern = await one(`select has_function_privilege('authenticated', 'public.painter_license_auto_revoke()', 'EXECUTE') as ok`);
+    check("Automatischer Entzug nicht direkt aufrufbar", fnIntern.ok === false, String(fnIntern.ok));
+}
+
+// --- 047: Selbstlöschende Nachrichten, Beweissicherung, aktive Anmeldungen ---
+if (CHATSICHER_SQL && LIVERIES_SQL) {
+    const id = (n) => `77000000-0000-0000-0000-0000000004${String(n).padStart(2, "0")}`;
+    const A = id(1), B = id(2), C = id(3), DC = id(4), GR = id(5);
+    const S_A1 = "77000000-0000-0000-0000-0000000005a1", S_A2 = "77000000-0000-0000-0000-0000000005a2", S_B = "77000000-0000-0000-0000-0000000005b1";
+    await db.exec(`
+      insert into auth.users (id) values ('${A}'), ('${B}'), ('${C}');
+      insert into public.profiles (id, username) values ('${A}', 'Alex'), ('${B}', 'Bea'), ('${C}', 'Cem');
+      insert into public.chats (id, user1_id, user2_id) values ('${DC}', '${A}', '${B}');
+      insert into public.chats (id, user1_id, user2_id, title) values ('${GR}', '${A}', '${A}', 'Team Ablauf');
+      insert into public.chat_members (chat_id, user_id, role) values ('${GR}', '${A}', 'admin'), ('${GR}', '${C}', 'member')
+        on conflict (chat_id, user_id) do update set role = excluded.role;
+      insert into auth.sessions (id, user_id, user_agent, ip, created_at) values
+        ('${S_A1}', '${A}', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36', '84.132.10.20', now() - interval '2 days'),
+        ('${S_A2}', '${A}', 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1', '91.20.1.2', now() - interval '1 hour'),
+        ('${S_B}', '${B}', 'Mozilla/5.0', '10.0.0.1', now());`);
+    await db.exec(readFileSync(CHATSICHER_SQL, "utf8"));
+    const ctl47 = await db.exec(readFileSync(CHATSICHER_SQL, "utf8")); // zweiter Lauf
+    const rows47 = ctl47[ctl47.length - 1].rows;
+    console.log("Kontrolle 047:\n  " + rows47.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+    check("Kontrolle 047: bereit, Löschlauf intern, Gäste ausgeschlossen, Anmeldungen beendbar (Zeitplan braucht pg_cron)",
+        rows47.slice(0, 4).map(r => r.ergebnis).join(",") === "bereit,ja,ja,ja", rows47.map(r => r.ergebnis).join(", "));
+
+    const senden = (uid, chat, text) => as(uid, async () => q(`insert into public.messages (chat_id, sender_id, text) values ('${chat}', '${uid}', '${text}') returning id, expires_at`));
+    const vorher = await senden(A, DC, "Vor dem Timer");
+    check("Ohne Timer kein Ablaufdatum", vorher.error === null && vorher.rows[0]?.expires_at === null, vorher.error || JSON.stringify(vorher.rows[0]));
+    await as(A, async () => {
+        const direkt = await q(`update public.chats set auto_delete_seconds = 3600 where id = '${GR}'`);
+        const wert = (await one(`select auto_delete_seconds as s from public.chats where id = '${GR}'`)).s;
+        check("Timer nicht direkt setzbar (auch nicht als Gruppenadmin)", wert === null, direkt.error || String(wert));
+        const falsch = await q(`select public.chat_set_auto_delete('${DC}', 42)`);
+        check("Nur feste Zeiten (1 Std., 1 Tag, 7 Tage, 30 Tage)", /Bitte wähle/.test(falsch.error || ""), falsch.error || "durchgelassen!");
+        const ok = await q(`select public.chat_set_auto_delete('${DC}', 86400) as s`);
+        check("Einzelchat: Teilnehmer schaltet 1 Tag ein", ok.error === null && ok.rows[0]?.s === 86400, ok.error || "");
+    });
+    const hinweis = await one(`select text from public.messages where chat_id = '${DC}' order by created_at desc limit 1`);
+    check("Hinweis im Chat für alle sichtbar", /hat selbstlöschende Nachrichten eingeschaltet \(1 Tag\)/.test(hinweis?.text || ""), hinweis?.text);
+    const nachher = await senden(B, DC, "Mit Timer");
+    const abl = nachher.rows[0]?.expires_at ? (new Date(nachher.rows[0].expires_at).getTime() - Date.now()) / 3600000 : 0;
+    check("Neue Nachricht läuft nach 1 Tag ab (von der Datenbank gesetzt)", nachher.error === null && abl > 23.5 && abl < 24.5, nachher.error || String(abl));
+    const MSG = nachher.rows[0]?.id;
+    const faelschen = await as(B, async () => q(`update public.messages set expires_at = now() + interval '10 years', text = 'Mit Timer' where id = '${MSG}' returning expires_at`));
+    check("Ablaufdatum nachträglich nicht änderbar", faelschen.rows.length === 0 || new Date(faelschen.rows[0].expires_at).getTime() - Date.now() < 2 * 86400000,
+        faelschen.error || JSON.stringify(faelschen.rows[0]));
+    const fremd = await as(C, async () => q(`select public.chat_set_auto_delete('${DC}', 3600)`));
+    check("Fremde können den Timer nicht umstellen", fremd.error !== null, fremd.error || "durchgelassen!");
+    const mitglied = await as(C, async () => q(`select public.chat_set_auto_delete('${GR}', 3600)`));
+    check("Gruppe: normale Mitglieder können den Timer nicht umstellen", /Gruppenadmins/.test(mitglied.error || ""), mitglied.error || "durchgelassen!");
+    const admin = await as(A, async () => q(`select public.chat_set_auto_delete('${GR}', 604800) as s`));
+    check("Gruppe: Gruppenadmin schaltet 7 Tage ein", admin.error === null && admin.rows[0]?.s === 604800, admin.error || "");
+    const forum = await mitAnspruch(U.admin, { aal: "aal2" }, async () => q(`select public.chat_set_auto_delete('${FORUM}', 3600)`));
+    check("Offizielles Forum: keine selbstlöschenden Nachrichten", /offiziellen Forum/.test(forum.error || ""), forum.error || "durchgelassen!");
+    const gast = await as(null, async () => q(`select public.chat_set_auto_delete('${DC}', null)`));
+    check("Gäste können nichts umstellen", gast.error !== null, gast.error || "durchgelassen!");
+    // Ablauf: Nachricht künstlich altern lassen, Löschlauf, Beweissicherung prüfen
+    await db.exec(`alter table public.messages disable trigger gsra_messages_set_expiry;
+                   update public.messages set expires_at = now() - interval '1 minute' where id = '${MSG}';
+                   update public.chats set last_message = 'Mit Timer' where id = '${DC}';
+                   alter table public.messages enable trigger gsra_messages_set_expiry;`);
+    const lauf = await as(B, async () => q(`select public.chat_expire_run()`));
+    check("Löschlauf nicht für Mitglieder aufrufbar", lauf.error !== null, lauf.error || "durchgelassen!");
+    await db.exec(`select public.chat_expire_run()`);
+    const nochDa = Number((await one(`select count(*) as n from public.messages where id = '${MSG}'`)).n);
+    check("Abgelaufene Nachricht ist gelöscht", nochDa === 0, String(nochDa));
+    const bleibt = Number((await one(`select count(*) as n from public.messages where chat_id = '${DC}' and text = 'Vor dem Timer'`)).n);
+    check("Nachrichten von vor dem Einschalten bleiben", bleibt === 1, String(bleibt));
+    const kopie = await one(`select change_type from public.message_history where message_id::text = '${MSG}'`);
+    check("Beweissicherung: Kopie nur für Admins, als „abgelaufen“ gekennzeichnet", kopie?.change_type === "abgelaufen (selbstlöschend)", JSON.stringify(kopie));
+    const vorschau = (await one(`select last_message from public.chats where id = '${DC}'`)).last_message;
+    check("Chatliste zeigt den abgelaufenen Text nicht mehr", vorschau !== "Mit Timer", vorschau);
+    const aus = await as(B, async () => q(`select public.chat_set_auto_delete('${DC}', null) as s`));
+    const neu = await senden(A, DC, "Wieder dauerhaft");
+    check("Ausschalten: neue Nachrichten bleiben dauerhaft", aus.error === null && neu.rows[0]?.expires_at === null, aus.error || JSON.stringify(neu.rows[0]));
+
+    // Aktive Anmeldungen
+    const liste = await mitAnspruch(A, { session_id: S_A1 }, async () => q(`select * from public.my_sessions()`));
+    check("Eigene Anmeldungen mit Gerät, grobem Netz und „diese Anmeldung“",
+        liste.error === null && liste.rows.length === 2 && liste.rows.some(r => r.aktuell && r.id === S_A1) && liste.rows.every(r => /x\.x$/.test(r.netz || "")),
+        liste.error || JSON.stringify(liste.rows));
+    check("Gerätenamen lesbar (iOS, Windows)", liste.rows.some(r => /iOS/.test(r.geraet)) && liste.rows.some(r => /Windows/.test(r.geraet)), JSON.stringify(liste.rows.map(r => r.geraet)));
+    const fremdEnde = await mitAnspruch(A, { session_id: S_A1 }, async () => q(`select public.end_session('${S_B}')`));
+    check("Fremde Anmeldungen lassen sich nicht beenden", /bereits beendet/.test(fremdEnde.error || "") && Number((await one(`select count(*) as n from auth.sessions where id = '${S_B}'`)).n) === 1,
+        fremdEnde.error || "durchgelassen!");
+    const selbst = await mitAnspruch(A, { session_id: S_A1 }, async () => q(`select public.end_session('${S_A1}')`));
+    check("Aktuelle Anmeldung nicht über die Liste beendbar (dafür „Abmelden“)", /diese Anmeldung hier/.test(selbst.error || ""), selbst.error || "durchgelassen!");
+    const ende = await mitAnspruch(A, { session_id: S_A1 }, async () => q(`select public.end_session('${S_A2}')`));
+    check("Andere eigene Anmeldung beendet", ende.error === null && Number((await one(`select count(*) as n from auth.sessions where id = '${S_A2}'`)).n) === 0, ende.error || "");
+    const gastListe = await as(null, async () => q(`select * from public.my_sessions()`));
+    check("Gäste sehen keine Anmeldungen", gastListe.error !== null, gastListe.error || "durchgelassen!");
+    const bListe = await mitAnspruch(B, { session_id: S_B }, async () => q(`select * from public.my_sessions()`));
+    check("Jeder sieht nur die eigenen Anmeldungen", bListe.rows.length === 1 && bListe.rows[0].id === S_B, JSON.stringify(bListe.rows));
 }
 
 // --- Konto löschen (Ausbau 3) funktioniert weiterhin, die Stimmen verschwinden mit ---

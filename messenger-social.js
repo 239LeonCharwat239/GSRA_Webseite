@@ -1133,7 +1133,8 @@ async function uploadGroupImage(chat, file) {
     const supabase = socialDb();
     const ext = (file.name.split(".").pop() || "png").toLowerCase();
     const path = `foren/${chat.id}/${Date.now()}.${ext}`;
-    const { error: uploadError } = await supabase.storage.from("avatars").upload(path, file, { contentType: file.type });
+    // Eindeutiger Dateiname: Browser dürfen das Bild ein Jahr zwischenspeichern (weniger Datenvolumen)
+    const { error: uploadError } = await supabase.storage.from("avatars").upload(path, file, { contentType: file.type, cacheControl: "31536000" });
     if (uploadError) {
         showToast(`Das Bild konnte nicht hochgeladen werden: ${uploadError.message}`, "error");
         return;

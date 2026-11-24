@@ -1125,6 +1125,19 @@ async function checkUrlParameters() {
     }
 }
 
+// Echtzeit im Hintergrund pausieren (supabase-client.js): nach 3 Minuten im versteckten Tab trennen,
+// beim Zurückkommen neu verbinden und Chatliste sowie offenen Chat frisch laden – es geht nichts verloren
+if (window.gsraHintergrund) window.gsraHintergrund(() => {
+    const supabase = window.supabaseClient || window.supabase;
+    if (globalListenerChannel) { supabase.removeChannel(globalListenerChannel); globalListenerChannel = null; }
+    if (messageSubscription) { supabase.removeChannel(messageSubscription); messageSubscription = null; }
+}, () => {
+    if (!currentUser?.id) return;
+    setupGlobalMessageListener();
+    loadUserChats();
+    if (activeChatId) loadChatMessages(activeChatId);
+});
+
 function setupGlobalMessageListener() {
     const supabase = window.supabaseClient || window.supabase;
     if (!supabase || !currentUser?.id) return;
@@ -1466,7 +1479,7 @@ async function renderChatsList() {
         const lastMsg = escapeHtml(asGroupWording(chat.last_message, chat.id) || 'Keine Nachrichten');
 
         item.innerHTML = `
-            <div class="wa-avatar">${avatarInner(avatarUrl, chatIconClass(chat))}</div>
+            <div class="wa-avatar">${avatarInner(window.gsraAvatarKlein(avatarUrl), chatIconClass(chat))}</div>
             <div class="wa-chat-info">
                 <div class="wa-chat-row">
                     <span class="wa-chat-name">${escapeHtml(displayTitle)}</span>
@@ -1566,7 +1579,7 @@ function createPersonRow(name, { icon = "fa-user", accent = false, note = "", av
     const row = document.createElement("div");
     row.className = "wa-chat-item";
     row.innerHTML = `
-        <div class="wa-avatar${accent ? " accent" : ""}">${avatarInner(avatarUrl, icon)}</div>
+        <div class="wa-avatar${accent ? " accent" : ""}">${avatarInner(window.gsraAvatarKlein(avatarUrl), icon)}</div>
         <div class="wa-chat-info"><span class="wa-chat-name"></span></div>
     `;
     row.querySelector(".wa-chat-name").textContent = name;
@@ -1884,7 +1897,7 @@ async function openChat(chatId, recipientName, chatTitle = null) {
 
 // Kopfzeile des Chats im WhatsApp-Stil: Bild bzw. Symbol, Name und eine Zeile darunter
 function setChatHeader(iconClass, title, subtitle, avatarUrl = null) {
-    if (chatHeaderAvatar) chatHeaderAvatar.innerHTML = avatarInner(avatarUrl, iconClass);
+    if (chatHeaderAvatar) chatHeaderAvatar.innerHTML = avatarInner(window.gsraAvatarKlein(avatarUrl), iconClass);
     if (chatTitleText) chatTitleText.innerText = title;
     if (chatSubtitleText) chatSubtitleText.innerText = subtitle;
 }
@@ -1958,6 +1971,42 @@ function createInfoRow(iconClass, text, onClick, extraClass = "") {
     return row;
 }
 
+const AUTO_DELETE_LABELS = { 3600: "1 Stunde", 86400: "1 Tag", 604800: "7 Tage", 2592000: "30 Tage" };
+
+// Selbstlöschende Nachrichten einstellen – gilt für neue Nachrichten ab jetzt, alle im Chat sehen einen Hinweis
+async function chooseAutoDelete(chat) {
+    const supabase = window.supabaseClient || window.supabase;
+    const choice = await showDialog({
+        icon: "fa-stopwatch",
+        title: "Selbstlöschende Nachrichten",
+        message: "Neue Nachrichten in diesem Chat verschwinden nach der gewählten Zeit – bei allen. Ältere Nachrichten bleiben. "
+            + "Zum Schutz vor Missbrauch bewahrt die GSRA eine Kopie für die Prüfung von Meldungen auf (nur Admins, höchstens 180 Tage).",
+        choices: [
+            { value: "aus", text: "Aus" }, { value: 3600, text: "1 Stunde" }, { value: 86400, text: "1 Tag" },
+            { value: 604800, text: "7 Tage" }, { value: 2592000, text: "30 Tage" }
+        ],
+        cancelText: "Abbrechen"
+    });
+    if (choice === null || choice === undefined) return;
+    const seconds = choice === "aus" ? null : Number(choice);
+    const { error } = await supabase.rpc("chat_set_auto_delete", { _chat: chat.id, _seconds: seconds });
+    if (error) {
+        const missing = /could not find the function|schema cache/i.test(error.message || "");
+        return showToast(missing ? "Selbstlöschende Nachrichten sind gleich verfügbar (Datenbank wird aktualisiert)." : gsraFriendlyError(error.message), "error");
+    }
+    chat.auto_delete_seconds = seconds;
+    showToast(seconds ? `Neue Nachrichten verschwinden nach ${AUTO_DELETE_LABELS[seconds]}.` : "Selbstlöschende Nachrichten sind aus.", "success");
+    renderChatInfo();
+}
+
+// Abgelaufene Nachrichten sofort ausblenden (die Datenbank löscht sie spätestens 5 Minuten später)
+const isExpiredMessage = (msg) => Boolean(msg?.expires_at) && new Date(msg.expires_at).getTime() <= Date.now();
+setInterval(() => {
+    document.querySelectorAll("[data-expires]").forEach(el => {
+        if (new Date(/** @type {HTMLElement} */ (el).dataset.expires).getTime() <= Date.now()) el.remove();
+    });
+}, 30000);
+
 function renderChatInfo() {
     const chat = allChatsCache.find(c => c.id === activeChatId);
     if (!chat || !chatInfoBody) return;
@@ -2023,6 +2072,14 @@ function renderChatInfo() {
     if (isDirect) general.appendChild(createInfoRow("fa-solid fa-id-card", `Profil von ${otherName} ansehen`, () => openUserProfile(otherUserId, { chatId: chat.id })));
     if (isDirect) general.appendChild(createInfoRow("fa-solid fa-pen", "Chat umbenennen (nur für dich sichtbar)", () => editChatTitleBtn?.click()));
     if (isAdmin) general.appendChild(createInfoRow("fa-solid fa-pen", "Gruppennamen ändern", () => editChatTitleBtn?.click()));
+    // Selbstlöschende Nachrichten (SQL 047): Einzelchat beide, Gruppe nur Gruppenadmins, offizielles Forum nie
+    if (!isOfficial) {
+        const timerText = `Selbstlöschende Nachrichten: ${AUTO_DELETE_LABELS[chat.auto_delete_seconds] || "Aus"}`;
+        general.appendChild(createInfoRow("fa-solid fa-stopwatch", timerText, () => {
+            if (isGroup && !isAdmin) return showToast("Das können nur Gruppenadmins einstellen.", "info");
+            chooseAutoDelete(chat);
+        }, chat.auto_delete_seconds ? "favorited" : ""));
+    }
     chatInfoBody.appendChild(general);
 
     if (isGroup) {
@@ -2481,7 +2538,7 @@ async function renderMessages(messages, chatId = activeChatId) {
     }
     chatMediaItems = [];
     // „Für mich gelöschte“ Nachrichten ausblenden; offene Verwarnungen bleiben oben im Chat angeheftet
-    messages = messages.filter(m => !hiddenMessageIds.has(String(m.id)));
+    messages = messages.filter(m => !hiddenMessageIds.has(String(m.id)) && !isExpiredMessage(m));
     if (typeof renderWarningBar === "function") renderWarningBar();
     messages = withWelcomeMessage(messages, chatId);
     if (messages.length === 0) {
@@ -2499,7 +2556,8 @@ async function renderMessages(messages, chatId = activeChatId) {
     }
     const seenSystemTexts = new Set();
     for (const msg of messages) {
-        const isSystem = msg.text && (msg.text.includes("hat den Chat") || msg.text.includes("hat das Forum") || msg.text.includes("zum Forum hinzugefügt") || msg.text.includes("umbenannt") || msg.text.includes("aus der Gruppe entfernt") || msg.text.includes("hat die Gruppe verlassen") || msg.text.includes("ist dem Forum beigetreten"));
+        const isSystem = msg.text && (msg.text.includes("hat den Chat") || msg.text.includes("hat das Forum") || msg.text.includes("zum Forum hinzugefügt") || msg.text.includes("umbenannt") || msg.text.includes("aus der Gruppe entfernt") || msg.text.includes("hat die Gruppe verlassen") || msg.text.includes("ist dem Forum beigetreten")
+            || /hat selbstlöschende Nachrichten (ein|aus)geschaltet/.test(msg.text));
         if (isSystem && !msg.image_url && !msg.reply_to && !/öffentlich gemacht|privat gemacht/.test(msg.text)) {
             const formatted = await formatSystemMessage(msg.text, msg.sender_id);
             if (stale()) return false;
@@ -2547,6 +2605,10 @@ async function formatSystemMessageText(text, senderId) {
     if (!text) return "";
     const isOwnAction = String(senderId) === String(currentUser?.id);
     const actorName = await fetchUserName(senderId);
+
+    // Selbstlöschende Nachrichten (SQL 047): „Du hast …“ bzw. der aktuelle Name statt des gespeicherten
+    const timerMatch = text.match(/hat (selbstlöschende Nachrichten (?:ein|aus)geschaltet.*)$/);
+    if (timerMatch) return isOwnAction ? `Du hast ${timerMatch[1]}` : `${actorName} hat ${timerMatch[1]}`;
 
     if (text.includes("zum Forum hinzugefügt")) {
         const match = text.match(/^(.+?)\s+hat\s+(.+?)\s+zum Forum hinzugefügt/i);
@@ -2635,11 +2697,13 @@ async function appendSingleMessage(msg, isSystem = false) {
         appendWelcomeMessage(msg);
         return;
     }
+    if (isExpiredMessage(msg)) return; // selbstlöschend und abgelaufen (SQL 047)
     const placeholder = chatMessages.querySelector(".chat-placeholder");
     if (placeholder) placeholder.remove();
 
     const wrapperDiv = document.createElement("div");
     wrapperDiv.style.cssText = "display: flex; flex-direction: column; width: 100%; position: relative;";
+    if (msg.expires_at) wrapperDiv.dataset.expires = msg.expires_at;
     const isOwn = String(msg.sender_id) === String(currentUser?.id);
     wrapperDiv.style.alignItems = isOwn ? "flex-end" : "flex-start";
 
@@ -3036,7 +3100,9 @@ async function appendSingleMessage(msg, isSystem = false) {
             textDiv.style.fontStyle = "italic";
             textDiv.style.opacity = "0.7";
         } else {
-            textDiv.innerText = msg.text;
+            // Links anklickbar machen – mit Warnhinweis vor fremden Seiten (src/links.ts)
+            if (window.gsraTextMitLinks) window.gsraTextMitLinks(textDiv, msg.text);
+            else textDiv.innerText = msg.text;
             longTextDiv = textDiv;
         }
         bubble.appendChild(textDiv);

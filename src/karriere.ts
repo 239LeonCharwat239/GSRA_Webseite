@@ -2,6 +2,8 @@
 // Eigene Einträge (Teams, Meisterschaften, Erfolge …) plus automatische Meilensteine aus der Datenbank, die niemand
 // fälschen kann. Alle Texte werden mit textContent ausgegeben; Links nur https, in neuem Tab ohne Verweis-Daten.
 // Profile (Messenger, Marktplatz, Coaching) rufen window.gsraRenderCareer(container, userId) auf.
+// Mit diesem Modul kommt auf jede Profil-Seite auch der Warnhinweis vor fremden Links (src/links.ts).
+import "./links";
 
 type Art = "team" | "meisterschaft" | "erfolg" | "rennen" | "lizenz" | "sonstiges";
 type Eintrag = { id: string; year: number; month: number | null; kind: Art; title: string; detail: string | null; link: string | null };

@@ -672,7 +672,8 @@ function createListingCard(item, isTop = false) {
         card.tabIndex = 0;
 
         const images = item.images || item.image_urls || item.imageUrls || [];
-        const coverImage = images.length > 0 ? images[0] : DEFAULT_PLACEHOLDER;
+        // Übersicht: Vorschaubild (640 px) statt des großen Fotos, falls beim Hochladen eines erzeugt wurde
+        const coverImage = images.length > 0 ? window.gsraVorschau(images[0]) : DEFAULT_PLACEHOLDER;
         const condition = item.condition || "Gebraucht";
         const productLine = [item.manufacturer, item.model].filter(Boolean).join(" ");
         const specs = specText(item);
@@ -949,7 +950,7 @@ function openDetailModal(item) {
         if (modalMainImage) modalMainImage.src = images[0];
         images.forEach((imgUrl, index) => {
             const thumb = document.createElement("img");
-            thumb.src = imgUrl;
+            thumb.src = window.gsraVorschau(imgUrl); // kleine Fassung für die Leiste; groß erst nach dem Anklicken
             thumb.className = `gallery-thumbnail ${index === 0 ? 'active' : ''}`;
 
             thumb.addEventListener("click", () => {
@@ -1272,9 +1273,17 @@ if (createItemForm) {
                 const uploadPromises = files.map(async (file) => {
                     // Eigener Ordner pro Person (Pflicht im Speicher)
                     const fileExt = IMAGE_TYPES[file.type];
-                    const fileName = `${currentUser.id}/${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
-                    
-                    const { error: uploadError } = await supabase.storage.from("marketplace").upload(fileName, file);
+                    const base = `${currentUser.id}/${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+                    // Zuerst ein Vorschaubild für die Übersicht (640 px, src/bilder.ts); klappt es, bekommt das Bild
+                    // das Kennzeichen „_v“ und die Übersicht lädt nur noch die kleine Fassung (siehe gsraVorschau)
+                    let suffix = "";
+                    const thumb = window.gsraBilder ? await window.gsraBilder.vorschau(file, 640) : null;
+                    if (thumb) {
+                        const { error: thumbErr } = await supabase.storage.from("marketplace").upload(`${base}_v.vorschau.jpg`, thumb, { contentType: "image/jpeg", cacheControl: window.gsraBilder.cache });
+                        if (!thumbErr) suffix = "_v";
+                    }
+                    const fileName = `${base}${suffix}.${fileExt}`;
+                    const { error: uploadError } = await supabase.storage.from("marketplace").upload(fileName, file, { cacheControl: window.gsraBilder?.cache || "3600" });
                     if (uploadError) throw uploadError;
 
                     const { data } = supabase.storage.from("marketplace").getPublicUrl(fileName);

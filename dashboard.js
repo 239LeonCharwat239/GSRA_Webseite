@@ -138,10 +138,18 @@ document.addEventListener("DOMContentLoaded", async () => {
                 return;
             }
             const fileExt = (file.name.split(".").pop() || "png").toLowerCase();
-            // Eigener Ordner je Nutzer (avatars/<Nutzer-ID>/…) – nur dort darf man selbst hochladen
-            const fileName = `${currentUser.id}/${Date.now()}.${fileExt}`;
             dashAvatar.classList.add("loading");
-            const { error: uploadErr } = await client.storage.from("avatars").upload(fileName, file, { contentType: file.type });
+            // Eigener Ordner je Nutzer (avatars/<Nutzer-ID>/…) – nur dort darf man selbst hochladen.
+            // Zuerst die kleine Fassung für Listen (128 px, src/bilder.ts); klappt sie, bekommt das Bild das Kennzeichen „_k“.
+            const stamp = Date.now();
+            let suffix = "";
+            const small = file.type !== "image/gif" && window.gsraBilder ? await window.gsraBilder.klein(file, 128) : null;
+            if (small) {
+                const { error: smallErr } = await client.storage.from("avatars").upload(`${currentUser.id}/${stamp}_k.klein.jpg`, small, { contentType: "image/jpeg", cacheControl: window.gsraBilder.cache });
+                if (!smallErr) suffix = "_k";
+            }
+            const fileName = `${currentUser.id}/${stamp}${suffix}.${fileExt}`;
+            const { error: uploadErr } = await client.storage.from("avatars").upload(fileName, file, { contentType: file.type, cacheControl: window.gsraBilder?.cache || "3600" });
             if (uploadErr) {
                 dashAvatar.classList.remove("loading");
                 showToast("Das Profilbild konnte nicht hochgeladen werden: " + uploadErr.message, "error");
@@ -177,7 +185,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
             // Datei im eigenen Ordner ebenfalls entfernen
             const path = oldUrl && oldUrl.split("/avatars/")[1];
-            if (path && path.startsWith(`${currentUser.id}/`)) client.storage.from("avatars").remove([decodeURIComponent(path)]).catch(() => {});
+            if (path && path.startsWith(`${currentUser.id}/`)) {
+                const smallPath = /_k\.\w+$/.test(path) ? path.replace(/_k\.\w+$/, "_k.klein.jpg") : null;
+                client.storage.from("avatars").remove([decodeURIComponent(path), ...(smallPath ? [decodeURIComponent(smallPath)] : [])]).catch(() => {});
+            }
             profile = { ...(profile || {}), avatar_url: null };
             showAvatar(null);
             showToast("Dein Profilbild wurde gelöscht.", "success");

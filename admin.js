@@ -441,7 +441,62 @@ document.addEventListener("DOMContentLoaded", async () => {
                 <input type="text" inputmode="numeric" placeholder="GSRA-ID" maxlength="12" required>
                 <button type="submit" class="admin-btn warn"><i class="fa-solid fa-crown"></i> Zum Pro-Fahrer machen</button>
             </form>
-            <div class="admin-pro-list"></div>`;
+            <div class="admin-pro-list"></div>
+            <p><strong>Painter-Lizenz</strong> (Liveries) entziehen (mit Begründung, Angebote werden pausiert) oder wiederherstellen.
+            Verwarnungen und Sperren entziehen sie automatisch. <strong>Pro-Painter</strong> trägt das Admin-Team ein – sie bieten ohne Lizenz an.</p>
+            <form class="admin-team-form admin-painter-form" autocomplete="off">
+                <input type="text" inputmode="numeric" placeholder="GSRA-ID" maxlength="12" required>
+                <input type="text" placeholder="Begründung (nicht beim Wiederherstellen)" maxlength="300">
+                <button type="submit" class="admin-btn warn" data-painter="revoke"><i class="fa-solid fa-ban"></i> Painter-Lizenz entziehen</button>
+                <button type="submit" class="admin-btn dismiss" data-painter="restore"><i class="fa-solid fa-rotate-left"></i> Wiederherstellen</button>
+                <button type="submit" class="admin-btn warn" data-painter="pro"><i class="fa-solid fa-palette"></i> Zum Pro-Painter machen</button>
+            </form>
+            <div class="admin-painter-list"></div>`;
+        // Pro-Painter (SQL 046): Liste mit Entfernen; Lizenz entziehen/wiederherstellen per GSRA-ID
+        const painterList = intro.querySelector(".admin-painter-list");
+        const renderPainters = async () => {
+            const { data: rows, error: pErr } = await client.from("pro_painters").select("user_id, added_at").order("added_at");
+            if (pErr) { painterList.textContent = ""; return; } // SQL 046 noch nicht ausgeführt
+            await loadProfiles((rows || []).map(p => p.user_id));
+            painterList.replaceChildren();
+            if (!rows?.length) { painterList.innerHTML = '<p class="admin-team-note">Noch keine Pro-Painter.</p>'; return; }
+            rows.forEach(p => {
+                const row = document.createElement("div");
+                row.className = "admin-pro-row";
+                row.innerHTML = `${personHtml(p.user_id, "Pro-Painter")}<button type="button" class="admin-btn dismiss"><i class="fa-solid fa-user-minus"></i> Entfernen</button>`;
+                row.querySelector("button").addEventListener("click", async () => {
+                    const ok = await showDialog({ icon: "fa-user-minus", title: `${nameOf(p.user_id)} als Pro-Painter entfernen?`,
+                        message: "Ohne eigene Painter-Lizenz werden die Livery-Angebote dann nicht mehr angezeigt.", confirmText: "Entfernen", cancelText: "Abbrechen" });
+                    if (!ok) return;
+                    const { error: delError } = await client.from("pro_painters").delete().eq("user_id", p.user_id);
+                    if (delError) return showToast(delError.message, "error");
+                    showToast(`${nameOf(p.user_id)} ist kein Pro-Painter mehr.`, "success");
+                    renderPainters();
+                });
+                painterList.appendChild(row);
+            });
+        };
+        intro.querySelector(".admin-painter-form").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const form = /** @type {HTMLFormElement} */ (e.currentTarget);
+            const [idInput, reasonInput] = form.querySelectorAll("input");
+            const gsraId = Number(String(idInput.value).replace(/[^\d]/g, ""));
+            if (!gsraId) return showToast("Bitte gib eine GSRA-ID ein.", "error");
+            const { data: target } = await client.from("profiles").select("id, username").eq("gsra_id", gsraId).maybeSingle();
+            if (!target) return showToast("Zu dieser GSRA-ID gibt es kein Konto.", "error");
+            const action = e.submitter?.dataset.painter;
+            const { error } = action === "pro"
+                ? await client.from("pro_painters").insert({ user_id: target.id })
+                : action === "restore"
+                    ? await client.rpc("painter_license_restore", { _user: target.id })
+                    : await client.rpc("painter_license_revoke", { _user: target.id, _reason: reasonInput.value.trim() });
+            if (error) return showToast(/duplicate|unique/i.test(error.message) ? `${target.username} ist bereits Pro-Painter.` : error.message, "error");
+            showToast(action === "pro" ? `${target.username} ist jetzt Pro-Painter.`
+                : action === "restore" ? `Painter-Lizenz von ${target.username} wiederhergestellt.` : `Painter-Lizenz von ${target.username} entzogen.`, "success");
+            form.reset();
+            if (action === "pro") renderPainters();
+        });
+        renderPainters();
         // Pro-Fahrer: Liste mit Entfernen, Hinzufügen per GSRA-ID (Änderungen stehen im Protokoll)
         const proList = intro.querySelector(".admin-pro-list");
         const renderPros = async () => {

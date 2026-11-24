@@ -197,6 +197,14 @@
                 <ul id="knownDevices" class="dash-device-list"></ul>
             </div>
 
+            <!-- Sicherheit: aktive Anmeldungen einzeln beenden (SQL 047, src/sitzungen.ts) -->
+            <div class="card dash-device-card dash-session-card" id="sessionsCard" hidden>
+                <h3><i class="fa-solid fa-user-shield"></i> Aktive Anmeldungen</h3>
+                <p>Hier bist du gerade angemeldet. Kommt dir eine Anmeldung fremd vor, beende sie und lege ein neues Passwort fest. Das Netz zeigen wir nur grob an.</p>
+                <ul id="sessionsList" class="dash-device-list dash-session-list"></ul>
+                <button type="button" id="sessionsEndOthers" class="dash-delete-btn dash-session-others" hidden><i class="fa-solid fa-user-shield"></i> Alle anderen Geräte abmelden</button>
+            </div>
+
             <!-- Konto löschen: Passwort bestätigen, dann endgültig löschen -->
             <div class="card dash-danger-card">
                 <div>
@@ -216,6 +224,8 @@
     <script src="dashboard.js"></script>
     <script src="abo.js"></script>
     <script type="module" src="src/karriere.ts"></script>
+    <script type="module" src="src/bilder.ts"></script>
+    <script type="module" src="src/sitzungen.ts"></script>
     <script type="module" src="src/suche.ts"></script>
 </body>
 </html>

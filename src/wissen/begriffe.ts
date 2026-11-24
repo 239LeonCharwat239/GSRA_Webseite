@@ -4,15 +4,21 @@
 import { AERODYNAMIK } from "./aerodynamik";
 import { ANTRIEB } from "./antrieb";
 import { BREMSEN } from "./bremsen";
+import { DATENANALYSE } from "./datenanalyse";
+import { ELEKTRIK } from "./elektrik";
 import { FAHRTECHNIK } from "./fahrtechnik";
 import { FAHRWERK } from "./fahrwerk";
+import { FAHRZEUGKONZEPTE } from "./fahrzeugkonzepte";
 import { REIFEN } from "./reifen";
+import { RENNBETRIEB } from "./rennbetrieb";
 import { SIMRACING } from "./simracing";
 import { STRATEGIE } from "./strategie";
+import { STRECKE } from "./strecke";
 import type { Begriff } from "./begriff";
 
 export { BEGRIFF_KATEGORIEN, type Begriff, type Kategorie } from "./begriff";
 
 export const BEGRIFFE: Begriff[] = [
   ...FAHRWERK, ...AERODYNAMIK, ...REIFEN, ...BREMSEN, ...ANTRIEB, ...FAHRTECHNIK, ...STRATEGIE, ...SIMRACING,
+  ...DATENANALYSE, ...ELEKTRIK, ...STRECKE, ...FAHRZEUGKONZEPTE, ...RENNBETRIEB,
 ];

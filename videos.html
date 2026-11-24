@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Videos - GSRA</title>
+    <meta name="description" content="Videos der GSRA: Hotlaps, Onboards, Rennen und Tutorials unserer Pro-Fahrer.">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha256-7jvo3hkrl8sdc9HpXWuCux9rZYwPl8TvdX/DMZlu09M=" crossorigin="anonymous"></script>
+    <script src="supabase-client.js"></script>
+    <script src="fehler-monitor.js"></script>
+    <script src="auth-nav.js"></script>
+</head>
+<body>
+
+<header>
+    <div class="logo-slogan-container">
+        <a href="index.html" class="logo-link">
+            <img src="GSRA_Logo_ohne Hintergrund.png" alt="GSRA Logo" class="logo">
+        </a>
+        <div class="header-slogan">
+            <span class="text-blue">UNITED BY SPEED.</span>
+            <span class="text-yellow">DRIVEN GLOBALLY.</span>
+        </div>
+    </div>
+    <!-- Die Navigation baut auth-nav.js aus einer zentralen Liste (GSRA_NAV) -->
+    <nav>
+        <a href="index.html">Home</a>
+        <a href="messenger.html">Messenger</a>
+        <a href="login.html" class="login-btn" id="loginNavBtn">Login</a>
+        <button id="logoutBtn" class="login-btn" style="display: none;">Logout</button>
+    </nav>
+</header>
+
+    <main class="container vd-seite">
+        <section class="hero-section">
+            <h1 class="hero-title"><span class="text-blue">Videos</span></h1>
+            <p class="hero-subtitle">Hotlaps, Onboards, Rennen und Tutorials – die neuesten Videos unserer Pro-Fahrer.</p>
+        </section>
+
+        <!-- Nur für Pro-Fahrer und Admins sichtbar (SQL 046 prüft das zusätzlich) -->
+        <section class="card vd-neu" id="vdNeuKarte" hidden>
+            <button type="button" class="vd-neu-kopf" id="vdNeuAuf" aria-expanded="false" aria-controls="vdForm">
+                <i class="fa-solid fa-circle-plus" aria-hidden="true"></i> Video veröffentlichen
+            </button>
+            <form id="vdForm" class="vd-form" hidden novalidate autocomplete="off">
+                <div class="vd-form-raster">
+                    <div class="vd-form-felder">
+                        <label><span>Link zum Video</span><input name="url" type="url" inputmode="url" maxlength="500" required placeholder="https://…"></label>
+                        <label><span>Titel</span><input name="title" type="text" maxlength="100" required placeholder="z. B. Hotlap Interlagos – GT3"></label>
+                        <label><span>Text <small>(freiwillig)</small></span><textarea name="description" rows="4" maxlength="1500" placeholder="Heute fahren wir in Brasilien …"></textarea></label>
+                        <label><span>Hashtags <small>(bis zu 10, z. B. #Hotlap #GT3)</small></span><input name="tags" type="text" maxlength="200" placeholder="#Hotlap #Fast #Alliance"></label>
+                    </div>
+                    <div class="vd-form-bild">
+                        <span class="vd-label">Vorschaubild <small>(16:9, wird verkleinert)</small></span>
+                        <div class="vd-vorschau" id="vdVorschau"><i class="fa-solid fa-image" aria-hidden="true"></i><span>Noch kein Bild</span></div>
+                        <label class="vd-bild-wahl"><i class="fa-solid fa-upload" aria-hidden="true"></i> Bild auswählen
+                            <input type="file" id="vdDatei" accept="image/jpeg,image/png,image/webp" hidden></label>
+                    </div>
+                </div>
+                <div class="vd-form-aktionen">
+                    <button type="submit" class="lv-btn primaer"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i> Veröffentlichen</button>
+                    <button type="button" class="lv-btn" id="vdAbbrechen">Abbrechen</button>
+                </div>
+            </form>
+        </section>
+
+        <!-- Kopfzeile: Überschrift, gewählter Hashtag (per Klick auf einen Hashtag im Video) und kleine Suche -->
+        <div class="gsra-werkzeugzeile" aria-label="Videos filtern">
+            <h2 class="gsra-werkzeugzeile-titel"><i class="fa-solid fa-film" aria-hidden="true"></i> Neueste Videos <small id="vdAnzahl"></small></h2>
+            <div class="gsra-werkzeugzeile-rechts">
+                <button type="button" class="gsra-filter-chip" id="vdTagFilter" hidden></button>
+                <label class="gsra-mini-suche"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                    <input type="search" id="vdSuche" placeholder="Suchen" maxlength="60" autocomplete="off" aria-label="Videos durchsuchen"></label>
+            </div>
+        </div>
+
+        <section id="vdListe" class="vd-liste" aria-live="polite"></section>
+    </main>
+
+    <script src="ui-dialogs.js"></script>
+    <script src="profil-karte.js"></script>
+    <script type="module" src="src/videos.ts"></script>
+    <script type="module" src="src/karriere.ts"></script>
+    <script type="module" src="src/suche.ts"></script>
+</body>
+</html>
