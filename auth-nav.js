@@ -514,7 +514,8 @@ async function startVisibilityHeader(client) {
 
 // Nicht angemeldet: Hinweis über der ganzen Seite im Design des Messengers – auf jeder Unterseite außer der Startseite
 const LOGIN_REQUIRED_TEXTS = {
-    messenger: ["den Messenger", "Mit deinem GSRA-Konto chattest du mit Freunden, trittst Foren bei und bleibst im offiziellen GSRA-Forum auf dem Laufenden."],
+    "app-verbinden": ["die GSRA-App", "Melde dich hier an – danach bestätigst du mit einem Klick, dass die GSRA-App auf deinem PC dein Konto nutzen darf."],
+    messenger:["den Messenger", "Mit deinem GSRA-Konto chattest du mit Freunden, trittst Foren bei und bleibst im offiziellen GSRA-Forum auf dem Laufenden."],
     marktplatz: ["den Marktplatz", "Mit deinem GSRA-Konto kaufst und verkaufst du Sim-Racing-Hardware in der Community."],
     setups: ["die Setups", "Mit deinem GSRA-Konto lädst du Setups herunter und teilst deine eigenen mit der Community."],
     coaching: ["das Coaching", "Mit deinem GSRA-Konto buchst du Coachings bei erfahrenen Fahrern – oder wirst mit der GSRA-Coach-Lizenz selbst Coach."],

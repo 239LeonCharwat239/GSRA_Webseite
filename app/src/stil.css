@@ -184,3 +184,29 @@ main { padding: 12px 20px 28px; max-width: 1400px; margin: 0 auto; }
   .tabelle th:nth-child(4), .tabelle td:nth-child(4) { display: none; }
   .tabelle th, .tabelle td { padding: 8px 6px; }
 }
+
+/* Konto (Anmeldung über die Webseite) */
+.konto { position: relative; }
+.konto-menue {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 20; min-width: 230px;
+  padding: 12px; border-radius: 12px; background: var(--flaeche-2); border: 1px solid var(--rand);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5); color: var(--text);
+}
+.konto-menue p { margin: 0 0 10px; color: var(--leise); }
+.konto-menue strong { color: var(--text); }
+.dialog { border: 1px solid var(--rand); border-radius: 16px; padding: 20px 22px; background: var(--flaeche-2); color: var(--text); max-width: 420px; }
+.dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
+.dialog h2 { margin-bottom: 8px; }
+.dialog p { margin: 0 0 12px; color: var(--leise); }
+.dialog input { width: 100%; font-size: 22px; letter-spacing: 6px; text-align: center; padding: 10px; }
+.dialog .fehler { color: var(--rot); min-height: 20px; margin: 8px 0 0; }
+.dialog-knoepfe { display: flex; justify-content: flex-end; gap: 10px; margin-top: 12px; }
+.knopf:disabled { opacity: 0.6; cursor: default; }
+.toast {
+  position: fixed; left: 50%; bottom: 20px; transform: translate(-50%, 20px); z-index: 30; max-width: min(560px, calc(100vw - 32px));
+  padding: 10px 16px; border-radius: 12px; background: var(--flaeche-2); border: 1px solid var(--rand); color: var(--text);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5); opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.2s;
+}
+.toast.sichtbar { opacity: 1; transform: translate(-50%, 0); }
+.toast.fehler { border-color: rgba(239, 68, 68, 0.5); }
+.toast.ok { border-color: rgba(34, 197, 94, 0.5); }

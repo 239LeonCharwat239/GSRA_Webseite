@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GSRA-App verbinden | GSRA</title>
+    <meta name="description" content="Melde die GSRA-App auf deinem PC mit deinem GSRA-Konto an – ohne Passwort in der App.">
+    <meta name="robots" content="noindex">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha256-7jvo3hkrl8sdc9HpXWuCux9rZYwPl8TvdX/DMZlu09M=" crossorigin="anonymous"></script>
+    <script src="supabase-client.js"></script>
+    <script src="fehler-monitor.js"></script>
+    <script src="auth-nav.js"></script>
+</head>
+<body>
+
+<header>
+    <div class="logo-slogan-container">
+        <a href="index.html" class="logo-link">
+            <img src="GSRA_Logo_ohne Hintergrund.png" alt="GSRA Logo" class="logo">
+        </a>
+        <div class="header-slogan">
+            <span class="text-blue">UNITED BY SPEED.</span>
+            <span class="text-yellow">DRIVEN GLOBALLY.</span>
+        </div>
+    </div>
+    <!-- Die Navigation baut auth-nav.js aus einer zentralen Liste (GSRA_NAV) -->
+    <nav>
+        <a href="index.html">Home</a>
+        <a href="messenger.html">Messenger</a>
+        <a href="login.html" class="login-btn" id="loginNavBtn">Login</a>
+        <button id="logoutBtn" class="login-btn" style="display: none;">Logout</button>
+    </nav>
+</header>
+
+    <div class="container co-page av-page">
+        <section class="hero-section co-hero">
+            <h1 class="hero-title">GSRA-APP <span class="text-blue">VERBINDEN</span></h1>
+            <p class="hero-subtitle">Melde die GSRA-App auf deinem PC mit deinem Konto an – ohne Passwort in der App.</p>
+        </section>
+
+        <!-- Inhalt baut src/app-verbinden.ts (Anfrage der App prüfen, bestätigen, zurück zur App) -->
+        <section class="re-karte av-karte" id="avKarte" aria-live="polite">
+            <p class="av-text"><i class="fa-solid fa-spinner fa-spin"></i> Einen Moment …</p>
+        </section>
+
+        <section class="re-karte av-info" aria-labelledby="avInfoTitel">
+            <h2 id="avInfoTitel"><i class="fa-solid fa-shield-halved"></i> So bleibt dein Konto sicher</h2>
+            <ul class="av-liste">
+                <li>Die App bekommt dein Passwort nie zu sehen. Du bestätigst hier auf der Webseite, wo du schon angemeldet bist.</li>
+                <li>Die Bestätigung geht nur an die App auf <strong>diesem</strong> PC und gilt 5 Minuten – ein weitergeleiteter Link nützt niemandem.</li>
+                <li>Die App erscheint danach unter „Aktive Anmeldungen“ in deinem Profil. Dort kannst du sie jederzeit abmelden.</li>
+                <li>Hast du die Zwei-Faktor-Anmeldung eingerichtet, fragt die App zusätzlich nach deinem Code.</li>
+            </ul>
+        </section>
+    </div>
+
+    <script src="ui-dialogs.js"></script>
+    <script type="module" src="src/app-verbinden.ts"></script>
+    <script type="module" src="src/suche.ts"></script>
+</body>
+</html>

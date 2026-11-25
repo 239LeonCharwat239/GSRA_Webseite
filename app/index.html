@@ -27,8 +27,30 @@
         <option value="12">12× schneller</option>
       </select>
       <button class="knopf" id="demoKnopf" type="button">Demo starten</button>
+      <div class="konto">
+        <button class="knopf leise" id="kontoKnopf" type="button">Anmelden</button>
+        <div class="konto-menue" id="kontoMenue" hidden>
+          <p>Angemeldet als <strong id="kontoName"></strong></p>
+          <button class="knopf leise" id="abmeldenKnopf" type="button">In der App abmelden</button>
+        </div>
+      </div>
     </div>
   </header>
+
+  <!-- Zwei-Faktor-Code (nur für Konten, die ihn eingerichtet haben) -->
+  <dialog id="codeDialog" class="dialog" aria-labelledby="codeTitel">
+    <form id="codeForm" autocomplete="off" novalidate>
+      <h2 id="codeTitel">Zwei-Faktor-Code</h2>
+      <p>Dein Konto ist mit Zwei-Faktor-Anmeldung geschützt. Gib den 6-stelligen Code aus deiner Authenticator-App ein.</p>
+      <input id="codeFeld" type="text" inputmode="numeric" maxlength="7" autocomplete="one-time-code" aria-label="6-stelliger Code">
+      <p class="fehler" id="codeFehler" aria-live="polite"></p>
+      <div class="dialog-knoepfe">
+        <button type="button" class="knopf leise" id="codeAbbrechen">Abbrechen</button>
+        <button type="submit" class="knopf">Bestätigen</button>
+      </div>
+    </form>
+  </dialog>
+  <div class="toast" id="hinweis" role="status" aria-live="polite"></div>
   <p class="sitzung" id="sitzungText"></p>
 
   <main>

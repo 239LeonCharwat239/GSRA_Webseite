@@ -7,6 +7,7 @@ import { bisZiel, rundenzeitSchnitt, verbrauchProRunde } from "./sprit.ts";
 import { DemoQuelle } from "./demo.ts";
 import { Diagramme, verlaufZeichnen, type Plot } from "./diagramm.ts";
 import type { Probe, Sitzung, Status } from "./typen.ts";
+import { kontoStarten } from "./konto-ansicht.ts";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => {
   const e = document.getElementById(id);
@@ -441,6 +442,7 @@ if (istApp) {
     statusZeigen();
   });
 }
+void kontoStarten(istApp);
 window.addEventListener("resize", () => {
   if (aktiverReiter === "live") live();
 });

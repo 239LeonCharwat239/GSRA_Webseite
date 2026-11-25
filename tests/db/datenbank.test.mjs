@@ -5,14 +5,15 @@
 import { PGlite } from "@electric-sql/pglite";
 import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
 import { readFileSync, readdirSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL, KARRIERE_SQL, STINTPLAN_SQL, LIVERIES_SQL, CHATSICHER_SQL, AUFRAEUMEN_SQL, ONLINE_SQL, RE_STIL_SQL] =
-    Array.from({ length: 50 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 50);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL, KARRIERE_SQL, STINTPLAN_SQL, LIVERIES_SQL, CHATSICHER_SQL, AUFRAEUMEN_SQL, ONLINE_SQL, RE_STIL_SQL, APP_LOGIN_SQL] =
+    Array.from({ length: 51 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 51);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -3563,6 +3564,88 @@ if (RE_STIL_SQL && AUFRAEUMEN_SQL) {
     await db.exec(`delete from public.user_bans where reason = 'Test 050'`);
     const gast = await as(null, async () => q(`select public.race_engineer_save('Gast', null, 'locker', 'normal', 'ruhig', 'de', '{}'::jsonb)`));
     check("Gäste: kein Renningenieur", gast.error !== null, gast.error || "durchgelassen!");
+}
+
+// --- 051: GSRA-App über die Webseite anmelden (Kopplung mit Einmal-Code und Geheimnis der App) ---
+if (APP_LOGIN_SQL && RE_STIL_SQL) {
+    const id = (n) => `79000000-0000-0000-0000-0000000006${String(n).padStart(2, "0")}`;
+    const A1 = id(1), GS = id(2), ZF = id(3), A4 = id(4);
+    await db.exec(`
+      alter table auth.users add column if not exists email text;
+      insert into auth.users (id, email) values ('${A1}', 'app@test.de'), ('${GS}', 'gesperrt@test.de'), ('${ZF}', 'zweifaktor@test.de'), ('${A4}', 'viel@test.de');
+      insert into public.profiles (id, username) values ('${A1}', 'Appfahrer Anton'), ('${GS}', 'Appsperre Gerda'), ('${ZF}', 'Zweifaktor Zora'), ('${A4}', 'Vielklick Viktor');
+      insert into auth.mfa_factors (user_id, status) values ('${ZF}', 'verified');`);
+    await db.exec(readFileSync(APP_LOGIN_SQL, "utf8"));
+    const ctl51 = await db.exec(readFileSync(APP_LOGIN_SQL, "utf8")); // zweiter Lauf
+    const rows51 = ctl51[ctl51.length - 1].rows;
+    console.log("Kontrolle 051:\n  " + rows51.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+    check("Kontrolle 051: bereit, Einlösen nur Server, Tabelle gesperrt", rows51.map(r => r.ergebnis).join(",") === "bereit,ja,ja", rows51.map(r => r.ergebnis).join(", "));
+
+    // „challenge“ wie in der App: base64url(sha256(Geheimnis)) – genau 43 Zeichen
+    const CH = createHash("sha256").update("geheimnis-der-app-1").digest("base64url");
+    const CH2 = createHash("sha256").update("geheimnis-einer-anderen-app").digest("base64url");
+    const sha = (t) => createHash("sha256").update(t, "utf8").digest("hex");
+    const take = async (code, ch) => (await q(`select * from public.app_link_take('${sha(code)}', '${ch}')`));
+
+    // Mitglied bestätigt auf der Webseite
+    const ok = await as(A1, async () => q(`select public.app_link_approve('${CH}', ' Windows-PC <script>alert(1)</script> ') as code`));
+    const code1 = ok.rows[0]?.code || "";
+    check("Bestätigen liefert einen Einmal-Code (64 Zeichen)", ok.error === null && /^[0-9a-f]{64}$/.test(code1), ok.error || code1);
+    const zeile = await one(`select geraet, code_hash, extract(epoch from expires_at - created_at)::int as sek from public.app_links where user_id = '${A1}'`);
+    check("Gespeichert nur die Prüfsumme, Gerätename bereinigt, 5 Minuten gültig",
+        zeile.code_hash === sha(code1) && !zeile.geraet.includes("<") && zeile.sek === 300, JSON.stringify(zeile));
+    await as(A1, async () => {
+        const lesen = await q(`select * from public.app_links`);
+        check("Kopplungen für die Webseite nicht lesbar (auch die eigenen nicht)", lesen.error !== null, lesen.error || `${lesen.rows.length} Zeilen`);
+        const schreiben = await q(`insert into public.app_links (user_id, challenge, code_hash, geraet) values ('${A1}', '${CH}', '${"a".repeat(64)}', 'x')`);
+        check("Kopplungen nicht direkt anlegbar", schreiben.error !== null, schreiben.error || "durchgelassen!");
+        const selbst = await q(`select * from public.app_link_take('${sha(code1)}', '${CH}')`);
+        check("Einlösen für Angemeldete gesperrt (nur Server-Funktion)", selbst.error !== null, selbst.error || "durchgelassen!");
+        const kaputt = await q(`select public.app_link_approve('zu-kurz', 'PC')`);
+        check("Ungültige Anfrage der App abgelehnt", /Ungültige Anfrage/.test(kaputt.error || ""), kaputt.error || "durchgelassen!");
+    });
+    const gast = await as(null, async () => q(`select public.app_link_approve('${CH}', 'PC')`));
+    check("Gäste können keine App anmelden", gast.error !== null, gast.error || "durchgelassen!");
+    const gastTake = await as(null, async () => q(`select * from public.app_link_take('${sha(code1)}', '${CH}')`));
+    check("Gäste können keinen Code einlösen", gastTake.error !== null, gastTake.error || "durchgelassen!");
+
+    // Server-Funktion löst ein: falsches Geheimnis verbraucht den Code
+    const falsch = await take(code1, CH2);
+    check("Falsches Geheimnis: keine Anmeldung", falsch.error === null && falsch.rows.length === 0, falsch.error || JSON.stringify(falsch.rows));
+    const danach = await take(code1, CH);
+    check("Nach einem Fehlversuch ist der Code verbraucht", danach.rows.length === 0, JSON.stringify(danach.rows));
+    const code2 = (await as(A1, async () => q(`select public.app_link_approve('${CH}', 'PC') as code`))).rows[0]?.code || "";
+    const richtig = await take(code2, CH);
+    check("Richtiger Code + Geheimnis: Konto und E-Mail für den Anmelde-Schlüssel", richtig.rows[0]?.konto === A1 && richtig.rows[0]?.adresse === "app@test.de", JSON.stringify(richtig.rows));
+    check("Code gilt genau einmal", (await take(code2, CH)).rows.length === 0);
+    const unbekannt = await take("f".repeat(64), CH);
+    check("Unbekannter Code: nichts", unbekannt.rows.length === 0);
+    const boese = await q(`select * from public.app_link_take($$'; delete from public.app_links; --$$, '${CH}')`);
+    check("Unsinn statt Prüfsumme: nichts, keine Wirkung", boese.error === null && boese.rows.length === 0, boese.error || "");
+
+    // Abgelaufen
+    const code3 = (await as(A1, async () => q(`select public.app_link_approve('${CH}', 'PC') as code`))).rows[0]?.code || "";
+    await db.exec(`update public.app_links set expires_at = now() - interval '1 second' where code_hash = '${sha(code3)}'`);
+    check("Abgelaufener Code: keine Anmeldung", (await take(code3, CH)).rows.length === 0);
+
+    // Gesperrt: weder bestätigen noch (nach der Sperre) einlösen
+    const code4 = (await as(GS, async () => q(`select public.app_link_approve('${CH}', 'PC') as code`))).rows[0]?.code || "";
+    await db.exec(`insert into public.user_bans (user_id, banned_until, reason) values ('${GS}', now() + interval '1 day', 'Test 051')`);
+    const gesperrt = await as(GS, async () => q(`select public.app_link_approve('${CH}', 'PC')`));
+    check("Gesperrte Konten können keine App anmelden", /gesperrt/.test(gesperrt.error || ""), gesperrt.error || "durchgelassen!");
+    check("Vor der Sperre bestätigter Code wird nach der Sperre nicht eingelöst", (await take(code4, CH)).rows.length === 0);
+    await db.exec(`delete from public.user_bans where reason = 'Test 051'`);
+
+    // Zwei-Faktor eingerichtet: Bestätigen nur mit bestätigtem Code (aal2)
+    const ohneCode = await as(ZF, async () => q(`select public.app_link_approve('${CH}', 'PC')`));
+    check("Mit Zwei-Faktor: ohne bestätigten Code keine App-Anmeldung", /Zwei-Faktor/.test(ohneCode.error || ""), ohneCode.error || "durchgelassen!");
+    const mitCode = await mitAnspruch(ZF, { aal: "aal2" }, async () => q(`select public.app_link_approve('${CH}', 'PC') as code`));
+    check("Mit Zwei-Faktor und bestätigtem Code: erlaubt", mitCode.error === null && /^[0-9a-f]{64}$/.test(mitCode.rows[0]?.code || ""), mitCode.error || "");
+
+    // Spam-Grenze: höchstens 10 pro Stunde
+    let letzter = null;
+    for (let i = 0; i < 11; i++) letzter = await as(A4, async () => q(`select public.app_link_approve('${CH}', 'PC')`));
+    check("Höchstens 10 App-Anmeldungen pro Stunde", /Zu viele/.test(letzter?.error || ""), letzter?.error || "durchgelassen!");
 }
 
 // --- Konto löschen (Ausbau 3) funktioniert weiterhin, die Stimmen verschwinden mit ---
