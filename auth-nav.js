@@ -348,6 +348,7 @@ const initAuthNav = async () => {
 
     addNavToggle();
     addSiteFooter();
+    kopfHoeheMerken();
     // Login-Knopf in der Kopfzeile führt nach der Anmeldung zurück zur aktuellen Unterseite
     if (loginNavBtn && !PUBLIC_PAGES.includes(currentPageName())) loginNavBtn.href = loginLinkHere();
 
@@ -599,25 +600,25 @@ const loginLinkHere = (extra = "") => {
     return `login.html?${extra}weiter=${encodeURIComponent(here)}`;
 };
 
-// Fußzeile auf jeder Seite: „Folge GSRA“ (außer auf der Startseite, die hat einen eigenen Bereich),
-// Impressum, Datenschutz, Nutzungsbedingungen
+// Höhe der festen Kopfzeile als CSS-Variable (--gsra-kopf-hoehe): Die App-Ansicht (Messenger) füllt genau den
+// Platz darunter, auch wenn die Kopfzeile auf schmalen Bildschirmen höher oder niedriger ist
+function kopfHoeheMerken() {
+    const kopf = document.querySelector("body > header");
+    if (!kopf) return;
+    const setzen = () => document.documentElement.style.setProperty("--gsra-kopf-hoehe", `${Math.ceil(kopf.getBoundingClientRect().height)}px`);
+    setzen();
+    if ("ResizeObserver" in window) new ResizeObserver(setzen).observe(kopf);
+    else window.addEventListener("resize", setzen);
+}
+
+// Fußzeile auf jeder Seite: schlanke Leiste mit Abos, Kündigen, Impressum, Datenschutz, Nutzungsbedingungen.
+// „Folge GSRA“ steht nur noch auf der Startseite (eigener Bereich, Wunsch 25.11.).
 function addSiteFooter() {
     if (document.getElementById("gsraSiteFooter")) return;
     const footer = document.createElement("footer");
     footer.id = "gsraSiteFooter";
     footer.className = "gsra-site-footer";
-    const social = ["", "index"].includes(currentPageName()) ? "" : `
-        <div class="gsra-footer-social">
-            <strong>Folge <span class="text-yellow">GSRA</span></strong>
-            <div class="gsra-footer-icons">
-                <a href="https://www.instagram.com/official.gsra/" target="_blank" rel="noopener" class="icon-instagram" aria-label="Instagram"><i class="fab fa-instagram"></i></a>
-                <a href="https://www.youtube.com/@GlobalSimracingAlliance" target="_blank" rel="noopener" class="icon-youtube" aria-label="YouTube"><i class="fab fa-youtube"></i></a>
-                <a href="https://www.reddit.com/r/GSRA/" target="_blank" rel="noopener" class="icon-reddit" aria-label="Reddit"><i class="fab fa-reddit"></i></a>
-                <a href="https://discord.gg/QDMa5qUCBX" target="_blank" rel="noopener" class="icon-discord" aria-label="Discord"><i class="fab fa-discord"></i></a>
-                <a href="https://www.twitch.tv/global_simracing_alliance" target="_blank" rel="noopener" class="icon-twitch" aria-label="Twitch"><i class="fab fa-twitch"></i></a>
-            </div>
-        </div>`;
-    footer.innerHTML = `${social}
+    footer.innerHTML = `
         <span>© ${new Date().getFullYear()} Global Simracing Alliance</span>
         <div class="gsra-site-footer-links">
             <a href="abo.html">Abos</a>

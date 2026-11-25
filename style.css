@@ -12189,22 +12189,65 @@ select option {
     .home-hero .hero-title { font-size: 30px; }
 }
 
-/* Fußzeile: „Folge GSRA“ auf jeder Seite (auth-nav.js) */
-.gsra-footer-social {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: center;
-    gap: 10px 22px;
-    width: 100%;
-    padding: 4px 0 14px;
-    margin-bottom: 4px;
-    border-bottom: 1px solid var(--border-subtle);
+/* „Folge GSRA“ steht nur noch auf der Startseite (eigener Bereich); die Fußzeile der Unterseiten ist eine
+   schlanke Leiste mit Kündigen, Impressum, Datenschutz und Nutzungsbedingungen (Wunsch 25.11.) */
+
+/* =========================================
+   App-Ansicht (Messenger, Wunsch 25.11.): Die Seite selbst scrollt nicht – Kopfzeile oben, schlanke Fußzeile
+   unten (Kündigen und Datenschutz bleiben immer sichtbar), dazwischen füllt der Messenger den ganzen Platz und
+   scrollt nur innen (Chatliste, Nachrichten). Die Höhe der Kopfzeile misst auth-nav.js (--gsra-kopf-hoehe).
+========================================= */
+body.app-ansicht {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
 }
-.gsra-footer-social strong { color: #fff; font-size: 15px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; }
-.gsra-footer-icons { display: flex; gap: 22px; }
-.gsra-footer-icons a { font-size: 24px; color: var(--text-muted); transition: color 0.2s ease, transform 0.2s ease; }
-.gsra-site-footer .gsra-footer-icons a:hover { transform: translateY(-2px); }
+body.app-ansicht > main.container {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    max-width: 1500px;
+    padding: calc(var(--gsra-kopf-hoehe, 88px) + 12px) 16px 10px;
+}
+body.app-ansicht .hero-section {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    margin: 0;
+    padding: 0;
+}
+body.app-ansicht .wa-container {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+    margin-top: 0;
+}
+body.app-ansicht .gsra-site-footer {
+    flex: none;
+    padding: 7px 16px;
+    font-size: 12px;
+    gap: 4px 18px;
+}
+body.app-ansicht .gsra-site-footer-links { gap: 4px 16px; }
+@media (max-width: 850px) {
+    body.app-ansicht > main.container { padding: calc(var(--gsra-kopf-hoehe, 70px) + 6px) 0 0; }
+    body.app-ansicht .wa-container { height: auto; min-height: 0; border-radius: 0; border-left: 0; border-right: 0; }
+    /* Handy: eine Zeile, seitlich wischbar statt mehrerer Zeilen */
+    body.app-ansicht .gsra-site-footer { flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; padding: 6px 12px; scrollbar-width: none; }
+    body.app-ansicht .gsra-site-footer-links { flex-wrap: nowrap; }
+    /* Kündigen, Impressum und Datenschutz zuerst – sie müssen ohne Wischen sichtbar sein */
+    body.app-ansicht .gsra-site-footer > span { display: none; }
+    body.app-ansicht .gsra-site-footer-links a[href="kuendigen.html"] { order: -4; }
+    body.app-ansicht .gsra-site-footer-links a[href="impressum.html"] { order: -3; }
+    body.app-ansicht .gsra-site-footer-links a[href="datenschutz.html"] { order: -2; }
+    body.app-ansicht .gsra-site-footer-links a[href="nutzungsbedingungen.html"] { order: -1; }
+}
 
 /* Textfelder: Größe steht fest – nirgends zum Aufziehen oder Verkleinern */
 textarea { resize: none !important; }
