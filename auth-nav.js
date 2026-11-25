@@ -607,8 +607,8 @@ function kopfHoeheMerken() {
     if (!kopf) return;
     const setzen = () => document.documentElement.style.setProperty("--gsra-kopf-hoehe", `${Math.ceil(kopf.getBoundingClientRect().height)}px`);
     setzen();
-    if ("ResizeObserver" in window) new ResizeObserver(setzen).observe(kopf);
-    else window.addEventListener("resize", setzen);
+    new ResizeObserver(setzen).observe(kopf); // z. B. wenn das Menü auf dem Handy die Kopfzeile verändert
+    window.addEventListener("resize", setzen);
 }
 
 // Fußzeile auf jeder Seite: schlanke Leiste mit Abos, Kündigen, Impressum, Datenschutz, Nutzungsbedingungen.
