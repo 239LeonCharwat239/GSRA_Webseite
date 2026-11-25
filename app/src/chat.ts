@@ -73,6 +73,11 @@ export class Chat {
     this.liste.replaceChildren();
   }
 
+  /** Der Renningenieur meldet sich von selbst (z. B. mit der Nachbesprechung nach der Sitzung) */
+  melden(text: string, klasse = "") {
+    this.sagen(text, klasse);
+  }
+
   async senden(eingabe: string): Promise<void> {
     const frage = eingabe.replace(/\s+/g, " ").trim().slice(0, 400);
     if (frage.length < 2) return;

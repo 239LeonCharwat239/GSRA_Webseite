@@ -9,10 +9,10 @@ import { Diagramme, verlaufZeichnen, type Plot } from "./diagramm.ts";
 import type { Feld, Probe, Sitzung, Status } from "./typen.ts";
 import { angemeldet, beiKontoWechsel, hinweis, kontoStarten } from "./konto-ansicht.ts";
 import { aufnahmeAbspielen, funkLaden, funkSpeichern, sprechen, stimmenFuer } from "./funk.ts";
-import { kiFragen, kiVerfuegbar, persoenlichkeitLaden, type Persoenlichkeit } from "./ki.ts";
+import { kiFragen, kiVerfuegbar, merkenSpeichern, persoenlichkeitLaden, type Persoenlichkeit } from "./ki.ts";
 import { messwerteKodieren } from "../../src/stint-messwerte.ts";
 import { bremspunkte, sparAuswerten, sparBasis, sparText, sparTipp, type Bremspunkt, type SparAuswertung, type SparBasis } from "./sparen.ts";
-import { Chat } from "./chat.ts";
+import { Chat, pruefSatz } from "./chat.ts";
 import { karteBauen, karteZeichnen, verlustJeAbschnitt, type Karte } from "./strecke.ts";
 import { Rennbeobachter, berichtErstellen, rundenzeitText, stelleText } from "./rennbericht.ts";
 import { startbildZeigen } from "./startbild.ts";
@@ -124,6 +124,8 @@ function allesZuruecksetzen() {
   if (spar.aktiv) sparBeenden();
   spar.runden = [];
   sparZeigen();
+  phaseSetzen("rennen");
+  chat?.leeren();
   rundenZeigen();
   live();
 }
@@ -131,6 +133,7 @@ function allesZuruecksetzen() {
 $("demoKnopf").addEventListener("click", () => {
   if (demo.laeuft) {
     demo.stop();
+    void nachbesprechung(true); // Sitzung vorbei → Nachbesprechung kommt von selbst
   } else {
     allesZuruecksetzen();
     sitzung = demo.fahrt.sitzung();
@@ -169,6 +172,9 @@ function statusSetzen(s: Status) {
     // Simulation erkannt: Demo beenden, neu anfangen
     if (demo.laeuft) demo.stop();
     allesZuruecksetzen();
+  } else if (vorher && !s.verbunden && !demo.laeuft) {
+    // Simulation beendet (Sitzung verlassen) → Nachbesprechung kommt von selbst
+    void nachbesprechung(true);
   }
   if (!demo.laeuft && s.sitzung) sitzung = s.sitzung;
   statusZeigen();
@@ -376,22 +382,60 @@ function kiTextZeigen(text: string) {
   ziel.hidden = false;
 }
 
-function berichtKiEinrichten() {
-  const knopf = $<HTMLButtonElement>("bKiKnopf");
+// Nachbesprechung (Wunsch 25.11.): kommt nach der Sitzung VON SELBST – im Chat und im Bericht. Danach kann man
+// Rückfragen zum Rennen stellen; das Wichtigste merkt sich der Renningenieur fürs nächste Mal (SQL 054).
+let phase: "rennen" | "nachbesprechung" = "rennen";
+let nachbesprechungLaeuft = false;
+
+function phaseSetzen(p: typeof phase) {
+  phase = p;
+  $("cSchnellRennen").hidden = p !== "rennen";
+  $("cSchnellDanach").hidden = p !== "nachbesprechung";
+}
+
+async function nachbesprechung(automatisch: boolean) {
   const status = $("bKiStatus");
-  knopf.addEventListener("click", async () => {
-    if (!zaehler.runden.some((r) => r.gueltig)) { status.textContent = "Für eine Nachbesprechung brauche ich mindestens eine gültige Runde."; return; }
-    if (!angemeldet()) { status.textContent = "Melde dich oben rechts an – dann bespricht dein Renningenieur die Sitzung mit dir."; return; }
-    knopf.disabled = true;
-    status.textContent = "Dein Renningenieur schaut sich die Sitzung an …";
-    const e = await kiFragen("nachbesprechung", berichtLage());
-    knopf.disabled = false;
-    if ("text" in e) {
-      status.textContent = "";
-      kiTextZeigen(e.text);
-      if (funkE.vorlesen) void vorlesen(e.text);
-    } else status.textContent = e.grund === "einrichtung" ? "Der KI-Renningenieur wird gerade eingerichtet – bald geht es los." : e.fehler;
-  });
+  if (!zaehler.runden.some((r) => r.gueltig)) {
+    if (!automatisch) status.textContent = "Für eine Nachbesprechung brauche ich mindestens eine gültige Runde.";
+    return;
+  }
+  if (nachbesprechungLaeuft) return;
+  nachbesprechungLaeuft = true;
+  phaseSetzen("nachbesprechung");
+  if (automatisch) {
+    reiterZeigen("chat");
+    hinweis("Sitzung vorbei – dein Renningenieur bespricht sie jetzt mit dir.", "ok");
+  }
+  const b = berichtErstellen(zaehler.runden, beobachter, laenge() ?? 4000, sitzung?.fahrer ?? []);
+  const vorlage = b.saetze.join(" ");
+  try {
+    if (angemeldet() && kiVerfuegbar("nachbesprechung")) {
+      status.textContent = "Dein Renningenieur schaut sich die Sitzung an …";
+      chat?.melden(pruefSatz(persoenlichkeit?.art ?? "kumpel"), "pruefen");
+      const e = await kiFragen("nachbesprechung", { ...berichtLage(), phase: "nachbesprechung" });
+      if ("text" in e) {
+        status.textContent = "";
+        kiTextZeigen(e.text);
+        chat?.melden(e.text, "nachbesprechung");
+        if (e.merken?.length) {
+          const n = await merkenSpeichern(e.merken);
+          if (n) hinweis(`Dein Renningenieur hat sich ${n === 1 ? "einen Punkt" : `${n} Punkte`} für das nächste Mal gemerkt.`, "ok");
+        }
+        return;
+      }
+      status.textContent = e.grund === "einrichtung" ? "Der KI-Renningenieur wird gerade eingerichtet – bis dahin die Kurzfassung." : e.fehler;
+    } else if (!angemeldet()) {
+      status.textContent = "Angemeldet bespricht dein KI-Renningenieur die Sitzung ausführlich mit dir.";
+    }
+    chat?.melden(vorlage, "nachbesprechung");
+  } finally {
+    nachbesprechungLaeuft = false;
+  }
+}
+
+function berichtKiEinrichten() {
+  $("bKiKnopf").addEventListener("click", () => void nachbesprechung(false));
+  $("cNachbesprechung").addEventListener("click", () => void nachbesprechung(false));
   $("bVorlesen").addEventListener("click", () => {
     const ki = $("bKiText");
     const text = !ki.hidden && ki.textContent ? Array.from(ki.children, (p) => p.textContent).join(" ") : Array.from($("bSaetze").children, (li) => li.textContent).join(" ");
@@ -534,8 +578,10 @@ function chatLage(): Record<string, unknown> {
   const sprit = zaehler.jetzt?.sprit ?? null;
   const { vor, hinter } = nachbarn();
   const b = g.length >= 2 ? berichtErstellen(zaehler.runden, beobachter, laenge() ?? 4000, sitzung?.fahrer ?? []) : null;
+  if (phase === "nachbesprechung") return { anlass: "frage", phase, ...berichtLage() };
   return {
     anlass: "frage",
+    phase,
     sitzung: sitzung?.sitzungsart ?? (demo.laeuft ? "Demo" : null),
     strecke: sitzung?.strecke ?? null,
     fahrzeug: sitzung?.fahrzeug ?? null,
@@ -565,6 +611,8 @@ function lokaleAntwort(frage: string): string | null {
   const nachbarText = (n: Nachbar, wo: string) => n
     ? `${wo} fährt ${n.nummer ? `#${n.nummer} ` : ""}${n.name}${n.abstand_s != null ? `, etwa ${zahl(n.abstand_s, 1)} s` : ""}.`
     : `${wo} ist gerade niemand – oder ich habe noch keine Daten vom Feld.`;
+  const live = /vor mir|vordermann|vorne|vorn\b|vorder|hinter mir|hintermann|hinten/.test(t);
+  if (live && phase === "nachbesprechung") return "Die Sitzung ist vorbei – frag mich lieber, was du in den Zweikämpfen oder an einer Stelle besser machen kannst.";
   if (/vor mir|vordermann|vorne|vorn\b|vorder/.test(t)) return nachbarText(vor, "Vor dir");
   if (/hinter mir|hintermann|hinten/.test(t)) return nachbarText(hinter, "Hinter dir");
   if (/sprit|tank|reicht|verbrauch/.test(t) && !/spar/.test(t)) {
@@ -582,8 +630,9 @@ function lokaleAntwort(frage: string): string | null {
   return null;
 }
 
+let chat: Chat | null = null;
 function chatEinrichten() {
-  const chat = new Chat($("cListe"), {
+  chat = new Chat($("cListe"), {
     lage: chatLage,
     angemeldet,
     art: () => persoenlichkeit?.art ?? "kumpel",
@@ -601,10 +650,10 @@ function chatEinrichten() {
     e.preventDefault();
     const text = feld.value;
     feld.value = "";
-    void chat.senden(text);
+    void chat?.senden(text);
   });
   for (const b of document.querySelectorAll<HTMLButtonElement>("[data-frage]")) {
-    b.addEventListener("click", () => void chat.senden(b.dataset.frage ?? ""));
+    b.addEventListener("click", () => void chat?.senden(b.dataset.frage ?? ""));
   }
 }
 

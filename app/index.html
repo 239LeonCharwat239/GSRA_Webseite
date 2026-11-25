@@ -190,11 +190,17 @@
       <div class="karte chat-karte">
         <h2>Frag deinen Renningenieur <small id="cName">Einfaches beantwortet er sofort, Schwieriges schaut er sich kurz an</small></h2>
         <div class="chat-liste" id="cListe" aria-live="polite"></div>
-        <div class="chat-schnell" aria-label="Schnelle Fragen">
+        <div class="chat-schnell" id="cSchnellRennen" aria-label="Schnelle Fragen im Rennen">
           <button type="button" class="knopf leise" data-frage="Wer fährt vor mir?">Wer fährt vor mir?</button>
           <button type="button" class="knopf leise" data-frage="Reicht der Sprit bis ins Ziel?">Reicht der Sprit?</button>
           <button type="button" class="knopf leise" data-frage="Ich möchte Sprit sparen.">Ich möchte Sprit sparen</button>
           <button type="button" class="knopf leise" data-frage="Warum verliere ich Zeit und was mache ich in der nächsten Runde besser?">Wo verliere ich Zeit – und warum?</button>
+        </div>
+        <div class="chat-schnell" id="cSchnellDanach" aria-label="Schnelle Fragen nach der Sitzung" hidden>
+          <button type="button" class="knopf leise" data-frage="Was hätte ich in meinen Zweikämpfen besser machen können?">Was hätte ich in den Zweikämpfen besser machen können?</button>
+          <button type="button" class="knopf leise" data-frage="Wo habe ich in diesem Rennen am meisten Zeit verloren und warum?">Wo habe ich am meisten Zeit verloren?</button>
+          <button type="button" class="knopf leise" data-frage="Woran soll ich bis zum nächsten Rennen arbeiten?">Woran arbeite ich bis zum nächsten Rennen?</button>
+          <button type="button" class="knopf" id="cNachbesprechung">Nachbesprechung noch einmal</button>
         </div>
         <form class="chat-form" id="cForm" autocomplete="off">
           <input id="cFeld" type="text" maxlength="400" placeholder="Schreib deinem Renningenieur …" aria-label="Nachricht an den Renningenieur">

@@ -11,9 +11,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL, KARRIERE_SQL, STINTPLAN_SQL, LIVERIES_SQL, CHATSICHER_SQL, AUFRAEUMEN_SQL, ONLINE_SQL, RE_STIL_SQL, APP_LOGIN_SQL, RE_KI_SQL, RE_CHAT_SQL] =
-    Array.from({ length: 53 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 53);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL, KARRIERE_SQL, STINTPLAN_SQL, LIVERIES_SQL, CHATSICHER_SQL, AUFRAEUMEN_SQL, ONLINE_SQL, RE_STIL_SQL, APP_LOGIN_SQL, RE_KI_SQL, RE_CHAT_SQL, RE_MERKEN_SQL] =
+    Array.from({ length: 54 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 54);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -3781,6 +3781,66 @@ if (RE_KI_SQL && RE_STIL_SQL) {
         await as(C, async () => {
             const lesen = await q(`select * from public.race_engineer_usage`);
             check("Zähler bleiben für Mitglieder unlesbar", lesen.error !== null, lesen.error || `${lesen.rows.length} Zeilen`);
+        });
+    }
+
+    // --- 054: Der Renningenieur merkt sich Erkenntnisse aus der Nachbesprechung ---
+    if (RE_MERKEN_SQL && RE_CHAT_SQL) {
+        const M = id(21), N = id(22), Z = id(23);
+        await db.exec(`
+          insert into auth.users (id) values ('${M}'), ('${N}'), ('${Z}');
+          insert into public.profiles (id, username) values ('${M}', 'Merkfahrer Moritz'), ('${N}', 'Nachbar Nora'), ('${Z}', 'Zweifaktor Zack');
+          insert into auth.mfa_factors (user_id, status) values ('${Z}', 'verified');`);
+        const lernen = (uid, art, text) => as(uid, async () => q(`select public.race_engineer_learn('${art}', $$${text}$$) as id`));
+        const vorher54 = await lernen(M, "schwaeche", "Kurve 4 zu früh gebremst");
+        check("Vor 054: Renningenieur kann sich nichts merken (Lücke nachgewiesen)", vorher54.error !== null, vorher54.error || "durchgelassen");
+        await db.exec(readFileSync(RE_MERKEN_SQL, "utf8"));
+        const ctl54 = await db.exec(readFileSync(RE_MERKEN_SQL, "utf8")); // zweiter Lauf
+        const rows54 = ctl54[ctl54.length - 1].rows;
+        console.log("Kontrolle 054:\n  " + rows54.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+        check("Kontrolle 054: bereit, Gäste ausgeschlossen, Gedächtnis nicht direkt beschreibbar", rows54.map(r => r.ergebnis).join(",") === "bereit,ja,ja", rows54.map(r => r.ergebnis).join(", "));
+
+        const e1 = await lernen(M, "schwaeche", "Spa, Kurve 4: bremst gut 10 m zu früh <script>x</script>");
+        check("Erkenntnis gespeichert", e1.error === null && !!e1.rows[0]?.id, e1.error || "");
+        const zeile = await one(`select art, text, quelle from public.race_engineer_memory where id = '${e1.rows[0]?.id}'`);
+        check("Herkunft „renningenieur“, Text bereinigt", zeile?.quelle === "renningenieur" && zeile.art === "schwaeche" && !zeile.text.includes("<"), JSON.stringify(zeile));
+        const doppelt = await lernen(M, "schwaeche", "SPA, KURVE 4: BREMST GUT 10 M ZU FRÜH <script>x</script>");
+        check("Gleicher Text (andere Schreibweise) wird nicht doppelt gespeichert", doppelt.rows[0]?.id === e1.rows[0]?.id, JSON.stringify(doppelt.rows));
+        const falsch = await lernen(M, "notiz", "Irgendwas");
+        check("Nur Stärke, Schwäche oder Ziel", /Unbekannte Art/.test(falsch.error || ""), falsch.error || "durchgelassen!");
+        const leer = await lernen(M, "ziel", "   ");
+        check("Leere Einträge abgelehnt", leer.error !== null, leer.error || "durchgelassen!");
+        // Erinnerung kommt in der nächsten Sitzung mit (race_engineer_turn)
+        const t = (await as(M, async () => q(`select public.race_engineer_turn('funk') as r`))).rows[0]?.r;
+        check("Nächste Sitzung: Erkenntnis steht im Gedächtnis des Renningenieurs", JSON.stringify(t?.gedaechtnis).includes("Kurve 4"), JSON.stringify(t?.gedaechtnis));
+        // Grenzen
+        for (let i = 0; i < 5; i++) await lernen(M, "ziel", `Ziel Nummer ${i} für Monza`);
+        const sieben = await lernen(M, "ziel", "Noch ein Ziel");
+        check("Höchstens 6 Einträge des Renningenieurs am Tag", /genug gemerkt/.test(sieben.error || ""), sieben.error || "durchgelassen!");
+        // Volles Gedächtnis: ältester eigener Eintrag des Renningenieurs fliegt, Einträge der Person bleiben
+        await db.exec(`insert into public.race_engineer_memory (user_id, art, text, quelle, created_at)
+                       select '${N}', 'notiz', 'Eigene Notiz ' || g, 'fahrer', now() - interval '10 days' from generate_series(1, 99) g;
+                       insert into public.race_engineer_memory (user_id, art, text, quelle, created_at) values ('${N}', 'ziel', 'Alter Renningenieur-Eintrag', 'renningenieur', now() - interval '20 days')`);
+        const voll = await lernen(N, "staerke", "Starke Zweikämpfe in Kurve 1");
+        const n = await one(`select count(*)::int as n, count(*) filter (where quelle = 'fahrer')::int as eigen, bool_or(text = 'Alter Renningenieur-Eintrag') as alt from public.race_engineer_memory where user_id = '${N}'`);
+        check("Volles Gedächtnis: ersetzt nur den ältesten eigenen Eintrag des Renningenieurs", voll.error === null && n.n === 100 && n.eigen === 99 && n.alt === false, JSON.stringify(n));
+        await db.exec(`delete from public.race_engineer_memory where user_id = '${N}' and quelle = 'renningenieur'; insert into public.race_engineer_memory (user_id, art, text, quelle) values ('${N}', 'notiz', 'Eigene Notiz 100', 'fahrer')`);
+        const nurEigene = await lernen(N, "staerke", "Noch eine Stärke");
+        check("Gedächtnis nur mit eigenen Einträgen voll: nichts wird überschrieben", /voll/.test(nurEigene.error || ""), nurEigene.error || "durchgelassen!");
+        // Fremde, Gast, gesperrt, Zwei-Faktor, direkter Zugriff
+        const fremd = await one(`select count(*)::int as n from public.race_engineer_memory where user_id = '${N}' and text like '%Kurve 4%'`);
+        check("Einträge landen nur bei der eigenen Person", fremd.n === 0, String(fremd.n));
+        const gast = await lernen(null, "ziel", "Gast");
+        check("Gäste: nichts merken", gast.error !== null, gast.error || "durchgelassen!");
+        await db.exec(`insert into public.user_bans (user_id, banned_until, reason) values ('${M}', now() + interval '1 day', 'Test 054')`);
+        const gesperrt54 = await lernen(M, "ziel", "Gesperrt");
+        check("Gesperrte Konten: nichts merken", /gesperrt/.test(gesperrt54.error || ""), gesperrt54.error || "durchgelassen!");
+        await db.exec(`delete from public.user_bans where reason = 'Test 054'`);
+        const zf = await lernen(Z, "ziel", "Ohne Code");
+        check("Mit Zwei-Faktor: ohne bestätigten Code nichts merken", /Zwei-Faktor/.test(zf.error || ""), zf.error || "durchgelassen!");
+        await as(M, async () => {
+            const direkt = await q(`insert into public.race_engineer_memory (user_id, art, text, quelle) values ('${N}', 'ziel', 'fremd', 'renningenieur')`);
+            check("Gedächtnis weiterhin nicht direkt beschreibbar (auch nicht fremdes)", direkt.error !== null, direkt.error || "durchgelassen!");
         });
     }
 }

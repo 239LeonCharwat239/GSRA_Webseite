@@ -93,7 +93,9 @@ Funk-Anlässe (Feld "anlass" in <messwerte>):
   dass du es nicht weißt.
 
 Rückfragen (wenn die Anfrage "frage" oder "analyse" ist): Die Person schreibt oder spricht mit dir – im Rennen oder
-danach. Der bisherige Verlauf steht davor. Antworte direkt auf die Frage unter <frage>, wie ein Kumpel am Funk, mit
+danach. Der bisherige Verlauf steht davor. Steht in den Messwerten "phase": "nachbesprechung", ist die Sitzung vorbei:
+Ihr sitzt zusammen in der Box und sprecht über das Rennen (Zweikämpfe, Fehler, was beim nächsten Mal anders läuft) –
+sprich dann nicht über Live-Werte wie den aktuellen Abstand. Antworte direkt auf die Frage unter <frage>, wie ein Kumpel am Funk, mit
 den Messwerten. Bei "frage" höchstens drei kurze Sätze. Bei "analyse" darfst du gründlicher sein (bis zu sechs Sätze):
 nenne die Ursache, die Stelle und einen konkreten Tipp, den man in der nächsten Runde ausprobieren kann. Steht die
 Antwort nicht in den Messwerten, sag ehrlich, was dir fehlt (z. B. "Dafür brauche ich noch eine saubere Runde").
@@ -104,7 +106,22 @@ ausrollen lassen; dazu kurz hochschalten bzw. kürzer im hohen Drehzahlbereich b
 Nachbesprechung (wenn die Anfrage "nachbesprechung" ist): Sprich wie nach der Sitzung in der Box, 5 bis 8 Sätze als
 zusammenhängender Text in 2 bis 3 kurzen Absätzen: 1. Wie lief es insgesamt (Plätze, Bestzeit, Konstanz).
 2. Die zwei wichtigsten Stellen, an denen Zeit liegt, mit konkretem Tipp. 3. Die Zweikämpfe (wer, wo überholt oder
-überholt worden) und was man daraus lernt. Ende mit einem kurzen, ehrlichen Ausblick. Keine Überschriften, keine Listen.`;
+überholt worden) und was man daraus lernt. Ende mit einem kurzen, ehrlichen Ausblick. Keine Überschriften, keine Listen.
+Passt ein Eintrag aus <gedaechtnis> (z. B. eine Schwäche vom letzten Mal), sag ehrlich, ob es besser geworden ist.
+Merken: Ganz am Ende darfst du höchstens zwei Dinge festhalten, an die du dich beim nächsten Mal erinnern willst –
+jeweils in einer eigenen Zeile genau so: <merken>schwaeche: Spa, Kurve 4 – bremst etwa 10 m zu früh</merken>
+(Art: schwaeche, staerke oder ziel; Text höchstens 120 Zeichen, mit Strecke und Stelle). Nur, wenn es wirklich
+wichtig ist; nichts erfinden. Diese Zeilen sieht die Person nicht im Text, sie landen in deinem Gedächtnis.`;
+
+// Gemerktes aus der Nachbesprechung herauslösen (höchstens 2; nur erlaubte Arten, kurze Texte)
+function merkenLesen(text: string): { rest: string; merken: Array<{ art: string; text: string }> } {
+  const merken: Array<{ art: string; text: string }> = [];
+  const muster = /<merken>\s*(schwaeche|staerke|ziel)\s*:\s*([^<]{3,160})<\/merken>/gi;
+  for (const m of text.matchAll(muster)) {
+    if (merken.length < 2) merken.push({ art: m[1].toLowerCase(), text: textSauber(m[2], 140) });
+  }
+  return { rest: text.replace(/<\/?merken>[^\n]*/gi, " ").replace(/<merken>[\s\S]*?<\/merken>/gi, " "), merken };
+}
 
 type Einstellungen = { name: string; rufname: string | null; art: string; gespraechig: string; stimme: string; sprache: string; themen: Record<string, boolean> };
 type Freigabe = { erlaubt: boolean; grund?: string; einstellungen?: Einstellungen; gedaechtnis?: Array<{ art: string; text: string }> };
@@ -209,10 +226,12 @@ Deno.serve(async (req) => {
             messages,
           });
     if (nachricht.stop_reason === "refusal") return antwort({ fehler: "Dazu sagt der Renningenieur nichts.", grund: "abgelehnt" }, 422);
-    const text = nachricht.content.filter((b) => b.type === "text").map((b) => (b as { text: string }).text).join(" ");
-    const sauber = antwortSauber(text, art === "funk" ? 320 : art === "frage" ? 600 : 2400);
+    const kiText = nachricht.content.filter((b) => b.type === "text").map((b) => (b as { text: string }).text).join(" ");
+    // Nur die Nachbesprechung darf sich etwas merken; aus allen anderen Antworten werden solche Zeilen entfernt
+    const { rest, merken } = merkenLesen(kiText);
+    const sauber = antwortSauber(rest, art === "funk" ? 320 : art === "frage" ? 600 : 2400);
     if (!sauber) return antwort({ fehler: "Keine Antwort erhalten.", grund: "leer" }, 502);
-    return antwort({ text: sauber, art });
+    return antwort(art === "nachbesprechung" ? { text: sauber, art, merken } : { text: sauber, art });
   } catch (e) {
     console.error("Renningenieur:", e instanceof Error ? e.message.slice(0, 200) : "unbekannter Fehler");
     return antwort({ fehler: "Der Renningenieur ist gerade nicht erreichbar." }, 502);

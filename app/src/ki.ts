@@ -7,7 +7,8 @@
 import { SUPABASE_ANON_KEY, SUPABASE_URL, sb } from "./konto.ts";
 
 export type KiArt = "funk" | "nachbesprechung" | "frage" | "analyse";
-export type KiErgebnis = { text: string } | { fehler: string; grund: string };
+export type Merken = { art: "staerke" | "schwaeche" | "ziel"; text: string };
+export type KiErgebnis = { text: string; merken?: Merken[] } | { fehler: string; grund: string };
 export type KiChat = { frage: string; verlauf: Array<{ wer: "fahrer" | "ingenieur"; text: string }> };
 
 let eingerichtet = true;
@@ -38,6 +39,16 @@ export async function persoenlichkeitLaden(): Promise<Persoenlichkeit | null> {
   };
 }
 
+/** Erkenntnisse aus der Nachbesprechung ins eigene Gedächtnis des Renningenieurs (SQL 054); Fehler sind egal */
+export async function merkenSpeichern(liste: Merken[]): Promise<number> {
+  let gespeichert = 0;
+  for (const m of liste.slice(0, 2)) {
+    const { error } = await sb().rpc("race_engineer_learn", { _art: m.art, _text: m.text });
+    if (!error) gespeichert++;
+  }
+  return gespeichert;
+}
+
 export async function kiFragen(art: KiArt, lage: Record<string, unknown>, chat?: KiChat): Promise<KiErgebnis> {
   if (!eingerichtet) return { fehler: "Der KI-Renningenieur ist noch nicht eingerichtet.", grund: "einrichtung" };
   if (!kiVerfuegbar(art)) return { fehler: "Kurze Pause.", grund: "grenze" };
@@ -58,8 +69,17 @@ export async function kiFragen(art: KiArt, lage: Record<string, unknown>, chat?:
   } catch {
     return { fehler: "Keine Verbindung zum Renningenieur.", grund: "netz" };
   }
-  const daten = (await antwort.json().catch(() => ({}))) as { text?: unknown; fehler?: unknown; grund?: unknown };
-  if (antwort.ok && typeof daten.text === "string" && daten.text.trim()) return { text: daten.text.trim().slice(0, 2400) };
+  const daten = (await antwort.json().catch(() => ({}))) as { text?: unknown; fehler?: unknown; grund?: unknown; merken?: unknown };
+  if (antwort.ok && typeof daten.text === "string" && daten.text.trim()) {
+    const merken = Array.isArray(daten.merken)
+      ? daten.merken.slice(0, 10).flatMap((m): Merken[] => {
+          const e = m as { art?: unknown; text?: unknown };
+          const art = (["staerke", "schwaeche", "ziel"] as const).find((a) => a === e?.art);
+          return art && typeof e.text === "string" && e.text.trim().length >= 2 ? [{ art, text: e.text.trim().slice(0, 200) }] : [];
+        }).slice(0, 2)
+      : [];
+    return { text: daten.text.trim().slice(0, 2400), merken };
+  }
   const grund = typeof daten.grund === "string" ? daten.grund : String(antwort.status);
   if (antwort.status === 503 && grund === "einrichtung") eingerichtet = false;
   if (antwort.status === 429) {
