@@ -371,7 +371,7 @@ export class DemoQuelle {
         liste.push(this.fahrt.weiter(1 / 60));
         // Stand aller Autos viermal pro Sekunde (Simulationszeit), wie bei der echten Simulation
         if (this.feldSenden && this.fahrt.zeit >= this.naechstesFeld) {
-          this.naechstesFeld = this.fahrt.zeit + 0.25;
+          this.naechstesFeld = this.fahrt.zeit + 0.1; // wie die App: zehnmal pro Sekunde
           this.feldSenden(this.fahrt.feld());
         }
       }

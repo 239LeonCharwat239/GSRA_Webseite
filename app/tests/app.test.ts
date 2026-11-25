@@ -14,6 +14,7 @@ import { messwerteKodieren, messwerteLesen } from "../../src/stint-messwerte.ts"
 import { bremspunkte, liftMeter, sparAuswerten, sparBasis, sparText, sparTipp } from "../src/sparen.ts";
 import { SPOTTER_SAETZE, Spotter, seiteAus, spotterSatz } from "../src/spotter.ts";
 import { abstandSatz, rufname } from "../src/vorlagen.ts";
+import { Feldrunden, deltaZu, verlustIn } from "../src/feldreferenz.ts";
 
 function fahren(fahrt: DemoFahrt, runden: number, z = new Rundenzaehler()) {
   const fertige = [];
@@ -340,6 +341,63 @@ test("Vorlagen-Funk: Vordermann mit Abstand und Tendenz, im Stil, ohne KI", () =
   assert.match(abstandSatz("kumpel", { ...vor, trend: 0.01 }, null, () => 0)!, /Abstand bleibt gleich/);
   assert.equal(rufname({ name: "Auto 12", nummer: "12", abstand: 1, trend: null }), "die 12");
   assert.equal(abstandSatz("unbekannt", vor, null, () => 0.99)!.length > 10, true, "unbekannte Art → Kumpel");
+});
+
+test("Referenz aus der Lobby: schnellste Runde im Feld aus den Positionsdaten, mit Zeitverlauf", () => {
+  const fahrt = new DemoFahrt(9);
+  const z = new Rundenzaehler();
+  const ref = new Feldrunden(DEMO_LAENGE);
+  let naechstes = 0;
+  while (fahrt.runde < 6) {
+    z.aufnehmen(fahrt.weiter(1 / 60));
+    if (fahrt.zeit >= naechstes) { naechstes = fahrt.zeit + 0.1; ref.aufnehmen(fahrt.feld()); }
+  }
+  const T = profil(idealeFahrweise()).t[DEMO_LAENGE];
+  assert.equal(ref.beste.size, 3, "alle drei Gegner haben eine geprüfte Runde");
+  const s = ref.schnellste()!;
+  assert.equal(s.idx, 3, "Mia Schulz (Faktor 0,99) ist die Schnellste");
+  assert.ok(Math.abs(s.zeit - T * 0.99) < 0.15, `Rundenzeit ${s.zeit} statt ${T * 0.99}`);
+  assert.ok(Math.abs(s.t[RASTER] - s.zeit) < 1e-6 && s.t[0] === 0, "Zeitverlauf von 0 bis Rundenzeit");
+  for (let i = 1; i <= RASTER; i++) assert.ok(s.t[i] >= s.t[i - 1], "Zeit läuft nur vorwärts");
+  // Eigene beste Runde dagegen: Rückstand am Ziel = Unterschied der Rundenzeiten
+  const beste = z.beste!;
+  const d = deltaZu(s, abtasten(beste.punkte).t);
+  assert.ok(Math.abs(d[RASTER] - (beste.zeit - s.zeit)) < 0.1, `Rückstand ${d[RASTER]} vs ${beste.zeit - s.zeit}`);
+  assert.ok(Math.abs(verlustIn(d, 0, RASTER) - d[RASTER]) < 1e-9);
+});
+
+test("Referenz aus der Lobby: Sprünge, Lücken und falsche Rundenzeiten werden nicht übernommen", () => {
+  const L = 4000;
+  const feld = (zeit: number, a: number[], runde: number[], letzte: number[] = [-1, -1]): Feld =>
+    ({ zeit, ich: 0, anteil: [0.5, ...a], runde: [1, ...runde], platz: [1, 2], inBox: [0, 0], letzte, beste: letzte });
+  // Gleichmäßige Runde von 80 s: sauber → übernommen
+  const fahren = (ref: Feldrunden, stoerung?: (zeit: number, a: number) => number | null, letzte = 80) => {
+    for (let k = 0; k <= 2 * 800 + 20; k++) {
+      const zeit = k * 0.1;
+      const gesamt = zeit / 80 + 0.5; // startet bei halber Runde
+      let a: number | null = gesamt % 1;
+      if (stoerung) a = stoerung(zeit, a);
+      ref.aufnehmen(feld(zeit, [a ?? -1], [1 + Math.floor(gesamt)], [-1, zeit > 100 ? letzte : -1]));
+    }
+  };
+  const sauber = new Feldrunden(L);
+  fahren(sauber);
+  assert.ok(Math.abs((sauber.schnellste()?.zeit ?? 0) - 80) < 0.05, "saubere Runde erkannt");
+  const sprung = new Feldrunden(L);
+  fahren(sprung, (z, a) => (z > 70 && z < 70.15 ? Math.min(0.99, a + 0.2) : a)); // Teleport um 800 m
+  assert.equal(sprung.beste.size, 0, "Teleport: keine Referenz");
+  const weg = new Feldrunden(L);
+  fahren(weg, (z, a) => (z > 60 && z < 61 ? null : a)); // kurz nicht auf der Strecke
+  assert.equal(weg.beste.size, 0, "Auto war nicht auf der Strecke: keine Referenz");
+  const falsch = new Feldrunden(L);
+  fahren(falsch, undefined, 75); // Simulation meldet eine andere Rundenzeit
+  assert.equal(falsch.beste.size, 0, "Rundenzeit passt nicht zur Simulation: keine Referenz");
+  const ohneZeiten = new Feldrunden(L);
+  for (let k = 0; k <= 1620; k++) {
+    const zeit = k * 0.1, gesamt = zeit / 80 + 0.5;
+    ohneZeiten.aufnehmen({ zeit, ich: 0, anteil: [0.5, gesamt % 1], runde: [1, 1 + Math.floor(gesamt)], platz: [1, 2], inBox: [0, 0] });
+  }
+  assert.equal(ohneZeiten.beste.size, 1, "Simulation ohne Rundenzeiten: die übrigen Prüfungen reichen");
 });
 
 test("Stint-Planer: Messwerte hin und zurück, Umlaute bleiben, Schadcode wird entschärft", () => {

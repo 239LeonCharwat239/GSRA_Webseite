@@ -15,6 +15,7 @@ import { bremspunkte, sparAuswerten, sparBasis, sparText, sparTipp, type Bremspu
 import { Chat, pruefSatz } from "./chat.ts";
 import { Spotter, spotterSatz } from "./spotter.ts";
 import { abstandSatz, type Gegner } from "./vorlagen.ts";
+import { Feldrunden, deltaZu, verlustIn } from "./feldreferenz.ts";
 import { karteBauen, karteZeichnen, verlustJeAbschnitt, type Karte } from "./strecke.ts";
 import { Rennbeobachter, berichtErstellen, rundenzeitText, stelleText } from "./rennbericht.ts";
 import { startbildZeigen } from "./startbild.ts";
@@ -65,10 +66,22 @@ const spotter = new Spotter((s) => {
 });
 
 let letztesFeld: Feld | null = null;
+// Referenz aus der Lobby: schnellste geprüfte Runde eines anderen Fahrers (nur auf diesem PC)
+const feldRef = new Feldrunden();
+let feldRefBekannt = 0;
 function feldAufnehmen(f: Feld) {
   if (!f || !Array.isArray(f.anteil)) return;
   letztesFeld = f;
   beobachter.aufnehmen(f, typischeRundenzeit());
+  feldRef.laengeSetzen(laenge());
+  feldRef.aufnehmen(f);
+  // neue Referenzrunde? Dann den Vergleich auffrischen
+  const s = feldRef.schnellste();
+  const kennung = s ? s.idx * 1e6 + Math.round(s.zeit * 1000) : 0;
+  if (kennung !== feldRefBekannt) {
+    feldRefBekannt = kennung;
+    if (aktiverReiter === "vergleich") feldRefZeigen();
+  }
 }
 
 const demo = new DemoQuelle((liste) => proben(liste), (f) => feldAufnehmen(f));
@@ -133,6 +146,8 @@ function allesZuruecksetzen() {
   letzteAbstaende = new Map();
   letzteSeite = null;
   spotter.zuruecksetzen();
+  feldRef.zuruecksetzen();
+  feldRefBekannt = 0;
   if (spar.aktiv) sparBeenden();
   spar.runden = [];
   sparZeigen();
@@ -394,6 +409,7 @@ function berichtLage(): Record<string, unknown> {
       gegner: k.name, runden: k.dauerRunden, knappster_abstand_s: runden3(k.minAbstand),
       ueberholungen: k.ueberholungen.slice(0, 4).map((u) => ({ ich_vorbei: u.ichVorbei, wo: stelleText(Math.round(u.anteil * RASTER), alleKurven) })),
     })),
+    gegen_schnellsten: gegenSchnellstenLage(),
   };
 }
 
@@ -638,6 +654,7 @@ function chatLage(): Record<string, unknown> {
     im_schnitt_verlust: b ? b.kurven.filter((k) => k.runden > 0 && k.schnitt > 0.005).slice(0, 3).map((k) => ({ kurve: `Kurve ${k.kurve.nr}`, schnitt_verlust_s: runden3(k.schnitt), tipp: k.tipp || null })) : [],
     zweikaempfe: b ? b.kaempfe.slice(-3).map((k) => ({ gegner: k.name, runden: k.dauerRunden, knappster_abstand_s: runden3(k.minAbstand) })) : [],
     sparen: sparLage(),
+    gegen_schnellsten: gegenSchnellstenLage(),
   };
 }
 
@@ -894,6 +911,65 @@ function vKarteZeichnen() {
   karteZeichnen(c, d.karte, { verlust: d.verlust, marken: d.marken, punkt: ebene === "genau" ? vCursor : null, spiegeln });
 }
 
+// ---------------------------------------------------------------- Referenz aus der Lobby (Schnellster im Feld)
+type GegenSchnellsten = { name: string; nummer: string; zeit: number; meine: number; rueckstand: number; delta: Float64Array;
+  verluste: Array<{ kurve: number; verlust: number }> };
+
+function gegenSchnellsten(): GegenSchnellsten | null {
+  const s = feldRef.schnellste();
+  const beste = zaehler.beste;
+  if (!s || !beste || beste.punkte.length < 10) return null;
+  const L = laenge() ?? 4000;
+  const meine = spur(beste);
+  const d = deltaZu(s, meine.t);
+  const kurven = kurvenFinden(meine, L);
+  const info = (sitzung?.fahrer ?? []).find((x) => x.idx === s.idx);
+  return {
+    name: info?.name ?? `Auto ${s.idx}`, nummer: info?.nummer ?? "", zeit: s.zeit, meine: beste.zeit, rueckstand: beste.zeit - s.zeit, delta: d,
+    verluste: kurven.map((k) => ({ kurve: k.nr, verlust: verlustIn(d, k.start, k.ende) })).sort((a, b) => b.verlust - a.verlust),
+  };
+}
+
+function gegenSchnellstenLage(): Record<string, unknown> | null {
+  const g = gegenSchnellsten();
+  if (!g) return null;
+  return {
+    fahrer: `${g.nummer ? `#${g.nummer} ` : ""}${g.name}`, seine_zeit_s: runden3(g.zeit), meine_bestzeit_s: runden3(g.meine), rueckstand_s: runden3(g.rueckstand),
+    groesste_verluste: g.verluste.filter((v) => v.verlust > 0.02).slice(0, 3).map((v) => ({ kurve: `Kurve ${v.kurve}`, verlust_s: runden3(v.verlust) })),
+    hier_schneller: g.verluste.filter((v) => v.verlust < -0.02).slice(-2).map((v) => ({ kurve: `Kurve ${v.kurve}`, gewinn_s: runden3(-v.verlust) })),
+  };
+}
+
+function feldRefZeigen() {
+  const g = gegenSchnellsten();
+  const text = $("fRefText");
+  const liste = $("fRefListe");
+  const c = document.getElementById("fRefStrecke") as HTMLCanvasElement | null;
+  if (!g) {
+    text.textContent = zaehler.beste
+      ? "Sobald ein anderes Auto in deiner Sitzung eine saubere Runde gefahren ist, vergleiche ich dich hier mit dem Schnellsten im Feld."
+      : "Fahr eine gültige Runde – dann vergleiche ich dich mit dem Schnellsten in deiner Lobby.";
+    liste.replaceChildren();
+    if (c) c.hidden = true;
+    return;
+  }
+  const wer = `${g.nummer ? `#${g.nummer} ` : ""}${g.name}`;
+  text.textContent = g.rueckstand > 0.005
+    ? `Schnellste Runde im Feld: ${wer}, ${zeitText(g.zeit)}. Deine Bestzeit ${zeitText(g.meine)} – ${zahl(g.rueckstand, 2)} s langsamer.`
+    : `Du bist der Schnellste im Feld! ${wer} kommt mit ${zeitText(g.zeit)} am nächsten (${zahl(-g.rueckstand, 2)} s langsamer als du).`;
+  const saetze: string[] = [];
+  const verlust = g.verluste.filter((v) => v.verlust > 0.02).slice(0, 3);
+  if (verlust.length) saetze.push(`Am meisten verlierst du in ${verlust.map((v) => `Kurve ${v.kurve} (${zahl(v.verlust, 2)} s)`).join(", ")}.`);
+  const gewinn = g.verluste.filter((v) => v.verlust < -0.02).slice(-2).reverse();
+  if (gewinn.length) saetze.push(`Schneller als ${g.name.split(/\s+/).at(-1)} bist du in ${gewinn.map((v) => `Kurve ${v.kurve} (${zahl(-v.verlust, 2)} s)`).join(" und ")}.`);
+  saetze.push("Tipp: Schau dir die rote Stelle im Reiter „Vergleich“ mit deinen eigenen Runden genauer an – Bremspunkt und Gas zeigen dir, WIE du die Zeit holst.");
+  liste.replaceChildren(...saetze.map((s) => neu("li", "", s)));
+  if (c) {
+    c.hidden = !karte;
+    if (karte) karteZeichnen(c, karte, { verlust: verlustJeAbschnitt(g.delta), marken: kurvenMarken, punkt: null, spiegeln });
+  }
+}
+
 const spiegelnFeld = $<HTMLInputElement>("spiegeln");
 spiegelnFeld.checked = spiegeln;
 spiegelnFeld.addEventListener("change", () => {
@@ -905,10 +981,12 @@ spiegelnFeld.addEventListener("change", () => {
   }
   live();
   vKarteZeichnen();
+  feldRefZeigen();
 });
 
 function vergleichZeigen() {
   auswahlFuellen();
+  feldRefZeigen();
   for (const b of document.querySelectorAll<HTMLButtonElement>("[data-ebene]")) b.setAttribute("aria-selected", String(b.dataset.ebene === ebene));
   const { ref, x } = auswahl;
   const bereit = !!ref && !!x && ref !== x;

@@ -151,6 +151,18 @@
           <p class="hinweis" id="vStreckeHinweis"></p>
         </aside>
       </div>
+      <div class="zweispaltig gleich feld-referenz">
+        <div class="karte">
+          <h2>Gegen den Schnellsten im Feld <small>Referenz aus deiner Lobby – nur auf diesem PC</small></h2>
+          <p id="fRefText">Sobald ein anderes Auto in deiner Sitzung eine saubere Runde gefahren ist, vergleiche ich dich hier mit dem Schnellsten im Feld.</p>
+          <ul class="bericht-saetze" id="fRefListe"></ul>
+          <p class="hinweis">Die Simulation verrät bei fremden Autos keine Pedale – du siehst, WO du Zeit verlierst. Geprüft: nur vollständige Runden ohne Box, Lücken oder Sprünge, passend zur Rundenzeit der Simulation.</p>
+        </div>
+        <div class="karte strecke-karte">
+          <h2>Wo du gegen ihn verlierst <small><span class="punkt rot"></span>verloren <span class="punkt gruen"></span>gewonnen</small></h2>
+          <canvas id="fRefStrecke" class="strecke"></canvas>
+        </div>
+      </div>
     </section>
 
     <!-- BERICHT (Nachbesprechung nach der Sitzung) -->

@@ -5,7 +5,7 @@
 //! * `gsra://status`  – { simulation, verbunden, meldung }
 //! * `gsra://sitzung` – Strecke, Streckenlänge, Fahrzeug, Sitzungsart
 //! * `gsra://proben`  – Liste von Messpunkten (siehe gsra_telemetrie::Probe)
-//! * `gsra://feld`    – Stand aller Autos (viermal pro Sekunde) für Rennbericht und Zweikämpfe
+//! * `gsra://feld`    – Stand aller Autos (zehnmal pro Sekunde) für Rennbericht, Zweikämpfe und die Referenz aus der Lobby
 
 use gsra_telemetrie::{Probe, Sitzung};
 use serde::Serialize;
@@ -101,7 +101,7 @@ fn schleife(app: AppHandle) {
         status.verbunden = verbunden;
         melden(&app, status.clone());
 
-        if verbunden && feld_zeit.elapsed() >= Duration::from_millis(250) {
+        if verbunden && feld_zeit.elapsed() >= Duration::from_millis(100) {
             leser.feld_anfordern();
             feld_zeit = Instant::now();
         }
