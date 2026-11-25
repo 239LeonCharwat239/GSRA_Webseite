@@ -11,6 +11,7 @@ import { karteBauen, verlustJeAbschnitt } from "../src/strecke.ts";
 import { Rennbeobachter, berichtErstellen } from "../src/rennbericht.ts";
 import type { Feld } from "../src/typen.ts";
 import { messwerteKodieren, messwerteLesen } from "../../src/stint-messwerte.ts";
+import { bremspunkte, liftMeter, sparAuswerten, sparBasis, sparText, sparTipp } from "../src/sparen.ts";
 
 function fahren(fahrt: DemoFahrt, runden: number, z = new Rundenzaehler()) {
   const fertige = [];
@@ -248,6 +249,41 @@ test("Rennbericht ohne gültige Runde: freundlicher Hinweis statt Fehler", () =>
   assert.equal(b.gueltig, 0);
   assert.equal(b.beste, null);
   assert.match(b.saetze[0], /Fahr ein paar Runden/);
+});
+
+test("Sprit sparen: Lift & Coast spart messbar Sprit, kostet etwas Zeit und wird richtig bewertet", () => {
+  const fahrt = new DemoFahrt(21);
+  const z = new Rundenzaehler();
+  fahren(fahrt, 4, z); // Basis ohne Sparen (Runde 1 ist angefangen und zählt nicht)
+  const basis = sparBasis(z.runden, DEMO_LAENGE)!;
+  assert.ok(basis && basis.verbrauch > 2 && basis.verbrauch < 3.5, JSON.stringify(basis));
+  assert.ok(basis.rollM < 30, `ohne Sparen kaum Rollen: ${basis.rollM} m`);
+  const punkte = bremspunkte(z.runden.filter((r) => r.gueltig).at(-1)!, DEMO_LAENGE, 3);
+  assert.equal(punkte.length, 3);
+  for (const p of punkte) assert.ok(p.tempoKmh > 90 && p.liftM >= 20 && p.liftM <= 120, JSON.stringify(p));
+  fahrt.sparen = true;
+  const { fertige } = fahren(fahrt, 4, z);
+  const sparRunden = fertige.slice(1).filter((r) => !r.inBox && r.sprit != null); // erste Runde fing noch ohne Sparen an
+  assert.ok(sparRunden.length >= 2);
+  for (const r of sparRunden) {
+    const a = sparAuswerten(r, basis, 0.05, DEMO_LAENGE)!;
+    assert.ok(a.ersparnis > 0.02, `Runde ${r.nr}: nur ${a.ersparnis}`);
+    assert.ok(a.rollM > basis.rollM + 100, `Rollstrecke ${a.rollM} m`);
+    assert.ok((a.zeitVerlust ?? 0) > 0 && (a.zeitVerlust ?? 9) < 3, `Zeitverlust ${a.zeitVerlust}`);
+    const text = sparText(a, sparTipp(r, punkte, DEMO_LAENGE), (b) => `vor Kurve bei ${Math.round(b.meter)} m`);
+    assert.match(text, /^Runde \d+: \d+,\d\d l, \d+,\d % gespart \(Ziel 5,0 %\)/);
+  }
+});
+
+test("Sprit sparen: Texte für zu wenig, genug und zu viel", () => {
+  const a = { runde: 7, verbrauch: 2.6, ersparnis: 0.02, zeitVerlust: 0.2, rollM: 120, ziel: 0.05, erreicht: false };
+  const tipp = { a: 0.3, meter: 1260, tempoKmh: 230, liftM: 65, gerollt: 20 };
+  assert.match(sparText(a, tipp, () => "vor Kurve 3"), /Noch nicht genug: Geh vor Kurve 3 etwa 65 m vor dem Bremspunkt vom Gas und lass rollen \(bisher 20 m\)\./);
+  assert.match(sparText({ ...a, ersparnis: 0.055, erreicht: true }, null, () => ""), /Ziel erreicht – genau so weiter\./);
+  assert.match(sparText({ ...a, ersparnis: 0.11, zeitVerlust: 0.9, erreicht: true }, null, () => ""), /mehr als nötig/);
+  assert.match(sparText({ ...a, ersparnis: -0.03 }, null, () => ""), /3,0 % MEHR als vorher/);
+  assert.equal(liftMeter(250), 70);
+  assert.equal(liftMeter(50), 20);
 });
 
 test("Stint-Planer: Messwerte hin und zurück, Umlaute bleiben, Schadcode wird entschärft", () => {

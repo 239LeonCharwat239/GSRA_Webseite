@@ -11,6 +11,8 @@ import { angemeldet, beiKontoWechsel, hinweis, kontoStarten } from "./konto-ansi
 import { aufnahmeAbspielen, funkLaden, funkSpeichern, sprechen, stimmenFuer } from "./funk.ts";
 import { kiFragen, kiVerfuegbar, persoenlichkeitLaden, type Persoenlichkeit } from "./ki.ts";
 import { messwerteKodieren } from "../../src/stint-messwerte.ts";
+import { bremspunkte, sparAuswerten, sparBasis, sparText, sparTipp, type Bremspunkt, type SparAuswertung, type SparBasis } from "./sparen.ts";
+import { Chat } from "./chat.ts";
 import { karteBauen, karteZeichnen, verlustJeAbschnitt, type Karte } from "./strecke.ts";
 import { Rennbeobachter, berichtErstellen, rundenzeitText, stelleText } from "./rennbericht.ts";
 import { startbildZeigen } from "./startbild.ts";
@@ -53,8 +55,10 @@ let spiegeln = (() => { try { return localStorage.getItem("gsra_karte_spiegeln")
 // Rennbericht: Plätze und Zweikämpfe aus dem Stand aller Autos
 const beobachter = new Rennbeobachter();
 const typischeRundenzeit = () => rundenzeitSchnitt(zaehler.runden) ?? zaehler.beste?.zeit ?? 90;
+let letztesFeld: Feld | null = null;
 function feldAufnehmen(f: Feld) {
   if (!f || !Array.isArray(f.anteil)) return;
+  letztesFeld = f;
   beobachter.aufnehmen(f, typischeRundenzeit());
 }
 
@@ -115,6 +119,11 @@ function allesZuruecksetzen() {
   $("lFunkQuelle").className = "";
   $("bKiText").hidden = true;
   $("bKiStatus").textContent = "";
+  letztesFeld = null;
+  letzterBefund = null;
+  if (spar.aktiv) sparBeenden();
+  spar.runden = [];
+  sparZeigen();
   rundenZeigen();
   live();
 }
@@ -206,7 +215,10 @@ function rundeFertig(r: Runde) {
       text += ` Die meiste Zeit liegt in ${kurvenName(b.kurve, laenge() ?? 4000)} (${sekunden(b.verlust)}). ${ursache}${b.tipp}`;
     }
   } else text = `Runde ${r.nr}: ${zeitText(r.zeit)}.`;
-  funkMelden(text, rundenLage(r, befund));
+  if (befund) letzterBefund = befund;
+  else if (beste === r) letzterBefund = null;
+  const sparSatz = sparRunde(r);
+  funkMelden(sparSatz ?? text, rundenLage(r, befund));
   // Karte aus der ersten gültigen Runde mit Fahrtrichtung; Kurvennummern aus der Bestzeit
   if (!karte && r.gueltig) karte = karteBauen(r.punkte);
   if (beste && beste.punkte.length > 10) kurvenMarken = kurvenFinden(spur(beste), laenge() ?? 4000).map((k) => ({ i: k.scheitel, text: String(k.nr) }));
@@ -245,6 +257,7 @@ function rundenLage(r: Runde, b: Befund | undefined): Record<string, unknown> {
     sprit_l: runden3(sprit),
     sprit_reicht_runden: v && sprit != null ? Math.floor((sprit / v) * 10) / 10 : null,
     platz: beobachter.platz,
+    sparen: sparLage(),
   };
 }
 
@@ -384,6 +397,215 @@ function berichtKiEinrichten() {
     const text = !ki.hidden && ki.textContent ? Array.from(ki.children, (p) => p.textContent).join(" ") : Array.from($("bSaetze").children, (li) => li.textContent).join(" ");
     void vorlesen(text);
   });
+}
+
+// ---------------------------------------------------------------- Sprit sparen (Lift & Coast)
+let letzterBefund: Befund | null = null;
+const spar = {
+  aktiv: false,
+  ziel: 0.05,
+  startNr: 0,
+  basis: null as SparBasis | null,
+  punkte: [] as Bremspunkt[],
+  runden: [] as SparAuswertung[],
+};
+
+/** „vor Kurve 3“ – Kurve nach dem Bremspunkt (Nummern wie in der App) */
+function sparStelle(b: Bremspunkt): string {
+  const beste = zaehler.beste;
+  const L = laenge() ?? 4000;
+  if (beste && beste.punkte.length > 10) {
+    const i = b.a * RASTER;
+    const k = kurvenFinden(spur(beste), L).find((x) => x.ende >= i);
+    if (k) return `vor Kurve ${k.nr}`;
+  }
+  return `bei ${meterText(b.meter)}`;
+}
+
+function sparStarten(): string | null {
+  const L = laenge() ?? 4000;
+  const basis = sparBasis(zaehler.runden, L);
+  const beste = zaehler.beste;
+  spar.ziel = Number($<HTMLSelectElement>("spZiel").value) || 0.05;
+  if (!basis || !beste) {
+    $("spStatus").textContent = "Fahr zuerst eine normale, saubere Runde – dann kenne ich deinen Verbrauch und sage dir, wo du sparen kannst.";
+    return "Fahr erst eine normale, saubere Runde – dann kenne ich deinen Verbrauch und zeige dir, wo du früher vom Gas gehst.";
+  }
+  // Bewertet wird erst die nächste volle Runde (die laufende hat ohne Sparen begonnen)
+  const startNr = zaehler.laufend?.nr ?? zaehler.runden.at(-1)?.nr ?? 0;
+  Object.assign(spar, { aktiv: true, basis, startNr, punkte: bremspunkte(beste, L, 3), runden: [] });
+  if (demo.laeuft) demo.fahrt.sparen = true;
+  sparZeigen();
+  const ziel = `${Math.round(spar.ziel * 100)} %`;
+  const erste = spar.punkte.length ? spar.punkte.reduce((m, x) => (x.tempoKmh > m.tempoKmh ? x : m)) : null;
+  return `Spar-Modus an: Ziel ${ziel} weniger als deine ${zahl(basis.verbrauch, 2)} l pro Runde.` +
+    (erste ? ` Fang ${sparStelle(erste)} an – etwa ${erste.liftM} m vor dem Bremspunkt vom Gas und rollen lassen.` : "");
+}
+
+function sparBeenden() {
+  spar.aktiv = false;
+  demo.fahrt.sparen = false;
+  sparZeigen();
+}
+
+/** Nach einer Runde im Spar-Modus: Bewertung als Funkspruch (null = Spar-Modus aus) */
+function sparRunde(r: Runde): string | null {
+  if (!spar.aktiv || !spar.basis || r.nr <= spar.startNr) return null;
+  const L = laenge() ?? 4000;
+  const a = sparAuswerten(r, spar.basis, spar.ziel, L);
+  if (!a) return null;
+  spar.runden.push(a);
+  if (aktiverReiter === "sprit") sparZeigen();
+  return sparText(a, sparTipp(r, spar.punkte, L), sparStelle);
+}
+
+function sparLage(): Record<string, unknown> | null {
+  if (!spar.aktiv || !spar.basis) return null;
+  const a = spar.runden.at(-1);
+  return {
+    ziel_prozent: Math.round(spar.ziel * 100),
+    basis_verbrauch_l: runden3(spar.basis.verbrauch),
+    letzte_ersparnis_prozent: a ? Math.round(a.ersparnis * 1000) / 10 : null,
+    letzter_zeitverlust_s: a?.zeitVerlust != null ? runden3(a.zeitVerlust) : null,
+    ausrollen_m: a ? Math.round(a.rollM) : null,
+    ziel_erreicht: a?.erreicht ?? null,
+    frueher_vom_gas: spar.punkte.map((b) => ({ wo: sparStelle(b), tempo_kmh: b.tempoKmh, meter_vor_bremspunkt: b.liftM })),
+  };
+}
+
+function sparZeigen() {
+  const knopf = $<HTMLButtonElement>("spKnopf");
+  knopf.textContent = spar.aktiv ? "Spar-Modus beenden" : "Spar-Modus starten";
+  const tipps = $("spTipps");
+  tipps.hidden = !spar.aktiv || !spar.punkte.length;
+  if (spar.aktiv && spar.basis) {
+    $("spStatus").textContent = `Ziel: ${Math.round(spar.ziel * 100)} % weniger als ${zahl(spar.basis.verbrauch, 2)} l pro Runde (Basis aus ${spar.basis.runden} ${spar.basis.runden === 1 ? "Runde" : "Runden"}).`;
+    const ul = neu("ul");
+    for (const b of spar.punkte) ul.append(neu("li", "", `${sparStelle(b)} (${b.tempoKmh} km/h): etwa ${b.liftM} m vor dem Bremspunkt vom Gas, rollen lassen`));
+    tipps.replaceChildren(neu("strong", "", "Hier lohnt sich Lift & Coast am meisten:"), ul);
+  }
+  const tabelle = $("spTabelle");
+  tabelle.hidden = !spar.runden.length;
+  $("spZeilen").replaceChildren(...spar.runden.slice(-8).reverse().map((a) => {
+    const tr = neu("tr");
+    tr.append(
+      neu("td", "", String(a.runde)),
+      neu("td", "", liter(a.verbrauch, 2)),
+      neu("td", a.erreicht ? "gut" : "warn", `${a.ersparnis >= 0 ? "−" : "+"}${zahl(Math.abs(a.ersparnis) * 100, 1)} %`),
+      neu("td", "", a.zeitVerlust == null ? "–" : `${a.zeitVerlust >= 0 ? "+" : "−"}${zahl(Math.abs(a.zeitVerlust), 2)} s`),
+      neu("td", "", `${Math.round(a.rollM)} m`),
+    );
+    return tr;
+  }));
+}
+
+$("spKnopf").addEventListener("click", () => {
+  if (spar.aktiv) sparBeenden();
+  else {
+    const satz = sparStarten();
+    if (satz && spar.aktiv && funkE.vorlesen) void vorlesen(satz);
+  }
+});
+
+// ---------------------------------------------------------------- Chat mit dem Renningenieur
+type Nachbar = { name: string; nummer: string; abstand_s: number | null } | null;
+function nachbarn(): { vor: Nachbar; hinter: Nachbar } {
+  const f = letztesFeld;
+  const fahrer = sitzung?.fahrer ?? [];
+  if (!f || f.ich == null) return { vor: null, hinter: null };
+  const meinPlatz = f.platz[f.ich];
+  if (meinPlatz == null || meinPlatz <= 0) return { vor: null, hinter: null };
+  const fortschritt = (i: number) => (f.runde[i] ?? 0) + Math.max(0, f.anteil[i] ?? 0);
+  const finden = (platz: number): Nachbar => {
+    const i = f.platz.findIndex((p) => p === platz);
+    if (i < 0) return null;
+    const info = fahrer.find((x) => x.idx === i);
+    const abstand = Math.abs(fortschritt(i) - fortschritt(f.ich!)) * typischeRundenzeit();
+    return { name: info?.name ?? `Auto ${i}`, nummer: info?.nummer ?? "", abstand_s: Number.isFinite(abstand) ? Math.round(abstand * 10) / 10 : null };
+  };
+  return { vor: meinPlatz > 1 ? finden(meinPlatz - 1) : null, hinter: finden(meinPlatz + 1) };
+}
+
+/** Alle Fakten für eine Rückfrage – nur Messwerte, keine Vermutungen */
+function chatLage(): Record<string, unknown> {
+  const g = zaehler.runden.filter((r) => r.gueltig);
+  const letzte = zaehler.runden.at(-1);
+  const v = verbrauchProRunde(zaehler.runden);
+  const sprit = zaehler.jetzt?.sprit ?? null;
+  const { vor, hinter } = nachbarn();
+  const b = g.length >= 2 ? berichtErstellen(zaehler.runden, beobachter, laenge() ?? 4000, sitzung?.fahrer ?? []) : null;
+  return {
+    anlass: "frage",
+    sitzung: sitzung?.sitzungsart ?? (demo.laeuft ? "Demo" : null),
+    strecke: sitzung?.strecke ?? null,
+    fahrzeug: sitzung?.fahrzeug ?? null,
+    aktuelle_runde: zaehler.laufend?.nr ?? null,
+    gefahrene_runden: zaehler.runden.length,
+    letzte_runde_s: letzte ? runden3(letzte.zeit) : null,
+    letzte_runde_gueltig: letzte?.gueltig ?? null,
+    bestzeit_s: runden3(zaehler.beste?.zeit),
+    schnitt_s: runden3(rundenzeitSchnitt(zaehler.runden)),
+    sprit_l: runden3(sprit),
+    verbrauch_pro_runde_l: runden3(v),
+    sprit_reicht_runden: v && sprit != null ? Math.floor((sprit / v) * 10) / 10 : null,
+    platz: beobachter.platz,
+    vor_mir: vor,
+    hinter_mir: hinter,
+    letzte_runde_groesster_verlust: letzterBefund ? { stelle: kurvenName(letzterBefund.kurve, laenge() ?? 4000), verlust_s: runden3(letzterBefund.verlust), ursachen: letzterBefund.ursachen.slice(0, 3), tipp: letzterBefund.tipp } : null,
+    im_schnitt_verlust: b ? b.kurven.filter((k) => k.runden > 0 && k.schnitt > 0.005).slice(0, 3).map((k) => ({ kurve: `Kurve ${k.kurve.nr}`, schnitt_verlust_s: runden3(k.schnitt), tipp: k.tipp || null })) : [],
+    zweikaempfe: b ? b.kaempfe.slice(-3).map((k) => ({ gegner: k.name, runden: k.dauerRunden, knappster_abstand_s: runden3(k.minAbstand) })) : [],
+    sparen: sparLage(),
+  };
+}
+
+/** Einfache Fakten ohne KI (sofort, auch offline) */
+function lokaleAntwort(frage: string): string | null {
+  const t = frage.toLowerCase();
+  const { vor, hinter } = nachbarn();
+  const nachbarText = (n: Nachbar, wo: string) => n
+    ? `${wo} fährt ${n.nummer ? `#${n.nummer} ` : ""}${n.name}${n.abstand_s != null ? `, etwa ${zahl(n.abstand_s, 1)} s` : ""}.`
+    : `${wo} ist gerade niemand – oder ich habe noch keine Daten vom Feld.`;
+  if (/vor mir|vordermann|vorne|vorn\b|vorder/.test(t)) return nachbarText(vor, "Vor dir");
+  if (/hinter mir|hintermann|hinten/.test(t)) return nachbarText(hinter, "Hinter dir");
+  if (/sprit|tank|reicht|verbrauch/.test(t) && !/spar/.test(t)) {
+    const v = verbrauchProRunde(zaehler.runden);
+    const sprit = zaehler.jetzt?.sprit;
+    if (!v || sprit == null) return "Für den Verbrauch brauche ich erst eine saubere Runde.";
+    return `Du hast ${zahl(sprit, 1)} l im Tank und verbrauchst ${zahl(v, 2)} l pro Runde – das reicht für etwa ${zahl(Math.floor((sprit / v) * 10) / 10, 1)} Runden. Ob es bis ins Ziel reicht, siehst du unter „Sprit & Stint“.`;
+  }
+  if (/letzte runde/.test(t)) {
+    const r = zaehler.runden.at(-1);
+    return r ? `Deine letzte Runde: ${zeitText(r.zeit)}${r.gueltig ? "" : ` (zählt nicht: ${r.grund ?? "ungültig"})`}.` : "Du hast noch keine Runde beendet.";
+  }
+  if (/bestzeit|beste runde|schnellste/.test(t)) return zaehler.beste ? `Deine Bestzeit: ${zeitText(zaehler.beste.zeit)} in Runde ${zaehler.beste.nr}.` : "Noch keine gültige Runde – noch keine Bestzeit.";
+  if (/platz|position/.test(t)) return beobachter.platz != null ? `Du liegst auf Platz ${beobachter.platz}.` : "Den Platz kenne ich nur im Rennen mit anderen Autos.";
+  return null;
+}
+
+function chatEinrichten() {
+  const chat = new Chat($("cListe"), {
+    lage: chatLage,
+    angemeldet,
+    art: () => persoenlichkeit?.art ?? "kumpel",
+    name: () => persoenlichkeit?.name ?? "Renningenieur",
+    lokal: lokaleAntwort,
+    vorlesen: (text) => { if (funkE.vorlesen) void vorlesen(text); },
+    sparenStarten: () => {
+      if (!spar.aktiv) return sparStarten();
+      const a = spar.runden.at(-1);
+      return a ? sparText(a, null, sparStelle) : "Der Spar-Modus läuft schon – nach der nächsten Runde sage ich dir, ob es reicht.";
+    },
+  });
+  const feld = $<HTMLInputElement>("cFeld");
+  $<HTMLFormElement>("cForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const text = feld.value;
+    feld.value = "";
+    void chat.senden(text);
+  });
+  for (const b of document.querySelectorAll<HTMLButtonElement>("[data-frage]")) {
+    b.addEventListener("click", () => void chat.senden(b.dataset.frage ?? ""));
+  }
 }
 
 // ---------------------------------------------------------------- Live
@@ -796,6 +1018,8 @@ if (istApp) {
 }
 funkEinrichten();
 berichtKiEinrichten();
+chatEinrichten();
+sparZeigen();
 void kontoStarten(istApp);
 window.addEventListener("resize", () => {
   if (aktiverReiter === "live") live();

@@ -1,8 +1,10 @@
-// GSRA – Supabase Edge Function „renningenieur“ (SQL 052)
-// Formuliert Funksprüche und die Nachbesprechung des KI-Renningenieurs. Die FAKTEN kommen immer aus den Messwerten
-// der App; die KI formuliert sie nur so, wie die Person ihren Renningenieur eingestellt hat (Name, Art, Sprache …).
+// GSRA – Supabase Edge Function „renningenieur“ (SQL 052, 053)
+// Formuliert Funksprüche, Rückfragen und die Nachbesprechung des KI-Renningenieurs. Die FAKTEN kommen immer aus den
+// Messwerten der App; die KI formuliert sie nur so, wie die Person ihren Renningenieur eingestellt hat.
 //
 //  * Funk: Claude Haiku 5.5 (schnell, günstig), ohne Nachdenk-Modus, höchstens ~2 Sätze.
+//  * Rückfrage im Chat („frage“): Haiku, kurz. Schwierige Frage („analyse“): Claude Sonnet 5.5 mit Nachdenken –
+//    die App sagt vorher sofort „Wir schauen uns das an“, wie ein echter Renningenieur.
 //  * Nachbesprechung nach der Sitzung: Claude Sonnet 5.5.
 //  * Der feste Teil der Anweisungen wird zwischengespeichert (Prompt-Caching) – das senkt die Kosten deutlich.
 //
@@ -90,6 +92,15 @@ Funk-Anlässe (Feld "anlass" in <messwerte>):
 - frage: Die Person hat eine Frage gestellt (Feld "frage") – beantworte sie kurz aus den Messwerten oder sag ehrlich,
   dass du es nicht weißt.
 
+Rückfragen (wenn die Anfrage "frage" oder "analyse" ist): Die Person schreibt oder spricht mit dir – im Rennen oder
+danach. Der bisherige Verlauf steht davor. Antworte direkt auf die Frage unter <frage>, wie ein Kumpel am Funk, mit
+den Messwerten. Bei "frage" höchstens drei kurze Sätze. Bei "analyse" darfst du gründlicher sein (bis zu sechs Sätze):
+nenne die Ursache, die Stelle und einen konkreten Tipp, den man in der nächsten Runde ausprobieren kann. Steht die
+Antwort nicht in den Messwerten, sag ehrlich, was dir fehlt (z. B. "Dafür brauche ich noch eine saubere Runde").
+Sprit sparen: Wenn die Person Sprit sparen will, erkläre Lift & Coast (früher vom Gas gehen und vor dem Bremspunkt
+ausrollen lassen; dazu kurz hochschalten bzw. kürzer im hohen Drehzahlbereich bleiben). Nutze dafür die Werte unter
+"sparen" in den Messwerten (Ziel, erreichte Ersparnis, Zeitverlust, wo früher vom Gas) und sag ehrlich, ob es reicht.
+
 Nachbesprechung (wenn die Anfrage "nachbesprechung" ist): Sprich wie nach der Sitzung in der Box, 5 bis 8 Sätze als
 zusammenhängender Text in 2 bis 3 kurzen Absätzen: 1. Wie lief es insgesamt (Plätze, Bestzeit, Konstanz).
 2. Die zwei wichtigsten Stellen, an denen Zeit liegt, mit konkretem Tipp. 3. Die Zweikämpfe (wer, wo überholt oder
@@ -123,12 +134,30 @@ Deno.serve(async (req) => {
 
   const roh = await req.text();
   if (roh.length > MAX_ANFRAGE) return antwort({ fehler: "Anfrage zu groß." }, 413);
-  let daten: { art?: unknown; lage?: unknown };
+  let daten: { art?: unknown; lage?: unknown; frage?: unknown; verlauf?: unknown };
   try { daten = JSON.parse(roh); } catch { return antwort({ fehler: "Ungültige Anfrage." }, 400); }
-  const art = daten?.art === "nachbesprechung" ? "nachbesprechung" : daten?.art === "funk" ? "funk" : null;
+  const ARTEN = ["funk", "nachbesprechung", "frage", "analyse"] as const;
+  const art = ARTEN.find((a) => a === daten?.art) ?? null;
   if (!art || !daten.lage || typeof daten.lage !== "object") return antwort({ fehler: "Ungültige Anfrage." }, 400);
   const lage = JSON.stringify(stutzen(daten.lage));
   if (lage.length > 8000) return antwort({ fehler: "Anfrage zu groß." }, 413);
+  // Rückfrage: die Frage selbst und höchstens 8 vorherige Beiträge (Fahrer ↔ Renningenieur), alles bereinigt
+  const chat = art === "frage" || art === "analyse";
+  const frage = chat && typeof daten.frage === "string" ? textSauber(daten.frage, 400) : "";
+  if (chat && frage.length < 2) return antwort({ fehler: "Bitte stell eine Frage." }, 400);
+  const verlauf: Array<{ role: "user" | "assistant"; content: string }> = [];
+  if (chat && Array.isArray(daten.verlauf)) {
+    for (const e of daten.verlauf.slice(-8)) {
+      const b = e as { wer?: unknown; text?: unknown };
+      const text = typeof b?.text === "string" ? textSauber(b.text, 600) : "";
+      if (!text || (b.wer !== "fahrer" && b.wer !== "ingenieur")) continue;
+      const role = b.wer === "fahrer" ? "user" as const : "assistant" as const;
+      const letzte = verlauf[verlauf.length - 1];
+      if (letzte?.role === role) letzte.content += `\n${text}`;
+      else if (verlauf.length || role === "user") verlauf.push({ role, content: text });
+    }
+    if (verlauf[verlauf.length - 1]?.role === "user") verlauf.pop(); // die neue Frage kommt gleich als eigene Nachricht
+  }
 
   try {
     // Freigabe und Zählung durch die Datenbank – mit der Anmeldung der Person (auth.uid(), Sperre, Zwei-Faktor)
@@ -144,32 +173,44 @@ Deno.serve(async (req) => {
     const freigabe = data as Freigabe;
     if (!freigabe?.erlaubt || !freigabe.einstellungen) return antwort({ fehler: "Gerade zu viele Anfragen.", grund: freigabe?.grund ?? "grenze" }, 429);
 
-    const ki = new Anthropic({ apiKey: schluessel, maxRetries: 1, timeout: art === "funk" ? 12_000 : 45_000 });
+    const schnell = art === "funk" || art === "frage";
+    const ki = new Anthropic({ apiKey: schluessel, maxRetries: 1, timeout: schnell ? 12_000 : 60_000 });
     const system = [
       { type: "text" as const, text: GRUNDREGELN, cache_control: { type: "ephemeral" as const } },
       { type: "text" as const, text: persoenlichkeit(freigabe.einstellungen, freigabe.gedaechtnis), cache_control: { type: "ephemeral" as const } },
     ];
-    const inhalt = `Anfrage: ${art}\n<messwerte>\n${lage}\n</messwerte>`;
-    const nachricht = art === "funk"
+    const inhalt = `Anfrage: ${art}\n<messwerte>\n${lage}\n</messwerte>${chat ? `\n<frage>\n${frage}\n</frage>` : ""}`;
+    const messages = [...verlauf, { role: "user" as const, content: inhalt }];
+    const nachricht = schnell
       ? await ki.messages.create({
           model: "claude-haiku-5-5",
-          max_tokens: 220,
+          max_tokens: art === "frage" ? 350 : 220,
           thinking: { type: "disabled" },
           output_config: { effort: "low" },
           system,
-          messages: [{ role: "user", content: inhalt }],
+          messages,
         })
-      : await ki.messages.create({
-          model: "claude-sonnet-5-5",
-          max_tokens: 1200,
-          thinking: { type: "between_tools" },
-          output_config: { effort: "medium" },
-          system,
-          messages: [{ role: "user", content: inhalt }],
-        });
+      : art === "analyse"
+        ? await ki.messages.create({
+            // Gründliche Antwort: kurz nachdenken lassen (die App hat schon „Wir schauen uns das an“ gesagt)
+            model: "claude-sonnet-5-5",
+            max_tokens: 4000,
+            thinking: { type: "adaptive" },
+            output_config: { effort: "medium" },
+            system,
+            messages,
+          })
+        : await ki.messages.create({
+            model: "claude-sonnet-5-5",
+            max_tokens: 1200,
+            thinking: { type: "between_tools" },
+            output_config: { effort: "medium" },
+            system,
+            messages,
+          });
     if (nachricht.stop_reason === "refusal") return antwort({ fehler: "Dazu sagt der Renningenieur nichts.", grund: "abgelehnt" }, 422);
     const text = nachricht.content.filter((b) => b.type === "text").map((b) => (b as { text: string }).text).join(" ");
-    const sauber = antwortSauber(text, art === "funk" ? 320 : 2400);
+    const sauber = antwortSauber(text, art === "funk" ? 320 : art === "frage" ? 600 : 2400);
     if (!sauber) return antwort({ fehler: "Keine Antwort erhalten.", grund: "leer" }, 502);
     return antwort({ text: sauber, art });
   } catch (e) {

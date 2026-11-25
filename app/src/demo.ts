@@ -28,7 +28,9 @@ const GANG_AB = [0, 20, 32, 44, 56, 67];
 const VERBRAUCH_PRO_M = 0.0008; // Liter pro Meter bei Vollgas (Teil davon auch ohne Gas)
 
 /** Wie der Fahrer eine Runde fährt: je Kurve Faktor für Kurventempo, Bremskraft, Beschleunigung am Ausgang */
-export type Fahrweise = { tempo: number[]; bremse: number[]; ausgang: number[] };
+/** rollen: Meter Lift & Coast vor der Bremszone je Kurve (Sprit sparen); fehlt = 0 */
+export type Fahrweise = { tempo: number[]; bremse: number[]; ausgang: number[]; rollen?: number[] };
+const ROLL_VERZOEGERUNG = 1.1; // m/s² – Luftwiderstand und Motorbremse ohne Gas
 export type Profil = { v: Float64Array; g: Float64Array; b: Float64Array; l: Float64Array; t: Float64Array; sprit: Float64Array; boxe: Uint8Array; h: Float64Array };
 
 export const idealeFahrweise = (): Fahrweise => ({ tempo: DEMO_KURVEN.map(() => 1), bremse: DEMO_KURVEN.map(() => 1), ausgang: DEMO_KURVEN.map(() => 1) });
@@ -89,6 +91,26 @@ export function profil(f: Fahrweise, boxe: { rein?: boolean; raus?: boolean } = 
     v[m] = Math.min(v[m], Math.sqrt(v[m + 1] * v[m + 1] + 2 * dez));
   }
 
+  // Lift & Coast: vor der Bremszone früher vom Gas und ausrollen, bis die Bremskurve erreicht ist
+  const rollt = new Uint8Array(L + 1);
+  DEMO_KURVEN.forEach((kd, i) => {
+    const r = Math.round(f.rollen?.[i] ?? 0);
+    if (r <= 0) return;
+    const kurvenStart = Math.round(kd.bei - kd.laenge / 2);
+    let bs = kurvenStart;
+    while (bs > 1 && v[bs - 1] > v[bs] + 1e-6) bs--; // Beginn der Bremszone (letzter Hochpunkt davor)
+    if (kurvenStart - bs < 10) return; // keine echte Bremszone (z. B. Kurve aus dem Beschleunigen heraus) – nichts zu sparen
+    let m = Math.max(1, bs - r);
+    let vr = v[m];
+    for (; m < kurvenStart; m++) {
+      const naechstesV = Math.sqrt(Math.max(1, vr * vr - 2 * ROLL_VERZOEGERUNG));
+      if (naechstesV >= v[m + 1]) break; // Bremskurve erreicht – ab hier wird gebremst
+      rollt[m] = 1;
+      v[m + 1] = naechstesV;
+      vr = naechstesV;
+    }
+  });
+
   const g = new Float64Array(L + 1);
   const b = new Float64Array(L + 1);
   const l = new Float64Array(L + 1);
@@ -97,7 +119,10 @@ export function profil(f: Fahrweise, boxe: { rein?: boolean; raus?: boolean } = 
   for (let m = 0; m <= L; m++) {
     const n = Math.min(L, m + 1);
     const dv2 = v[n] * v[n] - v[m] * v[m];
-    if (dv2 < -0.5) {
+    if (rollt[m]) {
+      g[m] = 0;
+      b[m] = 0;
+    } else if (dv2 < -0.5) {
       b[m] = Math.min(1, -dv2 / 2 / VERZOEGERUNG);
       g[m] = 0;
     } else if (dv2 > 0.05) {
@@ -152,6 +177,8 @@ export const DEMO_GEGNER = [
 ];
 
 export class DemoFahrt {
+  /** Spar-Modus der Demo: ab der nächsten Runde Lift & Coast vor den Bremszonen */
+  sparen = false;
   zeit = 0;
   runde = 1;
   sprit = 40;
@@ -196,6 +223,8 @@ export class DemoFahrt {
       f.ausgang[k] -= 0.2;
     }
     for (const liste of [f.tempo, f.bremse, f.ausgang]) for (let i = 0; i < liste.length; i++) liste[i] = Math.max(0.5, liste[i]);
+    // Spar-Modus: die Demo-Fahrerin rollt vor den Bremszonen aus (unterschiedlich gut – wie ein Mensch)
+    if (this.sparen) f.rollen = DEMO_KURVEN.map(() => Math.max(0, 70 + this.gauss() * 25));
     return f;
   }
 

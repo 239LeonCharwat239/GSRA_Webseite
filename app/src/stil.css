@@ -249,6 +249,23 @@ main { padding: 12px 20px 28px; max-width: 1400px; margin: 0 auto; }
 .ki-text p { margin: 0; line-height: 1.55; }
 .ki-text[hidden] { display: none; }
 
+/* Chat mit dem Renningenieur */
+.chat-karte { display: flex; flex-direction: column; gap: 12px; }
+.chat-liste { min-height: 280px; max-height: min(58vh, 560px); overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px 2px; }
+.chat-liste:empty::before { content: "Frag zum Beispiel: „Wer fährt vor mir?“ oder „Warum bin ich in Kurve 4 langsamer?“"; color: var(--leise); font-size: 13px; }
+.chat-beitrag { max-width: min(640px, 86%); padding: 9px 12px; border-radius: 12px; background: var(--flaeche-2); border: 1px solid var(--rand); }
+.chat-beitrag p { margin: 2px 0 0; line-height: 1.5; white-space: pre-line; }
+.chat-beitrag.fahrer { align-self: flex-end; background: rgba(0, 85, 255, 0.16); border-color: rgba(0, 85, 255, 0.35); }
+.chat-beitrag.ingenieur { align-self: flex-start; }
+.chat-beitrag.pruefen { border-color: rgba(255, 204, 0, 0.35); }
+.chat-beitrag.tippt p { color: var(--leise); letter-spacing: 2px; }
+.chat-wer { font-size: 11px; color: var(--leise); }
+.chat-schnell { display: flex; flex-wrap: wrap; gap: 8px; }
+.chat-form { display: flex; gap: 8px; }
+.chat-form input { flex: 1; min-width: 0; background: var(--flaeche-2); border: 1px solid var(--rand); border-radius: 10px; padding: 9px 12px; }
+.spar-tipps { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: rgba(34, 197, 94, 0.07); border: 1px solid rgba(34, 197, 94, 0.25); }
+.spar-tipps ul { margin: 6px 0 0; padding-left: 18px; }
+
 /* Ladeanimation (gemeinsam mit der Webseite, ../src/ladeanimation.ts) und Startbild */
 .gsra-lade { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 28px 16px; color: var(--leise); text-align: center; }
 .gsra-lade-logo { display: block; width: min(150px, 60%); height: auto; overflow: visible; }

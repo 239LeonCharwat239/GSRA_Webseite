@@ -11,9 +11,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL, KARRIERE_SQL, STINTPLAN_SQL, LIVERIES_SQL, CHATSICHER_SQL, AUFRAEUMEN_SQL, ONLINE_SQL, RE_STIL_SQL, APP_LOGIN_SQL, RE_KI_SQL] =
-    Array.from({ length: 52 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 52);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL, KARRIERE_SQL, STINTPLAN_SQL, LIVERIES_SQL, CHATSICHER_SQL, AUFRAEUMEN_SQL, ONLINE_SQL, RE_STIL_SQL, APP_LOGIN_SQL, RE_KI_SQL, RE_CHAT_SQL] =
+    Array.from({ length: 53 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 53);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -3741,6 +3741,48 @@ if (RE_KI_SQL && RE_STIL_SQL) {
     const loeschen = await q(`delete from auth.users where id = '${V}'`);
     const uebrig = await one(`select (select count(*) from public.race_engineer_monthly where user_id = '${V}') + (select count(*) from public.race_engineer_usage where user_id = '${V}') as n`);
     check("Konto gelöscht: keine Zählung übrig", loeschen.error === null && Number(uebrig.n) === 0, loeschen.error || String(uebrig.n));
+
+    // --- 053: Rückfragen im Chat (frage, analyse) mit eigenen Tagesgrenzen ---
+    if (RE_CHAT_SQL) {
+        const C = id(11), D = id(12);
+        await db.exec(`
+          insert into auth.users (id) values ('${C}'), ('${D}');
+          insert into public.profiles (id, username) values ('${C}', 'Chatfahrer Carl'), ('${D}', 'Deepfrage Dora');`);
+        const vorher53 = await turn(C, "frage");
+        check("Vor 053: Rückfragen im Chat nicht möglich (Lücke nachgewiesen)", /Unbekannte Anfrage/.test(vorher53.error || ""), vorher53.error || "durchgelassen");
+        await db.exec(readFileSync(RE_CHAT_SQL, "utf8"));
+        const ctl53 = await db.exec(readFileSync(RE_CHAT_SQL, "utf8")); // zweiter Lauf
+        const rows53 = ctl53[ctl53.length - 1].rows;
+        console.log("Kontrolle 053:\n  " + rows53.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+        check("Kontrolle 053: bereit, Gäste ausgeschlossen", rows53.map(r => r.ergebnis).join(",") === "bereit,ja", rows53.map(r => r.ergebnis).join(", "));
+        const f1 = (await turn(C, "frage")).rows[0]?.r;
+        check("Rückfrage (frage) erlaubt, mit eigener Persönlichkeit", f1?.erlaubt === true && f1.einstellungen?.name === "Kim", JSON.stringify(f1));
+        const a1 = (await turn(C, "analyse")).rows[0]?.r;
+        check("Gründliche Antwort (analyse) erlaubt", a1?.erlaubt === true, JSON.stringify(a1));
+        check("Funk und Nachbesprechung gehen weiter", (await turn(C, "funk")).rows[0]?.r?.erlaubt === true && (await turn(C, "nachbesprechung")).rows[0]?.r?.erlaubt === true);
+        const m53 = await one(`select anzahl from public.race_engineer_monthly where user_id = '${C}'`);
+        check("Rückfragen zählen zum Monat", m53?.anzahl === 4, JSON.stringify(m53));
+        await db.exec(`insert into public.race_engineer_usage (user_id, art, created_at)
+                       select '${D}', 'analyse', now() - interval '3 hours' from generate_series(1, 100)`);
+        const a101 = (await turn(D, "analyse")).rows[0]?.r;
+        check("Höchstens 100 gründliche Antworten am Tag", a101?.erlaubt === false && a101.grund === "tag", JSON.stringify(a101));
+        check("Kurze Rückfragen bleiben dann möglich", (await turn(D, "frage")).rows[0]?.r?.erlaubt === true);
+        await db.exec(`insert into public.race_engineer_usage (user_id, art, created_at)
+                       select '${D}', 'frage', now() - interval '3 hours' from generate_series(1, 300)`);
+        const f301 = (await turn(D, "frage")).rows[0]?.r;
+        check("Höchstens 300 kurze Rückfragen am Tag", f301?.erlaubt === false && f301.grund === "tag", JSON.stringify(f301));
+        check("Funk trotzdem weiter möglich", (await turn(D, "funk")).rows[0]?.r?.erlaubt === true);
+        const unbekannt53 = await turn(D, "alles");
+        check("Weiterhin keine unbekannten Arten", /Unbekannte Anfrage/.test(unbekannt53.error || ""), unbekannt53.error || "durchgelassen!");
+        const regel = await q(`insert into public.race_engineer_usage (user_id, art) values ('${D}', 'boese')`);
+        check("Datenbank-Regel lehnt unbekannte Arten auch direkt ab", regel.error !== null, regel.error || "durchgelassen!");
+        const gast53 = await turn(null, "frage");
+        check("Gäste: keine Rückfragen", gast53.error !== null, gast53.error || "durchgelassen!");
+        await as(C, async () => {
+            const lesen = await q(`select * from public.race_engineer_usage`);
+            check("Zähler bleiben für Mitglieder unlesbar", lesen.error !== null, lesen.error || `${lesen.rows.length} Zeilen`);
+        });
+    }
 }
 
 // --- Konto löschen (Ausbau 3) funktioniert weiterhin, die Stimmen verschwinden mit ---

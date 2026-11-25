@@ -20,6 +20,7 @@
       <button type="button" role="tab" data-reiter="vergleich" aria-selected="false">Vergleich</button>
       <button type="button" role="tab" data-reiter="sprit" aria-selected="false">Sprit &amp; Stint</button>
       <button type="button" role="tab" data-reiter="bericht" aria-selected="false">Bericht</button>
+      <button type="button" role="tab" data-reiter="chat" aria-selected="false">Renningenieur</button>
     </nav>
     <div class="verbindung">
       <span class="led" id="led" aria-hidden="true"></span>
@@ -184,6 +185,25 @@
       </div>
     </section>
 
+    <!-- RENNINGENIEUR (Chat: Rückfragen schreiben – im Rennen und danach) -->
+    <section class="seite" data-seite="chat" aria-label="Renningenieur">
+      <div class="karte chat-karte">
+        <h2>Frag deinen Renningenieur <small id="cName">Einfaches beantwortet er sofort, Schwieriges schaut er sich kurz an</small></h2>
+        <div class="chat-liste" id="cListe" aria-live="polite"></div>
+        <div class="chat-schnell" aria-label="Schnelle Fragen">
+          <button type="button" class="knopf leise" data-frage="Wer fährt vor mir?">Wer fährt vor mir?</button>
+          <button type="button" class="knopf leise" data-frage="Reicht der Sprit bis ins Ziel?">Reicht der Sprit?</button>
+          <button type="button" class="knopf leise" data-frage="Ich möchte Sprit sparen.">Ich möchte Sprit sparen</button>
+          <button type="button" class="knopf leise" data-frage="Warum verliere ich Zeit und was mache ich in der nächsten Runde besser?">Wo verliere ich Zeit – und warum?</button>
+        </div>
+        <form class="chat-form" id="cForm" autocomplete="off">
+          <input id="cFeld" type="text" maxlength="400" placeholder="Schreib deinem Renningenieur …" aria-label="Nachricht an den Renningenieur">
+          <button class="knopf" type="submit">Senden</button>
+        </form>
+        <p class="hinweis">Der Verlauf bleibt nur in dieser Sitzung der App. Angemeldet antwortet dein KI-Renningenieur in seinem Stil – sonst sagt er dir Sprit, Abstände und Rundenzeiten direkt aus den Messwerten.</p>
+      </div>
+    </section>
+
     <!-- SPRIT & STINT -->
     <section class="seite" data-seite="sprit" aria-label="Sprit und Stint">
       <div class="raster">
@@ -204,6 +224,20 @@
         </div>
         <div class="ergebnis" id="sErgebnis" aria-live="polite"></div>
       </form>
+      <div class="karte">
+        <h2>Sprit sparen <small>Lift &amp; Coast – früher vom Gas, vor dem Bremspunkt ausrollen</small></h2>
+        <div class="funk-leiste">
+          <label class="feld-klein">Ziel
+            <select id="spZiel"><option value="0.03">3 % weniger</option><option value="0.05" selected>5 % weniger</option><option value="0.08">8 % weniger</option><option value="0.1">10 % weniger</option></select></label>
+          <button class="knopf" id="spKnopf" type="button">Spar-Modus starten</button>
+          <span class="hinweis" id="spStatus" aria-live="polite">Ich messe erst deinen normalen Verbrauch (3 saubere Runden) und sage dir dann nach jeder Runde, ob es reicht und was es kostet.</span>
+        </div>
+        <div id="spTipps" class="spar-tipps" hidden></div>
+        <table class="tabelle" id="spTabelle" hidden>
+          <thead><tr><th>Runde</th><th>Verbrauch</th><th>gespart</th><th>Zeit</th><th>Ausrollen</th></tr></thead>
+          <tbody id="spZeilen"></tbody>
+        </table>
+      </div>
       <div class="karte">
         <h2>Ganzes Rennen planen <small>Stint-Planer auf der GSRA-Webseite (Pole und Alliance)</small></h2>
         <p class="hinweis">Ganze Rennen mit Fahrerwechseln, Reifen und Boxenstopps planst du im Stint-Planer. Er übernimmt deine gemessene Rundenzeit, deinen Verbrauch, Strecke und Fahrzeug – du bestätigst dort, bevor etwas geändert wird.</p>
