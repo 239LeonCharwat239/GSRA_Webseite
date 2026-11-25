@@ -236,3 +236,11 @@ main { padding: 12px 20px 28px; max-width: 1400px; margin: 0 auto; }
 .ueberholungen .gut { color: var(--gruen); }
 .ueberholungen .schlecht { color: var(--rot); }
 @media (max-width: 1100px) { .zweispaltig.gleich { grid-template-columns: 1fr; } }
+
+/* Ladeanimation (gemeinsam mit der Webseite, ../src/ladeanimation.ts) und Startbild */
+.gsra-lade { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 28px 16px; color: var(--leise); text-align: center; }
+.gsra-lade-logo { display: block; width: min(150px, 60%); height: auto; overflow: visible; }
+.gsra-lade-text { margin: 0; font-size: 13px; }
+.start { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: radial-gradient(900px 420px at 50% 40%, rgba(0, 85, 255, 0.16), transparent 65%), var(--grund); transition: opacity 0.4s ease, visibility 0.4s; cursor: pointer; }
+.start .gsra-lade-logo { width: min(380px, 62vw); }
+.start.weg { opacity: 0; visibility: hidden; pointer-events: none; }

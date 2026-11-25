@@ -10,6 +10,9 @@ import type { Feld, Probe, Sitzung, Status } from "./typen.ts";
 import { kontoStarten } from "./konto-ansicht.ts";
 import { karteBauen, karteZeichnen, verlustJeAbschnitt, type Karte } from "./strecke.ts";
 import { Rennbeobachter, berichtErstellen, rundenzeitText, stelleText } from "./rennbericht.ts";
+import { startbildZeigen } from "./startbild.ts";
+
+startbildZeigen();
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => {
   const e = document.getElementById(id);

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GSRA Ladeanimation – Vorschau</title>
+  <link rel="stylesheet" href="/src/stil.css">
+  <link rel="stylesheet" href="/src/lade-vorschau.css">
+</head>
+<body>
+  <!-- Nur für die Entwicklung (gehört nicht zum fertigen Programm): Varianten der Ladeanimation zum Anschauen -->
+  <main class="lv">
+    <h1>Ladeanimation – Prototyp</h1>
+    <p class="hinweis">Das Netz des Globus bildet sich, die Buchstaben fliegen von links ein und glänzen – dann von vorn.</p>
+    <div class="lv-raster">
+      <section class="lv-feld dunkel"><h2>Groß, dunkler Hintergrund</h2><div class="lv-buehne" id="dunkel"></div></section>
+      <section class="lv-feld hell"><h2>Groß, heller Hintergrund</h2><div class="lv-buehne" id="hell"></div></section>
+      <section class="lv-feld dunkel"><h2>Im Messenger (Chatliste lädt)</h2><div class="lv-liste" id="liste"></div></section>
+      <section class="lv-feld dunkel"><h2>Startbild der App (einmal)</h2><div class="lv-buehne" id="einmal"></div><button class="knopf" id="nochmal" type="button">Nochmal abspielen</button></section>
+      <section class="lv-feld hell"><h2>Vergleich mit dem Original-Logo</h2><div class="lv-buehne lv-vergleich" id="vergleich"><img src="/gsra-logo.png" alt=""></div></section>
+    </div>
+  </main>
+  <script type="module" src="/src/lade-vorschau.ts"></script>
+</body>
+</html>

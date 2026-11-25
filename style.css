@@ -12192,6 +12192,21 @@ select option {
 /* „Folge GSRA“ steht nur noch auf der Startseite (eigener Bereich); die Fußzeile der Unterseiten ist eine
    schlanke Leiste mit Kündigen, Impressum, Datenschutz und Nutzungsbedingungen (Wunsch 25.11.) */
 
+/* Ladeanimation (src/ladeanimation.ts): Globus-Netz bildet sich, Buchstaben fliegen ein – z. B. Chatliste */
+.gsra-lade {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 28px 16px;
+    color: var(--text-muted);
+    text-align: center;
+}
+.gsra-lade-logo { display: block; width: min(150px, 60%); height: auto; overflow: visible; }
+.gsra-lade-text { margin: 0; padding: 15px; font-size: 13px; color: var(--text-muted); }
+.gsra-lade .gsra-lade-text { padding: 0; }
+
 /* =========================================
    App-Ansicht (Messenger, Wunsch 25.11.): Die Seite selbst scrollt nicht – Kopfzeile oben, schlanke Fußzeile
    unten (Kündigen und Datenschutz bleiben immer sichtbar), dazwischen füllt der Messenger den ganzen Platz und

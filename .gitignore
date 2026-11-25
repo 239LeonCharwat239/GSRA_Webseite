@@ -3,3 +3,9 @@ node_modules/
 dist/
 target/
 app/src-tauri/gen/
+# Private Testdaten (z. B. Sprachaufnahmen von Freunden) – nie ins öffentliche Repository
+privat-testdaten/
+*.ogg
+*.opus
+*.m4a
+*.wav
