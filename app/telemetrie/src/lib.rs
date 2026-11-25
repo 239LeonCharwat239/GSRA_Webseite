@@ -15,5 +15,5 @@ pub mod leser;
 #[cfg(windows)]
 pub mod windows;
 
-pub use irsdk::{Probe, Sitzung};
+pub use irsdk::{FahrerInfo, Feld, Probe, Sitzung};
 pub use leser::{Lesung, Leser, Speicher};

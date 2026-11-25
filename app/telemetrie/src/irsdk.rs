@@ -253,6 +253,37 @@ pub fn wert(zeile: &[u8], v: &Variable) -> Option<f64> {
     x.is_finite().then_some(x)
 }
 
+/// Alle Elemente einer Feld-Variablen (z. B. je Auto), höchstens `max`; nicht lesbare Werte bleiben leer
+pub fn werte(zeile: &[u8], v: &Variable, max: usize) -> Vec<Option<f64>> {
+    (0..v.anzahl.min(max))
+        .map(|i| {
+            let einzeln = Variable { name: String::new(), typ: v.typ, offset: v.offset + i * v.typ.groesse(), anzahl: 1 };
+            wert(zeile, &einzeln)
+        })
+        .collect()
+}
+
+/// Höchstens so viele Autos (iRacing: 64)
+pub const MAX_AUTOS: usize = 64;
+
+/// Werte je Auto für Rennbericht und Zweikämpfe (Namen wie im iRacing-SDK)
+const FELD_NAMEN: [&str; 5] = ["PlayerCarIdx", "CarIdxLapDistPct", "CarIdxLap", "CarIdxPosition", "CarIdxOnPitRoad"];
+
+/// Stand aller Autos (Index = Startnummer-unabhängiger Platz im Feld der Simulation, „CarIdx“)
+#[derive(Debug, Clone, PartialEq, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Feld {
+    pub zeit: Option<f64>,
+    /// eigener Index im Feld
+    pub ich: Option<i32>,
+    /// Streckenanteil 0…1 (negativ = Auto nicht auf der Strecke)
+    pub anteil: Vec<Option<f64>>,
+    pub runde: Vec<Option<f64>>,
+    /// Gesamtplatz (0 = noch keiner)
+    pub platz: Vec<Option<f64>>,
+    pub in_box: Vec<Option<f64>>,
+}
+
 /// Die Werte, die die App braucht (Namen wie im iRacing-SDK)
 const NAMEN: [&str; 17] = [
     "SessionTime",
@@ -278,6 +309,7 @@ const NAMEN: [&str; 17] = [
 #[derive(Debug, Clone, Default)]
 pub struct Karte {
     felder: [Option<Variable>; 17],
+    feld: [Option<Variable>; 5],
 }
 
 impl Karte {
@@ -286,7 +318,24 @@ impl Karte {
         for (i, name) in NAMEN.iter().enumerate() {
             k.felder[i] = vars.iter().find(|v| v.name == *name).cloned();
         }
+        for (i, name) in FELD_NAMEN.iter().enumerate() {
+            k.feld[i] = vars.iter().find(|v| v.name == *name).cloned();
+        }
         k
+    }
+
+    /// Stand aller Autos; `None`, wenn die Simulation keine Werte je Auto liefert
+    pub fn feld(&self, zeile: &[u8]) -> Option<Feld> {
+        let anteil = self.feld[1].as_ref()?;
+        let alle = |i: usize| self.feld[i].as_ref().map(|v| werte(zeile, v, MAX_AUTOS)).unwrap_or_default();
+        Some(Feld {
+            zeit: self.zahl(zeile, 0),
+            ich: self.feld[0].as_ref().and_then(|v| wert(zeile, v)).map(|x| x as i32),
+            anteil: werte(zeile, anteil, MAX_AUTOS),
+            runde: alle(2),
+            platz: alle(3),
+            in_box: alle(4),
+        })
     }
     pub fn vorhanden(&self) -> usize {
         self.felder.iter().filter(|f| f.is_some()).count()
@@ -354,6 +403,50 @@ pub struct Sitzung {
     pub streckenlaenge_m: Option<f64>,
     pub fahrzeug: Option<String>,
     pub sitzungsart: Option<String>,
+    /// Teilnehmer (ohne Pace-Car und Zuschauer) – für Zweikämpfe im Rennbericht
+    pub fahrer: Vec<FahrerInfo>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FahrerInfo {
+    pub idx: i32,
+    pub name: String,
+    pub nummer: String,
+}
+
+/// Fahrerliste aus dem Block „Drivers:“ (je Eintrag „- CarIdx: …“, „UserName: …“, „CarNumber: …“)
+fn fahrer_lesen(yaml: &str) -> Vec<FahrerInfo> {
+    let mut liste: Vec<FahrerInfo> = Vec::new();
+    let mut aktuell: Option<(FahrerInfo, bool)> = None; // (Eintrag, ausblenden)
+    let abschliessen = |e: Option<(FahrerInfo, bool)>, liste: &mut Vec<FahrerInfo>| {
+        if let Some((f, aus)) = e {
+            if !aus && !f.name.is_empty() && liste.len() < MAX_AUTOS && !liste.iter().any(|x| x.idx == f.idx) {
+                liste.push(f);
+            }
+        }
+    };
+    for z in yaml.lines() {
+        let t = z.trim_start();
+        if let Some(rest) = t.strip_prefix("- CarIdx:") {
+            abschliessen(aktuell.take(), &mut liste);
+            aktuell = rest.trim().parse::<i32>().ok().filter(|i| (0..MAX_AUTOS as i32).contains(i)).map(|idx| (FahrerInfo { idx, ..Default::default() }, false));
+            continue;
+        }
+        let Some((f, aus)) = aktuell.as_mut() else { continue };
+        if let Some(w) = t.strip_prefix("UserName:") {
+            f.name = sauber(w).map(|s| s.chars().take(40).collect()).unwrap_or_default();
+        } else if let Some(w) = t.strip_prefix("CarNumber:") {
+            f.nummer = sauber(w).map(|s| s.chars().filter(|c| c.is_ascii_alphanumeric()).take(4).collect()).unwrap_or_default();
+        } else if t.starts_with("CarIsPaceCar: 1") || t.starts_with("IsSpectator: 1") {
+            *aus = true;
+        } else if !t.is_empty() && !z.starts_with(' ') {
+            // nächster Hauptabschnitt (z. B. „SplitTimeInfo:“): Liste zu Ende
+            abschliessen(aktuell.take(), &mut liste);
+        }
+    }
+    abschliessen(aktuell.take(), &mut liste);
+    liste
 }
 
 /// Latin-1 → Text (jedes Byte ist ein Zeichen); endet am ersten Nullbyte
@@ -431,7 +524,7 @@ pub fn sitzung_lesen(yaml: &str) -> Sitzung {
         }
         None
     });
-    Sitzung { strecke, streckenlaenge_m, fahrzeug, sitzungsart }
+    Sitzung { strecke, streckenlaenge_m, fahrzeug, sitzungsart, fahrer: fahrer_lesen(yaml) }
 }
 
 #[cfg(test)]
@@ -679,6 +772,52 @@ mod tests {
         let lang = format!("TrackDisplayName: {}\n", "x".repeat(500));
         assert_eq!(sitzung_lesen(&lang).strecke.map(|t| t.len()), Some(80));
         assert_eq!(sitzung_lesen("TrackLength: 3.2 mi").streckenlaenge_m.map(|m| m.round()), Some(5150.0));
+    }
+
+    #[test]
+    fn feld_aller_autos() {
+        let v = |name: &str, typ: Typ, offset: usize, anzahl: usize| Variable { name: name.into(), typ, offset, anzahl };
+        let vars = vec![
+            v("SessionTime", Typ::Doppelt, 0, 1),
+            v("PlayerCarIdx", Typ::Ganzzahl, 8, 1),
+            v("CarIdxLapDistPct", Typ::Zahl, 12, 64),
+            v("CarIdxLap", Typ::Ganzzahl, 12 + 256, 64),
+            v("CarIdxPosition", Typ::Ganzzahl, 12 + 512, 64),
+        ];
+        let mut z = vec![0u8; 12 + 768];
+        z[0..8].copy_from_slice(&100.5f64.to_le_bytes());
+        z[8..12].copy_from_slice(&3i32.to_le_bytes());
+        z[12 + 3 * 4..12 + 4 * 4].copy_from_slice(&0.25f32.to_le_bytes());
+        z[12 + 5 * 4..12 + 6 * 4].copy_from_slice(&(-1.0f32).to_le_bytes());
+        z[268 + 3 * 4..268 + 4 * 4].copy_from_slice(&7i32.to_le_bytes());
+        z[524 + 3 * 4..524 + 4 * 4].copy_from_slice(&2i32.to_le_bytes());
+        let f = Karte::aus(&vars).feld(&z).unwrap();
+        assert_eq!(f.zeit, Some(100.5));
+        assert_eq!(f.ich, Some(3));
+        assert_eq!(f.anteil.len(), 64);
+        assert_eq!(f.anteil[3], Some(0.25));
+        assert_eq!(f.anteil[5], Some(-1.0));
+        assert_eq!(f.runde[3], Some(7.0));
+        assert_eq!(f.platz[3], Some(2.0));
+        assert!(f.in_box.is_empty(), "fehlende Variable bleibt leer");
+        // ohne Streckenanteile je Auto kein Feld
+        assert!(Karte::aus(&vars[..2]).feld(&z).is_none());
+        // zu kurze Zeile: kein Absturz, Werte leer
+        let kurz = Karte::aus(&vars).feld(&z[..40]).unwrap();
+        assert_eq!(kurz.anteil[20], None);
+    }
+
+    #[test]
+    fn fahrerliste_ohne_pace_car_und_zuschauer() {
+        let yaml = "DriverInfo:\n DriverCarIdx: 1\n Drivers:\n - CarIdx: 0\n   UserName: Pace Car\n   CarNumber: \"0\"\n   CarIsPaceCar: 1\n - CarIdx: 1\n   UserName: Anna Beispiel\n   CarNumber: \"27\"\n   CarIsPaceCar: 0\n   IsSpectator: 0\n - CarIdx: 2\n   UserName: <script>alert(1)</script>\u{0007}Böse\n   CarNumber: \"7<b>\"\n - CarIdx: 3\n   UserName: Zuschauer Zoe\n   IsSpectator: 1\n - CarIdx: 99\n   UserName: Zu Hoch\nSplitTimeInfo:\n Sectors:\n - CarIdx: 5\n";
+        let f = fahrer_lesen(yaml);
+        assert_eq!(f.len(), 2, "{f:?}");
+        assert_eq!(f[0], FahrerInfo { idx: 1, name: "Anna Beispiel".into(), nummer: "27".into() });
+        assert_eq!(f[1].idx, 2);
+        assert!(!f[1].name.contains('\u{7}'));
+        assert_eq!(f[1].nummer, "7b");
+        let lang = format!("Drivers:\n - CarIdx: 4\n   UserName: {}\n", "x".repeat(300));
+        assert_eq!(fahrer_lesen(&lang)[0].name.len(), 40);
     }
 
     #[test]

@@ -5,7 +5,7 @@
 // Physik bewusst einfach: Höchsttempo je Kurve, Beschleunigung nimmt mit dem Tempo ab, Bremsen mit fester
 // Verzögerung. Daraus entsteht ein Tempoverlauf über die Strecke (1 Punkt pro Meter) und die Zeit dazu.
 
-import type { Probe, Sitzung } from "./typen.ts";
+import type { Feld, Probe, Sitzung } from "./typen.ts";
 
 /** richtung: +1 = Rechtskurve, -1 = Linkskurve; winkel: wie weit die Kurve dreht (Grad, Summe der Runde = 360) */
 type KurveDef = { bei: number; v: number; laenge: number; richtung: 1 | -1; winkel: number };
@@ -143,6 +143,14 @@ export function zufall(start: number) {
 
 export const DEMO_BOXENSTOPP_ALLE = 12;
 
+/** Gegner der Demo: fahren die Ideallinie, aber mit eigenem Tempo (faktor > 1 = langsamer) und Vorsprung in Sekunden.
+ *  Lena ist etwa gleich schnell (langer Zweikampf), Tom langsamer (wird eingeholt), Mia führt. Namen ausgedacht. */
+export const DEMO_GEGNER = [
+  { idx: 1, name: "Lena Weber", nummer: "27", faktor: 1.008, vorsprung: 1.5 },
+  { idx: 2, name: "Tom Becker", nummer: "7", faktor: 1.022, vorsprung: 6 },
+  { idx: 3, name: "Mia Schulz", nummer: "11", faktor: 0.99, vorsprung: 12 },
+];
+
 export class DemoFahrt {
   zeit = 0;
   runde = 1;
@@ -154,6 +162,8 @@ export class DemoFahrt {
   private p: Profil;
   private tick = 0;
   private nachgetankt = false;
+  private meter = 0;
+  private ideal: Profil | null = null;
   private readonly rnd: () => number;
 
   constructor(startwert = 7) {
@@ -162,7 +172,10 @@ export class DemoFahrt {
   }
 
   sitzung(): Sitzung {
-    return { strecke: "GSRA-Testring (Demo)", streckenlaengeM: DEMO_LAENGE, fahrzeug: "Demo-GT3", sitzungsart: "Training" };
+    return {
+      strecke: "GSRA-Testring (Demo)", streckenlaengeM: DEMO_LAENGE, fahrzeug: "Demo-GT3", sitzungsart: "Rennen",
+      fahrer: [{ idx: 0, name: "Du", nummer: "1" }, ...DEMO_GEGNER.map((g) => ({ idx: g.idx, name: g.name, nummer: g.nummer }))],
+    };
   }
 
   private gauss() {
@@ -202,6 +215,31 @@ export class DemoFahrt {
     this.nachgetankt = false;
   }
 
+  /** Stand aller Autos (Index 0 = du, 1–3 = Gegner) mit Plätzen nach dem Fortschritt im Rennen */
+  feld(): Feld {
+    const ideal = (this.ideal ??= profil(idealeFahrweise()));
+    const T = ideal.t[DEMO_LAENGE];
+    const anteil: number[] = [this.meter / DEMO_LAENGE];
+    const runde: number[] = [this.runde];
+    for (const g of DEMO_GEGNER) {
+      const e = Math.max(0, (this.zeit + g.vorsprung) / g.faktor);
+      const runden = Math.floor(e / T);
+      const rest = e - runden * T;
+      let lo = 0;
+      let hi = DEMO_LAENGE;
+      while (hi - lo > 1) {
+        const m = (lo + hi) >> 1;
+        if (ideal.t[m] <= rest) lo = m;
+        else hi = m;
+      }
+      anteil.push(lo / DEMO_LAENGE);
+      runde.push(runden + 1);
+    }
+    const fortschritt = anteil.map((a, i) => runde[i] + a);
+    const platz = fortschritt.map((f) => 1 + fortschritt.filter((x) => x > f).length);
+    return { zeit: this.zeit, ich: 0, anteil, runde, platz, inBox: anteil.map(() => 0) };
+  }
+
   /** Nächster Messpunkt nach `dt` Sekunden */
   weiter(dt: number): Probe {
     this.zeit += dt;
@@ -218,6 +256,7 @@ export class DemoFahrt {
     }
     const f = t[hi] > t[lo] ? (tRunde - t[lo]) / (t[hi] - t[lo]) : 0;
     const meter = lo + f;
+    this.meter = meter;
     const w = (a: Float64Array) => a[lo] + (a[hi] - a[lo]) * f;
     const tempo = w(this.p.v);
     const gang = gangVon(tempo);
@@ -257,9 +296,12 @@ export class DemoQuelle {
   private rest = 0;
   readonly fahrt: DemoFahrt;
   private readonly senden: (p: Probe[]) => void;
+  private readonly feldSenden: ((f: Feld) => void) | null;
+  private naechstesFeld = 0;
 
-  constructor(senden: (p: Probe[]) => void, startwert = Date.now() % 100000) {
+  constructor(senden: (p: Probe[]) => void, feldSenden: ((f: Feld) => void) | null = null, startwert = Date.now() % 100000) {
     this.senden = senden;
+    this.feldSenden = feldSenden;
     this.fahrt = new DemoFahrt(startwert);
   }
 
@@ -274,7 +316,14 @@ export class DemoQuelle {
       const n = Math.floor(this.rest);
       this.rest -= n;
       const liste: Probe[] = [];
-      for (let i = 0; i < n; i++) liste.push(this.fahrt.weiter(1 / 60));
+      for (let i = 0; i < n; i++) {
+        liste.push(this.fahrt.weiter(1 / 60));
+        // Stand aller Autos viermal pro Sekunde (Simulationszeit), wie bei der echten Simulation
+        if (this.feldSenden && this.fahrt.zeit >= this.naechstesFeld) {
+          this.naechstesFeld = this.fahrt.zeit + 0.25;
+          this.feldSenden(this.fahrt.feld());
+        }
+      }
       if (liste.length) this.senden(liste);
     }, 50);
   }

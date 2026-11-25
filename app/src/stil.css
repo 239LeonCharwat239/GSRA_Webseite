@@ -79,7 +79,7 @@ main { padding: 12px 20px 28px; max-width: 1400px; margin: 0 auto; }
 .seite.aktiv { display: block; }
 
 /* Kacheln */
-.raster { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.raster { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 14px; }
 .kachel, .karte {
   background: linear-gradient(180deg, var(--flaeche-2), var(--flaeche));
   border: 1px solid var(--rand); border-radius: 14px; padding: 14px 16px;
@@ -223,3 +223,16 @@ main { padding: 12px 20px 28px; max-width: 1400px; margin: 0 auto; }
   .zweispaltig, .vergleich-raster { grid-template-columns: 1fr; }
   .vergleich-raster aside { order: -1; position: static; }
 }
+/* Bericht */
+.bericht-saetze { margin: 0; padding-left: 20px; display: grid; gap: 8px; font-size: 15px; }
+.zweispaltig.gleich { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.tipp-zelle { color: var(--leise); font-size: 12px; max-width: 360px; }
+.kaempfe { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.kaempfe > li { padding: 10px 12px; border-radius: 10px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--rand); }
+.kampf-kopf { display: flex; justify-content: space-between; gap: 10px; }
+.kampf-kopf span { color: var(--leise); font-size: 12px; }
+.kaempfe p { margin: 6px 0 0; color: var(--leise); }
+.ueberholungen { margin: 6px 0 0; padding-left: 18px; }
+.ueberholungen .gut { color: var(--gruen); }
+.ueberholungen .schlecht { color: var(--rot); }
+@media (max-width: 1100px) { .zweispaltig.gleich { grid-template-columns: 1fr; } }

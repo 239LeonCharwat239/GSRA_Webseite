@@ -4,7 +4,7 @@
 //! Zähler (tickCount) noch derselbe ist – sonst wurde sie währenddessen überschrieben und wir versuchen es
 //! erneut (so macht es auch das offizielle SDK).
 
-use crate::irsdk::{self, Fehler, Karte, Kopf, Probe, Sitzung, KOPF_LAENGE, VARIABLE_LAENGE};
+use crate::irsdk::{self, Fehler, Feld, Karte, Kopf, Probe, Sitzung, KOPF_LAENGE, VARIABLE_LAENGE};
 
 /// Ein Speicherbereich, aus dem nur kopiert wird (echter Bereich oder Testdaten)
 pub trait Speicher {
@@ -42,6 +42,8 @@ pub struct Lesung {
     pub verbunden: bool,
     pub probe: Option<Probe>,
     pub sitzung: Option<Sitzung>,
+    /// Stand aller Autos – nur nach `feld_anfordern` (z. B. viermal pro Sekunde), sonst leer
+    pub feld: Option<Feld>,
 }
 
 #[derive(Default)]
@@ -51,6 +53,7 @@ pub struct Leser {
     letzter_tick: Option<i32>,
     sitzung_stand: Option<i32>,
     zeile: Vec<u8>,
+    feld_gewuenscht: bool,
 }
 
 const VERSUCHE: usize = 3;
@@ -58,6 +61,11 @@ const VERSUCHE: usize = 3;
 impl Leser {
     pub fn new() -> Leser {
         Leser::default()
+    }
+
+    /// Beim nächsten gelesenen Messpunkt auch den Stand aller Autos liefern
+    pub fn feld_anfordern(&mut self) {
+        self.feld_gewuenscht = true;
     }
 
     /// Vergisst alles (z. B. nach einem Neustart der Simulation)
@@ -132,6 +140,11 @@ impl Leser {
             if i32::from_le_bytes(nachher) == tick {
                 self.letzter_tick = Some(tick);
                 lesung.probe = Some(karte.probe(&self.zeile, tick));
+                if self.feld_gewuenscht {
+                    // nur aus einer vollständig gelesenen Zeile (Zähler geprüft)
+                    lesung.feld = karte.feld(&self.zeile);
+                    self.feld_gewuenscht = false;
+                }
                 return Ok(lesung);
             }
         }

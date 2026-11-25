@@ -5,6 +5,7 @@
 //! * `gsra://status`  – { simulation, verbunden, meldung }
 //! * `gsra://sitzung` – Strecke, Streckenlänge, Fahrzeug, Sitzungsart
 //! * `gsra://proben`  – Liste von Messpunkten (siehe gsra_telemetrie::Probe)
+//! * `gsra://feld`    – Stand aller Autos (viermal pro Sekunde) für Rennbericht und Zweikämpfe
 
 use gsra_telemetrie::{Probe, Sitzung};
 use serde::Serialize;
@@ -58,6 +59,7 @@ fn schleife(app: AppHandle) {
     let mut leser = Leser::new();
     let mut stapel: Vec<Probe> = Vec::with_capacity(16);
     let mut versand = Instant::now();
+    let mut feld_zeit = Instant::now();
     let mut naechster_versuch = Instant::now();
     let mut status = Status { simulation: "iracing", ..Default::default() };
     melden(&app, status.clone());
@@ -80,6 +82,9 @@ fn schleife(app: AppHandle) {
                     if let Some(p) = l.probe {
                         stapel.push(p);
                     }
+                    if let Some(f) = l.feld {
+                        let _ = app.emit("gsra://feld", f);
+                    }
                 }
                 Err(e) => {
                     // Unerwartete Daten: Verbindung schließen und in 2 s neu versuchen
@@ -96,6 +101,10 @@ fn schleife(app: AppHandle) {
         status.verbunden = verbunden;
         melden(&app, status.clone());
 
+        if verbunden && feld_zeit.elapsed() >= Duration::from_millis(250) {
+            leser.feld_anfordern();
+            feld_zeit = Instant::now();
+        }
         if !stapel.is_empty() && versand.elapsed() >= Duration::from_millis(50) {
             let _ = app.emit("gsra://proben", &stapel);
             stapel.clear();

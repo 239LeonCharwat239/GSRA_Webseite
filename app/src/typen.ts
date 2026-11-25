@@ -23,11 +23,26 @@ export type Probe = {
   richtung: number | null;
 };
 
+export type FahrerInfo = { idx: number; name: string; nummer: string };
+
 export type Sitzung = {
   strecke: string | null;
   streckenlaengeM: number | null;
   fahrzeug: string | null;
   sitzungsart: string | null;
+  /** Teilnehmer (ohne Pace-Car und Zuschauer); fehlt bei älteren Ständen */
+  fahrer?: FahrerInfo[];
+};
+
+/** Stand aller Autos (Index = Auto im Feld der Simulation); viermal pro Sekunde */
+export type Feld = {
+  zeit: number | null;
+  ich: number | null;
+  /** Streckenanteil 0…1, negativ = Auto nicht auf der Strecke */
+  anteil: Array<number | null>;
+  runde: Array<number | null>;
+  platz: Array<number | null>;
+  inBox: Array<number | null>;
 };
 
 export type Status = {

@@ -8,6 +8,8 @@ import { bisZiel, verbrauchProRunde, rundenzeitSchnitt } from "../src/sprit.ts";
 import { DemoFahrt, DEMO_KURVEN, DEMO_LAENGE, DEMO_BOXENSTOPP_ALLE, idealeFahrweise, profil, type Profil } from "../src/demo.ts";
 import type { Probe } from "../src/typen.ts";
 import { karteBauen, verlustJeAbschnitt } from "../src/strecke.ts";
+import { Rennbeobachter, berichtErstellen } from "../src/rennbericht.ts";
+import type { Feld } from "../src/typen.ts";
 
 function fahren(fahrt: DemoFahrt, runden: number, z = new Rundenzaehler()) {
   const fertige = [];
@@ -179,4 +181,70 @@ test("Zeitverlust je Abschnitt zeigt die Kurve mit dem Fehler", () => {
   for (let i = 1; i < verlust.length; i++) if (verlust[i] > verlust[max]) max = i;
   const meter = (max / RASTER) * DEMO_LAENGE;
   assert.ok(Math.abs(meter - DEMO_KURVEN[3].bei) < 300, `größter Verlust bei ${meter} m`);
+});
+
+test("Zweikampf: Gegner kommt näher und geht vorbei – mit Stelle und Richtung", () => {
+  const b = new Rennbeobachter();
+  const T = 90; // Rundenzeit
+  // ich fahre gleichmäßig, Auto 1 startet 2 s hinter mir und ist 0,1 s pro 10 s schneller
+  for (let s = 0; s <= 400; s += 0.25) {
+    const mein = s / T;
+    const er = (s - 2 + s * 0.01) / T;
+    const f: Feld = { zeit: s, ich: 0, anteil: [mein % 1, er % 1], runde: [Math.floor(mein) + 1, Math.floor(er) + 1], platz: [er > mein ? 2 : 1, er > mein ? 1 : 2], inBox: [0, 0] };
+    b.aufnehmen(f, T);
+  }
+  const k = b.alleKaempfe();
+  assert.equal(k.length, 1, JSON.stringify(k));
+  assert.equal(k[0].idx, 1);
+  assert.equal(k[0].ueberholungen.length, 1);
+  assert.equal(k[0].ueberholungen[0].ichVorbei, false, "er ist an mir vorbei");
+  assert.equal(b.startPlatz, 1);
+  assert.equal(b.platz, 2);
+  // Zeit läuft zurück (neue Sitzung): alles vergessen
+  b.aufnehmen({ zeit: 1, ich: 0, anteil: [0.1, 0.5], runde: [1, 1], platz: [1, 2], inBox: [0, 0] }, T);
+  assert.equal(b.alleKaempfe().length, 0);
+});
+
+test("Rennbeobachter ignoriert Unsinn und überrundete Autos", () => {
+  const b = new Rennbeobachter();
+  for (let s = 0; s < 100; s += 0.25) {
+    // Auto 1 ist eine Runde zurück, aber auf der Strecke direkt neben mir: kein Zweikampf um den Platz
+    b.aufnehmen({ zeit: s, ich: 0, anteil: [0.3, 0.301], runde: [5, 4], platz: [1, 3], inBox: [0, 0] }, 90);
+    b.aufnehmen({ zeit: s, ich: 7, anteil: [0.3], runde: [5], platz: [1], inBox: [0] }, 90); // ungültiger eigener Index
+    b.aufnehmen({ zeit: Number.NaN, ich: 0, anteil: [0.3, 0.3], runde: [5, 5], platz: [1, 2], inBox: [0, 0] }, 90);
+  }
+  assert.equal(b.alleKaempfe().length, 0);
+});
+
+test("Rennbericht mit der Demo: Zweikampf mit Namen, Ideal-Runde, Konstanz, Kurve mit Verlust", () => {
+  const fahrt = new DemoFahrt(11);
+  const z = new Rundenzaehler();
+  const beob = new Rennbeobachter();
+  let naechstes = 0;
+  while (fahrt.runde < 16) {
+    const r = z.aufnehmen(fahrt.weiter(1 / 60));
+    void r;
+    if (fahrt.zeit >= naechstes) {
+      naechstes = fahrt.zeit + 0.25;
+      beob.aufnehmen(fahrt.feld(), 87);
+    }
+  }
+  const b = berichtErstellen(z.runden, beob, DEMO_LAENGE, fahrt.sitzung().fahrer);
+  assert.ok(b.gueltig >= 10, `gültig ${b.gueltig}`);
+  assert.ok(b.beste != null && b.ideal != null && b.ideal <= b.beste, `${b.ideal} ≤ ${b.beste}`);
+  assert.ok(b.konstanz != null && b.konstanz > 0 && b.konstanz < 2, `Konstanz ${b.konstanz}`);
+  assert.equal(b.kurven.length, DEMO_KURVEN.length);
+  assert.ok(b.kurven[0].schnitt >= b.kurven[1].schnitt, "nach Verlust sortiert");
+  assert.ok(b.kaempfe.length >= 1, "mindestens ein Zweikampf");
+  assert.ok(b.kaempfe.some((k) => k.name.includes("Lena Weber") || k.name.includes("Tom Becker")), JSON.stringify(b.kaempfe.map((k) => k.name)));
+  assert.ok(b.stopps >= 1, "Boxenstopp erkannt");
+  assert.ok(b.saetze.some((s) => s.startsWith("Zweikampf mit #")), b.saetze.join(" | "));
+  assert.ok(b.saetze.some((s) => s.includes("Ideal-Runde") || s.includes("konstant")), b.saetze.join(" | "));
+});
+
+test("Rennbericht ohne gültige Runde: freundlicher Hinweis statt Fehler", () => {
+  const b = berichtErstellen([], null, 4000);
+  assert.equal(b.gueltig, 0);
+  assert.equal(b.beste, null);
+  assert.match(b.saetze[0], /Fahr ein paar Runden/);
 });

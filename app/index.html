@@ -17,6 +17,7 @@
       <button type="button" role="tab" data-reiter="runden" aria-selected="false">Runden <span class="anzahl" id="rundenAnzahl">0</span></button>
       <button type="button" role="tab" data-reiter="vergleich" aria-selected="false">Vergleich</button>
       <button type="button" role="tab" data-reiter="sprit" aria-selected="false">Sprit &amp; Stint</button>
+      <button type="button" role="tab" data-reiter="bericht" aria-selected="false">Bericht</button>
     </nav>
     <div class="verbindung">
       <span class="led" id="led" aria-hidden="true"></span>
@@ -131,6 +132,37 @@
           <canvas id="vStrecke" class="strecke"></canvas>
           <p class="hinweis" id="vStreckeHinweis"></p>
         </aside>
+      </div>
+    </section>
+
+    <!-- BERICHT (Nachbesprechung nach der Sitzung) -->
+    <section class="seite" data-seite="bericht" aria-label="Bericht">
+      <div class="raster">
+        <div class="kachel"><span class="titel">Runden</span><strong id="bRunden">–</strong><small id="bRundenInfo">gültig</small></div>
+        <div class="kachel"><span class="titel">Bestzeit</span><strong id="bBeste">–</strong><small id="bSchnitt">&nbsp;</small></div>
+        <div class="kachel"><span class="titel">Ideal-Runde</span><strong id="bIdeal">–</strong><small>aus deinen besten Abschnitten</small></div>
+        <div class="kachel"><span class="titel">Konstanz</span><strong id="bKonstanz">–</strong><small>Streuung deiner Runden</small></div>
+        <div class="kachel"><span class="titel">Plätze</span><strong id="bPlaetze">–</strong><small id="bPlaetzeInfo">&nbsp;</small></div>
+        <div class="kachel"><span class="titel">Sprit</span><strong id="bSprit">–</strong><small id="bStopps">&nbsp;</small></div>
+      </div>
+      <div class="karte funk">
+        <h2>Nachbesprechung <small>Kurz gesagt – wie von deinem Renningenieur</small></h2>
+        <ul class="bericht-saetze" id="bSaetze"></ul>
+      </div>
+      <div class="zweispaltig gleich">
+        <div class="karte">
+          <h2>Wo du im Schnitt Zeit lässt <small>jede gültige Runde gegen deine Bestzeit</small></h2>
+          <p class="leer" id="bKurvenLeer">Ab zwei gültigen Runden siehst du hier, in welchen Kurven du im Schnitt Zeit verlierst.</p>
+          <table class="tabelle" id="bKurven" hidden>
+            <thead><tr><th>Kurve</th><th>bei</th><th>Ø Verlust</th><th>Tipp</th></tr></thead>
+            <tbody id="bKurvenZeilen"></tbody>
+          </table>
+        </div>
+        <div class="karte">
+          <h2>Zweikämpfe <small>wer, wie lange, wo überholt wurde</small></h2>
+          <p class="leer" id="bKaempfeLeer">Noch keine Zweikämpfe – sie erscheinen, sobald ein anderes Auto länger als 10 Sekunden weniger als eine Sekunde von dir entfernt ist.</p>
+          <ul class="kaempfe" id="bKaempfe"></ul>
+        </div>
       </div>
     </section>
 

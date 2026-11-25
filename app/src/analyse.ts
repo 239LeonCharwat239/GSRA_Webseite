@@ -141,6 +141,8 @@ export type Vergleich = {
   delta: Float64Array;
   befunde: Befund[];
   staerken: Befund[];
+  /** alle Kurven (für den Rennbericht: Durchschnitt über viele Runden) */
+  alle: Befund[];
   zusammenfassung: string;
 };
 
@@ -215,5 +217,5 @@ export function vergleichen(ref: Spur, x: Spur, laengeM: number): Vergleich {
       zusammenfassung += ` Am meisten verlierst du in ${liste} (zusammen ${zahl(summe, 2)} s).`;
     }
   }
-  return { gesamt, kurven, delta: d, befunde, staerken, zusammenfassung };
+  return { gesamt, kurven, delta: d, befunde, staerken, alle, zusammenfassung };
 }

@@ -6,9 +6,10 @@ import { abtasten, kurvenFinden, kurvenName, meterText, sekunden, vergleichen, z
 import { bisZiel, rundenzeitSchnitt, verbrauchProRunde } from "./sprit.ts";
 import { DemoQuelle } from "./demo.ts";
 import { Diagramme, verlaufZeichnen, type Plot } from "./diagramm.ts";
-import type { Probe, Sitzung, Status } from "./typen.ts";
+import type { Feld, Probe, Sitzung, Status } from "./typen.ts";
 import { kontoStarten } from "./konto-ansicht.ts";
 import { karteBauen, karteZeichnen, verlustJeAbschnitt, type Karte } from "./strecke.ts";
+import { Rennbeobachter, berichtErstellen, rundenzeitText, stelleText } from "./rennbericht.ts";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => {
   const e = document.getElementById(id);
@@ -43,7 +44,15 @@ let letzterVerlust: Float64Array | null = null;
 let kurvenMarken: { i: number; text: string }[] = [];
 let spiegeln = (() => { try { return localStorage.getItem("gsra_karte_spiegeln") === "1"; } catch { return false; } })();
 
-const demo = new DemoQuelle((liste) => proben(liste));
+// Rennbericht: Plätze und Zweikämpfe aus dem Stand aller Autos
+const beobachter = new Rennbeobachter();
+const typischeRundenzeit = () => rundenzeitSchnitt(zaehler.runden) ?? zaehler.beste?.zeit ?? 90;
+function feldAufnehmen(f: Feld) {
+  if (!f || !Array.isArray(f.anteil)) return;
+  beobachter.aufnehmen(f, typischeRundenzeit());
+}
+
+const demo = new DemoQuelle((liste) => proben(liste), (f) => feldAufnehmen(f));
 
 const laenge = () => sitzung?.streckenlaengeM ?? (groessterMeter > 500 ? groessterMeter : null);
 
@@ -56,6 +65,7 @@ function reiterZeigen(name: string) {
   if (name === "vergleich") vergleichZeigen();
   if (name === "sprit") spritZeigen();
   if (name === "runden") rundenZeigen();
+  if (name === "bericht") berichtZeigen();
 }
 for (const b of document.querySelectorAll<HTMLButtonElement>("[data-reiter]")) b.addEventListener("click", () => reiterZeigen(b.dataset.reiter ?? "live"));
 
@@ -91,6 +101,7 @@ function allesZuruecksetzen() {
   karte = null;
   letzterVerlust = null;
   kurvenMarken = [];
+  beobachter.zuruecksetzen();
   spurCache = new WeakMap();
   $("lFunkText").textContent = "Fahr eine Runde – danach sage ich dir, wo du Zeit liegen lässt.";
   rundenZeigen();
@@ -125,6 +136,9 @@ async function appVerbinden() {
     }
   });
   await listen<Status>("gsra://status", (e) => statusSetzen(e.payload));
+  await listen<Feld>("gsra://feld", (e) => {
+    if (!demo.laeuft) feldAufnehmen(e.payload);
+  });
   statusSetzen(await invoke<Status>("status"));
 }
 
@@ -187,6 +201,7 @@ function rundeFertig(r: Runde) {
   if (aktiverReiter === "runden") rundenZeigen();
   if (aktiverReiter === "vergleich") vergleichZeigen();
   if (aktiverReiter === "sprit") spritZeigen();
+  if (aktiverReiter === "bericht") berichtZeigen();
 }
 
 // ---------------------------------------------------------------- Live
@@ -460,6 +475,54 @@ function vergleichZeigen() {
   diagramme.setzen(plots, v.kurven.map((k) => ({ i: k.scheitel, text: `K${k.nr}` })), RASTER);
   if (zoom) diagramme.bereich(zoom.von, zoom.bis);
   else diagramme.bereich(0, RASTER);
+}
+
+// ---------------------------------------------------------------- Bericht (Nachbesprechung)
+function berichtZeigen() {
+  const b = berichtErstellen(zaehler.runden, beobachter, laenge() ?? 4000, sitzung?.fahrer ?? []);
+  $("bRunden").textContent = b.runden ? String(b.gueltig) : "–";
+  $("bRundenInfo").textContent = b.runden ? `gültig von ${b.runden}` : "gültig";
+  $("bBeste").textContent = rundenzeitText(b.beste);
+  $("bSchnitt").textContent = b.schnitt != null ? `Schnitt ${rundenzeitText(b.schnitt)}` : " ";
+  $("bIdeal").textContent = rundenzeitText(b.ideal);
+  $("bKonstanz").textContent = b.konstanz != null ? `±${zahl(b.konstanz, 2)} s` : "–";
+  const diff = b.startPlatz != null && b.endPlatz != null ? b.startPlatz - b.endPlatz : null;
+  $("bPlaetze").textContent = diff == null ? "–" : diff > 0 ? `+${diff}` : diff < 0 ? `−${-diff}` : "±0";
+  $("bPlaetzeInfo").textContent = b.startPlatz != null && b.endPlatz != null ? `von P${b.startPlatz} auf P${b.endPlatz}` : "nur im Rennen mit Gegnern";
+  $("bSprit").textContent = b.sprit != null ? liter(b.sprit, 2) : "–";
+  $("bStopps").textContent = b.sprit != null ? `pro Runde · ${b.stopps} ${b.stopps === 1 ? "Boxenstopp" : "Boxenstopps"}` : " ";
+
+  $("bSaetze").replaceChildren(...b.saetze.map((s) => neu("li", "", s)));
+
+  const kurven = b.kurven.filter((k) => k.runden > 0 && k.schnitt > 0.005).slice(0, 6);
+  $("bKurvenLeer").hidden = kurven.length > 0;
+  $("bKurven").hidden = kurven.length === 0;
+  $("bKurvenZeilen").replaceChildren(
+    ...kurven.map((k) => {
+      const tr = neu("tr");
+      tr.append(neu("td", "zeit", `Kurve ${k.kurve.nr}`), neu("td", "", meterText(k.meter)), neu("td", "warn", `Ø ${zahl(k.schnitt, 2)} s`), neu("td", "tipp-zelle", k.tipp || "–"));
+      return tr;
+    }),
+  );
+
+  const alleKurven = b.kurven.map((k) => k.kurve);
+  $("bKaempfeLeer").hidden = b.kaempfe.length > 0;
+  $("bKaempfe").replaceChildren(
+    ...b.kaempfe.slice(0, 12).map((k) => {
+      const li = neu("li");
+      const kopf = neu("div", "kampf-kopf");
+      kopf.append(neu("strong", "", k.name), neu("span", "", `etwa ${k.dauerRunden} ${k.dauerRunden === 1 ? "Runde" : "Runden"}`));
+      li.append(kopf);
+      if (k.ueberholungen.length) {
+        const ul = neu("ul", "ueberholungen");
+        for (const u of k.ueberholungen.slice(0, 6)) {
+          ul.append(neu("li", u.ichVorbei ? "gut" : "schlecht", `${u.ichVorbei ? "Vorbei" : "Überholt worden"} ${stelleText(Math.round(u.anteil * RASTER), alleKurven)}`));
+        }
+        li.append(ul);
+      } else li.append(neu("p", "", `Reihenfolge gehalten – knappster Abstand ${zahl(k.minAbstand, 1)} s.`));
+      return li;
+    }),
+  );
 }
 
 // ---------------------------------------------------------------- Sprit & Stint
