@@ -16,6 +16,7 @@ import { Chat, pruefSatz } from "./chat.ts";
 import { Spotter, spotterSatz } from "./spotter.ts";
 import { abstandSatz, type Gegner } from "./vorlagen.ts";
 import { Feldrunden, deltaZu, verlustIn } from "./feldreferenz.ts";
+import { namenErsetzen } from "./datenschutz.ts";
 import { karteBauen, karteZeichnen, verlustJeAbschnitt, type Karte } from "./strecke.ts";
 import { Rennbeobachter, berichtErstellen, rundenzeitText, stelleText } from "./rennbericht.ts";
 import { startbildZeigen } from "./startbild.ts";
@@ -276,6 +277,13 @@ let funkNr = 0;
 
 const runden3 = (x: number | null | undefined) => (x == null || !Number.isFinite(x) ? null : Math.round(x * 1000) / 1000);
 
+/** Datenschutz-Schalter „Fahrernamen an die KI“: aus = Namen anderer Fahrer werden vor dem Senden durch die
+ *  Startnummer ersetzt (Spotter, Vorlagen-Funk und Anzeigen bleiben auf dem PC und behalten die Namen) */
+function kiLage(lage: Record<string, unknown>): Record<string, unknown> {
+  if (funkE.namenAnKi) return lage;
+  return namenErsetzen(lage, sitzung?.fahrer ?? []) as Record<string, unknown>;
+}
+
 /** Nur gemessene Fakten nach einer Runde – daraus formuliert die KI den Funkspruch */
 function rundenLage(r: Runde, b: Befund | undefined): Record<string, unknown> {
   const beste = zaehler.beste;
@@ -313,7 +321,7 @@ function funkMelden(vorlage: string, lage: Record<string, unknown>) {
     return;
   }
   quelle.textContent = "Renningenieur formuliert …";
-  void kiFragen("funk", lage).then((e) => {
+  void kiFragen("funk", kiLage(lage)).then((e) => {
     if (nr !== funkNr) return; // inzwischen neue Runde
     if ("text" in e) {
       $("lFunkText").textContent = e.text;
@@ -349,15 +357,17 @@ function funkEinrichten() {
   const klangFeld = $<HTMLInputElement>("fKlang");
   const laut = $<HTMLInputElement>("fLaut");
   const spotterFeld = $<HTMLInputElement>("fSpotter");
+  const namenFeld = $<HTMLInputElement>("fNamen");
   vorlesenFeld.checked = funkE.vorlesen;
   klangFeld.checked = funkE.klang;
   spotterFeld.checked = funkE.spotter;
+  namenFeld.checked = funkE.namenAnKi;
   laut.value = String(funkE.lautstaerke);
   const merken = () => {
-    funkE = { vorlesen: vorlesenFeld.checked, klang: klangFeld.checked, lautstaerke: Number(laut.value), stimme: $<HTMLSelectElement>("fStimme").value, spotter: spotterFeld.checked };
+    funkE = { vorlesen: vorlesenFeld.checked, klang: klangFeld.checked, lautstaerke: Number(laut.value), stimme: $<HTMLSelectElement>("fStimme").value, spotter: spotterFeld.checked, namenAnKi: namenFeld.checked };
     funkSpeichern(funkE);
   };
-  for (const f of [vorlesenFeld, klangFeld, spotterFeld, laut, $("fStimme")]) f.addEventListener("change", merken);
+  for (const f of [vorlesenFeld, klangFeld, spotterFeld, namenFeld, laut, $("fStimme")]) f.addEventListener("change", merken);
   stimmenFuellen();
   if ("speechSynthesis" in window) window.speechSynthesis.addEventListener("voiceschanged", stimmenFuellen);
   $("fProbe").addEventListener("click", () => {
@@ -449,7 +459,7 @@ async function nachbesprechung(automatisch: boolean) {
     if (angemeldet() && kiVerfuegbar("nachbesprechung")) {
       status.textContent = "Dein Renningenieur schaut sich die Sitzung an …";
       chat?.melden(pruefSatz(persoenlichkeit?.art ?? "kumpel"), "pruefen");
-      const e = await kiFragen("nachbesprechung", { ...berichtLage(), phase: "nachbesprechung" });
+      const e = await kiFragen("nachbesprechung", kiLage({ ...berichtLage(), phase: "nachbesprechung" }));
       if ("text" in e) {
         status.textContent = "";
         kiTextZeigen(e.text);
@@ -687,7 +697,7 @@ function lokaleAntwort(frage: string): string | null {
 let chat: Chat | null = null;
 function chatEinrichten() {
   chat = new Chat($("cListe"), {
-    lage: chatLage,
+    lage: () => kiLage(chatLage()),
     angemeldet,
     art: () => persoenlichkeit?.art ?? "kumpel",
     name: () => persoenlichkeit?.name ?? "Renningenieur",

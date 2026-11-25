@@ -15,6 +15,7 @@ import { bremspunkte, liftMeter, sparAuswerten, sparBasis, sparText, sparTipp } 
 import { SPOTTER_SAETZE, Spotter, seiteAus, spotterSatz } from "../src/spotter.ts";
 import { abstandSatz, rufname } from "../src/vorlagen.ts";
 import { Feldrunden, deltaZu, verlustIn } from "../src/feldreferenz.ts";
+import { namenErsetzen } from "../src/datenschutz.ts";
 
 function fahren(fahrt: DemoFahrt, runden: number, z = new Rundenzaehler()) {
   const fertige = [];
@@ -398,6 +399,30 @@ test("Referenz aus der Lobby: Sprünge, Lücken und falsche Rundenzeiten werden 
     ohneZeiten.aufnehmen({ zeit, ich: 0, anteil: [0.5, gesamt % 1], runde: [1, 1 + Math.floor(gesamt)], platz: [1, 2], inBox: [0, 0] });
   }
   assert.equal(ohneZeiten.beste.size, 1, "Simulation ohne Rundenzeiten: die übrigen Prüfungen reichen");
+});
+
+test("Datenschutz: Fahrernamen an die KI lassen sich durch Startnummern ersetzen (auch Nachnamen allein)", () => {
+  const fahrer = [{ name: "Du", nummer: "1" }, { name: "Tom Becker", nummer: "7" }, { name: "Mia Schulz", nummer: "11" }, { name: "Xi", nummer: "" }];
+  const lage = {
+    vor_mir: { name: "Tom Becker", nummer: "7", abstand: 1.2 },
+    zweikaempfe: [{ gegner: "#7 Tom Becker", wo: "in Kurve 6" }, { gegner: "Mia Schulz" }],
+    gegen_schnellsten: { fahrer: "#11 Mia Schulz", hinweis: "Schulz ist in Kurve 4 schneller" },
+    frage: "Was mache ich gegen Becker?", runde: 7, gueltig: true, nichts: null,
+  };
+  const aus = namenErsetzen(lage, fahrer) as typeof lage;
+  const json = JSON.stringify(aus);
+  assert.ok(!/Becker|Schulz/.test(json), json);
+  assert.equal(aus.vor_mir.name, "#7");
+  assert.equal(aus.zweikaempfe[0].gegner, "#7");
+  assert.equal(aus.gegen_schnellsten.fahrer, "#11");
+  assert.equal(aus.gegen_schnellsten.hinweis, "#11 ist in Kurve 4 schneller");
+  assert.equal(aus.frage, "Was mache ich gegen #7?");
+  assert.equal(aus.runde, 7);
+  assert.equal(aus.nichts, null);
+  assert.equal(JSON.stringify(namenErsetzen({ a: "Du bist schnell" }, fahrer)), JSON.stringify({ a: "Du bist schnell" }), "„Du“ bleibt");
+  const kurz = namenErsetzen({ a: "Max fährt maximal am Limit, Maximilian nicht", b: "Xi vorn" }, [{ name: "Max", nummer: "3" }, { name: "Xi", nummer: "" }]) as { a: string; b: string };
+  assert.equal(kurz.a, "#3 fährt maximal am Limit, Maximilian nicht", "nur ganze Wörter");
+  assert.equal(kurz.b, "ein Fahrer vorn");
 });
 
 test("Stint-Planer: Messwerte hin und zurück, Umlaute bleiben, Schadcode wird entschärft", () => {

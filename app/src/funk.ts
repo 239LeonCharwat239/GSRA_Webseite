@@ -7,10 +7,11 @@
 // Ton-Daten heraus) – deshalb dort nur Klick und Rauschen. Mit einer KI-Stimme (später) geht der volle Filter.
 
 export type Stimmlage = "ruhig" | "energisch" | "tief" | "hell";
-export type FunkEinstellungen = { vorlesen: boolean; klang: boolean; lautstaerke: number; stimme: string; spotter: boolean };
+/** namenAnKi: Namen anderer Fahrer an den KI-Renningenieur schicken (aus = nur Startnummern; Datenschutz) */
+export type FunkEinstellungen = { vorlesen: boolean; klang: boolean; lautstaerke: number; stimme: string; spotter: boolean; namenAnKi: boolean };
 
 const SPEICHER = "gsra_funk";
-const STANDARD: FunkEinstellungen = { vorlesen: false, klang: true, lautstaerke: 0.8, stimme: "", spotter: true };
+const STANDARD: FunkEinstellungen = { vorlesen: false, klang: true, lautstaerke: 0.8, stimme: "", spotter: true, namenAnKi: true };
 
 export function funkLaden(): FunkEinstellungen {
   try {
@@ -21,6 +22,7 @@ export function funkLaden(): FunkEinstellungen {
       lautstaerke: typeof roh.lautstaerke === "number" && roh.lautstaerke >= 0 && roh.lautstaerke <= 1 ? roh.lautstaerke : STANDARD.lautstaerke,
       stimme: typeof roh.stimme === "string" ? roh.stimme.slice(0, 200) : "",
       spotter: typeof roh.spotter === "boolean" ? roh.spotter : STANDARD.spotter,
+      namenAnKi: typeof roh.namenAnKi === "boolean" ? roh.namenAnKi : STANDARD.namenAnKi,
     };
   } catch {
     return { ...STANDARD };
