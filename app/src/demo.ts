@@ -245,12 +245,11 @@ export class DemoFahrt {
   }
 
   /** Stand aller Autos (Index 0 = du, 1–3 = Gegner) mit Plätzen nach dem Fortschritt im Rennen */
-  feld(): Feld {
+  /** Position der Gegner: Runde und Meter auf der Runde */
+  private gegner(): Array<{ runde: number; meter: number }> {
     const ideal = (this.ideal ??= profil(idealeFahrweise()));
     const T = ideal.t[DEMO_LAENGE];
-    const anteil: number[] = [this.meter / DEMO_LAENGE];
-    const runde: number[] = [this.runde];
-    for (const g of DEMO_GEGNER) {
+    return DEMO_GEGNER.map((g) => {
       const e = Math.max(0, (this.zeit + g.vorsprung) / g.faktor);
       const runden = Math.floor(e / T);
       const rest = e - runden * T;
@@ -261,12 +260,34 @@ export class DemoFahrt {
         if (ideal.t[m] <= rest) lo = m;
         else hi = m;
       }
-      anteil.push(lo / DEMO_LAENGE);
-      runde.push(runden + 1);
-    }
+      return { runde: runden + 1, meter: lo };
+    });
+  }
+
+  feld(): Feld {
+    const T = (this.ideal ??= profil(idealeFahrweise())).t[DEMO_LAENGE];
+    const g = this.gegner();
+    const anteil: number[] = [this.meter / DEMO_LAENGE, ...g.map((x) => x.meter / DEMO_LAENGE)];
+    const runde: number[] = [this.runde, ...g.map((x) => x.runde)];
     const fortschritt = anteil.map((a, i) => runde[i] + a);
     const platz = fortschritt.map((f) => 1 + fortschritt.filter((x) => x > f).length);
-    return { zeit: this.zeit, ich: 0, anteil, runde, platz, inBox: anteil.map(() => 0) };
+    const zeiten = [this.letzteRunde ?? -1, ...DEMO_GEGNER.map((x) => T * x.faktor)];
+    return { zeit: this.zeit, ich: 0, anteil, runde, platz, inBox: anteil.map(() => 0), letzte: zeiten, beste: zeiten };
+  }
+
+  /** Spotter wie in iRacing (CarLeftRight): Gegner mit ungerader Nummer kommen links, die anderen rechts vorbei */
+  private seite(): number {
+    let links = 0, rechts = 0;
+    this.gegner().forEach((x, i) => {
+      let d = x.meter - this.meter;
+      if (d > DEMO_LAENGE / 2) d -= DEMO_LAENGE;
+      if (d < -DEMO_LAENGE / 2) d += DEMO_LAENGE;
+      if (Math.abs(d) < 5) { if (DEMO_GEGNER[i].idx % 2 === 1) links++; else rechts++; }
+    });
+    if (links && rechts) return 4;
+    if (links >= 2) return 5;
+    if (rechts >= 2) return 6;
+    return links ? 2 : rechts ? 3 : 1;
   }
 
   /** Nächster Messpunkt nach `dt` Sekunden */
@@ -314,6 +335,7 @@ export class DemoFahrt {
       aufStrecke: true,
       inBox: this.p.boxe[Math.round(meter)] === 1,
       richtung: w(this.p.h),
+      seite: this.seite(),
     };
   }
 }

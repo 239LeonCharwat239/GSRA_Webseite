@@ -8,11 +8,13 @@ import { DemoQuelle } from "./demo.ts";
 import { Diagramme, verlaufZeichnen, type Plot } from "./diagramm.ts";
 import type { Feld, Probe, Sitzung, Status } from "./typen.ts";
 import { angemeldet, beiKontoWechsel, hinweis, kontoStarten } from "./konto-ansicht.ts";
-import { aufnahmeAbspielen, funkLaden, funkSpeichern, sprechen, stimmenFuer } from "./funk.ts";
+import { aufnahmeAbspielen, funkLaden, funkSpeichern, sprechen, spotterSprechen, stimmenFuer } from "./funk.ts";
 import { kiFragen, kiVerfuegbar, merkenSpeichern, persoenlichkeitLaden, type Persoenlichkeit } from "./ki.ts";
 import { messwerteKodieren } from "../../src/stint-messwerte.ts";
 import { bremspunkte, sparAuswerten, sparBasis, sparText, sparTipp, type Bremspunkt, type SparAuswertung, type SparBasis } from "./sparen.ts";
 import { Chat, pruefSatz } from "./chat.ts";
+import { Spotter, spotterSatz } from "./spotter.ts";
+import { abstandSatz, type Gegner } from "./vorlagen.ts";
 import { karteBauen, karteZeichnen, verlustJeAbschnitt, type Karte } from "./strecke.ts";
 import { Rennbeobachter, berichtErstellen, rundenzeitText, stelleText } from "./rennbericht.ts";
 import { startbildZeigen } from "./startbild.ts";
@@ -55,6 +57,13 @@ let spiegeln = (() => { try { return localStorage.getItem("gsra_karte_spiegeln")
 // Rennbericht: Plätze und Zweikämpfe aus dem Stand aller Autos
 const beobachter = new Rennbeobachter();
 const typischeRundenzeit = () => rundenzeitSchnitt(zaehler.runden) ?? zaehler.beste?.zeit ?? 90;
+// Spotter: „Auto links/rechts“ sofort und ohne KI (Wunsch 25.11.)
+let letzteSeite: number | null = null;
+const spotter = new Spotter((s) => {
+  const sprache = persoenlichkeit?.sprache ?? "de";
+  spotterSprechen(spotterSatz(s, sprache), funkE, sprache);
+});
+
 let letztesFeld: Feld | null = null;
 function feldAufnehmen(f: Feld) {
   if (!f || !Array.isArray(f.anteil)) return;
@@ -121,6 +130,9 @@ function allesZuruecksetzen() {
   $("bKiStatus").textContent = "";
   letztesFeld = null;
   letzterBefund = null;
+  letzteAbstaende = new Map();
+  letzteSeite = null;
+  spotter.zuruecksetzen();
   if (spar.aktiv) sparBeenden();
   spar.runden = [];
   sparZeigen();
@@ -184,6 +196,10 @@ function statusSetzen(s: Status) {
 let geplant = false;
 function proben(liste: Probe[]) {
   for (const p of liste) {
+    if (p.seite != null) {
+      letzteSeite = p.seite;
+      spotter.aufnehmen(p.seite, p.zeit);
+    }
     const r = zaehler.aufnehmen(p);
     if (p.meter != null && p.meter > groessterMeter && p.meter < 100_000) groessterMeter = p.meter;
     verlauf.tempo.push(p.tempo ?? 0);
@@ -224,7 +240,10 @@ function rundeFertig(r: Runde) {
   if (befund) letzterBefund = befund;
   else if (beste === r) letzterBefund = null;
   const sparSatz = sparRunde(r);
-  funkMelden(sparSatz ?? text, rundenLage(r, befund));
+  // Abstände nach vorn/hinten mit Tendenz – als Vorlage, ohne KI (Thema „Abstände“)
+  const gegner = gegnerMitTrend();
+  const abstand = abstandSatz(persoenlichkeit?.art ?? "kumpel", gegner.vor, gegner.hinter);
+  funkMelden([sparSatz ?? text, abstand].filter(Boolean).join(" "), { ...rundenLage(r, befund), vor_mir: gegner.vor, hinter_mir: gegner.hinter });
   // Karte aus der ersten gültigen Runde mit Fahrtrichtung; Kurvennummern aus der Bestzeit
   if (!karte && r.gueltig) karte = karteBauen(r.punkte);
   if (beste && beste.punkte.length > 10) kurvenMarken = kurvenFinden(spur(beste), laenge() ?? 4000).map((k) => ({ i: k.scheitel, text: String(k.nr) }));
@@ -314,14 +333,16 @@ function funkEinrichten() {
   const vorlesenFeld = $<HTMLInputElement>("fVorlesen");
   const klangFeld = $<HTMLInputElement>("fKlang");
   const laut = $<HTMLInputElement>("fLaut");
+  const spotterFeld = $<HTMLInputElement>("fSpotter");
   vorlesenFeld.checked = funkE.vorlesen;
   klangFeld.checked = funkE.klang;
+  spotterFeld.checked = funkE.spotter;
   laut.value = String(funkE.lautstaerke);
   const merken = () => {
-    funkE = { vorlesen: vorlesenFeld.checked, klang: klangFeld.checked, lautstaerke: Number(laut.value), stimme: $<HTMLSelectElement>("fStimme").value };
+    funkE = { vorlesen: vorlesenFeld.checked, klang: klangFeld.checked, lautstaerke: Number(laut.value), stimme: $<HTMLSelectElement>("fStimme").value, spotter: spotterFeld.checked };
     funkSpeichern(funkE);
   };
-  for (const f of [vorlesenFeld, klangFeld, laut, $("fStimme")]) f.addEventListener("change", merken);
+  for (const f of [vorlesenFeld, klangFeld, spotterFeld, laut, $("fStimme")]) f.addEventListener("change", merken);
   stimmenFuellen();
   if ("speechSynthesis" in window) window.speechSynthesis.addEventListener("voiceschanged", stimmenFuellen);
   $("fProbe").addEventListener("click", () => {
@@ -552,7 +573,23 @@ $("spKnopf").addEventListener("click", () => {
 });
 
 // ---------------------------------------------------------------- Chat mit dem Renningenieur
-type Nachbar = { name: string; nummer: string; abstand_s: number | null } | null;
+type Nachbar = { idx: number; name: string; nummer: string; abstand_s: number | null } | null;
+
+// Abstände der letzten Runde je Auto – daraus die Tendenz („holt 0,3 pro Runde“)
+let letzteAbstaende = new Map<number, number>();
+function gegnerMitTrend(): { vor: Gegner | null; hinter: Gegner | null } {
+  const { vor, hinter } = nachbarn();
+  const neu = new Map<number, number>();
+  const mach = (n: Nachbar): Gegner | null => {
+    if (!n || n.abstand_s == null) return null;
+    const vorher = letzteAbstaende.get(n.idx);
+    neu.set(n.idx, n.abstand_s);
+    return { name: n.name, nummer: n.nummer, abstand: n.abstand_s, trend: vorher != null ? Math.round((n.abstand_s - vorher) * 100) / 100 : null };
+  };
+  const ergebnis = { vor: mach(vor), hinter: mach(hinter) };
+  letzteAbstaende = neu;
+  return ergebnis;
+}
 function nachbarn(): { vor: Nachbar; hinter: Nachbar } {
   const f = letztesFeld;
   const fahrer = sitzung?.fahrer ?? [];
@@ -565,7 +602,7 @@ function nachbarn(): { vor: Nachbar; hinter: Nachbar } {
     if (i < 0) return null;
     const info = fahrer.find((x) => x.idx === i);
     const abstand = Math.abs(fortschritt(i) - fortschritt(f.ich!)) * typischeRundenzeit();
-    return { name: info?.name ?? `Auto ${i}`, nummer: info?.nummer ?? "", abstand_s: Number.isFinite(abstand) ? Math.round(abstand * 10) / 10 : null };
+    return { idx: i, name: info?.name ?? `Auto ${i}`, nummer: info?.nummer ?? "", abstand_s: Number.isFinite(abstand) ? Math.round(abstand * 10) / 10 : null };
   };
   return { vor: meinPlatz > 1 ? finden(meinPlatz - 1) : null, hinter: finden(meinPlatz + 1) };
 }
@@ -662,6 +699,12 @@ function live() {
   const p = zaehler.jetzt;
   const l = zaehler.laufend;
   const beste = zaehler.beste;
+  // Spotter-Anzeige: 2 links, 3 rechts, 4 beidseitig, 5 zwei links, 6 zwei rechts
+  const s = letzteSeite ?? 1;
+  $("spotterLinks").classList.toggle("an", s === 2 || s === 4 || s === 5);
+  $("spotterRechts").classList.toggle("an", s === 3 || s === 4 || s === 6);
+  $("spotterLinks").textContent = s === 5 ? "◀◀ Zwei links" : "◀ Auto links";
+  $("spotterRechts").textContent = s === 6 ? "Zwei rechts ▶▶" : "Auto rechts ▶";
   $("lTempo").textContent = p?.tempo != null ? String(Math.round(p.tempo * 3.6)) : "–";
   $("lGang").textContent = p?.gang == null ? "–" : p.gang === 0 ? "N" : p.gang < 0 ? "R" : String(p.gang);
   const rpm = p?.drehzahl ?? 0;

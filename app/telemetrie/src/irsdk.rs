@@ -267,7 +267,15 @@ pub fn werte(zeile: &[u8], v: &Variable, max: usize) -> Vec<Option<f64>> {
 pub const MAX_AUTOS: usize = 64;
 
 /// Werte je Auto für Rennbericht und Zweikämpfe (Namen wie im iRacing-SDK)
-const FELD_NAMEN: [&str; 5] = ["PlayerCarIdx", "CarIdxLapDistPct", "CarIdxLap", "CarIdxPosition", "CarIdxOnPitRoad"];
+const FELD_NAMEN: [&str; 7] = [
+    "PlayerCarIdx",
+    "CarIdxLapDistPct",
+    "CarIdxLap",
+    "CarIdxPosition",
+    "CarIdxOnPitRoad",
+    "CarIdxLastLapTime",
+    "CarIdxBestLapTime",
+];
 
 /// Stand aller Autos (Index = Startnummer-unabhängiger Platz im Feld der Simulation, „CarIdx“)
 #[derive(Debug, Clone, PartialEq, Serialize, Default)]
@@ -282,10 +290,13 @@ pub struct Feld {
     /// Gesamtplatz (0 = noch keiner)
     pub platz: Vec<Option<f64>>,
     pub in_box: Vec<Option<f64>>,
+    /// letzte und beste Rundenzeit je Auto (Sekunden; -1 oder 0 = noch keine)
+    pub letzte: Vec<Option<f64>>,
+    pub beste: Vec<Option<f64>>,
 }
 
 /// Die Werte, die die App braucht (Namen wie im iRacing-SDK)
-const NAMEN: [&str; 17] = [
+const NAMEN: [&str; 18] = [
     "SessionTime",
     "Lap",
     "LapDistPct",
@@ -303,13 +314,15 @@ const NAMEN: [&str; 17] = [
     "IsOnTrack",
     "OnPitRoad",
     "YawNorth",
+    // Spotter: 0 aus, 1 frei, 2 Auto links, 3 Auto rechts, 4 links und rechts, 5 zwei links, 6 zwei rechts
+    "CarLeftRight",
 ];
 
 /// Zuordnung Name → Variable (fehlende Werte bleiben leer)
 #[derive(Debug, Clone, Default)]
 pub struct Karte {
-    felder: [Option<Variable>; 17],
-    feld: [Option<Variable>; 5],
+    felder: [Option<Variable>; 18],
+    feld: [Option<Variable>; 7],
 }
 
 impl Karte {
@@ -335,6 +348,8 @@ impl Karte {
             runde: alle(2),
             platz: alle(3),
             in_box: alle(4),
+            letzte: alle(5),
+            beste: alle(6),
         })
     }
     pub fn vorhanden(&self) -> usize {
@@ -366,6 +381,7 @@ impl Karte {
             auf_strecke: b(14),
             in_box: b(15),
             richtung: z(16),
+            seite: z(17).map(|x| x as i32).filter(|x| (0..=6).contains(x)),
         }
     }
 }
@@ -393,6 +409,8 @@ pub struct Probe {
     pub in_box: Option<bool>,
     /// Fahrtrichtung zur Nordrichtung (Bogenmaß) – daraus entsteht die Streckenkarte
     pub richtung: Option<f64>,
+    /// Spotter (CarLeftRight): 0 aus, 1 frei, 2 links, 3 rechts, 4 beidseitig, 5 zwei links, 6 zwei rechts
+    pub seite: Option<i32>,
 }
 
 /// Strecke und Fahrzeug aus der Sitzungsinfo (nur, was die App anzeigt)
@@ -562,6 +580,7 @@ pub mod testdaten {
                 ("IsOnTrack", Typ::Bool),
                 ("OnPitRoad", Typ::Bool),
                 ("YawNorth", Typ::Zahl),
+                ("CarLeftRight", Typ::Ganzzahl),
             ] {
                 vars.push((n.to_string(), t, o));
                 o += t.groesse();
@@ -637,11 +656,11 @@ mod tests {
         let b = bau.bauen(1, &[("Speed", 50.0)]);
         let k = kopf_lesen(&b).unwrap();
         assert!(k.verbunden());
-        assert_eq!(k.anzahl_variablen, 17);
+        assert_eq!(k.anzahl_variablen, 18);
         assert_eq!(k.neueste_zeile(), 1);
         k.pruefen(b.len()).unwrap();
-        let vars = variablen_lesen(&b[VAR_START..], 17, bau.zeilen_laenge).unwrap();
-        assert_eq!(vars.len(), 17);
+        let vars = variablen_lesen(&b[VAR_START..], 18, bau.zeilen_laenge).unwrap();
+        assert_eq!(vars.len(), 18);
         assert_eq!(vars[0].name, "SessionTime");
         assert_eq!(vars[0].typ, Typ::Doppelt);
     }
@@ -660,11 +679,12 @@ mod tests {
             ("IsOnTrack", 1.0),
             ("OnPitRoad", 0.0),
             ("YawNorth", 1.5),
+            ("CarLeftRight", 2.0),
         ]);
         let k = kopf_lesen(&b).unwrap();
-        let vars = variablen_lesen(&b[VAR_START..], 17, bau.zeilen_laenge).unwrap();
+        let vars = variablen_lesen(&b[VAR_START..], 18, bau.zeilen_laenge).unwrap();
         let karte = Karte::aus(&vars);
-        assert_eq!(karte.vorhanden(), 17);
+        assert_eq!(karte.vorhanden(), 18);
         let i = k.neueste_zeile();
         let o = k.puffer[i].offset as usize;
         let p = karte.probe(&b[o..o + bau.zeilen_laenge], k.puffer[i].tick);
@@ -677,7 +697,21 @@ mod tests {
         assert_eq!(p.auf_strecke, Some(true));
         assert_eq!(p.in_box, Some(false));
         assert_eq!(p.richtung, Some(1.5));
+        assert_eq!(p.seite, Some(2), "Spotter: Auto links");
         assert_eq!(p.tick, 100);
+    }
+
+    #[test]
+    fn spotter_nur_bekannte_werte() {
+        let bau = Bau::standard();
+        let vars = variablen_lesen(&bau.bauen(0, &[])[VAR_START..], 18, bau.zeilen_laenge).unwrap();
+        let karte = Karte::aus(&vars);
+        for (roh, erwartet) in [(0.0, Some(0)), (1.0, Some(1)), (6.0, Some(6)), (7.0, None), (-3.0, None), (99999.0, None)] {
+            let b = bau.bauen(0, &[("CarLeftRight", roh)]);
+            let k = kopf_lesen(&b).unwrap();
+            let o = k.puffer[0].offset as usize;
+            assert_eq!(karte.probe(&b[o..o + bau.zeilen_laenge], 1).seite, erwartet, "Rohwert {roh}");
+        }
     }
 
     #[test]
@@ -699,7 +733,7 @@ mod tests {
     fn unendliche_und_nan_werte_werden_verworfen() {
         let bau = Bau::standard();
         let b = bau.bauen(0, &[("Speed", f64::NAN), ("SessionTime", f64::INFINITY)]);
-        let vars = variablen_lesen(&b[VAR_START..], 17, bau.zeilen_laenge).unwrap();
+        let vars = variablen_lesen(&b[VAR_START..], 18, bau.zeilen_laenge).unwrap();
         let k = kopf_lesen(&b).unwrap();
         let o = k.puffer[0].offset as usize;
         let p = Karte::aus(&vars).probe(&b[o..o + bau.zeilen_laenge], 1);
@@ -783,8 +817,10 @@ mod tests {
             v("CarIdxLapDistPct", Typ::Zahl, 12, 64),
             v("CarIdxLap", Typ::Ganzzahl, 12 + 256, 64),
             v("CarIdxPosition", Typ::Ganzzahl, 12 + 512, 64),
+            v("CarIdxLastLapTime", Typ::Zahl, 12 + 768, 64),
         ];
-        let mut z = vec![0u8; 12 + 768];
+        let mut z = vec![0u8; 12 + 1024];
+        z[780 + 3 * 4..780 + 4 * 4].copy_from_slice(&87.25f32.to_le_bytes());
         z[0..8].copy_from_slice(&100.5f64.to_le_bytes());
         z[8..12].copy_from_slice(&3i32.to_le_bytes());
         z[12 + 3 * 4..12 + 4 * 4].copy_from_slice(&0.25f32.to_le_bytes());
@@ -800,6 +836,8 @@ mod tests {
         assert_eq!(f.runde[3], Some(7.0));
         assert_eq!(f.platz[3], Some(2.0));
         assert!(f.in_box.is_empty(), "fehlende Variable bleibt leer");
+        assert_eq!(f.letzte[3], Some(87.25), "letzte Rundenzeit je Auto");
+        assert!(f.beste.is_empty());
         // ohne Streckenanteile je Auto kein Feld
         assert!(Karte::aus(&vars[..2]).feld(&z).is_none());
         // zu kurze Zeile: kein Absturz, Werte leer

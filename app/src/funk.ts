@@ -7,10 +7,10 @@
 // Ton-Daten heraus) – deshalb dort nur Klick und Rauschen. Mit einer KI-Stimme (später) geht der volle Filter.
 
 export type Stimmlage = "ruhig" | "energisch" | "tief" | "hell";
-export type FunkEinstellungen = { vorlesen: boolean; klang: boolean; lautstaerke: number; stimme: string };
+export type FunkEinstellungen = { vorlesen: boolean; klang: boolean; lautstaerke: number; stimme: string; spotter: boolean };
 
 const SPEICHER = "gsra_funk";
-const STANDARD: FunkEinstellungen = { vorlesen: false, klang: true, lautstaerke: 0.8, stimme: "" };
+const STANDARD: FunkEinstellungen = { vorlesen: false, klang: true, lautstaerke: 0.8, stimme: "", spotter: true };
 
 export function funkLaden(): FunkEinstellungen {
   try {
@@ -20,6 +20,7 @@ export function funkLaden(): FunkEinstellungen {
       klang: typeof roh.klang === "boolean" ? roh.klang : STANDARD.klang,
       lautstaerke: typeof roh.lautstaerke === "number" && roh.lautstaerke >= 0 && roh.lautstaerke <= 1 ? roh.lautstaerke : STANDARD.lautstaerke,
       stimme: typeof roh.stimme === "string" ? roh.stimme.slice(0, 200) : "",
+      spotter: typeof roh.spotter === "boolean" ? roh.spotter : STANDARD.spotter,
     };
   } catch {
     return { ...STANDARD };
@@ -143,6 +144,23 @@ export function sprechen(text: string, e: FunkEinstellungen, opt: { sprache?: st
       window.setTimeout(() => { if (nr === laufNr) window.speechSynthesis.speak(u); }, 160);
     } else window.speechSynthesis.speak(u);
   });
+}
+
+/** Spotter-Ansage: sofort, kurz, unterbricht alles andere (Sicherheit geht vor). Eigene, zweite Stimme, damit man
+ *  Spotter und Renningenieur auseinanderhält. */
+export function spotterSprechen(text: string, e: FunkEinstellungen, sprache: string): void {
+  if (!e.spotter || !text || !("speechSynthesis" in window)) return;
+  funkStoppen();
+  const u = new SpeechSynthesisUtterance(text);
+  const alle = stimmenFuer(sprache);
+  const ingenieur = alle.find((v) => v.voiceURI === e.stimme) || alle[0];
+  const andere = alle.find((v) => v !== ingenieur) || ingenieur;
+  if (andere) u.voice = andere;
+  const LAENDER: Record<string, string> = { de: "de-DE", en: "en-GB", es: "es-ES", fr: "fr-FR", pt: "pt-PT", it: "it-IT", nl: "nl-NL", pl: "pl-PL", tr: "tr-TR", ru: "ru-RU", zh: "zh-CN", ja: "ja-JP" };
+  u.lang = andere?.lang || LAENDER[sprache] || "de-DE";
+  u.rate = 1.25;
+  u.volume = Math.max(0, Math.min(1, e.lautstaerke));
+  window.speechSynthesis.speak(u);
 }
 
 // ---------------------------------------------------------------- Testaufnahme durch den Funk-Filter

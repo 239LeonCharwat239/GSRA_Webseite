@@ -45,7 +45,13 @@ export class Chat {
   private readonly verlauf: ChatBeitrag[] = [];
   private laeuft = 0;
 
-  constructor(private readonly liste: HTMLElement, private readonly u: ChatUmgebung) {}
+  private readonly liste: HTMLElement;
+  private readonly u: ChatUmgebung;
+
+  constructor(liste: HTMLElement, u: ChatUmgebung) {
+    this.liste = liste;
+    this.u = u;
+  }
 
   private blase(b: ChatBeitrag, klasse = ""): HTMLElement {
     const el = document.createElement("div");

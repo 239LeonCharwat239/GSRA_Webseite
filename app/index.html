@@ -60,6 +60,10 @@
   <main>
     <!-- LIVE -->
     <section class="seite aktiv" data-seite="live" aria-label="Live">
+      <div class="spotter-anzeige" id="spotterAnzeige" aria-live="assertive">
+        <span class="spotter-seite links" id="spotterLinks">◀ Auto links</span>
+        <span class="spotter-seite rechts" id="spotterRechts">Auto rechts ▶</span>
+      </div>
       <div class="raster">
         <div class="kachel gross"><span class="titel">Tempo</span><strong id="lTempo">–</strong><small>km/h</small></div>
         <div class="kachel gross"><span class="titel">Gang</span><strong id="lGang">–</strong><div class="balken drehzahl"><i id="lDrehzahl"></i></div><small id="lDrehzahlText">U/min</small></div>
@@ -89,6 +93,7 @@
         <div class="funk-leiste">
           <label class="schalter"><input type="checkbox" id="fVorlesen"> Vorlesen</label>
           <label class="schalter"><input type="checkbox" id="fKlang"> Funk-Klang</label>
+          <label class="schalter" title="Sagt sofort „Auto links“, „Auto rechts“, „Frei“ – ohne KI, in der Sprache deines Renningenieurs"><input type="checkbox" id="fSpotter"> Spotter</label>
           <label class="feld-klein">Stimme <select id="fStimme"></select></label>
           <label class="feld-klein">Lautstärke <input type="range" id="fLaut" min="0" max="1" step="0.05"></label>
           <button class="knopf leise" id="fProbe" type="button">Probe-Funk</button>

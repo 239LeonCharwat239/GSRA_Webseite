@@ -21,6 +21,8 @@ export type Probe = {
   inBox: boolean | null;
   /** Fahrtrichtung zur Nordrichtung (Bogenmaß, im Uhrzeigersinn) – daraus entsteht die Streckenkarte */
   richtung: number | null;
+  /** Spotter (iRacing CarLeftRight): 0 aus, 1 frei, 2 links, 3 rechts, 4 beidseitig, 5 zwei links, 6 zwei rechts */
+  seite?: number | null;
 };
 
 export type FahrerInfo = { idx: number; name: string; nummer: string };
@@ -43,6 +45,9 @@ export type Feld = {
   runde: Array<number | null>;
   platz: Array<number | null>;
   inBox: Array<number | null>;
+  /** letzte und beste Rundenzeit je Auto (Sekunden; ≤ 0 = noch keine) – fehlt bei älteren Ständen */
+  letzte?: Array<number | null>;
+  beste?: Array<number | null>;
 };
 
 export type Status = {

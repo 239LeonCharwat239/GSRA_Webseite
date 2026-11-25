@@ -249,6 +249,11 @@ main { padding: 12px 20px 28px; max-width: 1400px; margin: 0 auto; }
 .ki-text p { margin: 0; line-height: 1.55; }
 .ki-text[hidden] { display: none; }
 
+/* Spotter: Auto links/rechts gut sichtbar über den Live-Werten */
+.spotter-anzeige { display: flex; justify-content: space-between; gap: 12px; min-height: 0; }
+.spotter-seite { visibility: hidden; padding: 6px 14px; border-radius: 999px; font-weight: 700; letter-spacing: 0.5px; background: rgba(255, 204, 0, 0.16); border: 1px solid rgba(255, 204, 0, 0.5); color: var(--gelb); margin-bottom: 10px; }
+.spotter-seite.an { visibility: visible; }
+
 /* Chat mit dem Renningenieur */
 .chat-karte { display: flex; flex-direction: column; gap: 12px; }
 .chat-liste { min-height: 280px; max-height: min(58vh, 560px); overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px 2px; }

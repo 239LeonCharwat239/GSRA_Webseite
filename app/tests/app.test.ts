@@ -12,6 +12,8 @@ import { Rennbeobachter, berichtErstellen } from "../src/rennbericht.ts";
 import type { Feld } from "../src/typen.ts";
 import { messwerteKodieren, messwerteLesen } from "../../src/stint-messwerte.ts";
 import { bremspunkte, liftMeter, sparAuswerten, sparBasis, sparText, sparTipp } from "../src/sparen.ts";
+import { SPOTTER_SAETZE, Spotter, seiteAus, spotterSatz } from "../src/spotter.ts";
+import { abstandSatz, rufname } from "../src/vorlagen.ts";
 
 function fahren(fahrt: DemoFahrt, runden: number, z = new Rundenzaehler()) {
   const fertige = [];
@@ -284,6 +286,60 @@ test("Sprit sparen: Texte für zu wenig, genug und zu viel", () => {
   assert.match(sparText({ ...a, ersparnis: -0.03 }, null, () => ""), /3,0 % MEHR als vorher/);
   assert.equal(liftMeter(250), 70);
   assert.equal(liftMeter(50), 20);
+});
+
+test("Spotter: sofort bei Auto daneben, „Frei“ erst nach echtem Nebeneinander, keine Dauerschleife", () => {
+  const gesagt: string[] = [];
+  const s = new Spotter((x) => gesagt.push(x));
+  const folge = (werte: Array<[number, number]>) => { for (const [t, roh] of werte) s.aufnehmen(roh, t); };
+  folge([[0, 1], [0.1, 1], [0.2, 2]]);
+  assert.deepEqual(gesagt, ["links"], "sofort „links“");
+  folge([[0.3, 2], [0.5, 2], [1.0, 2]]);
+  assert.deepEqual(gesagt, ["links"], "keine Wiederholung, solange er daneben ist");
+  folge([[1.1, 1], [1.2, 2]]); // kurz flackernd frei → nicht „frei“, nicht noch einmal „links“
+  assert.deepEqual(gesagt, ["links"]);
+  folge([[1.3, 1], [1.5, 1], [1.8, 1]]); // jetzt wirklich frei (≥ 0,45 s)
+  assert.deepEqual(gesagt, ["links", "frei"]);
+  folge([[3, 3], [3.1, 1], [3.6, 1], [3.7, 1]]); // nur angetippt (< 0,6 s daneben) → kein „frei“
+  assert.deepEqual(gesagt, ["links", "frei", "rechts"]);
+  folge([[5, 4], [5.1, 5], [5.2, 0], [5.3, 99]]); // beidseitig, zwei links; 0 = Spotter aus, Unsinn wird ignoriert
+  assert.deepEqual(gesagt.slice(3), ["beide", "zweiLinks"]);
+  assert.equal(seiteAus(6), "zweiRechts");
+  assert.equal(seiteAus(0), null);
+  // Alle 12 Sprachen haben alle 6 Ansagen
+  for (const [sprache, saetze] of Object.entries(SPOTTER_SAETZE)) {
+    assert.equal(Object.keys(saetze).length, 6, sprache);
+    for (const t of Object.values(saetze)) assert.ok(t.length >= 2 && t.length <= 30, `${sprache}: ${t}`);
+  }
+  assert.equal(Object.keys(SPOTTER_SAETZE).length, 12);
+  assert.equal(spotterSatz("links", "en"), "Car left");
+  assert.equal(spotterSatz("frei", "xx"), "Frei");
+});
+
+test("Demo: beim Überholen ist ein Auto neben dir (Spotter-Wert wie in iRacing)", () => {
+  const fahrt = new DemoFahrt(4);
+  const werte = new Set<number>();
+  while (fahrt.runde < 12) werte.add(fahrt.weiter(1 / 30).seite ?? -1);
+  assert.ok(werte.has(1), "meist frei");
+  assert.ok(werte.has(2) || werte.has(3), `jemand neben dir: ${[...werte]}`);
+  const f = fahrt.feld();
+  assert.equal(f.letzte?.length, 4);
+  assert.ok((f.letzte?.[1] ?? 0) > 60, "Rundenzeiten der Gegner");
+});
+
+test("Vorlagen-Funk: Vordermann mit Abstand und Tendenz, im Stil, ohne KI", () => {
+  const vor = { name: "Tom Becker", nummer: "7", abstand: 1.24, trend: -0.31 };
+  const hinter = { name: "Mia Schulz", nummer: "11", abstand: 0.8, trend: -0.2 };
+  const k = abstandSatz("kumpel", vor, null, () => 0)!;
+  assert.match(k, /^Becker ist 1,2 vor dir – du holst 0,3 pro Runde/);
+  assert.match(abstandSatz("profi", vor, null, () => 0)!, /^Abstand nach vorn 1,2, Becker\. Tendenz minus 0,3 pro Runde\./);
+  assert.match(abstandSatz("locker", { ...vor, trend: 0.4 }, null, () => 0)!, /zieht grad 0,4 pro Runde weg/);
+  assert.match(abstandSatz("knapp", vor, hinter, () => 0)!, /^Vorne Becker, 1,2, minus 0,3\. Hinten Schulz, 0,8\.$/);
+  assert.equal(abstandSatz("kumpel", { ...vor, abstand: 5 }, { ...hinter, abstand: 3 }), null, "weit weg: nichts sagen");
+  assert.equal(abstandSatz("kumpel", { ...vor, trend: null }, null, () => 0), "Becker ist 1,2 vor dir.", "ohne Tendenz keine Behauptung");
+  assert.match(abstandSatz("kumpel", { ...vor, trend: 0.01 }, null, () => 0)!, /Abstand bleibt gleich/);
+  assert.equal(rufname({ name: "Auto 12", nummer: "12", abstand: 1, trend: null }), "die 12");
+  assert.equal(abstandSatz("unbekannt", vor, null, () => 0.99)!.length > 10, true, "unbekannte Art → Kumpel");
 });
 
 test("Stint-Planer: Messwerte hin und zurück, Umlaute bleiben, Schadcode wird entschärft", () => {

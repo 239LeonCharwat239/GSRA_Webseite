@@ -3845,6 +3845,30 @@ if (RE_KI_SQL && RE_STIL_SQL) {
     }
 }
 
+// --- Versehentlich ein ALTES Skript erneut ausgeführt (25.11.: 043 nach 054): darf nichts zurücksetzen ---
+// Vergleicht alle Funktionen, Prüfregeln, Zugriffsregeln (RLS) und Rechte vorher und nachher.
+if (UNTERSTUETZER_SQL && RE_MERKEN_SQL) {
+    const stand = async () => JSON.stringify({
+        funktionen: (await q(`select p.oid::regprocedure::text as f, md5(pg_get_functiondef(p.oid)) as h, p.proacl::text as rechte
+                              from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.prokind = 'f' order by 1`)).rows,
+        regeln: (await q(`select conrelid::regclass::text as t, conname, md5(pg_get_constraintdef(oid)) as h from pg_constraint
+                           where connamespace = 'public'::regnamespace order by 1, 2`)).rows,
+        rls: (await q(`select tablename, policyname, permissive, roles::text, md5(coalesce(qual, '') || coalesce(with_check, '')) as h
+                        from pg_policies where schemaname = 'public' order by 1, 2`)).rows,
+        rechte: (await q(`select c.relname, c.relacl::text from pg_class c join pg_namespace n on n.oid = c.relnamespace
+                           where n.nspname = 'public' and c.relkind = 'r' order by 1`)).rows,
+    });
+    const vorher = await stand();
+    const umfang = JSON.parse(vorher);
+    check("Vergleich deckt wirklich etwas ab (Funktionen, Regeln, RLS, Rechte)",
+        umfang.funktionen.length > 50 && umfang.regeln.length > 50 && umfang.rls.length > 50 && umfang.rechte.length > 30,
+        `${umfang.funktionen.length} Funktionen, ${umfang.regeln.length} Regeln, ${umfang.rls.length} RLS, ${umfang.rechte.length} Tabellen`);
+    await db.exec(readFileSync(UNTERSTUETZER_SQL, "utf8"));
+    const nachher = await stand();
+    check("043 nach allen neueren Skripten erneut ausgeführt: keine Funktion, Regel oder Rechte zurückgesetzt", vorher === nachher,
+        vorher === nachher ? "" : "Unterschied gefunden");
+}
+
 // --- Konto löschen (Ausbau 3) funktioniert weiterhin, die Stimmen verschwinden mit ---
 await as(U.lena, async () => {
     await q(`select * from public.vote_setup('${S2}', 1)`);
