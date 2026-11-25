@@ -146,6 +146,21 @@ pub fn anmeldung_abbrechen() {
     LAUF.fetch_add(1, Ordering::SeqCst);
 }
 
+/// Adresse des Stint-Planers mit den gemessenen Werten – nur diese eine Seite der GSRA-Webseite und nur
+/// base64url-Daten im Anker (kein Pfad, keine Parameter, keine fremde Adresse aus der Oberfläche)
+pub fn stint_adresse(messwerte: &str) -> Option<String> {
+    base64url(messwerte, 8, 2000).then(|| format!("{WEBSEITE}/stintplaner.html#messwerte={messwerte}"))
+}
+
+/// Öffnet den Stint-Planer im Standard-Browser; der Planer fragt vor dem Übernehmen nach
+#[tauri::command]
+pub fn stintplaner_oeffnen(app: AppHandle, messwerte: String) -> Result<(), String> {
+    let adresse = stint_adresse(&messwerte).ok_or_else(|| "Ungültige Messwerte.".to_string())?;
+    app.opener()
+        .open_url(adresse, None::<&str>)
+        .map_err(|_| "Der Browser konnte nicht geöffnet werden.".to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -193,5 +208,16 @@ mod tests {
         assert!(!base64url(&"a".repeat(42), 43, 43));
         assert!(!base64url("abc/def+ghi=jklmnopqrstuvwxyz0123456789abcd", 43, 43));
         assert!(base64url(Z, 22, 64));
+    }
+
+    #[test]
+    fn stintplaner_nur_mit_sauberen_messwerten() {
+        let gut = "eyJ2IjoxLCJyeiI6ODcuNH0";
+        assert_eq!(stint_adresse(gut).as_deref(), Some("https://gsra-webseite.vercel.app/stintplaner.html#messwerte=eyJ2IjoxLCJyeiI6ODcuNH0"));
+        assert_eq!(stint_adresse("abc"), None); // zu kurz
+        assert_eq!(stint_adresse(&"a".repeat(2001)), None); // zu lang
+        assert_eq!(stint_adresse("eyJ2IjoxfQ&x=https://boese.example"), None);
+        assert_eq!(stint_adresse("eyJ2IjoxfQ#<script>"), None);
+        assert_eq!(stint_adresse("../../anderes"), None);
     }
 }

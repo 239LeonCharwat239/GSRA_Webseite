@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 
 // Gemeinsame Bausteine mit der Webseite (z. B. die Ladeanimation) liegen in ../src – nur genau diese Dateien
 // darf die Entwicklungs-Vorschau zusätzlich ausliefern, sonst nichts außerhalb des App-Ordners.
-const GEMEINSAM = [resolve(import.meta.dirname, "../src/ladeanimation.ts")];
+const GEMEINSAM = ["../src/ladeanimation.ts", "../src/stint-messwerte.ts"].map((d) => resolve(import.meta.dirname, d));
 
 export default defineConfig({
   root: import.meta.dirname,

@@ -1,7 +1,9 @@
 // GSRA – Stint-Planer (Pole und Alliance). Rechnet im Browser; Pläne liegen im Konto (SQL 045) und werden mit dem
 // Team live abgeglichen. Jede Eingabe wird beim Laden auf sinnvolle Grenzen geprüft (pruefen), alle Texte werden mit
 // textContent ausgegeben. Teilen per Link (#plan=…) funktioniert weiterhin.
-// Später: Verbrauch, Rundenzeiten und Live-Stand automatisch aus der GSRA-App (iRacing, ACC, LMU).
+// Aus der GSRA-App (Reiter „Sprit & Stint“): gemessene Rundenzeit und Verbrauch kommen per Link (#messwerte=…)
+// und werden erst nach Bestätigung übernommen (stint-messwerte.ts). Später auch der Live-Stand im Rennen.
+import { messwerteLesen } from "./stint-messwerte";
 
 type Fahrer = { name: string; rundenzeit: number | null };
 type Rennen = { simulation: string; fahrzeug: string; strecke: string; notizen: string };
@@ -853,6 +855,39 @@ function messenEinrichten() {
   });
 }
 
+// ---------- Messwerte aus der GSRA-App übernehmen ----------
+// Der Anker wird gleich beim Start gelesen – beim Öffnen eines gespeicherten Plans ändert sich die Adresse.
+const ankerBeimStart = typeof location !== "undefined" ? location.hash : "";
+async function messwerteAnbieten() {
+  if (!/^#messwerte=/.test(ankerBeimStart)) return;
+  const m = messwerteLesen(ankerBeimStart);
+  // Anker entfernen (wird nicht gespeichert und nicht beim Teilen mitkopiert)
+  if (/^#messwerte=/.test(location.hash)) history.replaceState(null, "", location.pathname + location.search);
+  if (!m) return toast("Die Messwerte aus der App waren unvollständig und wurden nicht übernommen.", "error");
+  const zeilen = [
+    m.rundenzeit != null ? `Rundenzeit: ${rundenzeitText(m.rundenzeit)} (Schnitt aus ${m.runden} ${m.runden === 1 ? "Runde" : "Runden"})` : "",
+    m.verbrauch != null ? `Verbrauch: ${komma(m.verbrauch, 2)} l pro Runde` : "",
+    m.simulation ? `Simulation: ${m.simulation}` : "",
+    m.strecke ? `Strecke: ${m.strecke}` : "",
+    m.fahrzeug ? `Fahrzeug: ${m.fahrzeug}` : "",
+  ].filter(Boolean);
+  const zeigeDialog = (window as unknown as { showDialog?: (o: Record<string, unknown>) => Promise<unknown> }).showDialog;
+  const ok = zeigeDialog
+    ? await zeigeDialog({ icon: "fa-gauge-high", title: "Messwerte aus der GSRA-App übernehmen?",
+        message: `${zeilen.join("\n")}\n\nDie Werte ersetzen die Angaben in diesem Plan. Tank, Reserve und Boxenzeiten bleiben, wie sie sind.`,
+        confirmText: "Übernehmen", cancelText: "Nicht übernehmen" })
+    : window.confirm(`Messwerte aus der GSRA-App übernehmen?\n\n${zeilen.join("\n")}`);
+  if (!ok) return;
+  const setze = (n: string, v: string) => { const f = feld(n); if (f && v) f.value = v; };
+  if (m.rundenzeit != null) setze("rundenzeit", rundenzeitText(m.rundenzeit));
+  if (m.verbrauch != null) setze("verbrauch", komma(m.verbrauch, 2));
+  setze("simulation", m.simulation);
+  setze("strecke", m.strecke);
+  setze("fahrzeug", m.fahrzeug);
+  aktualisieren();
+  toast("Messwerte aus der App übernommen.", "success");
+}
+
 // ---------- Zugang: Teil von Pole und Alliance ----------
 // Gespeicherte Pläne prüft die Datenbank selbst (SQL 045); diese Prüfung entscheidet nur über die Anzeige.
 type Zugang = "frei" | "gast" | "gesperrt" | "fehler";
@@ -972,6 +1007,7 @@ async function starten() {
   });
   messenEinrichten();
   zeigen(planAusFormular());
+  await messwerteAnbieten();
   // Die Uhr „Jetzt laut Plan“ jede halbe Minute auffrischen
   window.setInterval(() => { if (zuletzt && zuletzt.start) zeigen(zuletzt); }, 30000);
 }

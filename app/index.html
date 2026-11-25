@@ -83,8 +83,18 @@
         </div>
       </div>
       <div class="karte funk">
-        <h2>Nach der Runde <small>Kurz gesagt</small></h2>
+        <h2>Nach der Runde <small id="lFunkQuelle">Kurz gesagt</small></h2>
         <p id="lFunkText">Fahr eine Runde – danach sage ich dir, wo du Zeit liegen lässt.</p>
+        <div class="funk-leiste">
+          <label class="schalter"><input type="checkbox" id="fVorlesen"> Vorlesen</label>
+          <label class="schalter"><input type="checkbox" id="fKlang"> Funk-Klang</label>
+          <label class="feld-klein">Stimme <select id="fStimme"></select></label>
+          <label class="feld-klein">Lautstärke <input type="range" id="fLaut" min="0" max="1" step="0.05"></label>
+          <button class="knopf leise" id="fProbe" type="button">Probe-Funk</button>
+          <label class="knopf leise datei" title="Die Datei bleibt auf deinem PC – sie wird nur abgespielt, nicht hochgeladen">Eigene Aufnahme durch den Funk
+            <input type="file" id="fAufnahme" accept="audio/*,.ogg,.opus,.m4a,.mp3,.wav"></label>
+        </div>
+        <p class="hinweis" id="fHinweis">Angemeldet formuliert dein KI-Renningenieur die Ansagen in seinem Stil (eingestellt auf der Webseite unter „Renningenieur“).</p>
       </div>
     </section>
 
@@ -150,6 +160,12 @@
       <div class="karte funk">
         <h2>Nachbesprechung <small>Kurz gesagt – wie von deinem Renningenieur</small></h2>
         <ul class="bericht-saetze" id="bSaetze"></ul>
+        <div class="funk-leiste">
+          <button class="knopf" id="bKiKnopf" type="button">Nachbesprechung vom Renningenieur</button>
+          <button class="knopf leise" id="bVorlesen" type="button">Vorlesen</button>
+          <span class="hinweis" id="bKiStatus" aria-live="polite"></span>
+        </div>
+        <div class="ki-text" id="bKiText" hidden></div>
       </div>
       <div class="zweispaltig gleich">
         <div class="karte">
@@ -188,7 +204,14 @@
         </div>
         <div class="ergebnis" id="sErgebnis" aria-live="polite"></div>
       </form>
-      <p class="hinweis">Ganze Rennen mit Fahrerwechseln planst du im Stint-Planer auf der GSRA-Webseite. Bald übernimmt er deine gemessenen Werte direkt aus der App.</p>
+      <div class="karte">
+        <h2>Ganzes Rennen planen <small>Stint-Planer auf der GSRA-Webseite (Pole und Alliance)</small></h2>
+        <p class="hinweis">Ganze Rennen mit Fahrerwechseln, Reifen und Boxenstopps planst du im Stint-Planer. Er übernimmt deine gemessene Rundenzeit, deinen Verbrauch, Strecke und Fahrzeug – du bestätigst dort, bevor etwas geändert wird.</p>
+        <div class="funk-leiste">
+          <button class="knopf" id="sStintKnopf" type="button">Messwerte an den Stint-Planer</button>
+          <span class="hinweis" id="sStintStatus" aria-live="polite"></span>
+        </div>
+      </div>
     </section>
   </main>
 

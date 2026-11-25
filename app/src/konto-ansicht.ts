@@ -20,6 +20,12 @@ export function hinweis(text: string, art: "info" | "fehler" | "ok" = "info") {
 
 let konto: Konto | null = null;
 let wartet = false;
+const beobachter = new Set<() => void>();
+
+/** Angemeldet und (falls eingerichtet) Zwei-Faktor bestätigt */
+export const angemeldet = () => !!konto && !konto.braucheCode;
+/** Wird aufgerufen, wenn sich die Anmeldung ändert (z. B. um die Einstellungen des Renningenieurs zu laden) */
+export const beiKontoWechsel = (f: () => void) => { beobachter.add(f); };
 let laufend: { geheimnis: string } | null = null;
 
 function zeigen() {
@@ -38,7 +44,13 @@ function zeigen() {
     knopf.title = "Mit deinem GSRA-Konto anmelden (über die Webseite)";
   }
   $("kontoName").textContent = konto ? konto.name : "";
+  const jetzt = angemeldet() ? konto?.id ?? "" : "";
+  if (jetzt !== zuletztGemeldet) {
+    zuletztGemeldet = jetzt;
+    for (const f of beobachter) f();
+  }
 }
+let zuletztGemeldet = "";
 
 async function aktualisieren() {
   try {

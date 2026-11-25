@@ -237,6 +237,18 @@ main { padding: 12px 20px 28px; max-width: 1400px; margin: 0 auto; }
 .ueberholungen .schlecht { color: var(--rot); }
 @media (max-width: 1100px) { .zweispaltig.gleich { grid-template-columns: 1fr; } }
 
+/* Funk des Renningenieurs (Vorlesen, Funk-Klang, KI-Nachbesprechung) */
+.funk-leiste { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-top: 12px; }
+.funk-leiste .feld-klein { display: inline-flex; align-items: center; gap: 6px; color: var(--leise); font-size: 12px; }
+.funk-leiste select { max-width: 220px; background: var(--flaeche-2); border: 1px solid var(--rand); border-radius: 8px; padding: 4px 8px; }
+.funk-leiste input[type="range"] { width: 110px; accent-color: var(--gelb); }
+.knopf.datei { position: relative; overflow: hidden; }
+.knopf.datei input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.quelle-ki { color: var(--gelb); font-weight: 600; }
+.ki-text { margin-top: 12px; padding: 12px 14px; border-radius: 10px; background: rgba(255, 204, 0, 0.06); border: 1px solid rgba(255, 204, 0, 0.18); display: grid; gap: 8px; }
+.ki-text p { margin: 0; line-height: 1.55; }
+.ki-text[hidden] { display: none; }
+
 /* Ladeanimation (gemeinsam mit der Webseite, ../src/ladeanimation.ts) und Startbild */
 .gsra-lade { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 28px 16px; color: var(--leise); text-align: center; }
 .gsra-lade-logo { display: block; width: min(150px, 60%); height: auto; overflow: visible; }

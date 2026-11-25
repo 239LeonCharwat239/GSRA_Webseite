@@ -10,6 +10,7 @@ import type { Probe } from "../src/typen.ts";
 import { karteBauen, verlustJeAbschnitt } from "../src/strecke.ts";
 import { Rennbeobachter, berichtErstellen } from "../src/rennbericht.ts";
 import type { Feld } from "../src/typen.ts";
+import { messwerteKodieren, messwerteLesen } from "../../src/stint-messwerte.ts";
 
 function fahren(fahrt: DemoFahrt, runden: number, z = new Rundenzaehler()) {
   const fertige = [];
@@ -247,4 +248,30 @@ test("Rennbericht ohne gültige Runde: freundlicher Hinweis statt Fehler", () =>
   assert.equal(b.gueltig, 0);
   assert.equal(b.beste, null);
   assert.match(b.saetze[0], /Fahr ein paar Runden/);
+});
+
+test("Stint-Planer: Messwerte hin und zurück, Umlaute bleiben, Schadcode wird entschärft", () => {
+  const kodiert = messwerteKodieren({ rundenzeit: 87.4567, verbrauch: 2.6789, runden: 5, simulation: "iRacing", strecke: "Nürburgring <script>alert(1)</script>", fahrzeug: "BMW M4 GT3" });
+  assert.match(kodiert, /^[A-Za-z0-9_-]+$/);
+  const m = messwerteLesen(`#messwerte=${kodiert}`);
+  assert.ok(m);
+  assert.equal(m.rundenzeit, 87.457);
+  assert.equal(m.verbrauch, 2.679);
+  assert.equal(m.runden, 5);
+  assert.equal(m.fahrzeug, "BMW M4 GT3");
+  assert.ok(m.strecke.startsWith("Nürburgring") && !m.strecke.includes("<"));
+});
+
+test("Stint-Planer: unsinnige oder fremde Links werden nicht übernommen", () => {
+  const link = (o: unknown) => `#messwerte=${Buffer.from(JSON.stringify(o)).toString("base64url")}`;
+  assert.equal(messwerteLesen("#plan=abc"), null);
+  assert.equal(messwerteLesen("#messwerte=%%%"), null);
+  assert.equal(messwerteLesen(link({ v: 2, rz: 90 })), null); // unbekannte Fassung
+  assert.equal(messwerteLesen(link({ v: 1, rz: 5, vb: 900 })), null); // außerhalb der Grenzen
+  assert.equal(messwerteLesen(link({ v: 1, rz: "90", vb: null })), null); // Text statt Zahl
+  const nurVerbrauch = messwerteLesen(link({ v: 1, vb: 3.1, n: 99999, strecke: "x".repeat(500) }));
+  assert.equal(nurVerbrauch?.rundenzeit, null);
+  assert.equal(nurVerbrauch?.runden, 1);
+  assert.equal(nurVerbrauch?.strecke.length, 60);
+  assert.equal(messwerteLesen(`#messwerte=${Buffer.from("kein json").toString("base64url")}`), null);
 });

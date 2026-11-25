@@ -9,7 +9,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(live::Zustand::default())
-        .invoke_handler(tauri::generate_handler![live::status, anmeldung::anmeldung_starten, anmeldung::anmeldung_abbrechen])
+        .invoke_handler(tauri::generate_handler![live::status, anmeldung::anmeldung_starten, anmeldung::anmeldung_abbrechen, anmeldung::stintplaner_oeffnen])
         .setup(|app| {
             live::starten(app.handle().clone());
             Ok(())

@@ -11,9 +11,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL, KARRIERE_SQL, STINTPLAN_SQL, LIVERIES_SQL, CHATSICHER_SQL, AUFRAEUMEN_SQL, ONLINE_SQL, RE_STIL_SQL, APP_LOGIN_SQL] =
-    Array.from({ length: 51 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 51);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL, KARRIERE_SQL, STINTPLAN_SQL, LIVERIES_SQL, CHATSICHER_SQL, AUFRAEUMEN_SQL, ONLINE_SQL, RE_STIL_SQL, APP_LOGIN_SQL, RE_KI_SQL] =
+    Array.from({ length: 52 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 52);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -3646,6 +3646,101 @@ if (APP_LOGIN_SQL && RE_STIL_SQL) {
     let letzter = null;
     for (let i = 0; i < 11; i++) letzter = await as(A4, async () => q(`select public.app_link_approve('${CH}', 'PC')`));
     check("Höchstens 10 App-Anmeldungen pro Stunde", /Zu viele/.test(letzter?.error || ""), letzter?.error || "durchgelassen!");
+}
+
+// --- 052: KI-Renningenieur – unsichtbare Schutzgrenzen, Kostendeckel, nur eigene Einstellungen ---
+if (RE_KI_SQL && RE_STIL_SQL) {
+    const id = (n) => `79000000-0000-0000-0000-0000000007${String(n).padStart(2, "0")}`;
+    const F = id(1), B = id(2), GS = id(3), ZF = id(4), V = id(5);
+    await db.exec(`
+      insert into auth.users (id) values ('${F}'), ('${B}'), ('${GS}'), ('${ZF}'), ('${V}');
+      insert into public.profiles (id, username) values ('${F}', 'Funkfahrer Fritz'), ('${B}', 'Boxenfunk Berta'),
+        ('${GS}', 'Funksperre Gustav'), ('${ZF}', 'Funkfaktor Zoe'), ('${V}', 'Vielfunk Vera');
+      insert into auth.mfa_factors (user_id, status) values ('${ZF}', 'verified');`);
+    // Vorher-Test: ohne 052 gibt es keine Schutzgrenze (Funktion fehlt)
+    const vorher = await as(F, async () => q(`select public.race_engineer_turn('funk')`));
+    check("Vor 052: keine Zählung/Schutzgrenze vorhanden (Lücke nachgewiesen)", vorher.error !== null, vorher.error || "vorhanden?!");
+    await db.exec(readFileSync(RE_KI_SQL, "utf8"));
+    const ctl52 = await db.exec(readFileSync(RE_KI_SQL, "utf8")); // zweiter Lauf
+    const rows52 = ctl52[ctl52.length - 1].rows;
+    console.log("Kontrolle 052:\n  " + rows52.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+    check("Kontrolle 052: bereit, Gäste ausgeschlossen, Zähler nicht lesbar", rows52.map(r => r.ergebnis).join(",") === "bereit,ja,ja", rows52.map(r => r.ergebnis).join(", "));
+
+    const turn = (uid, art = "funk") => as(uid, async () => q(`select public.race_engineer_turn('${art}') as r`));
+    // Ohne gespeicherte Einstellungen: Standard-Renningenieur
+    const erst = (await turn(F)).rows[0]?.r;
+    check("Mitglied: erlaubt, Standard-Einstellungen (Kim, Kumpel)", erst?.erlaubt === true && erst.einstellungen?.name === "Kim" && erst.einstellungen?.art === "kumpel", JSON.stringify(erst));
+    // Eigene Einstellungen und Gedächtnis kommen mit – fremde nie
+    await as(F, async () => {
+        await q(`select public.race_engineer_save('Lia', 'Fritz', 'locker', 'viel', 'hell', 'de', '{"wetter": false}'::jsonb)`);
+        await q(`select public.race_engineer_remember('ziel', 'Konstanter fahren in Spa')`);
+    });
+    await as(B, async () => { await q(`select public.race_engineer_remember('notiz', 'GEHEIM von Berta')`); });
+    const mit = (await turn(F)).rows[0]?.r;
+    check("Eigene Persönlichkeit wird geliefert (Lia, locker, Rufname)", mit?.einstellungen?.name === "Lia" && mit.einstellungen.art === "locker" && mit.einstellungen.rufname === "Fritz" && mit.einstellungen.themen?.wetter === false, JSON.stringify(mit?.einstellungen));
+    check("Eigenes Gedächtnis dabei, fremdes nicht", JSON.stringify(mit?.gedaechtnis).includes("Spa") && !JSON.stringify(mit).includes("GEHEIM"), JSON.stringify(mit?.gedaechtnis));
+    const monat = await one(`select anzahl from public.race_engineer_monthly where user_id = '${F}'`);
+    check("Jede KI-Antwort wird still gezählt (Monat)", monat?.anzahl === 2, JSON.stringify(monat));
+
+    // Direkter Zugriff auf die Zähler: verboten (lesen, schreiben, zurücksetzen)
+    await as(F, async () => {
+        for (const t of ["race_engineer_usage", "race_engineer_monthly", "race_engineer_daily"]) {
+            const lesen = await q(`select * from public.${t}`);
+            check(`${t}: nicht lesbar`, lesen.error !== null, lesen.error || `${lesen.rows.length} Zeilen`);
+        }
+        const zuruecksetzen = await q(`delete from public.race_engineer_monthly where user_id = '${F}'`);
+        check("Eigenen Monatszähler zurücksetzen: verboten", zuruecksetzen.error !== null, zuruecksetzen.error || "durchgelassen!");
+        const faelschen = await q(`insert into public.race_engineer_usage (user_id, art) values ('${B}', 'funk')`);
+        check("Fremde Zählung eintragen: verboten", faelschen.error !== null, faelschen.error || "durchgelassen!");
+        const unbekannt = await q(`select public.race_engineer_turn('alles') as r`);
+        check("Unbekannte Anfrage abgelehnt", /Unbekannte Anfrage/.test(unbekannt.error || ""), unbekannt.error || "durchgelassen!");
+        const einspritzen = await q(`select public.race_engineer_turn($$funk'); delete from public.race_engineer_usage; --$$) as r`);
+        check("Unsinn als Art: abgelehnt, keine Wirkung", einspritzen.error !== null, einspritzen.error || "durchgelassen!");
+    });
+
+    // Gast, gesperrt, Zwei-Faktor
+    const gast = await turn(null);
+    check("Gäste: kein KI-Renningenieur", gast.error !== null, gast.error || "durchgelassen!");
+    await db.exec(`insert into public.user_bans (user_id, banned_until, reason) values ('${GS}', now() + interval '1 day', 'Test 052')`);
+    const gesperrt = await turn(GS);
+    check("Gesperrte Konten: kein KI-Renningenieur", /gesperrt/.test(gesperrt.error || ""), gesperrt.error || "durchgelassen!");
+    await db.exec(`delete from public.user_bans where reason = 'Test 052'`);
+    const ohneCode = await turn(ZF);
+    check("Mit Zwei-Faktor: ohne bestätigten Code kein KI-Renningenieur", /Zwei-Faktor/.test(ohneCode.error || ""), ohneCode.error || "durchgelassen!");
+    const mitCode = await mitAnspruch(ZF, { aal: "aal2" }, async () => q(`select public.race_engineer_turn('funk') as r`));
+    check("Mit Zwei-Faktor und bestätigtem Code: erlaubt", mitCode.error === null && mitCode.rows[0]?.r?.erlaubt === true, mitCode.error || JSON.stringify(mitCode.rows[0]));
+
+    // Grenzen: 20 pro Minute, 30 Nachbesprechungen am Tag, 6.000 im Monat, Tagesdeckel für alle
+    let r = null;
+    for (let i = 0; i < 21; i++) r = (await turn(V)).rows[0]?.r;
+    check("Höchstens 20 KI-Antworten pro Minute (die 21. nicht)", r?.erlaubt === false && r.grund === "minute", JSON.stringify(r));
+    const zaehlerNachSperre = await one(`select count(*)::int as n from public.race_engineer_usage where user_id = '${V}'`);
+    check("Abgelehnte Anfragen zählen nicht mit", zaehlerNachSperre.n === 20, String(zaehlerNachSperre.n));
+    await db.exec(`update public.race_engineer_usage set created_at = now() - interval '5 minutes' where user_id = '${V}'`);
+    check("Nach einer Minute geht es weiter", (await turn(V)).rows[0]?.r?.erlaubt === true);
+    await db.exec(`insert into public.race_engineer_usage (user_id, art, created_at)
+                   select '${V}', 'nachbesprechung', now() - interval '2 hours' from generate_series(1, 30)`);
+    const nb = (await turn(V, "nachbesprechung")).rows[0]?.r;
+    check("Höchstens 30 Nachbesprechungen am Tag", nb?.erlaubt === false && nb.grund === "tag", JSON.stringify(nb));
+    check("Funk bleibt trotzdem möglich", (await turn(V)).rows[0]?.r?.erlaubt === true);
+    await db.exec(`update public.race_engineer_monthly set anzahl = 6000 where user_id = '${V}'`);
+    const voll = (await turn(V)).rows[0]?.r;
+    check("Höchstens 6.000 KI-Antworten im Monat", voll?.erlaubt === false && voll.grund === "monat", JSON.stringify(voll));
+    const andere = (await turn(B)).rows[0]?.r;
+    check("Andere Mitglieder davon unberührt", andere?.erlaubt === true, JSON.stringify(andere));
+    await db.exec(`update public.race_engineer_daily set anzahl = 100000`);
+    const deckel = (await turn(B)).rows[0]?.r;
+    check("Kostendeckel: höchstens 100.000 KI-Antworten am Tag für alle", deckel?.erlaubt === false && deckel.grund === "gesamt", JSON.stringify(deckel));
+    await db.exec(`update public.race_engineer_daily set anzahl = 5`);
+    // Aufräumen: Einträge älter als 2 Tage verschwinden, die Monatszahl bleibt
+    await db.exec(`update public.race_engineer_usage set created_at = now() - interval '3 days' where user_id = '${F}'`);
+    await turn(F);
+    const rest = await one(`select count(*)::int as n from public.race_engineer_usage where user_id = '${F}' and created_at < now() - interval '2 days'`);
+    check("Alte Einträge (älter als 2 Tage) werden gelöscht", rest.n === 0, String(rest.n));
+    // Konto löschen nimmt die Zählung mit
+    const loeschen = await q(`delete from auth.users where id = '${V}'`);
+    const uebrig = await one(`select (select count(*) from public.race_engineer_monthly where user_id = '${V}') + (select count(*) from public.race_engineer_usage where user_id = '${V}') as n`);
+    check("Konto gelöscht: keine Zählung übrig", loeschen.error === null && Number(uebrig.n) === 0, loeschen.error || String(uebrig.n));
 }
 
 // --- Konto löschen (Ausbau 3) funktioniert weiterhin, die Stimmen verschwinden mit ---

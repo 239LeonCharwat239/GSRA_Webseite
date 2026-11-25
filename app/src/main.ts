@@ -7,7 +7,10 @@ import { bisZiel, rundenzeitSchnitt, verbrauchProRunde } from "./sprit.ts";
 import { DemoQuelle } from "./demo.ts";
 import { Diagramme, verlaufZeichnen, type Plot } from "./diagramm.ts";
 import type { Feld, Probe, Sitzung, Status } from "./typen.ts";
-import { kontoStarten } from "./konto-ansicht.ts";
+import { angemeldet, beiKontoWechsel, hinweis, kontoStarten } from "./konto-ansicht.ts";
+import { aufnahmeAbspielen, funkLaden, funkSpeichern, sprechen, stimmenFuer } from "./funk.ts";
+import { kiFragen, kiVerfuegbar, persoenlichkeitLaden, type Persoenlichkeit } from "./ki.ts";
+import { messwerteKodieren } from "../../src/stint-messwerte.ts";
 import { karteBauen, karteZeichnen, verlustJeAbschnitt, type Karte } from "./strecke.ts";
 import { Rennbeobachter, berichtErstellen, rundenzeitText, stelleText } from "./rennbericht.ts";
 import { startbildZeigen } from "./startbild.ts";
@@ -107,6 +110,11 @@ function allesZuruecksetzen() {
   beobachter.zuruecksetzen();
   spurCache = new WeakMap();
   $("lFunkText").textContent = "Fahr eine Runde – danach sage ich dir, wo du Zeit liegen lässt.";
+  funkNr++; // eine noch laufende KI-Antwort gehört zur alten Sitzung
+  $("lFunkQuelle").textContent = "Kurz gesagt";
+  $("lFunkQuelle").className = "";
+  $("bKiText").hidden = true;
+  $("bKiStatus").textContent = "";
   rundenZeigen();
   live();
 }
@@ -182,6 +190,7 @@ function rundeFertig(r: Runde) {
   $("rundenAnzahl").textContent = String(zaehler.runden.length);
   const beste = zaehler.beste;
   let text: string;
+  let befund: Befund | undefined;
   if (!r.gueltig) text = `Runde ${r.nr} zählt nicht (${r.grund ?? "ungültig"}).`;
   else if (beste === r) {
     const zweite = zaehler.runden.filter((x) => x.gueltig && x !== r).reduce<Runde | null>((b, x) => (!b || x.zeit < b.zeit ? x : b), null);
@@ -190,13 +199,14 @@ function rundeFertig(r: Runde) {
     const v = vergleichen(spur(beste), spur(r), laenge() ?? 4000);
     letzterVerlust = verlustJeAbschnitt(v.delta);
     const b = v.befunde[0];
+    befund = b;
     text = `${zeitText(r.zeit)} – ${zahl(r.zeit - beste.zeit, 3)} s hinter deiner Bestzeit.`;
     if (b) {
       const ursache = b.ursachen[0] ? `${b.ursachen[0].charAt(0).toUpperCase()}${b.ursachen[0].slice(1)}. ` : "";
       text += ` Die meiste Zeit liegt in ${kurvenName(b.kurve, laenge() ?? 4000)} (${sekunden(b.verlust)}). ${ursache}${b.tipp}`;
     }
   } else text = `Runde ${r.nr}: ${zeitText(r.zeit)}.`;
-  $("lFunkText").textContent = text;
+  funkMelden(text, rundenLage(r, befund));
   // Karte aus der ersten gültigen Runde mit Fahrtrichtung; Kurvennummern aus der Bestzeit
   if (!karte && r.gueltig) karte = karteBauen(r.punkte);
   if (beste && beste.punkte.length > 10) kurvenMarken = kurvenFinden(spur(beste), laenge() ?? 4000).map((k) => ({ i: k.scheitel, text: String(k.nr) }));
@@ -205,6 +215,175 @@ function rundeFertig(r: Runde) {
   if (aktiverReiter === "vergleich") vergleichZeigen();
   if (aktiverReiter === "sprit") spritZeigen();
   if (aktiverReiter === "bericht") berichtZeigen();
+}
+
+// ---------------------------------------------------------------- Funk und KI-Renningenieur
+let funkE = funkLaden();
+let persoenlichkeit: Persoenlichkeit | null = null;
+let funkNr = 0;
+
+const runden3 = (x: number | null | undefined) => (x == null || !Number.isFinite(x) ? null : Math.round(x * 1000) / 1000);
+
+/** Nur gemessene Fakten nach einer Runde – daraus formuliert die KI den Funkspruch */
+function rundenLage(r: Runde, b: Befund | undefined): Record<string, unknown> {
+  const beste = zaehler.beste;
+  const v = verbrauchProRunde(zaehler.runden);
+  const sprit = zaehler.jetzt?.sprit ?? null;
+  return {
+    anlass: "runde",
+    sitzung: sitzung?.sitzungsart ?? (demo.laeuft ? "Demo" : null),
+    strecke: sitzung?.strecke ?? null,
+    fahrzeug: sitzung?.fahrzeug ?? null,
+    runde: r.nr,
+    gueltig: r.gueltig,
+    ungueltig_weil: r.gueltig ? null : r.grund ?? "ungültig",
+    zeit_s: runden3(r.zeit),
+    bestzeit_s: runden3(beste?.zeit),
+    neue_bestzeit: beste === r,
+    hinter_bestzeit_s: beste && beste !== r && r.gueltig ? runden3(r.zeit - beste.zeit) : null,
+    groesster_verlust: b ? { stelle: kurvenName(b.kurve, laenge() ?? 4000), verlust_s: runden3(b.verlust), ursache: b.ursachen[0] ?? null, tipp: b.tipp } : null,
+    sprit_l: runden3(sprit),
+    sprit_reicht_runden: v && sprit != null ? Math.floor((sprit / v) * 10) / 10 : null,
+    platz: beobachter.platz,
+  };
+}
+
+/** Ansage nach der Runde: Vorlage sofort, angemeldet danach die Formulierung des KI-Renningenieurs */
+function funkMelden(vorlage: string, lage: Record<string, unknown>) {
+  const nr = ++funkNr;
+  const quelle = $("lFunkQuelle");
+  $("lFunkText").textContent = vorlage;
+  quelle.textContent = "Kurz gesagt";
+  quelle.className = "";
+  if (!angemeldet() || !kiVerfuegbar()) {
+    if (funkE.vorlesen) void vorlesen(vorlage);
+    return;
+  }
+  quelle.textContent = "Renningenieur formuliert …";
+  void kiFragen("funk", lage).then((e) => {
+    if (nr !== funkNr) return; // inzwischen neue Runde
+    if ("text" in e) {
+      $("lFunkText").textContent = e.text;
+      quelle.textContent = `KI-Renningenieur ${persoenlichkeit?.name ?? ""}`.trim();
+      quelle.className = "quelle-ki";
+      if (funkE.vorlesen) void vorlesen(e.text);
+    } else {
+      quelle.textContent = "Kurz gesagt";
+      if (funkE.vorlesen) void vorlesen(vorlage);
+    }
+  });
+}
+
+function vorlesen(text: string) {
+  return sprechen(text, funkE, { sprache: persoenlichkeit?.sprache ?? "de", stimmlage: persoenlichkeit?.stimme ?? "ruhig" });
+}
+
+function stimmenFuellen() {
+  const auswahl = $<HTMLSelectElement>("fStimme");
+  const stimmen = stimmenFuer(persoenlichkeit?.sprache ?? "de");
+  auswahl.replaceChildren(neu("option", "", "Automatisch (natürlichste)"));
+  (auswahl.firstElementChild as HTMLOptionElement).value = "";
+  for (const v of stimmen) {
+    const o = neu("option", "", `${v.name.slice(0, 60)}${v.localService ? "" : " (online)"}`);
+    o.value = v.voiceURI;
+    auswahl.append(o);
+  }
+  auswahl.value = stimmen.some((v) => v.voiceURI === funkE.stimme) ? funkE.stimme : "";
+}
+
+function funkEinrichten() {
+  const vorlesenFeld = $<HTMLInputElement>("fVorlesen");
+  const klangFeld = $<HTMLInputElement>("fKlang");
+  const laut = $<HTMLInputElement>("fLaut");
+  vorlesenFeld.checked = funkE.vorlesen;
+  klangFeld.checked = funkE.klang;
+  laut.value = String(funkE.lautstaerke);
+  const merken = () => {
+    funkE = { vorlesen: vorlesenFeld.checked, klang: klangFeld.checked, lautstaerke: Number(laut.value), stimme: $<HTMLSelectElement>("fStimme").value };
+    funkSpeichern(funkE);
+  };
+  for (const f of [vorlesenFeld, klangFeld, laut, $("fStimme")]) f.addEventListener("change", merken);
+  stimmenFuellen();
+  if ("speechSynthesis" in window) window.speechSynthesis.addEventListener("voiceschanged", stimmenFuellen);
+  $("fProbe").addEventListener("click", () => {
+    const name = persoenlichkeit?.name ?? "Kim";
+    void vorlesen(`Funkcheck. Hier ist ${name}, ich höre dich laut und deutlich. Sprit reicht für sieben Runden, Box in Runde 23.`);
+  });
+  $<HTMLInputElement>("fAufnahme").addEventListener("change", async (e) => {
+    const feld = e.target as HTMLInputElement;
+    const datei = feld.files?.[0];
+    feld.value = "";
+    if (!datei) return;
+    try {
+      const sek = await aufnahmeAbspielen(datei, funkE);
+      hinweis(`Spiele „${datei.name.slice(0, 60)}“ (${Math.round(sek)} s) durch den Funk – die Datei bleibt auf deinem PC.`, "ok");
+    } catch (err) {
+      hinweis(err instanceof Error ? err.message : "Die Aufnahme lässt sich nicht abspielen.", "fehler");
+    }
+  });
+  beiKontoWechsel(async () => {
+    persoenlichkeit = angemeldet() ? await persoenlichkeitLaden().catch(() => null) : null;
+    stimmenFuellen();
+    $("fHinweis").textContent = angemeldet()
+      ? `Dein KI-Renningenieur ${persoenlichkeit?.name ?? ""} formuliert die Ansagen in seinem Stil.`.replace("  ", " ")
+      : "Angemeldet formuliert dein KI-Renningenieur die Ansagen in seinem Stil (eingestellt auf der Webseite unter „Renningenieur“).";
+  });
+}
+
+// KI-Nachbesprechung (Bericht): nur Fakten aus dem Bericht, Namen der Gegner aus der Startliste
+function berichtLage(): Record<string, unknown> {
+  const b = berichtErstellen(zaehler.runden, beobachter, laenge() ?? 4000, sitzung?.fahrer ?? []);
+  const alleKurven = b.kurven.map((k) => k.kurve);
+  return {
+    sitzung: sitzung?.sitzungsart ?? (demo.laeuft ? "Demo" : null),
+    strecke: sitzung?.strecke ?? null,
+    fahrzeug: sitzung?.fahrzeug ?? null,
+    runden: b.runden,
+    gueltige_runden: b.gueltig,
+    bestzeit_s: runden3(b.beste),
+    ideal_s: runden3(b.ideal),
+    schnitt_s: runden3(b.schnitt),
+    streuung_s: runden3(b.konstanz),
+    start_platz: b.startPlatz,
+    end_platz: b.endPlatz,
+    sprit_pro_runde_l: runden3(b.sprit),
+    boxenstopps: b.stopps,
+    zeitverlust_kurven: b.kurven.filter((k) => k.runden > 0 && k.schnitt > 0.005).slice(0, 6)
+      .map((k) => ({ kurve: `Kurve ${k.kurve.nr}`, schnitt_verlust_s: runden3(k.schnitt), tipp: k.tipp || null })),
+    zweikaempfe: b.kaempfe.slice(0, 8).map((k) => ({
+      gegner: k.name, runden: k.dauerRunden, knappster_abstand_s: runden3(k.minAbstand),
+      ueberholungen: k.ueberholungen.slice(0, 4).map((u) => ({ ich_vorbei: u.ichVorbei, wo: stelleText(Math.round(u.anteil * RASTER), alleKurven) })),
+    })),
+  };
+}
+
+function kiTextZeigen(text: string) {
+  const ziel = $("bKiText");
+  ziel.replaceChildren(...text.split(/\n{2,}/).map((a) => neu("p", "", a.trim())).filter((p) => p.textContent));
+  ziel.hidden = false;
+}
+
+function berichtKiEinrichten() {
+  const knopf = $<HTMLButtonElement>("bKiKnopf");
+  const status = $("bKiStatus");
+  knopf.addEventListener("click", async () => {
+    if (!zaehler.runden.some((r) => r.gueltig)) { status.textContent = "Für eine Nachbesprechung brauche ich mindestens eine gültige Runde."; return; }
+    if (!angemeldet()) { status.textContent = "Melde dich oben rechts an – dann bespricht dein Renningenieur die Sitzung mit dir."; return; }
+    knopf.disabled = true;
+    status.textContent = "Dein Renningenieur schaut sich die Sitzung an …";
+    const e = await kiFragen("nachbesprechung", berichtLage());
+    knopf.disabled = false;
+    if ("text" in e) {
+      status.textContent = "";
+      kiTextZeigen(e.text);
+      if (funkE.vorlesen) void vorlesen(e.text);
+    } else status.textContent = e.grund === "einrichtung" ? "Der KI-Renningenieur wird gerade eingerichtet – bald geht es los." : e.fehler;
+  });
+  $("bVorlesen").addEventListener("click", () => {
+    const ki = $("bKiText");
+    const text = !ki.hidden && ki.textContent ? Array.from(ki.children, (p) => p.textContent).join(" ") : Array.from($("bSaetze").children, (li) => li.textContent).join(" ");
+    void vorlesen(text);
+  });
 }
 
 // ---------------------------------------------------------------- Live
@@ -574,6 +753,35 @@ function spritZeigen() {
     b.reicht ? zeile("Ergebnis", "Reicht ohne Tankstopp", "gut") : zeile("Nachtanken", `mindestens ${liter(b.nachtanken)}`, "warn"),
   );
 }
+// Messwerte an den Stint-Planer der Webseite (er fragt vor dem Übernehmen nach)
+$("sStintKnopf").addEventListener("click", async () => {
+  const anzeige = $("sStintStatus");
+  const gueltige = zaehler.runden.filter((r) => r.gueltig);
+  const rundenzeit = rundenzeitSchnitt(zaehler.runden);
+  const verbrauch = verbrauchProRunde(zaehler.runden);
+  if (!gueltige.length || (rundenzeit == null && verbrauch == null)) {
+    anzeige.textContent = "Fahr zuerst ein paar saubere Runden – dann kann ich Rundenzeit und Verbrauch übergeben.";
+    return;
+  }
+  const echt = !demo.laeuft && status?.verbunden === true;
+  const daten = messwerteKodieren({
+    rundenzeit, verbrauch, runden: Math.min(5, gueltige.length),
+    simulation: echt ? "iRacing" : "",
+    strecke: sitzung?.strecke ?? "", fahrzeug: sitzung?.fahrzeug ?? "",
+  });
+  try {
+    if (istApp) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("stintplaner_oeffnen", { messwerte: daten });
+    } else {
+      window.open(`https://gsra-webseite.vercel.app/stintplaner.html#messwerte=${daten}`, "_blank", "noopener");
+    }
+    anzeige.textContent = "Der Stint-Planer öffnet sich im Browser – bestätige dort die Übernahme.";
+  } catch (e) {
+    anzeige.textContent = typeof e === "string" ? e : "Der Browser konnte nicht geöffnet werden.";
+  }
+});
+
 $("sForm").addEventListener("input", () => spritZeigen());
 $("sForm").addEventListener("submit", (e) => e.preventDefault());
 
@@ -586,6 +794,8 @@ if (istApp) {
     statusZeigen();
   });
 }
+funkEinrichten();
+berichtKiEinrichten();
 void kontoStarten(istApp);
 window.addEventListener("resize", () => {
   if (aktiverReiter === "live") live();
