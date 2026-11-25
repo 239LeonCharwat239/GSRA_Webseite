@@ -7,6 +7,7 @@ import { abtasten, kurvenFinden, vergleichen, zeitBei, RASTER } from "../src/ana
 import { bisZiel, verbrauchProRunde, rundenzeitSchnitt } from "../src/sprit.ts";
 import { DemoFahrt, DEMO_KURVEN, DEMO_LAENGE, DEMO_BOXENSTOPP_ALLE, idealeFahrweise, profil, type Profil } from "../src/demo.ts";
 import type { Probe } from "../src/typen.ts";
+import { karteBauen, verlustJeAbschnitt } from "../src/strecke.ts";
 
 function fahren(fahrt: DemoFahrt, runden: number, z = new Rundenzaehler()) {
   const fertige = [];
@@ -24,7 +25,7 @@ function fahren(fahrt: DemoFahrt, runden: number, z = new Rundenzaehler()) {
 /** Punkte einer Runde aus einem Demo-Profil (ein Punkt alle 2 m) */
 function punkteAus(p: Profil): Punkt[] {
   const out: Punkt[] = [];
-  for (let m = 0; m <= DEMO_LAENGE; m += 2) out.push({ a: m / DEMO_LAENGE, t: p.t[m], v: p.v[m], g: p.g[m], b: p.b[m], gang: 3, l: p.l[m] });
+  for (let m = 0; m <= DEMO_LAENGE; m += 2) out.push({ a: m / DEMO_LAENGE, t: p.t[m], v: p.v[m], g: p.g[m], b: p.b[m], gang: 3, l: p.l[m], r: p.h[m] });
   return out;
 }
 
@@ -57,7 +58,7 @@ test("Boxenstopp: Ein- und Ausfahrtsrunde ungültig, Nachtanken verfälscht den 
 
 test("Zeit rückwärts verwirft die laufende Runde, Datenlücke macht sie ungültig", () => {
   const z = new Rundenzaehler();
-  const p = (zeit: number, anteil: number): Probe => ({ tick: 0, zeit, runde: 1, anteil, meter: null, tempo: 50, drehzahl: null, gang: 3, gas: 1, bremse: 0, lenkung: 0, sprit: 30, rundenzeit: null, letzteRunde: null, besteRunde: null, aufStrecke: true, inBox: false });
+  const p = (zeit: number, anteil: number): Probe => ({ tick: 0, zeit, runde: 1, anteil, meter: null, tempo: 50, drehzahl: null, gang: 3, gas: 1, bremse: 0, lenkung: 0, sprit: 30, rundenzeit: null, letzteRunde: null, besteRunde: null, aufStrecke: true, inBox: false, richtung: null });
   z.aufnehmen(p(0, 0.95));
   z.aufnehmen(p(1, 0.01)); // Linie → Runde beginnt
   for (let i = 1; i < 50; i++) z.aufnehmen(p(1 + i, 0.01 + i * 0.02));
@@ -73,7 +74,7 @@ test("Zeit rückwärts verwirft die laufende Runde, Datenlücke macht sie ungül
 });
 
 test("zeitBei interpoliert und meldet fehlende Daten", () => {
-  const pk: Punkt[] = [0, 0.5, 1].map((a, i) => ({ a, t: i * 10, v: 0, g: 0, b: 0, gang: 0, l: 0 }));
+  const pk: Punkt[] = [0, 0.5, 1].map((a, i) => ({ a, t: i * 10, v: 0, g: 0, b: 0, gang: 0, l: 0, r: 0 }));
   assert.equal(zeitBei(pk, 0.25), 5);
   assert.equal(zeitBei(pk, 1), 20);
   assert.equal(zeitBei([], 0.3), null);
@@ -140,4 +141,42 @@ test("Sprit bis zum Ziel", () => {
   assert.equal(bisZiel({ sprit: 50, verbrauch: 0, rundenzeit: 90, rest: { runden: 10 } }), null);
   assert.equal(bisZiel({ sprit: 50, verbrauch: 2, rundenzeit: null, rest: { sekunden: 600 } }), null);
   assert.equal(rundenzeitSchnitt([]), null);
+});
+
+test("Streckenkarte: aus Tempo und Fahrtrichtung, geschlossen, passende Größe", () => {
+  const punkte = punkteAus(profil(idealeFahrweise()));
+  const k = karteBauen(punkte)!;
+  assert.ok(k, "Karte gebaut");
+  assert.equal(k.x.length, RASTER + 1);
+  assert.ok(Math.abs(k.laenge - DEMO_LAENGE) < 30, `Länge ${k.laenge}`);
+  // geschlossen: Ende = Anfang
+  assert.ok(Math.hypot(k.x[RASTER] - k.x[0], k.y[RASTER] - k.y[0]) < 1);
+  // echte Fläche (kein Strich): Ausdehnung in beide Richtungen mehrere hundert Meter
+  const breite = Math.max(...k.x) - Math.min(...k.x);
+  const hoehe = Math.max(...k.y) - Math.min(...k.y);
+  assert.ok(breite > 300 && hoehe > 300, `${breite} × ${hoehe}`);
+  // Abstand benachbarter Rasterpunkte ≈ Streckenlänge / Raster
+  const schritt = Math.hypot(k.x[501] - k.x[500], k.y[501] - k.y[500]);
+  assert.ok(Math.abs(schritt - DEMO_LAENGE / RASTER) < 1.5, `Schritt ${schritt}`);
+});
+
+test("Streckenkarte: ohne Fahrtrichtung oder mit Lücke keine (falsche) Karte", () => {
+  const punkte = punkteAus(profil(idealeFahrweise()));
+  assert.equal(karteBauen(punkte.map((p) => ({ ...p, r: Number.NaN }))), null);
+  const mitLuecke = punkte.map((p, i) => (i > 1000 ? { ...p, t: p.t + 5 } : p));
+  assert.equal(karteBauen(mitLuecke), null);
+  assert.equal(karteBauen(punkte.slice(0, 20)), null);
+});
+
+test("Zeitverlust je Abschnitt zeigt die Kurve mit dem Fehler", () => {
+  const ref = abtasten(punkteAus(profil(idealeFahrweise())));
+  const f = idealeFahrweise();
+  f.bremse[3] = 0.7;
+  f.tempo[3] = 0.93;
+  const v = vergleichen(ref, abtasten(punkteAus(profil(f))), DEMO_LAENGE);
+  const verlust = verlustJeAbschnitt(v.delta);
+  let max = 0;
+  for (let i = 1; i < verlust.length; i++) if (verlust[i] > verlust[max]) max = i;
+  const meter = (max / RASTER) * DEMO_LAENGE;
+  assert.ok(Math.abs(meter - DEMO_KURVEN[3].bei) < 300, `größter Verlust bei ${meter} m`);
 });

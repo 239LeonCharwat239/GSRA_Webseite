@@ -7,18 +7,19 @@
 
 import type { Probe, Sitzung } from "./typen.ts";
 
-type KurveDef = { bei: number; v: number; laenge: number; richtung: 1 | -1 };
+/** richtung: +1 = Rechtskurve, -1 = Linkskurve; winkel: wie weit die Kurve dreht (Grad, Summe der Runde = 360) */
+type KurveDef = { bei: number; v: number; laenge: number; richtung: 1 | -1; winkel: number };
 
 export const DEMO_LAENGE = 4200;
 export const DEMO_KURVEN: KurveDef[] = [
-  { bei: 420, v: 24, laenge: 60, richtung: 1 },
-  { bei: 900, v: 38, laenge: 90, richtung: -1 },
-  { bei: 1350, v: 52, laenge: 120, richtung: 1 },
-  { bei: 1700, v: 30, laenge: 70, richtung: -1 },
-  { bei: 2300, v: 60, laenge: 150, richtung: 1 },
-  { bei: 2900, v: 27, laenge: 60, richtung: 1 },
-  { bei: 3300, v: 44, laenge: 100, richtung: -1 },
-  { bei: 3750, v: 35, laenge: 80, richtung: 1 },
+  { bei: 420, v: 24, laenge: 60, richtung: 1, winkel: 169 },
+  { bei: 900, v: 38, laenge: 90, richtung: -1, winkel: -133 },
+  { bei: 1350, v: 52, laenge: 120, richtung: 1, winkel: 146 },
+  { bei: 1700, v: 30, laenge: 70, richtung: -1, winkel: -80 },
+  { bei: 2300, v: 60, laenge: 150, richtung: 1, winkel: 137 },
+  { bei: 2900, v: 27, laenge: 60, richtung: 1, winkel: 100 },
+  { bei: 3300, v: 44, laenge: 100, richtung: -1, winkel: -109 },
+  { bei: 3750, v: 35, laenge: 80, richtung: 1, winkel: 130 },
 ];
 const V_MAX = 78; // m/s ≈ 280 km/h
 const VERZOEGERUNG = 14; // m/s² bei voller Bremse
@@ -28,11 +29,28 @@ const VERBRAUCH_PRO_M = 0.0008; // Liter pro Meter bei Vollgas (Teil davon auch 
 
 /** Wie der Fahrer eine Runde fährt: je Kurve Faktor für Kurventempo, Bremskraft, Beschleunigung am Ausgang */
 export type Fahrweise = { tempo: number[]; bremse: number[]; ausgang: number[] };
-export type Profil = { v: Float64Array; g: Float64Array; b: Float64Array; l: Float64Array; t: Float64Array; sprit: Float64Array; boxe: Uint8Array };
+export type Profil = { v: Float64Array; g: Float64Array; b: Float64Array; l: Float64Array; t: Float64Array; sprit: Float64Array; boxe: Uint8Array; h: Float64Array };
 
 export const idealeFahrweise = (): Fahrweise => ({ tempo: DEMO_KURVEN.map(() => 1), bremse: DEMO_KURVEN.map(() => 1), ausgang: DEMO_KURVEN.map(() => 1) });
 
 const beschleunigung = (v: number) => 8.5 * (1 - v / (V_MAX + 4)) + 0.6;
+
+/** Fahrtrichtung je Meter (Bogenmaß zur Nordrichtung, im Uhrzeigersinn): in jeder Kurve gleichmäßig gedreht */
+let richtungenSpeicher: Float64Array | null = null;
+function richtungen(): Float64Array {
+  if (richtungenSpeicher) return richtungenSpeicher;
+  const h = new Float64Array(DEMO_LAENGE + 1);
+  for (let m = 1; m <= DEMO_LAENGE; m++) {
+    let dh = 0;
+    for (const k of DEMO_KURVEN) {
+      const von = k.bei - k.laenge / 2;
+      if (m - 1 >= von && m - 1 < von + k.laenge) dh = (k.winkel * Math.PI) / 180 / k.laenge;
+    }
+    h[m] = h[m - 1] + dh;
+  }
+  richtungenSpeicher = h;
+  return h;
+}
 
 /** Tempo, Pedale, Lenkung, Zeit und Verbrauch über die Strecke (Index = Meter) */
 export function profil(f: Fahrweise, boxe: { rein?: boolean; raus?: boolean } = {}, startTempo?: number): Profil {
@@ -91,14 +109,14 @@ export function profil(f: Fahrweise, boxe: { rein?: boolean; raus?: boolean } = 
     if (ki >= 0) {
       const kd = DEMO_KURVEN[ki];
       const pos = (m - (kd.bei - kd.laenge / 2)) / kd.laenge;
-      l[m] = kd.richtung * Math.sin(Math.PI * pos) * Math.min(2.2, 22 / Math.max(v[m], 12));
+      l[m] = -kd.richtung * Math.sin(Math.PI * pos) * Math.min(2.2, 22 / Math.max(v[m], 12)); // links = positiv
     }
     if (m > 0) {
       t[m] = t[m - 1] + 2 / (v[m - 1] + v[m]);
       sprit[m] = sprit[m - 1] + VERBRAUCH_PRO_M * (0.25 + 0.75 * g[m - 1]);
     }
   }
-  return { v, g, b, l, t, sprit, boxe: inBox };
+  return { v, g, b, l, t, sprit, boxe: inBox, h: richtungen() };
 }
 
 const gangVon = (v: number) => {
@@ -227,6 +245,7 @@ export class DemoFahrt {
       besteRunde: this.besteRunde,
       aufStrecke: true,
       inBox: this.p.boxe[Math.round(meter)] === 1,
+      richtung: w(this.p.h),
     };
   }
 }

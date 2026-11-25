@@ -254,7 +254,7 @@ pub fn wert(zeile: &[u8], v: &Variable) -> Option<f64> {
 }
 
 /// Die Werte, die die App braucht (Namen wie im iRacing-SDK)
-const NAMEN: [&str; 16] = [
+const NAMEN: [&str; 17] = [
     "SessionTime",
     "Lap",
     "LapDistPct",
@@ -271,12 +271,13 @@ const NAMEN: [&str; 16] = [
     "LapBestLapTime",
     "IsOnTrack",
     "OnPitRoad",
+    "YawNorth",
 ];
 
 /// Zuordnung Name → Variable (fehlende Werte bleiben leer)
 #[derive(Debug, Clone, Default)]
 pub struct Karte {
-    felder: [Option<Variable>; 16],
+    felder: [Option<Variable>; 17],
 }
 
 impl Karte {
@@ -315,6 +316,7 @@ impl Karte {
             beste_runde: z(13),
             auf_strecke: b(14),
             in_box: b(15),
+            richtung: z(16),
         }
     }
 }
@@ -340,6 +342,8 @@ pub struct Probe {
     pub beste_runde: Option<f64>,
     pub auf_strecke: Option<bool>,
     pub in_box: Option<bool>,
+    /// Fahrtrichtung zur Nordrichtung (Bogenmaß) – daraus entsteht die Streckenkarte
+    pub richtung: Option<f64>,
 }
 
 /// Strecke und Fahrzeug aus der Sitzungsinfo (nur, was die App anzeigt)
@@ -464,6 +468,7 @@ pub mod testdaten {
                 ("LapBestLapTime", Typ::Zahl),
                 ("IsOnTrack", Typ::Bool),
                 ("OnPitRoad", Typ::Bool),
+                ("YawNorth", Typ::Zahl),
             ] {
                 vars.push((n.to_string(), t, o));
                 o += t.groesse();
@@ -539,11 +544,11 @@ mod tests {
         let b = bau.bauen(1, &[("Speed", 50.0)]);
         let k = kopf_lesen(&b).unwrap();
         assert!(k.verbunden());
-        assert_eq!(k.anzahl_variablen, 16);
+        assert_eq!(k.anzahl_variablen, 17);
         assert_eq!(k.neueste_zeile(), 1);
         k.pruefen(b.len()).unwrap();
-        let vars = variablen_lesen(&b[VAR_START..], 16, bau.zeilen_laenge).unwrap();
-        assert_eq!(vars.len(), 16);
+        let vars = variablen_lesen(&b[VAR_START..], 17, bau.zeilen_laenge).unwrap();
+        assert_eq!(vars.len(), 17);
         assert_eq!(vars[0].name, "SessionTime");
         assert_eq!(vars[0].typ, Typ::Doppelt);
     }
@@ -561,11 +566,12 @@ mod tests {
             ("FuelLevel", 42.25),
             ("IsOnTrack", 1.0),
             ("OnPitRoad", 0.0),
+            ("YawNorth", 1.5),
         ]);
         let k = kopf_lesen(&b).unwrap();
-        let vars = variablen_lesen(&b[VAR_START..], 16, bau.zeilen_laenge).unwrap();
+        let vars = variablen_lesen(&b[VAR_START..], 17, bau.zeilen_laenge).unwrap();
         let karte = Karte::aus(&vars);
-        assert_eq!(karte.vorhanden(), 16);
+        assert_eq!(karte.vorhanden(), 17);
         let i = k.neueste_zeile();
         let o = k.puffer[i].offset as usize;
         let p = karte.probe(&b[o..o + bau.zeilen_laenge], k.puffer[i].tick);
@@ -577,6 +583,7 @@ mod tests {
         assert_eq!(p.sprit, Some(42.25));
         assert_eq!(p.auf_strecke, Some(true));
         assert_eq!(p.in_box, Some(false));
+        assert_eq!(p.richtung, Some(1.5));
         assert_eq!(p.tick, 100);
     }
 
@@ -599,7 +606,7 @@ mod tests {
     fn unendliche_und_nan_werte_werden_verworfen() {
         let bau = Bau::standard();
         let b = bau.bauen(0, &[("Speed", f64::NAN), ("SessionTime", f64::INFINITY)]);
-        let vars = variablen_lesen(&b[VAR_START..], 16, bau.zeilen_laenge).unwrap();
+        let vars = variablen_lesen(&b[VAR_START..], 17, bau.zeilen_laenge).unwrap();
         let k = kopf_lesen(&b).unwrap();
         let o = k.puffer[0].offset as usize;
         let p = Karte::aus(&vars).probe(&b[o..o + bau.zeilen_laenge], 1);

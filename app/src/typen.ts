@@ -19,6 +19,8 @@ export type Probe = {
   besteRunde: number | null;
   aufStrecke: boolean | null;
   inBox: boolean | null;
+  /** Fahrtrichtung zur Nordrichtung (Bogenmaß, im Uhrzeigersinn) – daraus entsteht die Streckenkarte */
+  richtung: number | null;
 };
 
 export type Sitzung = {

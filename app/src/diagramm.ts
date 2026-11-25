@@ -23,6 +23,7 @@ export class Diagramme {
   private readonly ziel: HTMLElement;
   private readonly xText: (i: number) => string;
   onBereich: (von: number, bis: number, ganz: boolean) => void = () => {};
+  onCursor: (i: number | null) => void = () => {};
 
   constructor(ziel: HTMLElement, xText: (i: number) => string) {
     this.ziel = ziel;
@@ -78,10 +79,12 @@ export class Diagramme {
       this.cursor = this.index(canvas, e.clientX);
       if (this.ziehenAb != null) this.ziehenBis = this.cursor;
       this.zeichnen();
+      this.onCursor(this.cursor);
     });
     canvas.addEventListener("pointerleave", () => {
       this.cursor = null;
       this.zeichnen();
+      this.onCursor(null);
     });
     canvas.addEventListener("pointerdown", (e) => {
       this.ziehenAb = this.index(canvas, e.clientX);

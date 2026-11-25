@@ -210,3 +210,16 @@ main { padding: 12px 20px 28px; max-width: 1400px; margin: 0 auto; }
 .toast.sichtbar { opacity: 1; transform: translate(-50%, 0); }
 .toast.fehler { border-color: rgba(239, 68, 68, 0.5); }
 .toast.ok { border-color: rgba(34, 197, 94, 0.5); }
+/* Streckenkarte */
+.zweispaltig { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 14px; align-items: start; }
+.zweispaltig > .karte { margin-bottom: 14px; }
+.strecke { width: 100%; height: 260px; display: block; }
+.strecke-karte .hinweis { margin: 6px 0 0; }
+.schalter { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; color: var(--leise); font-size: 12px; cursor: pointer; }
+.vergleich-raster { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; align-items: start; }
+.vergleich-raster .strecke { height: 320px; }
+.klebt { position: sticky; top: 76px; }
+@media (max-width: 1100px) {
+  .zweispaltig, .vergleich-raster { grid-template-columns: 1fr; }
+  .vergleich-raster aside { order: -1; position: static; }
+}

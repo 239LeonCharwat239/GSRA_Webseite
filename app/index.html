@@ -67,9 +67,17 @@
         <div class="kachel"><span class="titel">Letzte Runde</span><strong id="lLetzte">–</strong><small id="lBeste">&nbsp;</small></div>
         <div class="kachel"><span class="titel">Sprit</span><strong id="lSprit">–</strong><small id="lSpritInfo">&nbsp;</small></div>
       </div>
-      <div class="karte">
-        <h2>Die letzten 10 Sekunden <small><span class="punkt weiss"></span>Tempo <span class="punkt gruen"></span>Gas <span class="punkt rot"></span>Bremse</small></h2>
-        <canvas id="lVerlauf" class="verlauf"></canvas>
+      <div class="zweispaltig">
+        <div class="karte">
+          <h2>Die letzten 10 Sekunden <small><span class="punkt weiss"></span>Tempo <span class="punkt gruen"></span>Gas <span class="punkt rot"></span>Bremse</small></h2>
+          <canvas id="lVerlauf" class="verlauf"></canvas>
+        </div>
+        <div class="karte strecke-karte">
+          <h2>Strecke <small>Farben: deine letzte Runde gegen die Bestzeit</small></h2>
+          <canvas id="lStrecke" class="strecke"></canvas>
+          <p class="hinweis" id="lStreckeHinweis">Die Karte entsteht nach deiner ersten vollen Runde.</p>
+          <label class="schalter"><input type="checkbox" id="spiegeln"> Karte spiegeln</label>
+        </div>
       </div>
       <div class="karte funk">
         <h2>Nach der Runde <small>Kurz gesagt</small></h2>
@@ -100,20 +108,29 @@
         </div>
       </div>
       <p class="leer" id="vLeer">Für einen Vergleich brauchst du zwei aufgezeichnete Runden. Fahr los – oder starte die Demo.</p>
-      <div id="vKurz" hidden>
-        <p class="zusammenfassung" id="vZusammen"></p>
-        <div class="befunde" id="vBefunde"></div>
-        <div class="staerken" id="vStaerken"></div>
-        <p class="hinweis">Die Kurven nummeriert die App selbst anhand der Bremszonen – die Nummern können von der offiziellen Zählung der Strecke abweichen.</p>
-      </div>
-      <div id="vGenau" hidden>
-        <div class="leiste klein">
-          <span class="legende"><span class="punkt blau"></span>Referenz <span class="punkt gelb"></span>Vergleich</span>
-          <span id="vBereich" class="bereich">Ganze Runde</span>
-          <button type="button" id="vGanz" class="knopf leise" hidden>Ganze Runde zeigen</button>
-          <span class="tipp">Ziehen = hineinzoomen · Doppelklick = ganze Runde</span>
+      <div class="vergleich-raster" id="vRaster" hidden>
+        <div class="vergleich-inhalt">
+          <div id="vKurz" hidden>
+            <p class="zusammenfassung" id="vZusammen"></p>
+            <div class="befunde" id="vBefunde"></div>
+            <div class="staerken" id="vStaerken"></div>
+            <p class="hinweis">Die Kurven nummeriert die App selbst anhand der Bremszonen – die Nummern können von der offiziellen Zählung der Strecke abweichen.</p>
+          </div>
+          <div id="vGenau" hidden>
+            <div class="leiste klein">
+              <span class="legende"><span class="punkt blau"></span>Referenz <span class="punkt gelb"></span>Vergleich</span>
+              <span id="vBereich" class="bereich">Ganze Runde</span>
+              <button type="button" id="vGanz" class="knopf leise" hidden>Ganze Runde zeigen</button>
+              <span class="tipp">Ziehen = hineinzoomen · Doppelklick = ganze Runde</span>
+            </div>
+            <div class="diagramme" id="vDiagramme"></div>
+          </div>
         </div>
-        <div class="diagramme" id="vDiagramme"></div>
+        <aside class="karte strecke-karte klebt">
+          <h2>Strecke <small><span class="punkt rot"></span>Zeit verloren <span class="punkt gruen"></span>gewonnen</small></h2>
+          <canvas id="vStrecke" class="strecke"></canvas>
+          <p class="hinweis" id="vStreckeHinweis"></p>
+        </aside>
       </div>
     </section>
 

@@ -9,8 +9,8 @@
 
 import type { Probe } from "./typen.ts";
 
-/** Ein Punkt der Runde: a = Anteil 0…1, t = Sekunden seit Rundenbeginn */
-export type Punkt = { a: number; t: number; v: number; g: number; b: number; gang: number; l: number };
+/** Ein Punkt der Runde: a = Anteil 0…1, t = Sekunden seit Rundenbeginn, r = Fahrtrichtung (Bogenmaß, NaN = unbekannt) */
+export type Punkt = { a: number; t: number; v: number; g: number; b: number; gang: number; l: number; r: number };
 
 export type Runde = {
   nr: number;
@@ -39,12 +39,21 @@ const MIN_RUNDE = 10; // kürzere „Runden“ sind Messfehler
 
 const mische = (x: number | null, y: number | null, f: number) => (x == null || y == null ? (y ?? x ?? 0) : x + (y - x) * f);
 
+/** Winkel zwischen zwei Richtungen mischen (über den kürzeren Weg, z. B. 350° → 10°) */
+export function winkelMischen(x: number | null, y: number | null, f: number): number {
+  if (x == null || y == null || !Number.isFinite(x) || !Number.isFinite(y)) return y ?? x ?? Number.NaN;
+  let d = (y - x) % (2 * Math.PI);
+  if (d > Math.PI) d -= 2 * Math.PI;
+  if (d < -Math.PI) d += 2 * Math.PI;
+  return x + d * f;
+}
+
 function punkt(p: Probe, a: number, t: number): Punkt {
-  return { a, t, v: p.tempo ?? 0, g: p.gas ?? 0, b: p.bremse ?? 0, gang: p.gang ?? 0, l: p.lenkung ?? 0 };
+  return { a, t, v: p.tempo ?? 0, g: p.gas ?? 0, b: p.bremse ?? 0, gang: p.gang ?? 0, l: p.lenkung ?? 0, r: p.richtung ?? Number.NaN };
 }
 
 function zwischen(p: Probe, q: Probe, f: number, a: number, t: number): Punkt {
-  return { a, t, v: mische(p.tempo, q.tempo, f), g: mische(p.gas, q.gas, f), b: mische(p.bremse, q.bremse, f), gang: f < 0.5 ? (p.gang ?? 0) : (q.gang ?? 0), l: mische(p.lenkung, q.lenkung, f) };
+  return { a, t, v: mische(p.tempo, q.tempo, f), g: mische(p.gas, q.gas, f), b: mische(p.bremse, q.bremse, f), gang: f < 0.5 ? (p.gang ?? 0) : (q.gang ?? 0), l: mische(p.lenkung, q.lenkung, f), r: winkelMischen(p.richtung, q.richtung, f) };
 }
 
 export class Rundenzaehler {

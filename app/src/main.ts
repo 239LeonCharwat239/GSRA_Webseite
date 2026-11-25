@@ -2,12 +2,13 @@
 // Daten kommen aus der Simulation (Rust, Ereignisse „gsra://…“) oder aus der Demo. Alle Texte per textContent.
 
 import { Rundenzaehler, type Runde } from "./runden.ts";
-import { abtasten, kurvenName, meterText, sekunden, vergleichen, zahl, zeitBei, RASTER, type Befund, type Spur } from "./analyse.ts";
+import { abtasten, kurvenFinden, kurvenName, meterText, sekunden, vergleichen, zahl, zeitBei, RASTER, type Befund, type Spur } from "./analyse.ts";
 import { bisZiel, rundenzeitSchnitt, verbrauchProRunde } from "./sprit.ts";
 import { DemoQuelle } from "./demo.ts";
 import { Diagramme, verlaufZeichnen, type Plot } from "./diagramm.ts";
 import type { Probe, Sitzung, Status } from "./typen.ts";
 import { kontoStarten } from "./konto-ansicht.ts";
+import { karteBauen, karteZeichnen, verlustJeAbschnitt, type Karte } from "./strecke.ts";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => {
   const e = document.getElementById(id);
@@ -36,6 +37,11 @@ let status: Status | null = null;
 const istApp = "__TAURI_INTERNALS__" in window;
 const verlauf = { tempo: [] as number[], gas: [] as number[], bremse: [] as number[] };
 let groessterMeter = 0;
+// Streckenkarte (entsteht aus der ersten gültigen Runde) und Farben der letzten Runde gegen die Bestzeit
+let karte: Karte | null = null;
+let letzterVerlust: Float64Array | null = null;
+let kurvenMarken: { i: number; text: string }[] = [];
+let spiegeln = (() => { try { return localStorage.getItem("gsra_karte_spiegeln") === "1"; } catch { return false; } })();
 
 const demo = new DemoQuelle((liste) => proben(liste));
 
@@ -82,6 +88,9 @@ function allesZuruecksetzen() {
   zaehler.zuruecksetzen();
   verlauf.tempo.length = verlauf.gas.length = verlauf.bremse.length = 0;
   groessterMeter = 0;
+  karte = null;
+  letzterVerlust = null;
+  kurvenMarken = [];
   spurCache = new WeakMap();
   $("lFunkText").textContent = "Fahr eine Runde – danach sage ich dir, wo du Zeit liegen lässt.";
   rundenZeigen();
@@ -162,6 +171,7 @@ function rundeFertig(r: Runde) {
     text = `Neue Bestzeit: ${zeitText(r.zeit)}${zweite ? ` – ${zahl(zweite.zeit - r.zeit, 3)} s schneller als vorher` : ""}. Stark!`;
   } else if (beste) {
     const v = vergleichen(spur(beste), spur(r), laenge() ?? 4000);
+    letzterVerlust = verlustJeAbschnitt(v.delta);
     const b = v.befunde[0];
     text = `${zeitText(r.zeit)} – ${zahl(r.zeit - beste.zeit, 3)} s hinter deiner Bestzeit.`;
     if (b) {
@@ -170,6 +180,10 @@ function rundeFertig(r: Runde) {
     }
   } else text = `Runde ${r.nr}: ${zeitText(r.zeit)}.`;
   $("lFunkText").textContent = text;
+  // Karte aus der ersten gültigen Runde mit Fahrtrichtung; Kurvennummern aus der Bestzeit
+  if (!karte && r.gueltig) karte = karteBauen(r.punkte);
+  if (beste && beste.punkte.length > 10) kurvenMarken = kurvenFinden(spur(beste), laenge() ?? 4000).map((k) => ({ i: k.scheitel, text: String(k.nr) }));
+  if (beste === r) letzterVerlust = null;
   if (aktiverReiter === "runden") rundenZeigen();
   if (aktiverReiter === "vergleich") vergleichZeigen();
   if (aktiverReiter === "sprit") spritZeigen();
@@ -211,6 +225,7 @@ function live() {
 
   const c = document.getElementById("lVerlauf") as HTMLCanvasElement | null;
   if (c && aktiverReiter === "live") verlaufZeichnen(c, verlauf.tempo, verlauf.gas, verlauf.bremse, 85);
+  if (aktiverReiter === "live") liveKarte(l ? l.a * RASTER : null);
   if (aktiverReiter === "sprit") spritKacheln();
 }
 
@@ -332,12 +347,62 @@ function befundKarte(b: Befund, staerke: boolean) {
   return karte;
 }
 
+// ---------------------------------------------------------------- Streckenkarte
+let vKarteDaten: { verlust: Float64Array; marken: { i: number; text: string; wichtig: boolean }[]; karte: Karte | null } | null = null;
+let vCursor: number | null = null;
+
+function liveKarte(punkt: number | null) {
+  const c = document.getElementById("lStrecke") as HTMLCanvasElement | null;
+  const h = $("lStreckeHinweis");
+  if (!c) return;
+  if (!karte) {
+    c.hidden = true;
+    h.hidden = false;
+    h.textContent = zaehler.runden.some((r) => r.gueltig)
+      ? "Für die Karte fehlt die Fahrtrichtung aus der Simulation."
+      : "Die Karte entsteht nach deiner ersten gültigen Runde.";
+    return;
+  }
+  c.hidden = false;
+  h.hidden = true;
+  karteZeichnen(c, karte, { verlust: letzterVerlust, marken: kurvenMarken, punkt, spiegeln });
+}
+
+function vKarteZeichnen() {
+  const c = document.getElementById("vStrecke") as HTMLCanvasElement | null;
+  const h = $("vStreckeHinweis");
+  const d = vKarteDaten;
+  if (!c || !d) return;
+  if (!d.karte) {
+    c.hidden = true;
+    h.textContent = "Für die Karte fehlt die Fahrtrichtung aus der Simulation.";
+    return;
+  }
+  c.hidden = false;
+  h.textContent = ebene === "genau" ? "Gelber Punkt = Stelle unter der Maus im Diagramm." : "Rote Kreise = Kurven mit dem größten Zeitverlust.";
+  karteZeichnen(c, d.karte, { verlust: d.verlust, marken: d.marken, punkt: ebene === "genau" ? vCursor : null, spiegeln });
+}
+
+const spiegelnFeld = $<HTMLInputElement>("spiegeln");
+spiegelnFeld.checked = spiegeln;
+spiegelnFeld.addEventListener("change", () => {
+  spiegeln = spiegelnFeld.checked;
+  try {
+    localStorage.setItem("gsra_karte_spiegeln", spiegeln ? "1" : "0");
+  } catch {
+    /* privater Modus: nur für diese Sitzung */
+  }
+  live();
+  vKarteZeichnen();
+});
+
 function vergleichZeigen() {
   auswahlFuellen();
   for (const b of document.querySelectorAll<HTMLButtonElement>("[data-ebene]")) b.setAttribute("aria-selected", String(b.dataset.ebene === ebene));
   const { ref, x } = auswahl;
   const bereit = !!ref && !!x && ref !== x;
   $("vLeer").hidden = bereit;
+  $("vRaster").hidden = !bereit;
   $("vKurz").hidden = !bereit || ebene !== "kurz";
   $("vGenau").hidden = !bereit || ebene !== "genau";
   if (!bereit || !ref || !x) return;
@@ -345,6 +410,14 @@ function vergleichZeigen() {
   const sr = spur(ref);
   const sx = spur(x);
   const v = vergleichen(sr, sx, l);
+  // Karte: rot, wo die Vergleichsrunde Zeit verliert; die teuersten Kurven hervorgehoben
+  vKarteDaten = {
+    verlust: verlustJeAbschnitt(v.delta),
+    marken: v.kurven.map((k) => ({ i: k.scheitel, text: String(k.nr), wichtig: v.befunde.some((b) => b.kurve.nr === k.nr) })),
+    karte: karte ?? karteBauen(ref.punkte),
+  };
+  vCursor = null;
+  vKarteZeichnen();
 
   if (ebene === "kurz") {
     $("vZusammen").textContent = v.zusammenfassung;
@@ -367,6 +440,11 @@ function vergleichZeigen() {
       zoom = ganz ? null : { von, bis };
       $("vBereich").textContent = ganz ? "Ganze Runde" : `${xText(von)} – ${xText(bis)}`;
       $("vGanz").hidden = ganz;
+    };
+    // Stelle unter der Maus auch auf der Karte zeigen
+    diagramme.onCursor = (i) => {
+      vCursor = i;
+      vKarteZeichnen();
     };
   }
   const BLAU = "#4d8dff";
