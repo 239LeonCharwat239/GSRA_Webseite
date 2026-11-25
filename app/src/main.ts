@@ -1196,6 +1196,10 @@ if (istApp) {
     statusZeigen();
   });
 }
+// Datenschutz-Hinweis der App
+for (const id of ["dsKnopf", "dsKnopf2"]) $(id).addEventListener("click", () => $<HTMLDialogElement>("dsDialog").showModal());
+$("dsZu").addEventListener("click", () => $<HTMLDialogElement>("dsDialog").close());
+
 funkEinrichten();
 berichtKiEinrichten();
 chatEinrichten();

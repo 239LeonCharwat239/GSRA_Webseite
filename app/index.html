@@ -36,6 +36,7 @@
         <div class="konto-menue" id="kontoMenue" hidden>
           <p>Angemeldet als <strong id="kontoName"></strong></p>
           <button class="knopf leise" id="abmeldenKnopf" type="button">In der App abmelden</button>
+          <button class="knopf leise" id="dsKnopf2" type="button">Datenschutz in der App</button>
         </div>
       </div>
     </div>
@@ -53,6 +54,29 @@
         <button type="submit" class="knopf">Bestätigen</button>
       </div>
     </form>
+  </dialog>
+  <!-- Datenschutz in der App: was auf dem PC bleibt und was wohin geht -->
+  <dialog id="dsDialog" class="dialog ds-dialog" aria-labelledby="dsTitel">
+    <h2 id="dsTitel">Datenschutz in der GSRA-App</h2>
+    <h3>Bleibt auf deinem PC</h3>
+    <ul>
+      <li>Alle Messwerte aus der Simulation: Runden, Tempo, Pedale, Sprit, Streckenkarte, Vergleiche, Rennbericht.</li>
+      <li>Der Stand der anderen Autos (Plätze, Abstände, Zweikämpfe, Referenz aus der Lobby) – nur während der Sitzung.</li>
+      <li>Spotter, Ansagen ohne KI, Sprachausgabe und deine eigene Testaufnahme durch den Funk-Filter.</li>
+      <li>Deine Einstellungen für Funk und Karte (nur in dieser App).</li>
+    </ul>
+    <h3>Geht an die GSRA (verschlüsselte Verbindung, Datenbank in Frankfurt)</h3>
+    <ul>
+      <li>Anmeldung: Die App meldet sich über die GSRA-Webseite an; sie sieht dein Passwort nie.</li>
+      <li>Nur wenn du angemeldet bist und den KI-Renningenieur nutzt: die Messwerte, die er für den Spruch braucht (z. B. Rundenzeit, Abstand, Kurve mit dem größten Verlust), deine Frage und deine Renningenieur-Einstellungen. Die GSRA speichert davon nur, wer wann eine Antwort bekommen hat (gegen Missbrauch, nach 2 Tagen gelöscht) – keine Inhalte.</li>
+      <li>Was sich dein Renningenieur merkt (höchstens zwei Punkte pro Nachbesprechung) – du siehst und löschst es auf der Webseite unter „Renningenieur“.</li>
+    </ul>
+    <h3>Geht an den KI-Anbieter (Auftragsverarbeiter, Verarbeitung auch außerhalb der EU möglich)</h3>
+    <ul>
+      <li>Für die Formulierung der Antworten dieselben Messwerte und deine Frage. Namen anderer Fahrer nur, wenn „Fahrernamen an die KI“ eingeschaltet ist – sonst nur Startnummern.</li>
+    </ul>
+    <p class="hinweis">Ausführlich: Datenschutzerklärung auf der GSRA-Webseite.</p>
+    <div class="dialog-knoepfe"><button type="button" class="knopf" id="dsZu">Verstanden</button></div>
   </dialog>
   <div class="toast" id="hinweis" role="status" aria-live="polite"></div>
   <p class="sitzung" id="sitzungText"></p>
@@ -102,6 +126,7 @@
             <input type="file" id="fAufnahme" accept="audio/*,.ogg,.opus,.m4a,.mp3,.wav"></label>
         </div>
         <p class="hinweis" id="fHinweis">Angemeldet formuliert dein KI-Renningenieur die Ansagen in seinem Stil (eingestellt auf der Webseite unter „Renningenieur“).</p>
+        <p class="hinweis"><button type="button" class="link-knopf" id="dsKnopf">Datenschutz in der App: was bleibt auf dem PC, was geht wohin?</button></p>
       </div>
     </section>
 

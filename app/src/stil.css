@@ -249,6 +249,12 @@ main { padding: 12px 20px 28px; max-width: 1400px; margin: 0 auto; }
 .ki-text p { margin: 0; line-height: 1.55; }
 .ki-text[hidden] { display: none; }
 
+/* Datenschutz-Hinweis der App */
+.ds-dialog { max-width: 640px; }
+.ds-dialog h3 { color: var(--text); margin: 14px 0 6px; }
+.ds-dialog ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.link-knopf { background: none; border: 0; padding: 0; color: var(--blau-hell); text-decoration: underline; cursor: pointer; font-size: 12px; }
+
 /* Referenz aus der Lobby (Vergleich) */
 .feld-referenz { margin-top: 16px; }
 
