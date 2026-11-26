@@ -275,8 +275,9 @@ main { padding: 12px 20px 28px; max-width: 1400px; margin: 0 auto; }
 .chat-beitrag.tippt p { color: var(--leise); letter-spacing: 2px; }
 .chat-wer { font-size: 11px; color: var(--leise); }
 .chat-schnell { display: flex; flex-wrap: wrap; gap: 8px; }
-.chat-form { display: flex; gap: 8px; }
-.chat-form input { flex: 1; min-width: 0; background: var(--flaeche-2); border: 1px solid var(--rand); border-radius: 10px; padding: 9px 12px; }
+.chat-form { display: flex; gap: 8px; align-items: flex-end; }
+.chat-form textarea { flex: 1; min-width: 0; resize: none; max-height: 220px; overflow-y: auto; line-height: 1.45; font: inherit; color: inherit;
+  background: var(--flaeche-2); border: 1px solid var(--rand); border-radius: 10px; padding: 9px 12px; }
 .spar-tipps { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: rgba(34, 197, 94, 0.07); border: 1px solid rgba(34, 197, 94, 0.25); }
 .spar-tipps ul { margin: 6px 0 0; padding-left: 18px; }
 

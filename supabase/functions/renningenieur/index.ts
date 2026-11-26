@@ -20,7 +20,7 @@ import Anthropic from "npm:@anthropic-ai/sdk@1.8.0";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const APP_HERKUNFT = new Set(["http://tauri.localhost", "https://tauri.localhost", "tauri://localhost", "http://localhost:1420"]);
-const MAX_ANFRAGE = 16_000; // Bytes
+const MAX_ANFRAGE = 64_000; // Bytes (Rückfragen bis etwa 1.000 Wörter, 26.11.)
 
 function kopf(herkunft: string | null): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json", "Cache-Control": "no-store" };
@@ -38,6 +38,11 @@ function kopf(herkunft: string | null): Record<string, string> {
 const TEXT_MAX = 60, LISTE_MAX = 12, FELDER_MAX = 24, TIEFE_MAX = 4;
 function textSauber(t: string, max = TEXT_MAX): string {
   return t.replace(/[\u0000-\u001F\u007F<>`{}\[\]]/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
+}
+/** Wie textSauber, aber Zeilenumbrüche bleiben (Rückfragen dürfen mehrzeilig sein) */
+function textMehrzeilig(t: string, max: number): string {
+  return t.replace(/\r\n?/g, "\n").replace(/[\u0000-\u0009\u000B-\u001F\u007F<>`{}\[\]]/g, " ").replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n").trim().slice(0, max);
 }
 function stutzen(wert: unknown, tiefe = 0): unknown {
   if (typeof wert === "number") return Number.isFinite(wert) ? Math.round(wert * 1000) / 1000 : null;
@@ -129,7 +134,14 @@ type Freigabe = { erlaubt: boolean; grund?: string; einstellungen?: Einstellunge
 function persoenlichkeit(e: Einstellungen, merk: Freigabe["gedaechtnis"]): string {
   const themen = { sprit: true, abstaende: true, flaggen: true, reifen: true, coaching: true, wetter: true, ...(e.themen || {}) };
   const p = { name: textSauber(e.name || "Kim", 24), rufname: e.rufname ? textSauber(e.rufname, 24) : null, art: e.art, gespraechig: e.gespraechig, sprache: e.sprache, themen };
-  const g = (merk || []).slice(0, 20).map((m) => `- ${textSauber(m.art, 12)}: ${textSauber(m.text, 200)}`).join("\n");
+  // Gedächtnis: Einträge bis 1.000 Zeichen (055), zusammen höchstens etwa 6.000 Zeichen (neueste zuerst)
+  let rest = 6000;
+  const g = (merk || []).slice(0, 20).flatMap((m) => {
+    const zeile = `- ${textSauber(m.art, 12)}: ${textSauber(m.text, 1000)}`;
+    if (zeile.length > rest) return [];
+    rest -= zeile.length;
+    return [zeile];
+  }).join("\n");
   return `<persoenlichkeit>\n${JSON.stringify(p)}\n</persoenlichkeit>\n<gedaechtnis>\n${g || "(leer)"}\n</gedaechtnis>`;
 }
 
@@ -160,13 +172,13 @@ Deno.serve(async (req) => {
   if (lage.length > 8000) return antwort({ fehler: "Anfrage zu groß." }, 413);
   // Rückfrage: die Frage selbst und höchstens 8 vorherige Beiträge (Fahrer ↔ Renningenieur), alles bereinigt
   const chat = art === "frage" || art === "analyse";
-  const frage = chat && typeof daten.frage === "string" ? textSauber(daten.frage, 400) : "";
+  const frage = chat && typeof daten.frage === "string" ? textMehrzeilig(daten.frage, 7000) : "";
   if (chat && frage.length < 2) return antwort({ fehler: "Bitte stell eine Frage." }, 400);
   const verlauf: Array<{ role: "user" | "assistant"; content: string }> = [];
   if (chat && Array.isArray(daten.verlauf)) {
     for (const e of daten.verlauf.slice(-8)) {
       const b = e as { wer?: unknown; text?: unknown };
-      const text = typeof b?.text === "string" ? textSauber(b.text, 600) : "";
+      const text = typeof b?.text === "string" ? textMehrzeilig(b.text, 2000) : "";
       if (!text || (b.wer !== "fahrer" && b.wer !== "ingenieur")) continue;
       const role = b.wer === "fahrer" ? "user" as const : "assistant" as const;
       const letzte = verlauf[verlauf.length - 1];

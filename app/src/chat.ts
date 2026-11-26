@@ -85,7 +85,8 @@ export class Chat {
   }
 
   async senden(eingabe: string): Promise<void> {
-    const frage = eingabe.replace(/\s+/g, " ").trim().slice(0, 400);
+    // Zeilen bleiben erhalten (mehrzeilige Eingabe); bis etwa 1.000 Wörter
+    const frage = eingabe.replace(/\r\n?/g, "\n").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim().slice(0, 7000);
     if (frage.length < 2) return;
     const nr = ++this.laeuft;
     const vorher = this.verlauf.slice(-8);

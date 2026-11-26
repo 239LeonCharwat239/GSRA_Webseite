@@ -77,7 +77,7 @@ function zeichne(box: HTMLElement, liste: Punkt[], proFahrer: boolean) {
     const zeit = el("small", "gsra-career-zeit", `${p.monat ? `${MONATE[p.monat - 1]} ` : ""}${p.jahr} · ${p.art}`);
     const titel = el("strong", "", p.titel);
     inhalt.append(zeit, titel);
-    if (p.text) inhalt.append(el("p", "", p.text));
+    if (p.text) inhalt.append(el("p", "gsra-career-text", p.text));
     if (p.link) {
       const a = el("a", "gsra-career-link", "Mehr erfahren");
       a.href = p.link;
@@ -189,7 +189,7 @@ async function editor(box: HTMLElement) {
     if (!Number.isInteger(jahr) || jahr < 1950 || jahr > 2100) return toast("Bitte gib ein Jahr zwischen 1950 und 2100 an.", "error");
     if (!titel) return toast("Bitte gib einen Titel an.", "error");
     if (link && !sichererLink(link)) return toast("Links müssen mit https:// beginnen.", "error");
-    const werte = { year: jahr, month: monat, kind: feld<HTMLSelectElement>("kind").value, title: titel.slice(0, 80), detail: detail.slice(0, 300) || null, link: link || null };
+    const werte = { year: jahr, month: monat, kind: feld<HTMLSelectElement>("kind").value, title: titel.slice(0, 80), detail: detail.slice(0, 7000) || null, link: link || null };
     const knopf = form.querySelector("button[type=submit]") as HTMLButtonElement;
     knopf.disabled = true;
     const { error } = bearbeiteId

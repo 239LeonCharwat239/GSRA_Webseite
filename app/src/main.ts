@@ -709,13 +709,21 @@ function chatEinrichten() {
       return a ? sparText(a, null, sparStelle) : "Der Spar-Modus läuft schon – nach der nächsten Runde sage ich dir, ob es reicht.";
     },
   });
-  const feld = $<HTMLInputElement>("cFeld");
-  $<HTMLFormElement>("cForm").addEventListener("submit", (e) => {
-    e.preventDefault();
+  // Mehrzeilige Eingabe wie im Messenger: wächst mit (bis zur Höchsthöhe), Enter sendet, Shift+Enter = neue Zeile
+  const feld = $<HTMLTextAreaElement>("cFeld");
+  const hoehe = () => { feld.style.height = "auto"; feld.style.height = `${Math.min(feld.scrollHeight, 220)}px`; };
+  const senden = () => {
     const text = feld.value;
+    if (!text.trim()) return;
     feld.value = "";
+    hoehe();
     void chat?.senden(text);
+  };
+  feld.addEventListener("input", hoehe);
+  feld.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); senden(); }
   });
+  $<HTMLFormElement>("cForm").addEventListener("submit", (e) => { e.preventDefault(); senden(); });
   for (const b of document.querySelectorAll<HTMLButtonElement>("[data-frage]")) {
     b.addEventListener("click", () => void chat?.senden(b.dataset.frage ?? ""));
   }

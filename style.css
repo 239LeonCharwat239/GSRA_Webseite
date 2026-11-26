@@ -2263,8 +2263,16 @@ p {
 .wa-favorite-btn.favorited {
     color: var(--gsra-yellow);
 }
-.wa-favorite-btn:hover {
-    color: var(--gsra-yellow);
+/* Gelb heißt immer „Favorit“: Überfahren hellt nur auf (sonst bleibt ein gerade entfernter Favorit unter der
+   Maus gelb, bis man weggeht – gleicher Effekt wie früher beim Kalender). Nur mit echter Maus (Handys haben
+   kein „Überfahren“ und würden den Zustand sonst festhalten). */
+@media (hover: hover) {
+    .wa-favorite-btn:not(.favorited):hover {
+        color: var(--text-light);
+    }
+    .wa-favorite-btn.favorited:hover {
+        filter: brightness(1.15);
+    }
 }
 
 .wa-chat-msg {
@@ -3668,9 +3676,14 @@ emoji-picker {
     background: rgba(0, 85, 255, 0.15);
 }
 
-.wa-info-row:hover i,
 .wa-info-row.favorited i {
     color: var(--gsra-yellow);
+}
+
+@media (hover: hover) {
+    .wa-info-row:not(.favorited):hover i {
+        color: var(--text-light);
+    }
 }
 
 .wa-info-row:hover i {
@@ -3841,6 +3854,16 @@ emoji-picker {
     margin: 0 0 12px;
     white-space: pre-line;
     word-break: break-word;
+    /* bis 7.000 Zeichen (055): lange Beschreibungen scrollen in der Karte statt sie zu sprengen */
+    max-height: 40vh;
+    overflow-y: auto;
+}
+/* Karriere-Beschreibung: Absätze behalten, lange Texte scrollen */
+.gsra-career-text {
+    white-space: pre-line;
+    word-break: break-word;
+    max-height: 30vh;
+    overflow-y: auto;
 }
 
 .gsra-profile-status {
@@ -13582,3 +13605,17 @@ header .gsra-account-menu #logoutBtn:hover { background: rgba(255, 77, 77, 0.1) 
 .av-aktionen { justify-content: flex-end; margin-top: 16px; }
 .av-fehler { margin: 12px 0 0; color: #ff8a8a; font-weight: 600; }
 .av-liste { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
+
+/* =========================================
+   Handy: kein automatisches Hineinzoomen beim Tippen (Wunsch 26.11.)
+   iPhones zoomen in jedes Eingabefeld mit Schrift unter 16 px – danach muss man erst wieder herauszoomen.
+   Mit 16 px bleibt die Seite stehen. Bewusst KEIN „maximum-scale=1“: Zoomen mit zwei Fingern bleibt möglich
+   (Barrierefreiheit).
+========================================= */
+@media (max-width: 850px) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]),
+    textarea,
+    select {
+        font-size: 16px !important;
+    }
+}

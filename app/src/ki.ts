@@ -56,7 +56,7 @@ export async function kiFragen(art: KiArt, lage: Record<string, unknown>, chat?:
   const token = data.session?.access_token;
   if (!token) return { fehler: "Bitte melde dich in der App an.", grund: "anmeldung" };
   const body = chat
-    ? { art, lage, frage: chat.frage.slice(0, 400), verlauf: chat.verlauf.slice(-8).map((b) => ({ wer: b.wer, text: b.text.slice(0, 600) })) }
+    ? { art, lage, frage: chat.frage.slice(0, 7000), verlauf: chat.verlauf.slice(-8).map((b) => ({ wer: b.wer, text: b.text.slice(0, 2000) })) }
     : { art, lage };
   let antwort: Response;
   try {

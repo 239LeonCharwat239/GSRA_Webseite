@@ -11,9 +11,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL, KARRIERE_SQL, STINTPLAN_SQL, LIVERIES_SQL, CHATSICHER_SQL, AUFRAEUMEN_SQL, ONLINE_SQL, RE_STIL_SQL, APP_LOGIN_SQL, RE_KI_SQL, RE_CHAT_SQL, RE_MERKEN_SQL] =
-    Array.from({ length: 54 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 54);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL, KARRIERE_SQL, STINTPLAN_SQL, LIVERIES_SQL, CHATSICHER_SQL, AUFRAEUMEN_SQL, ONLINE_SQL, RE_STIL_SQL, APP_LOGIN_SQL, RE_KI_SQL, RE_CHAT_SQL, RE_MERKEN_SQL, LAENGER_SQL] =
+    Array.from({ length: 55 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 55);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -3843,6 +3843,48 @@ if (RE_KI_SQL && RE_STIL_SQL) {
             check("Gedächtnis weiterhin nicht direkt beschreibbar (auch nicht fremdes)", direkt.error !== null, direkt.error || "durchgelassen!");
         });
     }
+}
+
+// --- 055: Längere Beschreibungen – mit echter Grenze in der Datenbank ---
+if (LAENGER_SQL && RE_MERKEN_SQL && KARRIERE_SQL) {
+    const id = (n) => `79000000-0000-0000-0000-0000000008${String(n).padStart(2, "0")}`;
+    const P = id(1), Q = id(2);
+    await db.exec(`
+      insert into auth.users (id) values ('${P}'), ('${Q}');
+      insert into public.profiles (id, username) values ('${P}', 'Langtext Lara'), ('${Q}', 'Kurztext Kai');`);
+    const bio = (uid, n) => as(uid, async () => q(`update public.profiles set bio = repeat('x', ${n}) where id = '${uid}' returning char_length(bio) as n`));
+    const vorher55 = await bio(P, 50000);
+    check("Vor 055: Profil-Beschreibung ohne Grenze in der Datenbank (Lücke nachgewiesen)", vorher55.error === null && vorher55.rows[0]?.n === 50000, vorher55.error || JSON.stringify(vorher55.rows));
+    await db.exec(`update public.profiles set bio = null where id = '${P}'`);
+    await db.exec(readFileSync(LAENGER_SQL, "utf8"));
+    const ctl55 = await db.exec(readFileSync(LAENGER_SQL, "utf8")); // zweiter Lauf
+    const rows55 = ctl55[ctl55.length - 1].rows;
+    console.log("Kontrolle 055:\n  " + rows55.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+    check("Kontrolle 055: bereit, je genau eine Grenze", rows55.map(r => r.ergebnis).join(",") === "bereit,ja", rows55.map(r => r.ergebnis).join(", "));
+    const b7000 = await bio(P, 7000);
+    check("Profil-Beschreibung bis 7.000 Zeichen (≈ 1.000 Wörter)", b7000.error === null && b7000.rows[0]?.n === 7000, b7000.error || "");
+    const b7001 = await bio(P, 7001);
+    check("Profil-Beschreibung über 7.000 Zeichen abgelehnt (auch direkt in der Datenbank)", b7001.error !== null, b7001.error || "durchgelassen!");
+    const fremd55 = await as(Q, async () => q(`update public.profiles set bio = 'gehackt' where id = '${P}' returning id`));
+    check("Fremde Beschreibung weiterhin nicht änderbar", fremd55.error !== null || fremd55.rows.length === 0, fremd55.error || `${fremd55.rows.length} Zeilen geändert`);
+    // Karriere: lange Beschreibung mit Absätzen
+    const karriere = (detail) => as(P, async () => q(`insert into public.career_entries (year, kind, title, detail) values (2025, 'erfolg', 'Langstrecke', $$${detail}$$) returning detail`));
+    const absatz = "Erster Absatz.\r\nZweiter Absatz\tmit Tab.\n\nDritter" + "\u0007";
+    const k1 = await karriere(absatz);
+    check("Karriere-Beschreibung: Absätze bleiben, andere Steuerzeichen werden entfernt", k1.error === null && k1.rows[0]?.detail === "Erster Absatz.\nZweiter Absatz mit Tab.\n\nDritter", k1.error || JSON.stringify(k1.rows[0]?.detail));
+    const k7000 = await karriere("y".repeat(7000));
+    check("Karriere-Beschreibung bis 7.000 Zeichen", k7000.error === null, k7000.error || "");
+    const k7001 = await karriere("y".repeat(7001));
+    check("Karriere-Beschreibung über 7.000 Zeichen abgelehnt", k7001.error !== null, k7001.error || "durchgelassen!");
+    // Gedächtnis: eigene Einträge bis 1.000 Zeichen, der Renningenieur selbst weiterhin kurz
+    const lang = await as(P, async () => q(`select public.race_engineer_remember('notiz', repeat('m', 1500)) as id`));
+    const gespeichert = lang.rows[0]?.id ? await one(`select char_length(text) as n from public.race_engineer_memory where id = '${lang.rows[0].id}'`) : null;
+    check("Eigene Gedächtnis-Einträge bis 1.000 Zeichen (längere werden gekürzt)", lang.error === null && gespeichert?.n === 1000, lang.error || JSON.stringify(gespeichert));
+    const roh = await q(`insert into public.race_engineer_memory (user_id, art, text) values ('${P}', 'notiz', repeat('z', 1001))`);
+    check("Datenbank-Regel: über 1.000 Zeichen abgelehnt", roh.error !== null, roh.error || "durchgelassen!");
+    const lernen55 = await as(P, async () => q(`select public.race_engineer_learn('ziel', repeat('k', 500)) as id`));
+    const kurz55 = lernen55.rows[0]?.id ? await one(`select char_length(text) as n from public.race_engineer_memory where id = '${lernen55.rows[0].id}'`) : null;
+    check("Was sich der Renningenieur selbst merkt, bleibt kurz (200 Zeichen)", kurz55?.n === 200, lernen55.error || JSON.stringify(kurz55));
 }
 
 // --- Versehentlich ein ALTES Skript erneut ausgeführt (25.11.: 043 nach 054): darf nichts zurücksetzen ---
