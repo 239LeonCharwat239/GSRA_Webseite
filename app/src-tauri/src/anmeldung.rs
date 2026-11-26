@@ -99,7 +99,7 @@ fn warten(app: AppHandle, horcher: TcpListener, zustand: String, lauf: u64) {
                 match rueckruf_lesen(&anfrage, &zustand) {
                     Rueckruf::Gueltig(code) => {
                         antworten(strom, "200 OK", "Fast geschafft", "Die GSRA-App meldet dich jetzt an. Du kannst diesen Tab schließen.");
-                        let _ = app.emit("gsra://anmeldung", code);
+                        let _ = app.emit_to("main", "gsra://anmeldung", code);
                         return;
                     }
                     Rueckruf::Fremd => antworten(
@@ -115,7 +115,7 @@ fn warten(app: AppHandle, horcher: TcpListener, zustand: String, lauf: u64) {
         }
     }
     if LAUF.load(Ordering::SeqCst) == lauf {
-        let _ = app.emit("gsra://anmeldung-ende", "abgelaufen");
+        let _ = app.emit_to("main", "gsra://anmeldung-ende", "abgelaufen");
     }
 }
 
@@ -146,17 +146,11 @@ pub fn anmeldung_abbrechen() {
     LAUF.fetch_add(1, Ordering::SeqCst);
 }
 
-/// Adresse des Stint-Planers mit den gemessenen Werten – nur diese eine Seite der GSRA-Webseite und nur
-/// base64url-Daten im Anker (kein Pfad, keine Parameter, keine fremde Adresse aus der Oberfläche)
-pub fn stint_adresse(messwerte: &str) -> Option<String> {
-    base64url(messwerte, 8, 2000).then(|| format!("{WEBSEITE}/stintplaner.html#messwerte={messwerte}"))
-}
-
-/// Öffnet den Stint-Planer im GSRA-Fenster der App; der Planer fragt vor dem Übernehmen nach
-#[tauri::command]
-pub fn stintplaner_oeffnen(app: AppHandle, messwerte: String) -> Result<(), String> {
-    let adresse = stint_adresse(&messwerte).ok_or_else(|| "Ungültige Messwerte.".to_string())?;
-    crate::webseite::zeigen(&app, &adresse)
+/// Anker für den Stint-Planer mit den gemessenen Werten: nur „messwerte=“ + base64url-Daten (kein Pfad, keine
+/// Parameter, keine fremde Adresse aus der Oberfläche). Der Planer fragt vor dem Übernehmen nach.
+pub fn stint_anker(anker: &str) -> Option<String> {
+    let messwerte = anker.strip_prefix("messwerte=")?;
+    base64url(messwerte, 8, 2000).then(|| format!("messwerte={messwerte}"))
 }
 
 #[cfg(test)]
@@ -210,12 +204,13 @@ mod tests {
 
     #[test]
     fn stintplaner_nur_mit_sauberen_messwerten() {
-        let gut = "eyJ2IjoxLCJyeiI6ODcuNH0";
-        assert_eq!(stint_adresse(gut).as_deref(), Some("https://gsra-webseite.vercel.app/stintplaner.html#messwerte=eyJ2IjoxLCJyeiI6ODcuNH0"));
-        assert_eq!(stint_adresse("abc"), None); // zu kurz
-        assert_eq!(stint_adresse(&"a".repeat(2001)), None); // zu lang
-        assert_eq!(stint_adresse("eyJ2IjoxfQ&x=https://boese.example"), None);
-        assert_eq!(stint_adresse("eyJ2IjoxfQ#<script>"), None);
-        assert_eq!(stint_adresse("../../anderes"), None);
+        let gut = "messwerte=eyJ2IjoxLCJyeiI6ODcuNH0";
+        assert_eq!(stint_anker(gut).as_deref(), Some(gut));
+        assert_eq!(stint_anker("messwerte=abc"), None); // zu kurz
+        assert_eq!(stint_anker(&format!("messwerte={}", "a".repeat(2001))), None); // zu lang
+        assert_eq!(stint_anker("messwerte=eyJ2IjoxfQ&x=https://boese.example"), None);
+        assert_eq!(stint_anker("messwerte=eyJ2IjoxfQ#<script>"), None);
+        assert_eq!(stint_anker("messwerte=../../anderes"), None);
+        assert_eq!(stint_anker("eyJ2IjoxLCJyeiI6ODcuNH0"), None); // ohne „messwerte=“
     }
 }

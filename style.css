@@ -13706,3 +13706,24 @@ header .gsra-account-menu #logoutBtn:hover { background: rgba(255, 77, 77, 0.1) 
     .ap-tabelle th, .ap-tabelle td { padding: 8px 6px; font-size: 13px; }
     .ap-tabelle td { width: 26%; }
 }
+/* =========================================
+   App-Ansicht (26.11.): Seiten laufen direkt in der GSRA-App (auth-nav.js setzt html.gsra-app)
+   Die Seitenleiste der App ersetzt Logo und Hauptmenü; Anmelden/Profil, Suche und Fußzeile bleiben.
+   ========================================= */
+html.gsra-app header {
+    min-height: 0;
+    height: 56px;
+    padding: 6px 20px;
+    justify-content: flex-end;
+    background: #0b0c10;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: none;
+}
+html.gsra-app header .logo-slogan-container,
+html.gsra-app header nav,
+html.gsra-app header .nav-toggle,
+html.gsra-app .gsra-help-btn {
+    display: none !important;
+}
+html.gsra-app header .gsra-nav-tools { display: flex !important; margin-left: auto; }
+html.gsra-app .container { padding-top: 84px; }

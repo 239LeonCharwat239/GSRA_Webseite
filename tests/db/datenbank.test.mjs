@@ -4,7 +4,7 @@
 // Start: im Ordner tests/db „npm install“ (einmalig) und dann „npm test“.
 import { PGlite } from "@electric-sql/pglite";
 import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -4007,6 +4007,57 @@ await as(U.lena, async () => {
 await db.exec(`set request.jwt.claims = ''`);
 const lenaVotes = Number((await one(`select count(*) as n from public.setup_votes where user_id = '${U.lena}'`)).n);
 check("Stimmen gelöschter Konten verschwinden", lenaVotes === 0, String(lenaVotes));
+
+// --- Prüf-SQL für die Live-Datenbank (Wunsch 26.11.): vergleicht live alles mit diesem getesteten Stand ---
+// Neu erzeugen nach jeder neuen Migration: PRUEFUNG_SCHREIBEN=1 (nur in der Standard-Variante).
+{
+    const { pruefungErzeugen } = await import("./live-pruefung.mjs");
+    const ziel = join(MIGRATIONS, "..", "pruefungen", "datenbank_pruefung.sql");
+    const { sql, umfang } = await pruefungErzeugen(db, MIGRATIONS);
+    if (process.env.PRUEFUNG_SCHREIBEN === "1" && !ALT_SETUPS) {
+        mkdirSync(dirname(ziel), { recursive: true });
+        writeFileSync(ziel, sql);
+    }
+    const datei = existsSync(ziel) ? readFileSync(ziel, "utf8").replace(/\r/g, "") : null;
+    if (!ALT_SETUPS) check("Prüf-SQL für die Live-Datenbank ist auf dem Stand aller Skripte", datei === sql,
+        datei ? (datei === sql ? JSON.stringify(umfang) : "veraltet – mit PRUEFUNG_SCHREIBEN=1 neu erzeugen") : "fehlt");
+    const nurLesen = !/\b(insert|update|delete|drop|alter|create|grant|revoke|truncate|perform|execute)\b/i.test((datei ?? sql).replace(/--[^\n]*/g, "").replace(/'([^']|'')*'/g, "''"));
+    check("Prüf-SQL enthält keine schreibenden Befehle", nurLesen);
+    const ergebnis = await q(datei ?? sql);
+    const gesamt = ergebnis.rows.find((r) => r.bereich === "GESAMT");
+    check(`Prüf-SQL im Nachbau (${ALT_SETUPS ? "alte" : "neue"} Ausgangslage): Alles in Ordnung`, gesamt?.status === "Alles in Ordnung",
+        ergebnis.error || (gesamt ? gesamt.details : "keine GESAMT-Zeile"));
+    for (const r of ergebnis.rows.filter((r) => r.nr === 2)) console.log(`       ${r.status} ${r.bereich} ${r.objekt}: ${r.details}`);
+
+    // Gegentest: Findet die Prüfung echte Probleme? (alles in einer Transaktion, danach zurückgerollt)
+    if (AUFRAEUMEN_SQL && LAENGER_SQL) {
+        await db.exec("begin");
+        try {
+            await db.exec(readFileSync(AUFRAEUMEN_SQL, "utf8")); // 048 NACH 055 erneut: alte Gedächtnis-Funktion (500 Zeichen) zurück
+            await db.exec(`alter table public.home_posts disable row level security;
+                create policy "Hintertür" on public.profiles for update to anon using (true);
+                grant execute on function public.home_post_delete(uuid) to anon;
+                alter table public.messages disable trigger gsra_messages_set_expiry;
+                update storage.buckets set file_size_limit = null where id = 'startseite';
+                create function public.offen() returns int language sql security definer as $$ select 1 $$;`);
+            const kaputt = await q(datei ?? sql);
+            const finde = (bereich, teil, status) => kaputt.rows.some((r) => r.nr === 2 && r.bereich === bereich && r.objekt.includes(teil) && r.status === status);
+            check("Gegentest: älteres Skript nach neuerem erkannt (Funktion mit anderem Inhalt)", finde("Funktion", "race_engineer_remember", "ABWEICHUNG"),
+                kaputt.error || JSON.stringify(kaputt.rows.filter((r) => r.nr === 2).map((r) => `${r.status} ${r.objekt}`)));
+            check("Gegentest: RLS abgeschaltet → FEHLER", finde("Tabelle", "home_posts", "FEHLER"));
+            check("Gegentest: zusätzliche offene Regel → WARNUNG", finde("Zugriffsregel", "Hintertür", "WARNUNG"));
+            check("Gegentest: Gäste dürfen Admin-Funktion ausführen → FEHLER", finde("Funktion", "home_post_delete", "FEHLER"));
+            check("Gegentest: Trigger abgeschaltet → FEHLER", finde("Trigger", "gsra_messages_set_expiry", "FEHLER"));
+            check("Gegentest: Speicher ohne Größengrenze → WARNUNG", finde("Speicher", "startseite", "WARNUNG"));
+            check("Gegentest: fremde Funktion mit Besitzerrechten ohne search_path → WARNUNG", finde("Funktion", "public.offen()", "WARNUNG"));
+            check("Gegentest: GESAMT meldet Probleme", kaputt.rows.find((r) => r.bereich === "GESAMT")?.status === "Bitte an Claude schicken");
+        } finally {
+            await db.exec("rollback");
+        }
+        const wieder = await q(datei ?? sql);
+        check("Nach dem Zurückrollen wieder: Alles in Ordnung", wieder.rows.find((r) => r.bereich === "GESAMT")?.status === "Alles in Ordnung");
+    }
+}
 
 console.log(failures === 0 ? "\nALLE PRÜFUNGEN BESTANDEN" : `\n${failures} PRÜFUNG(EN) FEHLGESCHLAGEN`);
 process.exit(failures === 0 ? 0 : 1);

@@ -20,7 +20,7 @@ import { namenErsetzen } from "./datenschutz.ts";
 import { karteBauen, karteZeichnen, verlustJeAbschnitt, type Karte } from "./strecke.ts";
 import { Rennbeobachter, berichtErstellen, rundenzeitText, stelleText } from "./rennbericht.ts";
 import { startbildZeigen } from "./startbild.ts";
-import { webseiteEinrichten } from "./webseite.ts";
+import { webAktiv, webEinrichten, webVerbergen, webZeigen } from "./webbereich.ts";
 
 startbildZeigen();
 
@@ -92,16 +92,36 @@ const laenge = () => sitzung?.streckenlaengeM ?? (groessterMeter > 500 ? groesst
 
 // ---------------------------------------------------------------- Reiter
 let aktiverReiter = "live";
+/** Seitenleiste: markiert den gewählten Bereich und blendet die passende Seite ein */
+function navMarkieren(knopf: HTMLElement | null, seite: string) {
+  for (const b of document.querySelectorAll<HTMLButtonElement>(".navi button")) {
+    if (b === knopf) b.setAttribute("aria-current", "page");
+    else b.removeAttribute("aria-current");
+  }
+  for (const s of document.querySelectorAll<HTMLElement>("[data-seite]")) s.classList.toggle("aktiv", s.dataset.seite === seite);
+  $("seitenTitel").textContent = knopf?.querySelector("span")?.textContent ?? "";
+  $("sitzungText").hidden = seite === "web";
+}
 function reiterZeigen(name: string) {
   aktiverReiter = name;
-  for (const b of document.querySelectorAll<HTMLButtonElement>("[data-reiter]")) b.setAttribute("aria-selected", String(b.dataset.reiter === name));
-  for (const s of document.querySelectorAll<HTMLElement>("[data-seite]")) s.classList.toggle("aktiv", s.dataset.seite === name);
+  webVerbergen();
+  navMarkieren(document.querySelector<HTMLElement>(`[data-reiter="${name}"]`), name);
   if (name === "vergleich") vergleichZeigen();
   if (name === "sprit") spritZeigen();
   if (name === "runden") rundenZeigen();
   if (name === "bericht") berichtZeigen();
+  if (name === "live") live();
+}
+/** Eine GSRA-Seite (Messenger, Setups …) direkt in der App */
+function webBereichZeigen(seite: string, anker?: string) {
+  const knopf = document.querySelector<HTMLElement>(`[data-web="${CSS.escape(seite)}"]`);
+  if (!knopf) return;
+  aktiverReiter = "web";
+  navMarkieren(knopf, "web");
+  void webZeigen(seite, knopf.querySelector("span")?.textContent ?? "GSRA", anker);
 }
 for (const b of document.querySelectorAll<HTMLButtonElement>("[data-reiter]")) b.addEventListener("click", () => reiterZeigen(b.dataset.reiter ?? "live"));
+for (const b of document.querySelectorAll<HTMLButtonElement>("[data-web]")) b.addEventListener("click", () => webBereichZeigen(b.dataset.web ?? "index.html"));
 
 // ---------------------------------------------------------------- Verbindung / Status
 function statusZeigen() {
@@ -1180,18 +1200,12 @@ $("sStintKnopf").addEventListener("click", async () => {
     simulation: echt ? "iRacing" : "",
     strecke: sitzung?.strecke ?? "", fahrzeug: sitzung?.fahrzeug ?? "",
   });
-  try {
-    if (istApp) {
-      const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("stintplaner_oeffnen", { messwerte: daten });
-    } else {
-      window.open(`https://gsra-webseite.vercel.app/stintplaner.html#messwerte=${daten}`, "_blank", "noopener");
-    }
-    anzeige.textContent = istApp
-      ? "Der Stint-Planer öffnet sich im Fenster „GSRA“ – bestätige dort die Übernahme."
-      : "Der Stint-Planer öffnet sich im Browser – bestätige dort die Übernahme.";
-  } catch (e) {
-    anzeige.textContent = typeof e === "string" ? e : "Der Stint-Planer konnte nicht geöffnet werden.";
+  if (istApp) {
+    anzeige.textContent = "Der Stint-Planer öffnet sich hier in der App – bestätige dort die Übernahme.";
+    webBereichZeigen("stintplaner.html", `messwerte=${daten}`);
+  } else {
+    window.open(`https://gsra-webseite.vercel.app/stintplaner.html#messwerte=${daten}`, "_blank", "noopener");
+    anzeige.textContent = "Der Stint-Planer öffnet sich im Browser – bestätige dort die Übernahme.";
   }
 });
 
@@ -1212,11 +1226,11 @@ for (const id of ["dsKnopf", "dsKnopf2"]) $(id).addEventListener("click", () => 
 $("dsZu").addEventListener("click", () => $<HTMLDialogElement>("dsDialog").close());
 
 funkEinrichten();
-webseiteEinrichten($("gUebersicht"), $("gMeldung"), istApp);
+void webEinrichten(istApp);
 berichtKiEinrichten();
 chatEinrichten();
 sparZeigen();
 void kontoStarten(istApp);
 window.addEventListener("resize", () => {
-  if (aktiverReiter === "live") live();
+  if (aktiverReiter === "live" && !webAktiv()) live();
 });

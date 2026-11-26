@@ -2,6 +2,14 @@
    GSRA - Zentrale Auth- & Navigationssteuerung (Präzise Live-Abfrage)
 ========================================= */
 
+// App-Ansicht (Wunsch 26.11.): In der GSRA-App laufen die Seiten direkt im App-Fenster; die Seitenleiste der App
+// ersetzt Logo und Hauptmenü. Erkennung: nur in eingebetteten Windows-Ansichten (WebView2) gibt es window.chrome.webview –
+// in normalen Browsern nicht, ein Link kann die App-Ansicht also nicht auslösen. Bleibt: Anmelden/Profil, Suche, Fußzeile
+// (Impressum, Datenschutz, „Verträge hier kündigen“).
+if (window.chrome && window.chrome.webview && window.top === window.self) {
+    document.documentElement.classList.add("gsra-app");
+}
+
 const initAuthNav = async () => {
     const client = window.supabaseClient || window.supabase;
 

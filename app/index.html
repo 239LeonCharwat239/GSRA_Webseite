@@ -9,31 +9,65 @@
 <body>
   <!-- Startbild: das Logo baut sich auf (Klick überspringt) -->
   <div class="start" id="start" title="Klicken zum Überspringen"></div>
-  <header class="kopf">
+  <div class="rahmen">
+  <!-- Seitenleiste: Rennen (Telemetrie) und die ganze GSRA – alles in einem Fenster (Wunsch 26.11.) -->
+  <aside class="leiste-seite" aria-label="GSRA">
     <div class="marke">
-      <img src="/gsra-logo.png" alt="GSRA" class="logo">
-      <div class="marke-text"><strong>GSRA</strong><span>Telemetrie</span></div>
+      <img src="/gsra-logo.png" alt="" class="logo">
+      <div class="marke-text">
+        <strong>GSRA</strong>
+        <span class="slogan"><span class="blau">United by speed.</span> <span class="gelb">Driven globally.</span></span>
+      </div>
     </div>
-    <nav class="reiter" role="tablist" aria-label="Bereiche">
-      <button type="button" role="tab" data-reiter="live" aria-selected="true">Live</button>
-      <button type="button" role="tab" data-reiter="runden" aria-selected="false">Runden <span class="anzahl" id="rundenAnzahl">0</span></button>
-      <button type="button" role="tab" data-reiter="vergleich" aria-selected="false">Vergleich</button>
-      <button type="button" role="tab" data-reiter="sprit" aria-selected="false">Sprit &amp; Stint</button>
-      <button type="button" role="tab" data-reiter="bericht" aria-selected="false">Bericht</button>
-      <button type="button" role="tab" data-reiter="chat" aria-selected="false">Renningenieur</button>
-      <button type="button" role="tab" data-reiter="gsra" aria-selected="false" class="reiter-gsra">GSRA</button>
+    <nav class="navi" aria-label="Bereiche">
+      <p class="navi-gruppe">Rennen</p>
+      <button type="button" data-reiter="live" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.6 18a8.5 8.5 0 1 1 14.8 0M12 14l4.5-5M12 14h.01"/></svg><span>Live</span></button>
+      <button type="button" data-reiter="runden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 9v4l2.5 2M9 2.5h6"/></svg><span>Runden</span> <span class="anzahl" id="rundenAnzahl">0</span></button>
+      <button type="button" data-reiter="vergleich"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-6 4 3 6-8 3 3M3 21h18"/></svg><span>Vergleich</span></button>
+      <button type="button" data-reiter="sprit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16M3 21h12M14 9h2a2 2 0 0 1 2 2v5a1.5 1.5 0 0 0 3 0V8l-3-3M7 7h4"/></svg><span>Sprit &amp; Stint</span></button>
+      <button type="button" data-reiter="bericht"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6v3H9zM7 4.5H5V21h14V4.5h-2M8 11h8M8 15h8M8 19h5"/></svg><span>Bericht</span></button>
+      <button type="button" data-reiter="chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14v-2a8 8 0 0 1 16 0v2M4 14h3v5H4zM17 14h3v5h-3z"/></svg><span>Renningenieur</span></button>
+
+      <p class="navi-gruppe">Community</p>
+      <button type="button" data-web="index.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h13v14H6a2 2 0 0 1-2-2V5zm13 4h3v8a2 2 0 0 1-2 2M8 9h5M8 13h5M8 17h3"/></svg><span>Neuigkeiten</span></button>
+      <button type="button" data-web="messenger.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5z"/></svg><span>Messenger</span></button>
+      <button type="button" data-web="kalender.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v14H4zM4 10h16M8 3v5M16 3v5"/></svg><span>Rennkalender</span></button>
+      <button type="button" data-web="videos.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM10 9l5 3-5 3z"/></svg><span>Videos</span></button>
+
+      <p class="navi-gruppe">Garage</p>
+      <button type="button" data-web="setups.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8M14 5v4M8 15v4"/></svg><span>Setups</span></button>
+      <button type="button" data-web="stintplaner.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z"/></svg><span>Stint-Planer</span></button>
+      <button type="button" data-web="liveries.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4l6 6-8 8H6v-6l8-8zM12 6l6 6"/></svg><span>Liveries</span></button>
+
+      <p class="navi-gruppe">Markt &amp; Coaching</p>
+      <button type="button" data-web="marktplatz.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1 12H6L5 8zM9 8V6a3 3 0 0 1 6 0v2"/></svg><span>Marktplatz</span></button>
+      <button type="button" data-web="coaching.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 4-9 4-9-4 9-4zM7 10v5c3 2 7 2 10 0v-5"/></svg><span>Coaching</span></button>
+
+      <p class="navi-gruppe">Wissen</p>
+      <button type="button" data-web="nachschlagewerk.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4zM5 17a3 3 0 0 1 3-3h11"/></svg><span>Nachschlagewerk</span></button>
+      <button type="button" data-web="hilfe.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01"/></svg><span>Hilfe</span></button>
+
+      <p class="navi-gruppe">Konto</p>
+      <button type="button" data-web="dashboard.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20a8 8 0 0 1 16 0"/></svg><span>Dashboard</span></button>
+      <button type="button" data-web="renningenieur.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1M15 4v4M9 10v4M17 16v4"/></svg><span>Renningenieur einstellen</span></button>
+      <button type="button" data-web="abo.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8l4 4 4-7 4 7 4-4-2 11H6L4 8z"/></svg><span>Mitgliedschaft</span></button>
     </nav>
-    <div class="verbindung">
-      <span class="led" id="led" aria-hidden="true"></span>
-      <span id="statusText">Starte …</span>
-      <select id="zeitraffer" aria-label="Zeitraffer der Demo" hidden>
-        <option value="1">Echtzeit</option>
-        <option value="4">4× schneller</option>
-        <option value="12">12× schneller</option>
-      </select>
-      <button class="knopf" id="demoKnopf" type="button">Demo starten</button>
+
+    <div class="leiste-fuss">
+      <div class="verbindung">
+        <span class="led" id="led" aria-hidden="true"></span>
+        <span id="statusText">Starte …</span>
+      </div>
+      <div class="demo-zeile">
+        <button class="knopf" id="demoKnopf" type="button">Demo starten</button>
+        <select id="zeitraffer" aria-label="Zeitraffer der Demo" hidden>
+          <option value="1">Echtzeit</option>
+          <option value="4">4× schneller</option>
+          <option value="12">12× schneller</option>
+        </select>
+      </div>
       <div class="konto">
-        <button class="knopf leise" id="kontoKnopf" type="button">Anmelden</button>
+        <button class="knopf leise konto-knopf" id="kontoKnopf" type="button">Anmelden</button>
         <div class="konto-menue" id="kontoMenue" hidden>
           <p>Angemeldet als <strong id="kontoName"></strong></p>
           <button class="knopf leise" id="abmeldenKnopf" type="button">In der App abmelden</button>
@@ -41,7 +75,22 @@
         </div>
       </div>
     </div>
-  </header>
+  </aside>
+
+  <div class="inhalt">
+    <header class="kopfzeile">
+      <div class="kopfzeile-titel">
+        <h1 id="seitenTitel">Live</h1>
+        <p class="sitzung" id="sitzungText"></p>
+      </div>
+      <!-- Nur bei Seiten der GSRA: zurück, vor, neu laden und wo man gerade ist -->
+      <div class="web-leiste" id="webLeiste" hidden>
+        <button type="button" class="symbol-knopf" id="webZurueck" title="Zurück" aria-label="Zurück"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+        <button type="button" class="symbol-knopf" id="webVor" title="Vor" aria-label="Vor"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+        <button type="button" class="symbol-knopf" id="webNeu" title="Neu laden" aria-label="Neu laden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg></button>
+        <span class="web-ort" id="webOrt" title="Diese Seite wird gerade angezeigt"></span>
+      </div>
+    </header>
 
   <!-- Zwei-Faktor-Code (nur für Konten, die ihn eingerichtet haben) -->
   <dialog id="codeDialog" class="dialog" aria-labelledby="codeTitel">
@@ -76,15 +125,15 @@
     <ul>
       <li>Für die Formulierung der Antworten dieselben Messwerte und deine Frage. Namen anderer Fahrer nur, wenn „Fahrernamen an die KI“ eingeschaltet ist – sonst nur Startnummern.</li>
     </ul>
-    <h3>Fenster „GSRA“</h3>
+    <h3>GSRA-Seiten in der App (Messenger, Kalender, Setups …)</h3>
     <ul>
-      <li>Zeigt die GSRA-Webseite (Messenger, Kalender, Setups …) – dort gilt dieselbe Datenschutzerklärung wie im Browser. Es lädt nur GSRA-Seiten und hat keinen Zugriff auf deine Messwerte; andere Seiten öffnen sich im normalen Browser.</li>
+      <li>Sie laufen direkt in der App, aber getrennt von der Telemetrie: Sie haben keinen Zugriff auf deine Messwerte, deine App-Anmeldung oder die Befehle der App. Es gilt dieselbe Datenschutzerklärung wie auf der Webseite.</li>
+      <li>Angezeigt werden nur Seiten der GSRA und – zum Bezahlen – die Seiten unseres Zahlungsdienstleisters; oben siehst du immer, wo du gerade bist. Links zu anderen Seiten öffnen sich in deinem normalen Browser.</li>
     </ul>
     <p class="hinweis">Ausführlich: Datenschutzerklärung auf der GSRA-Webseite.</p>
     <div class="dialog-knoepfe"><button type="button" class="knopf" id="dsZu">Verstanden</button></div>
   </dialog>
   <div class="toast" id="hinweis" role="status" aria-live="polite"></div>
-  <p class="sitzung" id="sitzungText"></p>
 
   <main>
     <!-- LIVE -->
@@ -130,7 +179,7 @@
           <label class="knopf leise datei" title="Die Datei bleibt auf deinem PC – sie wird nur abgespielt, nicht hochgeladen">Eigene Aufnahme durch den Funk
             <input type="file" id="fAufnahme" accept="audio/*,.ogg,.opus,.m4a,.mp3,.wav"></label>
         </div>
-        <p class="hinweis" id="fHinweis">Angemeldet formuliert dein KI-Renningenieur die Ansagen in seinem Stil (eingestellt auf der Webseite unter „Renningenieur“).</p>
+        <p class="hinweis" id="fHinweis">Angemeldet formuliert dein KI-Renningenieur die Ansagen in seinem Stil (links unter „Renningenieur einstellen“).</p>
         <p class="hinweis"><button type="button" class="link-knopf" id="dsKnopf">Datenschutz in der App: was bleibt auf dem PC, was geht wohin?</button></p>
       </div>
     </section>
@@ -302,18 +351,21 @@
       </div>
     </section>
 
-    <!-- GSRA: alle Funktionen der Webseite, in der App im eigenen Fenster -->
-    <section class="seite" data-seite="gsra" aria-label="GSRA">
-      <div class="karte gsra-kopf">
-        <div>
-          <h2>Deine GSRA <small>Alles von der Webseite – direkt aus der App</small></h2>
-          <p class="hinweis">Jede Seite öffnet sich im Fenster „GSRA“ neben der Telemetrie. Melde dich dort einmal an – die Anmeldung bleibt gespeichert. Bezahlen und Links zu anderen Seiten öffnen sich zur Sicherheit im normalen Browser.</p>
+    <!-- GSRA-Seiten (Messenger, Kalender, Setups …): erscheinen GENAU hier, direkt in der App.
+         In der App legt sich die Seite passgenau über diese Fläche (src/webbereich.ts); in der Browser-Vorschau
+         steht hier ein Hinweis. -->
+    <section class="seite web-seite" data-seite="web" aria-label="GSRA-Seite">
+      <div class="web-flaeche" id="webFlaeche">
+        <div class="web-vorschau" id="webVorschau">
+          <img src="/gsra-logo.png" alt="" class="web-vorschau-logo">
+          <p id="webVorschauText">Lädt …</p>
+          <button type="button" class="knopf leise" id="webVorschauKnopf" hidden>In neuem Tab öffnen</button>
         </div>
       </div>
-      <p class="fehler" id="gMeldung" aria-live="polite"></p>
-      <div id="gUebersicht"></div>
     </section>
   </main>
+  </div>
+  </div>
 
   <script type="module" src="/src/main.ts"></script>
 </body>

@@ -10,7 +10,7 @@ publish = false
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["unstable"] } # unstable: eingebettete GSRA-Seiten im Hauptfenster (webbereich.rs)
 # Nur aus Rust genutzt (feste Adresse der Webseite); die Oberfläche bekommt keine Erlaubnis, Seiten zu öffnen
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }

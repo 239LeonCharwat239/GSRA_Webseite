@@ -38,7 +38,7 @@ fn melden(app: &AppHandle, neu: Status) {
     };
     if *alt != neu {
         *alt = neu.clone();
-        let _ = app.emit("gsra://status", neu);
+        let _ = app.emit_to("main", "gsra://status", neu);
     }
 }
 
@@ -77,13 +77,13 @@ fn schleife(app: AppHandle) {
                     status.meldung = None;
                     if let Some(si) = l.sitzung {
                         status.sitzung = Some(si.clone());
-                        let _ = app.emit("gsra://sitzung", si);
+                        let _ = app.emit_to("main", "gsra://sitzung", si);
                     }
                     if let Some(p) = l.probe {
                         stapel.push(p);
                     }
                     if let Some(f) = l.feld {
-                        let _ = app.emit("gsra://feld", f);
+                        let _ = app.emit_to("main", "gsra://feld", f);
                     }
                 }
                 Err(e) => {
@@ -106,7 +106,7 @@ fn schleife(app: AppHandle) {
             feld_zeit = Instant::now();
         }
         if !stapel.is_empty() && versand.elapsed() >= Duration::from_millis(50) {
-            let _ = app.emit("gsra://proben", &stapel);
+            let _ = app.emit_to("main", "gsra://proben", &stapel);
             stapel.clear();
             versand = Instant::now();
         }

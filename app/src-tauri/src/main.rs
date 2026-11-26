@@ -4,13 +4,14 @@
 
 mod anmeldung;
 mod live;
-mod webseite;
+mod webbereich;
 
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(live::Zustand::default())
-        .invoke_handler(tauri::generate_handler![live::status, anmeldung::anmeldung_starten, anmeldung::anmeldung_abbrechen, anmeldung::stintplaner_oeffnen, webseite::webseite_oeffnen])
+        .manage(webbereich::Bereiche::default())
+        .invoke_handler(tauri::generate_handler![live::status, anmeldung::anmeldung_starten, anmeldung::anmeldung_abbrechen, webbereich::bereich_zeigen, webbereich::bereich_flaeche, webbereich::bereich_verbergen, webbereich::bereich_aktion])
         .setup(|app| {
             live::starten(app.handle().clone());
             Ok(())
