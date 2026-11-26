@@ -44,6 +44,15 @@
             </p>
         </section>
 
+        <!-- Neuigkeiten wie in einer Zeitung (SQL 056, src/startseite-beitraege.ts) – Beiträge schreiben nur Admins -->
+        <section class="home-news" id="homeNews" aria-labelledby="homeNewsTitle" hidden>
+            <div class="home-news-head">
+                <h2 id="homeNewsTitle"><i class="fa-solid fa-newspaper"></i> Neuigkeiten aus der GSRA</h2>
+                <button type="button" class="hn-neu" id="hnNeu" hidden><i class="fa-solid fa-plus"></i> Neuer Beitrag</button>
+            </div>
+            <div class="hn-zeitung" id="hnListe"></div>
+        </section>
+
         <!-- Nächste Rennen aus dem Rennkalender (startseite.js) -->
         <section class="home-events" id="homeEvents" aria-labelledby="homeEventsTitle">
             <div class="home-events-head">
@@ -88,7 +97,9 @@
     <script src="supabase-client.js"></script>
     <script src="fehler-monitor.js"></script>
     <script src="auth-nav.js"></script>
+    <script src="ui-dialogs.js"></script>
     <script src="startseite.js"></script>
     <script type="module" src="src/suche.ts"></script>
+    <script type="module" src="src/startseite-beitraege.ts"></script>
 </body>
 </html>

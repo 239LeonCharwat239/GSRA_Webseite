@@ -11,9 +11,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL, KARRIERE_SQL, STINTPLAN_SQL, LIVERIES_SQL, CHATSICHER_SQL, AUFRAEUMEN_SQL, ONLINE_SQL, RE_STIL_SQL, APP_LOGIN_SQL, RE_KI_SQL, RE_CHAT_SQL, RE_MERKEN_SQL, LAENGER_SQL] =
-    Array.from({ length: 55 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 55);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL, KARRIERE_SQL, STINTPLAN_SQL, LIVERIES_SQL, CHATSICHER_SQL, AUFRAEUMEN_SQL, ONLINE_SQL, RE_STIL_SQL, APP_LOGIN_SQL, RE_KI_SQL, RE_CHAT_SQL, RE_MERKEN_SQL, LAENGER_SQL, STARTSEITE_SQL] =
+    Array.from({ length: 56 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 56);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -3885,6 +3885,92 @@ if (LAENGER_SQL && RE_MERKEN_SQL && KARRIERE_SQL) {
     const lernen55 = await as(P, async () => q(`select public.race_engineer_learn('ziel', repeat('k', 500)) as id`));
     const kurz55 = lernen55.rows[0]?.id ? await one(`select char_length(text) as n from public.race_engineer_memory where id = '${lernen55.rows[0].id}'`) : null;
     check("Was sich der Renningenieur selbst merkt, bleibt kurz (200 Zeichen)", kurz55?.n === 200, lernen55.error || JSON.stringify(kurz55));
+}
+
+// --- 056: Startseite wie eine Zeitung – Beiträge der Admins mit Bildern ---
+if (STARTSEITE_SQL) {
+    const A = U.admin;
+    const admin = (fn) => mitAnspruch(A, { aal: "aal2" }, fn);
+    const speichern = (felder = {}) => {
+        const f = { id: null, titel: "Wir sind auf der Simracing Expo 2027", text: "Besucht uns an Stand B12.", bilder: [`${A}/expo-1.jpg`], veroeffentlicht: true, angeheftet: false, ...felder };
+        const arr = `array[${f.bilder.map((b) => `$$${b}$$`).join(",")}]::text[]`;
+        return q(`select public.home_post_save(${f.id ? `'${f.id}'` : "null"}, $$${f.titel}$$, $$${f.text}$$, ${f.bilder.length ? arr : "'{}'::text[]"}, ${f.veroeffentlicht}, ${f.angeheftet}) as id`);
+    };
+    const vorher56 = await admin(() => speichern());
+    check("Vor 056: keine Beiträge auf der Startseite möglich (Lücke nachgewiesen)", vorher56.error !== null, vorher56.error || "durchgelassen");
+    await db.exec(readFileSync(STARTSEITE_SQL, "utf8"));
+    const ctl56 = await db.exec(readFileSync(STARTSEITE_SQL, "utf8")); // zweiter Lauf
+    const rows56 = ctl56[ctl56.length - 1].rows;
+    console.log("Kontrolle 056:\n  " + rows56.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+    check("Kontrolle 056: bereit, Schreiben nur über Funktionen, Gäste ausgeschlossen", rows56.map(r => r.ergebnis).join(",") === "bereit,ja,ja", rows56.map(r => r.ergebnis).join(", "));
+
+    // Admin mit bestätigter Zwei-Faktor-Anmeldung veröffentlicht
+    const p1 = await admin(() => speichern({ text: "Erster Absatz.\r\nZweiter\u0007 Absatz." }));
+    const P1 = p1.rows[0]?.id;
+    check("Admin (Zwei-Faktor bestätigt) veröffentlicht einen Beitrag", p1.error === null && !!P1, p1.error || "");
+    const gespeichert56 = await one(`select text, bilder from public.home_posts where id = '${P1}'`);
+    check("Text bereinigt, Absätze bleiben", gespeichert56?.text === "Erster Absatz.\nZweiter  Absatz.", JSON.stringify(gespeichert56?.text));
+    const ohneCode = await as(A, () => speichern());
+    check("Admin ohne bestätigte Zwei-Faktor-Anmeldung: nichts veröffentlichen", /Admins/.test(ohneCode.error || ""), ohneCode.error || "durchgelassen!");
+    const mitglied = await as(U.max, () => speichern());
+    check("Mitglieder können keine Startseiten-Beiträge schreiben", /Admins/.test(mitglied.error || ""), mitglied.error || "durchgelassen!");
+    const gast56 = await as(null, () => speichern());
+    check("Gäste können keine Startseiten-Beiträge schreiben", gast56.error !== null, gast56.error || "durchgelassen!");
+
+    // Ungültige Eingaben
+    for (const [label, felder] of [
+        ["Überschrift zu kurz", { titel: "Hi" }],
+        ["Überschrift zu lang", { titel: "x".repeat(141) }],
+        ["Text über 7.000 Zeichen", { text: "x".repeat(7001) }],
+        ["Bild mit ../", { bilder: [`${A}/../geheim.jpg`] }],
+        ["Bild als Webadresse", { bilder: ["https://boese.example/x.jpg"] }],
+        ["Bild als SVG (Skript möglich)", { bilder: [`${A}/x.svg`] }],
+        ["Bild ohne Ordner", { bilder: ["expo.jpg"] }],
+        ["7 Bilder", { bilder: Array.from({ length: 7 }, (_, i) => `${A}/b${i}.jpg`) }]]) {
+        const r = await admin(() => speichern(felder));
+        check(`Abgelehnt: ${label}`, r.error !== null, r.error || "durchgelassen!");
+    }
+
+    // Entwurf (nicht veröffentlicht) sehen nur Admins; Gäste sehen veröffentlichte
+    const entwurf = (await admin(() => speichern({ titel: "Entwurf: Pressemitteilung", veroeffentlicht: false }))).rows[0]?.id;
+    const gastSicht = await as(null, () => q(`select id, titel from public.home_posts`));
+    check("Gäste sehen veröffentlichte Beiträge, aber keine Entwürfe", gastSicht.error === null && gastSicht.rows.some((r) => r.id === P1) && !gastSicht.rows.some((r) => r.id === entwurf), gastSicht.error || JSON.stringify(gastSicht.rows));
+    const adminSicht = await admin(() => q(`select id from public.home_posts`));
+    check("Admins sehen auch Entwürfe", adminSicht.rows.some((r) => r.id === entwurf), JSON.stringify(adminSicht.rows));
+
+    // Direkter Zugriff verboten – auch für Admins
+    const direkt = await admin(() => q(`update public.home_posts set titel = 'gehackt' where id = '${P1}' returning id`));
+    check("Beiträge nicht direkt änderbar (nur über die Funktion)", direkt.error !== null || direkt.rows.length === 0, direkt.error || "geändert!");
+    const direktNeu = await as(U.max, () => q(`insert into public.home_posts (titel) values ('Spam') returning id`));
+    check("Beiträge nicht direkt anlegbar", direktNeu.error !== null, direktNeu.error || "durchgelassen!");
+
+    // Ändern, Anheften, Löschen mit Protokoll
+    const aendern = await admin(() => speichern({ id: P1, titel: "Expo 2027: Stand B12", angeheftet: true }));
+    const nachher56 = await one(`select titel, angeheftet from public.home_posts where id = '${P1}'`);
+    check("Admin ändert und heftet an", aendern.error === null && nachher56?.titel === "Expo 2027: Stand B12" && nachher56.angeheftet === true, aendern.error || JSON.stringify(nachher56));
+    const loeschen56 = await admin(() => q(`select public.home_post_delete('${P1}') as bilder`));
+    check("Löschen gibt die Bilder zum Aufräumen zurück", loeschen56.error === null && JSON.stringify(loeschen56.rows[0]?.bilder).includes("expo-1.jpg"), loeschen56.error || JSON.stringify(loeschen56.rows));
+    const mitgliedLoescht = await as(U.max, () => q(`select public.home_post_delete('${entwurf}')`));
+    check("Mitglieder können keine Beiträge löschen", mitgliedLoescht.error !== null, mitgliedLoescht.error || "durchgelassen!");
+    const protokoll = await one(`select count(*)::int as n from public.moderation_log where action like 'startseite_beitrag_%' and actor_id = '${A}'`);
+    check("Jede Aktion steht im Moderationsprotokoll", protokoll.n >= 4, String(protokoll.n));
+
+    // Bilder hochladen: nur Admins, nur eigener Ordner, nur Bildformate (wie die Storage-API: nur INSERT, kein Zurücklesen)
+    const hoch = (uid, name, aal2 = true) => (aal2 ? mitAnspruch(uid, { aal: "aal2" }, () => q(`insert into storage.objects (bucket_id, name) values ('startseite', $$${name}$$)`))
+        : as(uid, () => q(`insert into storage.objects (bucket_id, name) values ('startseite', $$${name}$$)`)));
+    const okBild = await hoch(A, `${A}/expo-2.webp`);
+    const da = await one(`select count(*)::int as n from storage.objects where bucket_id = 'startseite' and name = '${A}/expo-2.webp'`);
+    check("Admin lädt ein Bild in den eigenen Ordner", okBild.error === null && da.n === 1, okBild.error || String(da.n));
+    const fremdOrdner = await hoch(A, `${U.max}/x.jpg`);
+    check("Bild in fremden Ordner: abgelehnt", fremdOrdner.error !== null, fremdOrdner.error || "durchgelassen!");
+    const svg = await hoch(A, `${A}/x.svg`);
+    check("SVG/HTML im Startseiten-Speicher: abgelehnt", svg.error !== null, svg.error || "durchgelassen!");
+    const mitgliedBild = await hoch(U.max, `${U.max}/x.jpg`);
+    check("Mitglieder laden keine Startseiten-Bilder hoch (trotz offener Altregel)", mitgliedBild.error !== null, mitgliedBild.error || "durchgelassen!");
+    const ohneCodeBild = await hoch(A, `${A}/y.jpg`, false);
+    check("Admin ohne bestätigten Code: kein Upload", ohneCodeBild.error !== null, ohneCodeBild.error || "durchgelassen!");
+    const bucket = await one(`select public, file_size_limit, allowed_mime_types from storage.buckets where id = 'startseite'`);
+    check("Speicher: öffentlich lesbar, höchstens 3 MB, nur JPEG/WebP/PNG", bucket?.public === true && Number(bucket.file_size_limit) <= 3145728 && !JSON.stringify(bucket.allowed_mime_types).includes("svg"), JSON.stringify(bucket));
 }
 
 // --- Versehentlich ein ALTES Skript erneut ausgeführt (25.11.: 043 nach 054): darf nichts zurücksetzen ---
