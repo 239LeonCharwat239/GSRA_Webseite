@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GSRA-App | GSRA</title>
+    <meta name="description" content="Die GSRA-App für deinen PC: Live-Telemetrie, Spotter, Funk vom KI-Renningenieur, Rundenvergleich, Sprit sparen und Rennbericht – und die ganze GSRA in einem Fenster.">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js" integrity="sha256-7jvo3hkrl8sdc9HpXWuCux9rZYwPl8TvdX/DMZlu09M=" crossorigin="anonymous"></script>
+    <script src="supabase-client.js"></script>
+    <script src="fehler-monitor.js"></script>
+    <script src="auth-nav.js"></script>
+</head>
+<body>
+
+<header>
+    <div class="logo-slogan-container">
+        <a href="index.html" class="logo-link">
+            <img src="GSRA_Logo_ohne Hintergrund.png" alt="GSRA Logo" class="logo">
+        </a>
+        <div class="header-slogan">
+            <span class="text-blue">UNITED BY SPEED.</span>
+            <span class="text-yellow">DRIVEN GLOBALLY.</span>
+        </div>
+    </div>
+    <!-- Die Navigation baut auth-nav.js aus einer zentralen Liste (GSRA_NAV) -->
+    <nav>
+        <a href="index.html">Home</a>
+        <a href="messenger.html">Messenger</a>
+        <a href="login.html" class="login-btn" id="loginNavBtn">Login</a>
+        <button id="logoutBtn" class="login-btn" style="display: none;">Logout</button>
+    </nav>
+</header>
+
+    <div class="container co-page ap-page">
+        <section class="hero-section co-hero">
+            <h1 class="hero-title">GSRA-<span class="text-blue">APP</span></h1>
+            <p class="hero-subtitle">Telemetrie, Spotter und dein Renningenieur live im Rennen – und die ganze GSRA in einem Fenster.</p>
+            <div class="co-stats"><span class="co-stat re-status"><i class="fa-solid fa-flask" aria-hidden="true"></i> <strong>In Entwicklung</strong> · für Windows-PCs</span></div>
+        </section>
+
+        <!-- Was es nur in der App gibt: alles, was Live-Daten aus der Simulation braucht -->
+        <section class="re-karte" aria-labelledby="apTitelNur">
+            <h2 id="apTitelNur"><i class="fa-solid fa-bolt" aria-hidden="true"></i> Nur in der App <small>Alles, was Live-Daten aus der Simulation braucht – ein Browser kann sie nicht lesen</small></h2>
+            <ul class="ap-raster">
+                <li><i class="fa-solid fa-gauge-high" aria-hidden="true"></i><div><strong>Live-Telemetrie</strong><span>Tempo, Gang, Pedale und das Delta zu deiner Bestzeit – in Echtzeit, während du fährst.</span></div></li>
+                <li><i class="fa-solid fa-chart-line" aria-hidden="true"></i><div><strong>Rundenvergleich</strong><span>„Kurz gesagt“ nennt die Kurven, in denen du Zeit liegen lässt, und warum. „Genau hinsehen“ legt Tempo, Gas, Bremse und Gang zweier Runden übereinander.</span></div></li>
+                <li><i class="fa-solid fa-route" aria-hidden="true"></i><div><strong>Streckenkarte</strong><span>Entsteht aus deiner ersten Runde und färbt, wo du gegen deine Bestzeit gewinnst oder verlierst.</span></div></li>
+                <li><i class="fa-solid fa-arrows-left-right" aria-hidden="true"></i><div><strong>Spotter</strong><span>„Auto links“, „Auto rechts“, „Frei“ – sofort, ohne KI und in der Sprache deines Renningenieurs.</span></div></li>
+                <li><i class="fa-solid fa-headset" aria-hidden="true"></i><div><strong>Funk vom Renningenieur</strong><span>Nach jeder Runde ein kurzer Spruch in seinem Stil – auf Wunsch vorgelesen, mit echtem Funk-Klang.</span></div></li>
+                <li><i class="fa-solid fa-comments" aria-hidden="true"></i><div><strong>Rückfragen im Rennen</strong><span>„Reicht der Sprit?“, „Wer fährt vor mir?“ – Einfaches beantwortet er sofort, Schwieriges schaut er sich kurz an.</span></div></li>
+                <li><i class="fa-solid fa-gas-pump" aria-hidden="true"></i><div><strong>Sprit sparen</strong><span>Der Spar-Modus misst erst deinen normalen Verbrauch und sagt dir dann nach jeder Runde, wie viel Lift &amp; Coast bringt – und was es an Zeit kostet.</span></div></li>
+                <li><i class="fa-solid fa-flag-checkered" aria-hidden="true"></i><div><strong>Referenz aus der Lobby</strong><span>Vergleich mit dem Schnellsten in deiner Sitzung – nur mit geprüften, sauberen Runden.</span></div></li>
+                <li><i class="fa-solid fa-clipboard-list" aria-hidden="true"></i><div><strong>Rennbericht und Nachbesprechung</strong><span>Ideal-Runde, Konstanz, Plätze und Zweikämpfe – und eine Nachbesprechung, aus der sich dein Renningenieur das Wichtigste merkt.</span></div></li>
+            </ul>
+        </section>
+
+        <!-- Was es auf beiden Wegen gibt -->
+        <section class="re-karte" aria-labelledby="apTitelBeide">
+            <h2 id="apTitelBeide"><i class="fa-solid fa-window-restore" aria-hidden="true"></i> Die ganze GSRA in der App</h2>
+            <p class="re-text">Alles von der Webseite öffnest du in der App mit einem Klick im Fenster „GSRA“ – neben deiner Telemetrie, ohne zwischen Browser und Simulation zu wechseln. Der Stint-Planer übernimmt dabei deine gemessene Rundenzeit und deinen Verbrauch direkt aus der App.</p>
+            <ul class="ap-chips" aria-label="Seiten der Webseite in der App">
+                <li><i class="fa-solid fa-newspaper" aria-hidden="true"></i> Neuigkeiten</li>
+                <li><i class="fa-solid fa-message" aria-hidden="true"></i> Messenger</li>
+                <li><i class="fa-solid fa-flag-checkered" aria-hidden="true"></i> Rennkalender</li>
+                <li><i class="fa-solid fa-film" aria-hidden="true"></i> Videos</li>
+                <li><i class="fa-solid fa-graduation-cap" aria-hidden="true"></i> Coaching</li>
+                <li><i class="fa-solid fa-sliders" aria-hidden="true"></i> Setups</li>
+                <li><i class="fa-solid fa-gas-pump" aria-hidden="true"></i> Stint-Planer</li>
+                <li><i class="fa-solid fa-book" aria-hidden="true"></i> Nachschlagewerk</li>
+                <li><i class="fa-solid fa-store" aria-hidden="true"></i> Marktplatz</li>
+                <li><i class="fa-solid fa-palette" aria-hidden="true"></i> Liveries</li>
+                <li><i class="fa-solid fa-gauge-high" aria-hidden="true"></i> Dashboard</li>
+                <li><i class="fa-solid fa-headset" aria-hidden="true"></i> Renningenieur einstellen</li>
+            </ul>
+        </section>
+
+        <!-- Vergleich Webseite / App -->
+        <section class="re-karte" aria-labelledby="apTitelVergleich">
+            <h2 id="apTitelVergleich"><i class="fa-solid fa-table-columns" aria-hidden="true"></i> Webseite oder App?</h2>
+            <div class="ap-tabelle-rahmen">
+                <table class="ap-tabelle">
+                    <thead><tr><th scope="col">Funktion</th><th scope="col">Webseite</th><th scope="col">App</th></tr></thead>
+                    <tbody>
+                        <tr><th scope="row">Messenger, Kalender, Setups, Coaching, Marktplatz</th><td class="ja"><i class="fa-solid fa-check" aria-hidden="true"></i><span class="sr-only">ja</span></td><td class="ja"><i class="fa-solid fa-check" aria-hidden="true"></i><span class="sr-only">ja</span></td></tr>
+                        <tr><th scope="row">Renningenieur einstellen (Name, Art, Gedächtnis)</th><td class="ja"><i class="fa-solid fa-check" aria-hidden="true"></i><span class="sr-only">ja</span></td><td class="ja"><i class="fa-solid fa-check" aria-hidden="true"></i><span class="sr-only">ja</span></td></tr>
+                        <tr><th scope="row">Stint-Planer</th><td class="ja">Werte selbst eintragen</td><td class="ja">Rundenzeit und Verbrauch gemessen</td></tr>
+                        <tr><th scope="row">Live-Telemetrie, Streckenkarte, Rundenvergleich</th><td class="nein"><i class="fa-solid fa-minus" aria-hidden="true"></i><span class="sr-only">nein</span></td><td class="ja"><i class="fa-solid fa-check" aria-hidden="true"></i><span class="sr-only">ja</span></td></tr>
+                        <tr><th scope="row">Spotter und Funk im Rennen</th><td class="nein"><i class="fa-solid fa-minus" aria-hidden="true"></i><span class="sr-only">nein</span></td><td class="ja"><i class="fa-solid fa-check" aria-hidden="true"></i><span class="sr-only">ja</span></td></tr>
+                        <tr><th scope="row">Rückfragen an den Renningenieur im Rennen</th><td class="nein"><i class="fa-solid fa-minus" aria-hidden="true"></i><span class="sr-only">nein</span></td><td class="ja"><i class="fa-solid fa-check" aria-hidden="true"></i><span class="sr-only">ja</span></td></tr>
+                        <tr><th scope="row">Sprit sparen, Rennbericht, Nachbesprechung</th><td class="nein"><i class="fa-solid fa-minus" aria-hidden="true"></i><span class="sr-only">nein</span></td><td class="ja"><i class="fa-solid fa-check" aria-hidden="true"></i><span class="sr-only">ja</span></td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <p class="co-form-note"><i class="fa-solid fa-crown" aria-hidden="true"></i> Der KI-Renningenieur wird Teil von Pole und Alliance. Der Stint-Planer gehört schon heute zu Pole und Alliance.</p>
+        </section>
+
+        <!-- Datenschutz und Sicherheit -->
+        <section class="re-karte" aria-labelledby="apTitelSicher">
+            <h2 id="apTitelSicher"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> Sicher und sparsam mit deinen Daten</h2>
+            <ul class="ap-raster ap-klein">
+                <li><i class="fa-solid fa-computer" aria-hidden="true"></i><div><strong>Messwerte bleiben auf deinem PC</strong><span>Runden, Pedale, Sprit, Streckenkarte und Vergleiche werden nicht hochgeladen.</span></div></li>
+                <li><i class="fa-solid fa-key" aria-hidden="true"></i><div><strong>Kein Passwort in der App</strong><span>Die App meldet sich über die GSRA-Webseite an – sie sieht dein Passwort nie.</span></div></li>
+                <li><i class="fa-solid fa-filter" aria-hidden="true"></i><div><strong>Nur das Nötigste an die KI</strong><span>Der Renningenieur bekommt nur die Werte für seine Antwort. Ein Schalter bestimmt, ob er andere Fahrer beim Namen oder nur als Startnummer kennt.</span></div></li>
+                <li><i class="fa-solid fa-lock" aria-hidden="true"></i><div><strong>Fenster nur für die GSRA</strong><span>Das Fenster „GSRA“ lädt ausschließlich GSRA-Seiten. Bezahlen und fremde Links öffnen sich in deinem normalen Browser.</span></div></li>
+            </ul>
+        </section>
+
+        <section class="re-karte ap-bald" aria-labelledby="apTitelBald">
+            <h2 id="apTitelBald"><i class="fa-solid fa-download" aria-hidden="true"></i> Download</h2>
+            <p class="re-text">Die GSRA-App ist in Entwicklung. Sobald sie bereitsteht, findest du den Download hier. Deinen Renningenieur kannst du schon heute <a href="renningenieur.html">einstellen</a>.</p>
+        </section>
+    </div>
+
+    <script type="module" src="src/suche.ts"></script>
+</body>
+</html>

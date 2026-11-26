@@ -647,7 +647,8 @@ const GSRA_NAV = [
     { label: "Garage", items: [
         { label: "Setups", href: "setups.html", icon: "fa-sliders", text: "Setup Hub für alle Simulationen" },
         { label: "Stint-Planer", href: "stintplaner.html", icon: "fa-gas-pump", text: "Sprit, Stints und Boxenstopps planen", vorschau: true },
-        { label: "Telemetrie", icon: "fa-chart-line", text: "Runden vergleichen und schneller werden", bald: true },
+        // Telemetrie gibt es in der GSRA-App (Wunsch 26.11.: auf der Webseite erklären, was die App bringt)
+        { label: "GSRA-App", href: "app.html", icon: "fa-desktop", text: "Telemetrie, Spotter und Funk am PC", vorschau: true },
         { label: "Renningenieur", href: "renningenieur.html", icon: "fa-headset", text: "Dein KI-Renningenieur", vorschau: true },
         { label: "Liveries", href: "liveries.html", icon: "fa-palette", text: "Painter für dein Design finden" }
     ] },

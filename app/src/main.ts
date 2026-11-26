@@ -20,6 +20,7 @@ import { namenErsetzen } from "./datenschutz.ts";
 import { karteBauen, karteZeichnen, verlustJeAbschnitt, type Karte } from "./strecke.ts";
 import { Rennbeobachter, berichtErstellen, rundenzeitText, stelleText } from "./rennbericht.ts";
 import { startbildZeigen } from "./startbild.ts";
+import { webseiteEinrichten } from "./webseite.ts";
 
 startbildZeigen();
 
@@ -1186,9 +1187,11 @@ $("sStintKnopf").addEventListener("click", async () => {
     } else {
       window.open(`https://gsra-webseite.vercel.app/stintplaner.html#messwerte=${daten}`, "_blank", "noopener");
     }
-    anzeige.textContent = "Der Stint-Planer öffnet sich im Browser – bestätige dort die Übernahme.";
+    anzeige.textContent = istApp
+      ? "Der Stint-Planer öffnet sich im Fenster „GSRA“ – bestätige dort die Übernahme."
+      : "Der Stint-Planer öffnet sich im Browser – bestätige dort die Übernahme.";
   } catch (e) {
-    anzeige.textContent = typeof e === "string" ? e : "Der Browser konnte nicht geöffnet werden.";
+    anzeige.textContent = typeof e === "string" ? e : "Der Stint-Planer konnte nicht geöffnet werden.";
   }
 });
 
@@ -1209,6 +1212,7 @@ for (const id of ["dsKnopf", "dsKnopf2"]) $(id).addEventListener("click", () => 
 $("dsZu").addEventListener("click", () => $<HTMLDialogElement>("dsDialog").close());
 
 funkEinrichten();
+webseiteEinrichten($("gUebersicht"), $("gMeldung"), istApp);
 berichtKiEinrichten();
 chatEinrichten();
 sparZeigen();

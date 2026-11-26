@@ -288,3 +288,42 @@ main { padding: 12px 20px 28px; max-width: 1400px; margin: 0 auto; }
 .start { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: radial-gradient(900px 420px at 50% 40%, rgba(0, 85, 255, 0.16), transparent 65%), var(--grund); transition: opacity 0.4s ease, visibility 0.4s; cursor: pointer; }
 .start .gsra-lade-logo { width: min(380px, 62vw); }
 .start.weg { opacity: 0; visibility: hidden; pointer-events: none; }
+
+/* Feinschliff (26.11.): ruhigere Tiefe, Akzent an den Überschriften, sanfter Seitenwechsel, schmale Fenster */
+.kachel, .karte, .befund { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 10px 28px rgba(0, 0, 0, 0.22); }
+.kachel { transition: border-color 0.2s; }
+.kachel:hover { border-color: rgba(77, 141, 255, 0.28); }
+.karte:not(.funk) > h2::before { content: ""; align-self: center; width: 3px; height: 14px; border-radius: 2px; background: var(--gelb); margin-right: -2px; }
+.seite.aktiv { animation: seite-ein 0.22s ease-out; }
+@keyframes seite-ein { from { opacity: 0; transform: translateY(6px); } }
+@media (prefers-reduced-motion: reduce) { .seite.aktiv { animation: none; } }
+.reiter { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.reiter::-webkit-scrollbar { display: none; }
+.reiter button { white-space: nowrap; flex: none; }
+.reiter .reiter-gsra { color: var(--gelb); }
+.reiter .reiter-gsra[aria-selected="true"] { color: #000; background: linear-gradient(135deg, #ffd84d, var(--gelb)); box-shadow: none; }
+* { scrollbar-color: rgba(255, 255, 255, 0.16) transparent; }
+textarea:focus-visible { outline: 2px solid var(--gelb); outline-offset: 2px; }
+@media (max-width: 760px) { .reiter { order: 3; width: 100%; } }
+
+/* Bereich „GSRA“: alle Funktionen der Webseite */
+.gsra-kopf { border-left: 3px solid var(--gelb); background: radial-gradient(600px 200px at 100% 0%, rgba(255, 204, 0, 0.08), transparent 70%), linear-gradient(180deg, var(--flaeche-2), var(--flaeche)); }
+.gsra-kopf .hinweis { margin: 0; max-width: 760px; font-size: 13px; }
+.gsra-kopf h2::before { display: none; }
+.fehler { color: var(--rot); margin: 0 0 8px; min-height: 0; }
+.fehler:empty { display: none; }
+.gsra-gruppe { margin-bottom: 18px; }
+.gsra-gruppe > h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--leise); margin: 0 0 10px; }
+.gsra-raster { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.gsra-kachel {
+  display: flex; align-items: flex-start; gap: 12px; text-align: left; cursor: pointer; padding: 14px 16px; border-radius: 14px;
+  background: linear-gradient(180deg, var(--flaeche-2), var(--flaeche)); border: 1px solid var(--rand); color: var(--text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 10px 28px rgba(0, 0, 0, 0.22); transition: border-color 0.2s, transform 0.2s;
+}
+.gsra-kachel:hover { border-color: rgba(255, 204, 0, 0.45); transform: translateY(-2px); }
+@media (prefers-reduced-motion: reduce) { .gsra-kachel:hover { transform: none; } }
+.gsra-kachel svg { flex: none; width: 36px; height: 36px; padding: 7px; border-radius: 10px; background: rgba(0, 85, 255, 0.16); stroke: var(--blau-hell); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.gsra-kachel:hover svg { background: rgba(255, 204, 0, 0.14); stroke: var(--gelb); }
+.gsra-kachel-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.gsra-kachel-text strong { font-size: 14px; }
+.gsra-kachel-text span { color: var(--leise); font-size: 12px; line-height: 1.4; }

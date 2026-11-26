@@ -21,6 +21,7 @@
       <button type="button" role="tab" data-reiter="sprit" aria-selected="false">Sprit &amp; Stint</button>
       <button type="button" role="tab" data-reiter="bericht" aria-selected="false">Bericht</button>
       <button type="button" role="tab" data-reiter="chat" aria-selected="false">Renningenieur</button>
+      <button type="button" role="tab" data-reiter="gsra" aria-selected="false" class="reiter-gsra">GSRA</button>
     </nav>
     <div class="verbindung">
       <span class="led" id="led" aria-hidden="true"></span>
@@ -74,6 +75,10 @@
     <h3>Geht an den KI-Anbieter (Auftragsverarbeiter, Verarbeitung auch außerhalb der EU möglich)</h3>
     <ul>
       <li>Für die Formulierung der Antworten dieselben Messwerte und deine Frage. Namen anderer Fahrer nur, wenn „Fahrernamen an die KI“ eingeschaltet ist – sonst nur Startnummern.</li>
+    </ul>
+    <h3>Fenster „GSRA“</h3>
+    <ul>
+      <li>Zeigt die GSRA-Webseite (Messenger, Kalender, Setups …) – dort gilt dieselbe Datenschutzerklärung wie im Browser. Es lädt nur GSRA-Seiten und hat keinen Zugriff auf deine Messwerte; andere Seiten öffnen sich im normalen Browser.</li>
     </ul>
     <p class="hinweis">Ausführlich: Datenschutzerklärung auf der GSRA-Webseite.</p>
     <div class="dialog-knoepfe"><button type="button" class="knopf" id="dsZu">Verstanden</button></div>
@@ -288,13 +293,25 @@
         </table>
       </div>
       <div class="karte">
-        <h2>Ganzes Rennen planen <small>Stint-Planer auf der GSRA-Webseite (Pole und Alliance)</small></h2>
+        <h2>Ganzes Rennen planen <small>Stint-Planer der GSRA (Pole und Alliance)</small></h2>
         <p class="hinweis">Ganze Rennen mit Fahrerwechseln, Reifen und Boxenstopps planst du im Stint-Planer. Er übernimmt deine gemessene Rundenzeit, deinen Verbrauch, Strecke und Fahrzeug – du bestätigst dort, bevor etwas geändert wird.</p>
         <div class="funk-leiste">
           <button class="knopf" id="sStintKnopf" type="button">Messwerte an den Stint-Planer</button>
           <span class="hinweis" id="sStintStatus" aria-live="polite"></span>
         </div>
       </div>
+    </section>
+
+    <!-- GSRA: alle Funktionen der Webseite, in der App im eigenen Fenster -->
+    <section class="seite" data-seite="gsra" aria-label="GSRA">
+      <div class="karte gsra-kopf">
+        <div>
+          <h2>Deine GSRA <small>Alles von der Webseite – direkt aus der App</small></h2>
+          <p class="hinweis">Jede Seite öffnet sich im Fenster „GSRA“ neben der Telemetrie. Melde dich dort einmal an – die Anmeldung bleibt gespeichert. Bezahlen und Links zu anderen Seiten öffnen sich zur Sicherheit im normalen Browser.</p>
+        </div>
+      </div>
+      <p class="fehler" id="gMeldung" aria-live="polite"></p>
+      <div id="gUebersicht"></div>
     </section>
   </main>
 

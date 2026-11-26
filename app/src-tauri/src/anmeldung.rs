@@ -152,13 +152,11 @@ pub fn stint_adresse(messwerte: &str) -> Option<String> {
     base64url(messwerte, 8, 2000).then(|| format!("{WEBSEITE}/stintplaner.html#messwerte={messwerte}"))
 }
 
-/// Öffnet den Stint-Planer im Standard-Browser; der Planer fragt vor dem Übernehmen nach
+/// Öffnet den Stint-Planer im GSRA-Fenster der App; der Planer fragt vor dem Übernehmen nach
 #[tauri::command]
 pub fn stintplaner_oeffnen(app: AppHandle, messwerte: String) -> Result<(), String> {
     let adresse = stint_adresse(&messwerte).ok_or_else(|| "Ungültige Messwerte.".to_string())?;
-    app.opener()
-        .open_url(adresse, None::<&str>)
-        .map_err(|_| "Der Browser konnte nicht geöffnet werden.".to_string())
+    crate::webseite::zeigen(&app, &adresse)
 }
 
 #[cfg(test)]
