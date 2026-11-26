@@ -107,7 +107,26 @@ fn grenzen(x: f64, y: f64, breite: f64, hoehe: f64) -> Result<Rect, String> {
 
 /// Zuletzt benutzte Bereiche (vorn = zuletzt)
 #[derive(Default)]
-pub struct Bereiche(Mutex<Vec<String>>);
+pub struct Bereiche {
+    zuletzt: Mutex<Vec<String>>,
+    /// Bereich, der gerade sichtbar sein soll (None = Telemetrie oder Dialog)
+    aktiv: Mutex<Option<String>>,
+    /// Bereiche, deren erste Seite fertig geladen ist – vorher bleiben sie versteckt (kein weißer Bildschirm)
+    geladen: Mutex<std::collections::HashSet<String>>,
+}
+
+/// Erst zeigen, wenn die Seite fertig ist UND der Bereich noch gewünscht ist
+fn zeigen_wenn_bereit(app: &AppHandle, label: &str) {
+    let b = app.state::<Bereiche>();
+    let bereit = b.geladen.lock().map(|g| g.contains(label)).unwrap_or(false);
+    let gewuenscht = b.aktiv.lock().map(|a| a.as_deref() == Some(label)).unwrap_or(false);
+    if let Some(w) = app.get_webview(label) {
+        if bereit && gewuenscht {
+            let _ = w.show();
+            let _ = w.set_focus();
+        }
+    }
+}
 
 #[derive(Clone, serde::Serialize)]
 struct Ort {
@@ -143,13 +162,13 @@ pub async fn bereich_zeigen(
             let _ = w.hide();
         }
     }
+    *bereiche.aktiv.lock().map_err(|_| "Interner Fehler.".to_string())? = Some(label.clone());
     if let Some(w) = app.get_webview(&label) {
         w.set_bounds(flaeche).map_err(|_| "Die Seite konnte nicht angezeigt werden.".to_string())?;
         if anker.is_some() {
             w.navigate(url).map_err(|_| "Die Seite konnte nicht geöffnet werden.".to_string())?;
         }
-        w.show().map_err(|_| "Die Seite konnte nicht angezeigt werden.".to_string())?;
-        let _ = w.set_focus();
+        zeigen_wenn_bereit(&app, &label);
     } else {
         let fenster = app.get_window("main").ok_or_else(|| "Hauptfenster fehlt.".to_string())?;
         let a_nav = app.clone();
@@ -180,25 +199,37 @@ pub async fn bereich_zeigen(
                 }
                 NewWindowResponse::Deny
             })
-            .on_page_load(move |_w, daten| {
+            .on_page_load(move |w, daten| {
                 let u = daten.url();
+                let fertig = matches!(daten.event(), PageLoadEvent::Finished);
                 let ort = Ort {
                     seite: s_laden.clone(),
                     host: u.host_str().unwrap_or("").to_string(),
                     gsra: u.scheme() == "https" && u.host_str() == Some(gsra_host()),
-                    laedt: matches!(daten.event(), PageLoadEvent::Started),
+                    laedt: !fertig,
                 };
                 // nur an die App selbst, nie an eingebettete Seiten
                 let _ = a_laden.emit_to("main", "gsra://web", ort);
-            });
-        fenster
+                if fertig {
+                    if let Ok(mut g) = a_laden.state::<Bereiche>().geladen.lock() {
+                        g.insert(w.label().to_string());
+                    }
+                    zeigen_wenn_bereit(&a_laden, w.label());
+                }
+            })
+            // Grund in GSRA-Schwarz statt Weiß, solange noch nichts gezeichnet ist
+            .background_color(tauri::window::Color(11, 12, 16, 255));
+        let neu = fenster
             .add_child(bauplan, flaeche.position, flaeche.size)
             .map_err(|_| "Die Seite konnte nicht geöffnet werden.".to_string())?;
+        // Versteckt, bis die erste Seite fertig ist – darunter zeigt die App ihre Ladeanimation
+        let _ = neu.hide();
+        zeigen_wenn_bereit(&app, &label);
     }
 
     // Zuletzt benutzt nach vorn; zu viele offene Bereiche schließen (Messenger bleibt)
     let zu_schliessen: Vec<String> = {
-        let mut liste = bereiche.0.lock().map_err(|_| "Interner Fehler.".to_string())?;
+        let mut liste = bereiche.zuletzt.lock().map_err(|_| "Interner Fehler.".to_string())?;
         liste.retain(|l| l != &label);
         liste.insert(0, label.clone());
         let mut weg = Vec::new();
@@ -212,6 +243,9 @@ pub async fn bereich_zeigen(
         weg
     };
     for l in zu_schliessen {
+        if let Ok(mut g) = bereiche.geladen.lock() {
+            g.remove(&l);
+        }
         if let Some(w) = app.get_webview(&l) {
             let _ = w.close();
         }
@@ -231,7 +265,10 @@ pub async fn bereich_flaeche(app: AppHandle, x: f64, y: f64, breite: f64, hoehe:
 
 /// Alle Bereiche ausblenden (Telemetrie, Dialoge der App)
 #[tauri::command]
-pub async fn bereich_verbergen(app: AppHandle) -> Result<(), String> {
+pub async fn bereich_verbergen(app: AppHandle, bereiche: State<'_, Bereiche>) -> Result<(), String> {
+    if let Ok(mut a) = bereiche.aktiv.lock() {
+        *a = None;
+    }
     for w in web_ansichten(&app) {
         let _ = w.hide();
     }

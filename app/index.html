@@ -30,7 +30,7 @@
 
       <p class="navi-gruppe">Community</p>
       <button type="button" data-web="index.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h13v14H6a2 2 0 0 1-2-2V5zm13 4h3v8a2 2 0 0 1-2 2M8 9h5M8 13h5M8 17h3"/></svg><span>Neuigkeiten</span></button>
-      <button type="button" data-web="messenger.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5z"/></svg><span>Messenger</span><i class="neu-punkt" id="messengerPunkt" hidden></i><span class="sr-only" id="messengerPunktText" hidden> – neue Nachrichten</span></button>
+      <button type="button" data-reiter="messenger" data-webseite="messenger.html" id="navMessenger"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5z"/></svg><span>Messenger</span><i class="neu-punkt" id="messengerPunkt" hidden></i><span class="sr-only" id="messengerPunktText" hidden> – neue Nachrichten</span></button>
       <button type="button" data-web="kalender.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v14H4zM4 10h16M8 3v5M16 3v5"/></svg><span>Rennkalender</span></button>
       <button type="button" data-web="videos.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM10 9l5 3-5 3z"/></svg><span>Videos</span></button>
 
@@ -49,7 +49,7 @@
 
       <p class="navi-gruppe">Konto</p>
       <button type="button" data-web="dashboard.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20a8 8 0 0 1 16 0"/></svg><span>Dashboard</span></button>
-      <button type="button" data-web="renningenieur.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1M15 4v4M9 10v4M17 16v4"/></svg><span>Renningenieur einstellen</span></button>
+      <button type="button" data-reiter="chat" data-anker="reEinstellen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1M15 4v4M9 10v4M17 16v4"/></svg><span>Renningenieur einstellen</span></button>
       <button type="button" data-web="abo.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8l4 4 4-7 4 7 4-4-2 11H6L4 8z"/></svg><span>Mitgliedschaft</span></button>
     </nav>
 
@@ -114,7 +114,9 @@
       <li>Der Stand der anderen Autos (Plätze, Abstände, Zweikämpfe, Referenz aus der Lobby) – nur während der Sitzung.</li>
       <li>Spotter, Ansagen ohne KI, Sprachausgabe und deine eigene Testaufnahme durch den Funk-Filter.</li>
       <li>Deine Einstellungen für Funk und Karte (nur in dieser App).</li>
-      <li>Sprechtaste: Das Mikrofon läuft nur, solange du die Taste drückst (höchstens 30 Sekunden). Die Spracherkennung läuft auf deinem PC; dein Ton wird nie gespeichert und nie gesendet. Weiter geht – wie bei einer getippten Frage – nur der erkannte Text. Modell: NVIDIA Parakeet TDT 0.6B v3 (Lizenz CC BY 4.0), ausgeführt mit sherpa-onnx.</li>
+      <li>Sprechtaste: Beim Halten und Antippen läuft das Mikrofon nur während deiner Frage (höchstens 30 Sekunden). Bei „Signalwort“ hört es dauerhaft mit, solange du diese Art gewählt hast – links unten steht dann „Mikro an“; Sätze ohne Signalwort werden sofort verworfen. Die Spracherkennung läuft auf deinem PC; dein Ton wird nie gespeichert und nie gesendet. Weiter geht – wie bei einer getippten Frage – nur der erkannte Text. Modelle: NVIDIA Parakeet TDT 0.6B v3 (CC BY 4.0) und Silero VAD (MIT), ausgeführt mit sherpa-onnx.</li>
+      <li>Knopf am Lenkrad: Die App liest nur, welcher Knopf gedrückt wird (keine Achsen, keine Tastatur) und nur, um deine Sprechtaste zu erkennen.</li>
+      <li>Welche Simulation läuft, erkennt die App am Namen des laufenden Programms – nur auf deinem PC.</li>
     </ul>
     <h3>Geht an die GSRA (verschlüsselte Verbindung, Datenbank in Frankfurt)</h3>
     <ul>
@@ -128,6 +130,7 @@
     </ul>
     <h3>GSRA-Seiten in der App (Messenger, Kalender, Setups …)</h3>
     <ul>
+      <li>Messenger und „Renningenieur einstellen“ sind direkt in der App gebaut und nutzen deine App-Anmeldung – mit denselben Regeln wie auf der Webseite (wer was sehen und schreiben darf, entscheidet die Datenbank).</li>
       <li>Sie laufen direkt in der App, aber getrennt von der Telemetrie: Sie haben keinen Zugriff auf deine Messwerte, deine App-Anmeldung oder die Befehle der App. Es gilt dieselbe Datenschutzerklärung wie auf der Webseite.</li>
       <li>Angezeigt werden nur Seiten der GSRA und – zum Bezahlen – die Seiten unseres Zahlungsdienstleisters; oben siehst du immer, wo du gerade bist. Links zu anderen Seiten öffnen sich in deinem normalen Browser.</li>
     </ul>
@@ -320,11 +323,75 @@
             <div class="balken" id="sBalken" hidden><i id="sBalkenWert"></i></div>
             <span class="hinweis" id="sInstallText"></span>
           </div>
-          <label class="feld-klein sprech-taste">Taste auf der Tastatur – funktioniert auch, während die Simulation läuft
-            <select id="sTaste"><option value="">Keine</option></select>
-          </label>
+          <fieldset class="sprech-art" id="sArt">
+            <legend>Wie willst du sprechen?</legend>
+            <label><input type="radio" name="sArt" value="halten" checked><span><strong>Halten</strong><small>Taste gedrückt halten, sprechen, loslassen</small></span></label>
+            <label><input type="radio" name="sArt" value="antippen"><span><strong>Antippen</strong><small>Einmal drücken – er hört zu, bis du aufhörst zu sprechen</small></span></label>
+            <label><input type="radio" name="sArt" value="signalwort"><span><strong>Signalwort</strong><small>„Hey Kim, reicht der Sprit?“ – ganz ohne Taste</small></span></label>
+          </fieldset>
+          <div class="sprech-signal" id="sSignal" hidden>
+            <label class="feld-klein">Signalwörter <small>(mit Komma getrennt; der Name deines Renningenieurs ist immer dabei)</small>
+              <input type="text" id="sSignalwoerter" maxlength="120" placeholder="Renningenieur, Box" autocomplete="off"></label>
+            <p class="hinweis">Dafür hört das Mikrofon dauerhaft mit – nur auf deinem PC, nichts wird gespeichert oder gesendet. Erst ein Satz, der mit dem Signalwort beginnt, geht an deinen Renningenieur. Tipp: Namen mit zwei Silben werden sicherer erkannt.</p>
+          </div>
+          <div class="sprech-ausloeser">
+            <span class="feld-klein">Taste auf der Tastatur oder Knopf am Lenkrad – funktioniert auch, während die Simulation läuft</span>
+            <div class="sprech-belegung">
+              <strong id="sBelegung">Keine</strong>
+              <button type="button" class="knopf leise" id="sFestlegen">Taste festlegen</button>
+              <button type="button" class="knopf leise" id="sEntfernen" hidden>Entfernen</button>
+            </div>
+            <p class="sprech-lernen" id="sLernen" hidden>Drück jetzt die Taste auf der Tastatur oder den Knopf am Lenkrad … <span>(Esc bricht ab)</span></p>
+          </div>
         </details>
         <p class="hinweis">Der Verlauf bleibt nur in dieser Sitzung der App. Angemeldet antwortet dein KI-Renningenieur in seinem Stil – sonst sagt er dir Sprit, Abstände und Rundenzeiten direkt aus den Messwerten.</p>
+      </div>
+
+      <!-- Renningenieur einstellen (wie auf der Webseite, SQL 048/050/059) – src/re-einstellungen.ts -->
+      <div class="karte re-einstellen" id="reEinstellen">
+        <h2>Renningenieur einstellen <small>Gilt in der App und auf der Webseite</small></h2>
+        <p class="hinweis" id="reAnmelden">Melde dich an, um deinen Renningenieur einzustellen.</p>
+        <form id="reForm" class="re-form" autocomplete="off" hidden>
+          <label class="re-feld"><span>Name deines Renningenieurs</span><input type="text" name="name" maxlength="24" required placeholder="z. B. Kim"></label>
+          <label class="re-feld"><span>So nennt er dich <small>(optional)</small></span><input type="text" name="rufname" maxlength="24" placeholder="z. B. dein Vorname"></label>
+          <fieldset class="re-feld re-breit"><legend>Art</legend>
+            <div class="re-chips">
+              <label><input type="radio" name="art" value="kumpel"><span><strong>Kumpel</strong><small>locker, mit Humor</small></span></label>
+              <label><input type="radio" name="art" value="profi"><span><strong>Profi</strong><small>sachlich, wie im Werksteam</small></span></label>
+              <label><input type="radio" name="art" value="motivator"><span><strong>Motivator</strong><small>pusht dich</small></span></label>
+              <label><input type="radio" name="art" value="knapp"><span><strong>Knapp</strong><small>nur Zahlen</small></span></label>
+              <label><input type="radio" name="art" value="locker"><span><strong>Locker</strong><small>Jugendsprache, Slang</small></span></label>
+            </div>
+          </fieldset>
+          <label class="re-feld"><span>Gesprächigkeit</span>
+            <select name="gespraechig"><option value="still">Still – nur das Wichtigste</option><option value="normal">Normal</option><option value="viel">Gesprächig – erklärt gern</option></select></label>
+          <label class="re-feld"><span>Stimme</span>
+            <select name="stimme"><option value="ruhig">Ruhig</option><option value="energisch">Energisch</option><option value="tief">Tief</option><option value="hell">Hell</option></select></label>
+          <div class="re-feld re-breit">
+            <span id="reSpracheTitel">Sprache</span>
+            <div class="sprachwahl" id="reSprache">
+              <input type="search" id="reSpracheFeld" role="combobox" aria-expanded="false" aria-controls="reSprachListe" aria-labelledby="reSpracheTitel" placeholder="Sprache suchen …" autocomplete="off">
+              <ul class="sprachwahl-liste" id="reSprachListe" role="listbox" hidden></ul>
+            </div>
+            <small class="hinweis">„Automatisch“: Er antwortet in der Sprache, in der du ihn ansprichst. Sprechen geht in 25 Sprachen, Türkisch, Chinesisch und Japanisch vorerst nur geschrieben.</small>
+          </div>
+          <fieldset class="re-feld re-breit"><legend>Worüber er dich informiert</legend><div class="re-chips re-themen" id="reThemen"></div></fieldset>
+          <div class="re-aktionen re-breit">
+            <button type="button" class="knopf leise" id="reProbe">Probefunk</button>
+            <button type="submit" class="knopf">Speichern</button>
+            <span class="hinweis" id="reMeldung" aria-live="polite"></span>
+          </div>
+        </form>
+        <div class="re-gedaechtnis" id="reGedaechtnisBereich" hidden>
+          <h3>Gedächtnis <small id="reGedAnzahl"></small></h3>
+          <p class="hinweis">Was hier steht, weiß dein Renningenieur über dich. Nur du siehst diese Einträge und kannst jeden löschen.</p>
+          <form id="reMerken" class="re-merken" autocomplete="off">
+            <select name="art" aria-label="Art des Eintrags"><option value="vorliebe">Vorliebe</option><option value="ziel">Ziel</option><option value="staerke">Stärke</option><option value="schwaeche">Daran arbeite ich</option><option value="notiz">Notiz</option></select>
+            <input type="text" name="text" maxlength="1000" placeholder="z. B. Sag mir Abstände nur auf Geraden" aria-label="Was soll er sich merken?">
+            <button type="submit" class="knopf leise">Merken</button>
+          </form>
+          <ul class="re-liste" id="reGedaechtnis"></ul>
+        </div>
       </div>
     </section>
 
@@ -372,13 +439,35 @@
       </div>
     </section>
 
+    <!-- MESSENGER direkt in der App (src/messenger.ts) – alle weiteren Funktionen über „Alle Funktionen“ -->
+    <section class="seite mx-seite" data-seite="messenger" aria-label="Messenger">
+      <p class="hinweis" id="mxAnmelden">Melde dich an (links unten), um den Messenger zu nutzen.</p>
+      <div class="mx" id="mx" hidden>
+        <aside class="mx-seitenteil">
+          <div class="mx-kopf">
+            <input type="search" id="mxSuche" placeholder="Chats durchsuchen …" aria-label="Chats durchsuchen" autocomplete="off">
+            <button type="button" class="knopf leise" id="mxWeb" title="Bilder, Sprachnachrichten, Reaktionen, Gruppen, Freunde">Alle Funktionen</button>
+          </div>
+          <ul class="mx-liste" id="mxListe" aria-label="Chats"></ul>
+        </aside>
+        <div class="mx-chat">
+          <header class="mx-chat-kopf"><strong id="mxTitel">Wähle einen Chat</strong><small id="mxUnter"></small></header>
+          <div class="mx-verlauf" id="mxVerlauf" aria-live="polite"></div>
+          <form class="mx-form" id="mxForm" autocomplete="off" hidden>
+            <textarea id="mxFeld" rows="1" maxlength="4000" placeholder="Nachricht schreiben … (Enter sendet, Shift+Enter = neue Zeile)" aria-label="Nachricht"></textarea>
+            <button type="submit" class="knopf">Senden</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
     <!-- GSRA-Seiten (Messenger, Kalender, Setups …): erscheinen GENAU hier, direkt in der App.
          In der App legt sich die Seite passgenau über diese Fläche (src/webbereich.ts); in der Browser-Vorschau
          steht hier ein Hinweis. -->
     <section class="seite web-seite" data-seite="web" aria-label="GSRA-Seite">
       <div class="web-flaeche" id="webFlaeche">
         <div class="web-vorschau" id="webVorschau">
-          <img src="/gsra-logo.png" alt="" class="web-vorschau-logo">
+          <div class="web-vorschau-logo" id="webVorschauLogo"></div>
           <p id="webVorschauText">Lädt …</p>
           <button type="button" class="knopf leise" id="webVorschauKnopf" hidden>In neuem Tab öffnen</button>
         </div>

@@ -23,6 +23,8 @@ import { startbildZeigen } from "./startbild.ts";
 import { webAktiv, webEinrichten, webVerbergen, webZeigen } from "./webbereich.ts";
 import { sprechtasteEinrichten } from "./sprechtaste.ts";
 import { messengerHinweis } from "./konto.ts";
+import { reEinstellungenEinrichten } from "./re-einstellungen.ts";
+import { messengerEinrichten } from "./messenger.ts";
 
 startbildZeigen();
 
@@ -89,6 +91,12 @@ function feldAufnehmen(f: Feld) {
 }
 
 const demo = new DemoQuelle((liste) => proben(liste), (f) => feldAufnehmen(f));
+// Messenger direkt in der App; „Alle Funktionen“ öffnet die Webansicht
+const messenger = messengerEinrichten({
+  hinweis,
+  webansicht: () => webBereichZeigen("messenger.html"),
+  ungelesen: (gibt) => punktSetzen(gibt),
+});
 
 const laenge = () => sitzung?.streckenlaengeM ?? (groessterMeter > 500 ? groessterMeter : null);
 
@@ -113,19 +121,41 @@ function reiterZeigen(name: string) {
   if (name === "runden") rundenZeigen();
   if (name === "bericht") berichtZeigen();
   if (name === "live") live();
+  if (name === "messenger") messenger.oeffnen();
 }
 /** Eine GSRA-Seite (Messenger, Setups …) direkt in der App */
 function webBereichZeigen(seite: string, anker?: string) {
-  const knopf = document.querySelector<HTMLElement>(`[data-web="${CSS.escape(seite)}"]`);
+  const knopf = document.querySelector<HTMLElement>(`[data-web="${CSS.escape(seite)}"], [data-webseite="${CSS.escape(seite)}"]`);
   if (!knopf) return;
   aktiverReiter = "web";
   navMarkieren(knopf, "web");
   void webZeigen(seite, knopf.querySelector("span")?.textContent ?? "GSRA", anker);
 }
-for (const b of document.querySelectorAll<HTMLButtonElement>("[data-reiter]")) b.addEventListener("click", () => reiterZeigen(b.dataset.reiter ?? "live"));
+for (const b of document.querySelectorAll<HTMLButtonElement>("[data-reiter]")) b.addEventListener("click", () => {
+  reiterZeigen(b.dataset.reiter ?? "live");
+  // Unterpunkt (z. B. „Renningenieur einstellen“): markieren und hinscrollen
+  if (b.dataset.anker) {
+    navMarkieren(b, b.dataset.reiter ?? "live");
+    document.getElementById(b.dataset.anker)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+});
 for (const b of document.querySelectorAll<HTMLButtonElement>("[data-web]")) b.addEventListener("click", () => webBereichZeigen(b.dataset.web ?? "index.html"));
 
 // ---------------------------------------------------------------- Verbindung / Status
+/** Welche Simulation läuft (nur Programmname, simulation.rs) – alle 5 s, solange keine Verbindung besteht */
+let simulation: { name: string; live: boolean } | null = null;
+async function simulationPruefen() {
+  if (!istApp || status?.verbunden || demo.laeuft) return;
+  const { invoke } = await import("@tauri-apps/api/core");
+  const neu = await invoke<{ name: string; live: boolean } | null>("simulation_erkennen").catch(() => null);
+  if (neu?.name !== simulation?.name) {
+    simulation = neu;
+    statusZeigen();
+  }
+}
+setInterval(() => void simulationPruefen(), 5_000);
+void simulationPruefen();
+
 function statusZeigen() {
   const led = $("led");
   const text = $("statusText");
@@ -141,7 +171,10 @@ function statusZeigen() {
     text.textContent = "Verbunden mit iRacing";
   } else if (istApp) {
     led.className = "led warten";
-    text.textContent = status?.meldung ?? "Warte auf iRacing …";
+    // Läuft eine andere Simulation, sagen wir das ehrlich (Live-Werte gibt es vorerst für iRacing)
+    text.textContent = simulation && !simulation.live
+      ? `${simulation.name} erkannt – Live-Werte dafür kommen bald`
+      : simulation?.live ? `${simulation.name} erkannt – verbinde …` : status?.meldung ?? "Warte auf eine Simulation …";
   } else {
     led.className = "led aus";
     text.textContent = "Browser-Vorschau";
@@ -414,7 +447,7 @@ function funkEinrichten() {
     stimmenFuellen();
     $("fHinweis").textContent = angemeldet()
       ? `Dein KI-Renningenieur ${persoenlichkeit?.name ?? ""} formuliert die Ansagen in seinem Stil.`.replace("  ", " ")
-      : "Angemeldet formuliert dein KI-Renningenieur die Ansagen in seinem Stil (eingestellt auf der Webseite unter „Renningenieur“).";
+      : "Angemeldet formuliert dein KI-Renningenieur die Ansagen in seinem Stil (einstellbar unter Renningenieur, ganz unten).";
   });
 }
 
@@ -1238,22 +1271,46 @@ void webEinrichten(istApp);
 berichtKiEinrichten();
 chatEinrichten();
 // Roter Punkt am Messenger (wie auf der Webseite): alle 45 s und beim Zurückkehren in die App nachsehen
-async function messengerPunkt() {
-  const neu = angemeldet() && !document.hidden ? await messengerHinweis().catch(() => false) : false;
+function punktSetzen(neu: boolean) {
   $("messengerPunkt").hidden = !neu;
   $("messengerPunktText").hidden = !neu;
-  document.querySelector('[data-web="messenger.html"]')?.classList.toggle("ungelesen", neu);
+  $("navMessenger").classList.toggle("ungelesen", neu);
 }
+async function messengerPunkt() {
+  punktSetzen(angemeldet() && !document.hidden ? await messengerHinweis().catch(() => false) : false);
+}
+beiKontoWechsel(() => messenger.zuruecksetzen());
 setInterval(() => void messengerPunkt(), 45_000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) void messengerPunkt(); });
 beiKontoWechsel(() => void messengerPunkt());
 void messengerPunkt();
 
-void sprechtasteEinrichten(istApp, (text) => {
+const sprechtaste = sprechtasteEinrichten(istApp, (text) => {
   sprachfrageZeit = Date.now();
   if (aktiverReiter !== "chat") hinweis(`Du: ${text.slice(0, 160)}`, "ok");
   void chat?.senden(text);
-}, hinweis).catch(() => { /* ohne Sprechtaste weiter */ });
+}, hinweis, () => persoenlichkeit?.name ?? "Kim").catch(() => null);
+
+// Renningenieur einstellen (unten im Bereich Renningenieur)
+const reEinstellungen = reEinstellungenEinrichten({
+  angemeldet,
+  hinweis,
+  gespeichert: async () => {
+    persoenlichkeit = await persoenlichkeitLaden().catch(() => persoenlichkeit);
+    stimmenFuellen();
+    $("cName").textContent = `${persoenlichkeit?.name ?? "Dein Renningenieur"} beantwortet Einfaches sofort, Schwieriges schaut er sich kurz an`;
+    (await sprechtaste)?.nameGeaendert(persoenlichkeit?.name ?? "Kim");
+  },
+  probe: (e) => {
+    const name = e.name || "Kim";
+    const satz = e.sprache === "en"
+      ? `Radio check. This is ${name}, loud and clear. Fuel is good for seven laps, box in lap 23.`
+      : `Funkcheck. Hier ist ${name}, ich höre dich laut und deutlich. Sprit reicht für sieben Runden, Box in Runde 23.`;
+    void sprechen(satz, { ...funkE, vorlesen: true }, { sprache: e.sprache, stimmlage: e.stimme as "ruhig" });
+  },
+});
+beiKontoWechsel(() => void reEinstellungen.laden());
+void reEinstellungen.laden();
 sparZeigen();
 void kontoStarten(istApp);
 window.addEventListener("resize", () => {

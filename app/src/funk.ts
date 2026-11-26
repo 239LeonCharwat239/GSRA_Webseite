@@ -6,6 +6,8 @@
 // Hinweis: Die Systemstimmen lassen sich technisch nicht durch den Filter schicken (der Browser gibt sie nicht als
 // Ton-Daten heraus) – deshalb dort nur Klick und Rauschen. Mit einer KI-Stimme (später) geht der volle Filter.
 
+import { LAENDERCODE, spracheVonText } from "./sprachen.ts";
+
 export type Stimmlage = "ruhig" | "energisch" | "tief" | "hell";
 /** namenAnKi: Namen anderer Fahrer an den KI-Renningenieur schicken (aus = nur Startnummern; Datenschutz) */
 export type FunkEinstellungen = { vorlesen: boolean; klang: boolean; lautstaerke: number; stimme: string; spotter: boolean; namenAnKi: boolean };
@@ -121,11 +123,12 @@ export function sprechen(text: string, e: FunkEinstellungen, opt: { sprache?: st
   const nr = laufNr;
   return new Promise((fertig) => {
     const u = new SpeechSynthesisUtterance(sauber);
-    const sprache = opt.sprache || "de";
+    // „Automatisch“: Stimme in der Sprache der Antwort (sonst Deutsch)
+    const sprache = opt.sprache === "auto" ? (spracheVonText(sauber) ?? "de") : opt.sprache || "de";
     const alle = stimmenFuer(sprache);
-    const gewaehlt = alle.find((v) => v.voiceURI === e.stimme) || alle[0];
+    const gewaehlt = (opt.sprache === "auto" ? undefined : alle.find((v) => v.voiceURI === e.stimme)) || alle[0];
     if (gewaehlt) u.voice = gewaehlt;
-    u.lang = gewaehlt?.lang || (sprache === "en" ? "en-GB" : "de-DE");
+    u.lang = gewaehlt?.lang || LAENDERCODE[sprache] || "de-DE";
     const [tempo, hoehe] = { ruhig: [1.0, 1], energisch: [1.1, 1.08], tief: [0.96, 0.78], hell: [1.03, 1.25] }[opt.stimmlage || "ruhig"];
     u.rate = tempo;
     u.pitch = hoehe;
@@ -154,12 +157,12 @@ export function spotterSprechen(text: string, e: FunkEinstellungen, sprache: str
   if (!e.spotter || !text || !("speechSynthesis" in window)) return;
   funkStoppen();
   const u = new SpeechSynthesisUtterance(text);
-  const alle = stimmenFuer(sprache);
+  const code = sprache === "auto" ? "de" : sprache; // Spotter-Sätze kommen aus festen Vorlagen
+  const alle = stimmenFuer(code);
   const ingenieur = alle.find((v) => v.voiceURI === e.stimme) || alle[0];
   const andere = alle.find((v) => v !== ingenieur) || ingenieur;
   if (andere) u.voice = andere;
-  const LAENDER: Record<string, string> = { de: "de-DE", en: "en-GB", es: "es-ES", fr: "fr-FR", pt: "pt-PT", it: "it-IT", nl: "nl-NL", pl: "pl-PL", tr: "tr-TR", ru: "ru-RU", zh: "zh-CN", ja: "ja-JP" };
-  u.lang = andere?.lang || LAENDER[sprache] || "de-DE";
+  u.lang = andere?.lang || LAENDERCODE[code] || "de-DE";
   u.rate = 1.25;
   u.volume = Math.max(0, Math.min(1, e.lautstaerke));
   window.speechSynthesis.speak(u);

@@ -21,4 +21,8 @@ cpal = "0.15"
 tauri-plugin-global-shortcut = "2"
 ureq = "2.12"
 sha2 = "0.10"
+
+# Lenkrad-Knöpfe als Sprechtaste (lenkrad.rs): Raw Input + HID, nur lesend
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_UI_Input", "Win32_UI_WindowsAndMessaging", "Win32_Devices_HumanInterfaceDevice", "Win32_System_LibraryLoader", "Win32_System_Diagnostics_ToolHelp"] }
 gsra-telemetrie = { path = "../telemetrie" }

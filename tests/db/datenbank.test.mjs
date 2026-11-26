@@ -11,9 +11,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL, KARRIERE_SQL, STINTPLAN_SQL, LIVERIES_SQL, CHATSICHER_SQL, AUFRAEUMEN_SQL, ONLINE_SQL, RE_STIL_SQL, APP_LOGIN_SQL, RE_KI_SQL, RE_CHAT_SQL, RE_MERKEN_SQL, LAENGER_SQL, STARTSEITE_SQL, ALTREGELN_SQL, HINWEIS_SQL] =
-    Array.from({ length: 58 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 58);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL, KARRIERE_SQL, STINTPLAN_SQL, LIVERIES_SQL, CHATSICHER_SQL, AUFRAEUMEN_SQL, ONLINE_SQL, RE_STIL_SQL, APP_LOGIN_SQL, RE_KI_SQL, RE_CHAT_SQL, RE_MERKEN_SQL, LAENGER_SQL, STARTSEITE_SQL, ALTREGELN_SQL, HINWEIS_SQL, RE_SPRACHEN_SQL] =
+    Array.from({ length: 59 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 59);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -4138,6 +4138,28 @@ if (HINWEIS_SQL) {
     await db.exec(`delete from public.messages where text = 'Neu für Max'`);
 }
 
+// --- 059: Renningenieur-Sprache „auto“ und die 25 Sprachen der Sprechtaste ---
+if (RE_SPRACHEN_SQL) {
+    const speichern = (wer, sprache) => as(wer, () => q(`select public.race_engineer_save('Kim', null, 'kumpel', 'normal', 'ruhig', '${sprache}', null)`));
+    const vorher = await speichern(U.max, "auto");
+    check("Vorher: „Automatisch“ noch nicht erlaubt", /Sprache/.test(vorher.error || ""), vorher.error || "durchgelassen");
+    await db.exec(readFileSync(RE_SPRACHEN_SQL, "utf8"));
+    const ctl59 = await db.exec(readFileSync(RE_SPRACHEN_SQL, "utf8")); // zweiter Lauf
+    const k59 = ctl59[ctl59.length - 1].rows;
+    check("059: Kontrollabfrage vollständig", k59.every(r => ["bereit", "ja"].includes(r.ergebnis)), JSON.stringify(k59));
+    for (const s of ["auto", "uk", "sv", "de", "ja"]) {
+        const r = await speichern(U.max, s);
+        const gespeichert = (await one(`select sprache from public.race_engineer_settings where user_id = '${U.max}'`))?.sprache;
+        check(`059: Sprache „${s}“ speicherbar`, r.error === null && gespeichert === s, r.error || gespeichert);
+    }
+    for (const s of ["xx", "de'; drop table x; --", "ar"]) {
+        const r = await speichern(U.max, s.replace(/'/g, "''"));
+        check(`059: Sprache „${s.slice(0, 12)}“ abgelehnt`, r.error !== null, r.error || "durchgelassen!");
+    }
+    const gast = await speichern(null, "auto");
+    check("059: Gäste speichern nichts", gast.error !== null, gast.error || "durchgelassen!");
+}
+
 // --- Versehentlich ein ALTES Skript erneut ausgeführt (25.11.: 043 nach 054): darf nichts zurücksetzen ---
 // Vergleicht alle Funktionen, Prüfregeln, Zugriffsregeln (RLS) und Rechte vorher und nachher.
 if (UNTERSTUETZER_SQL && RE_MERKEN_SQL) {
@@ -4200,7 +4222,8 @@ check("Stimmen gelöschter Konten verschwinden", lenaVotes === 0, String(lenaVot
         try {
             await db.exec(readFileSync(AUFRAEUMEN_SQL, "utf8")); // 048 NACH 055 erneut: alte Gedächtnis-Funktion (500 Zeichen) zurück
             await db.exec(`alter table public.home_posts disable row level security;
-                create policy "Hintertür" on public.profiles for update to anon using (true);
+                create policy "Hintertür" on public.user_plans for update to anon using (true);
+                create policy "Altregel anders benannt" on public.profiles for update using (auth.uid() = id);
                 grant execute on function public.home_post_delete(uuid) to anon;
                 alter table public.messages disable trigger gsra_messages_set_expiry;
                 update storage.buckets set file_size_limit = null where id = 'startseite';
@@ -4211,6 +4234,8 @@ check("Stimmen gelöschter Konten verschwinden", lenaVotes === 0, String(lenaVot
                 kaputt.error || JSON.stringify(kaputt.rows.filter((r) => r.nr === 2).map((r) => `${r.status} ${r.objekt}`)));
             check("Gegentest: RLS abgeschaltet → FEHLER", finde("Tabelle", "home_posts", "FEHLER"));
             check("Gegentest: zusätzliche offene Regel → WARNUNG", finde("Zugriffsregel", "Hintertür", "WARNUNG"));
+            check("Gegentest: anders benannte Altregel, Zugriff im schlimmsten Fall geprüft → nur HINWEIS",
+                finde("Zugriffsregel", "Altregel anders benannt", "HINWEIS"));
             check("Gegentest: Gäste dürfen Admin-Funktion ausführen → FEHLER", finde("Funktion", "home_post_delete", "FEHLER"));
             check("Gegentest: Trigger abgeschaltet → FEHLER", finde("Trigger", "gsra_messages_set_expiry", "FEHLER"));
             check("Gegentest: Speicher ohne Größengrenze → WARNUNG", finde("Speicher", "startseite", "WARNUNG"));

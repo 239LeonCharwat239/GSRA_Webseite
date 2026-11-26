@@ -88,6 +88,47 @@ export async function messengerHinweis(): Promise<boolean> {
   return !error && data === true;
 }
 
+// ---------------------------------------------------------------- Renningenieur einstellen (wie auf der Webseite)
+export type ReThema = "sprit" | "abstaende" | "flaggen" | "reifen" | "coaching" | "wetter";
+export type ReEinstellungen = {
+  name: string; rufname: string | null; art: string; gespraechig: string; stimme: string; sprache: string; themen: Record<ReThema, boolean>;
+};
+export type ReEintrag = { id: string; art: string; text: string; quelle: string; created_at: string };
+
+/** Eigene Einstellungen (null = noch nichts gespeichert) */
+export async function reLaden(): Promise<Partial<ReEinstellungen> | null> {
+  const { data: s } = await sb().auth.getSession();
+  if (!s.session) return null;
+  const { data, error } = await sb().from("race_engineer_settings").select("name, rufname, art, gespraechig, stimme, sprache, themen")
+    .eq("user_id", s.session.user.id).maybeSingle();
+  if (error) throw new Error("Die Einstellungen ließen sich nicht laden.");
+  return (data as Partial<ReEinstellungen> | null) ?? null;
+}
+
+/** Speichern über die geprüfte Datenbank-Funktion (prüft Name, Art, Sprache …) */
+export async function reSpeichern(e: ReEinstellungen): Promise<void> {
+  const { error } = await sb().rpc("race_engineer_save", {
+    _name: e.name, _rufname: e.rufname, _art: e.art, _gespraechig: e.gespraechig, _stimme: e.stimme, _sprache: e.sprache, _themen: e.themen,
+  });
+  if (error) throw new Error(error.message.slice(0, 200));
+}
+
+export async function gedaechtnisLaden(): Promise<ReEintrag[]> {
+  const { data, error } = await sb().from("race_engineer_memory").select("id, art, text, quelle, created_at")
+    .order("created_at", { ascending: false }).limit(100);
+  return error ? [] : ((data as ReEintrag[] | null) ?? []);
+}
+
+export async function gedaechtnisMerken(art: string, text: string): Promise<void> {
+  const { error } = await sb().rpc("race_engineer_remember", { _art: art, _text: text });
+  if (error) throw new Error(error.message.slice(0, 200));
+}
+
+export async function gedaechtnisLoeschen(id: string): Promise<void> {
+  const { error } = await sb().from("race_engineer_memory").delete().eq("id", id);
+  if (error) throw new Error("Der Eintrag ließ sich nicht löschen.");
+}
+
 /** Nur diese App abmelden (andere Geräte bleiben angemeldet) */
 export async function abmelden(): Promise<void> {
   await sb().auth.signOut({ scope: "local" });

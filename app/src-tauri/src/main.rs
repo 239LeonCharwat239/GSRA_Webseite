@@ -3,7 +3,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod anmeldung;
+mod lenkrad;
 mod live;
+mod simulation;
 mod sprache;
 mod webbereich;
 
@@ -15,16 +17,14 @@ fn main() {
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _taste, ereignis| {
                     use tauri_plugin_global_shortcut::ShortcutState;
-                    let _ = match ereignis.state() {
-                        ShortcutState::Pressed => sprache::druecken(app),
-                        ShortcutState::Released => sprache::loslassen(app),
-                    };
+                    sprache::ausloesen(app, ereignis.state() == ShortcutState::Pressed);
                 })
                 .build(),
         )
         .manage(live::Zustand::default())
         .manage(webbereich::Bereiche::default())
         .manage(sprache::Sprache::default())
+        .manage(lenkrad::Lenkrad::default())
         .invoke_handler(tauri::generate_handler![
             live::status,
             anmeldung::anmeldung_starten,
@@ -37,7 +37,11 @@ fn main() {
             sprache::sprache_installieren,
             sprache::sprache_vorbereiten,
             sprache::sprechtaste,
-            sprache::sprechtaste_belegen
+            sprache::sprechtaste_belegen,
+            sprache::hoermodus_setzen,
+            lenkrad::lenkrad_lernen,
+            lenkrad::lenkrad_belegen,
+            simulation::simulation_erkennen
         ])
         .setup(|app| {
             live::starten(app.handle().clone());

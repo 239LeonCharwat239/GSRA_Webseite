@@ -35,7 +35,7 @@ export async function persoenlichkeitLaden(): Promise<Persoenlichkeit | null> {
     name: typeof roh.name === "string" && roh.name.trim() ? roh.name.trim().slice(0, 24) : "Kim",
     art: ARTEN.find((a) => a === roh.art) ?? "kumpel",
     stimme: STIMMEN.find((s) => s === roh.stimme) ?? "ruhig",
-    sprache: typeof roh.sprache === "string" && /^[a-z]{2}$/.test(roh.sprache) ? roh.sprache : "de",
+    sprache: typeof roh.sprache === "string" && /^([a-z]{2}|auto)$/.test(roh.sprache) ? roh.sprache : "de",
   };
 }
 

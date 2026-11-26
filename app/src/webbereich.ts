@@ -3,6 +3,8 @@
 // die Inhaltsfläche (#webFlaeche) – die Prüfung, was geladen werden darf, macht src-tauri/src/webbereich.rs.
 // In der Browser-Vorschau erscheint an dieser Stelle nur ein Hinweis mit Link.
 
+import { ladeLogo } from "../../src/ladeanimation.ts";
+
 const WEBSEITE = "https://gsra-webseite.vercel.app";
 
 type Aufruf = <T>(befehl: string, daten?: Record<string, unknown>) => Promise<T>;
@@ -83,6 +85,9 @@ export const webAktiv = () => aktiv;
 
 export async function webEinrichten(app: boolean): Promise<void> {
   istApp = app;
+  // Ladeanimation der GSRA statt weißem Bildschirm: Die Seite bleibt versteckt, bis sie fertig ist (webbereich.rs),
+  // darunter läuft das animierte Logo
+  $("webVorschauLogo").replaceChildren(ladeLogo().element);
   $("webVorschauKnopf").addEventListener("click", () => {
     if (aktiv) window.open(`${WEBSEITE}/${aktiv}`, "_blank", "noopener");
   });

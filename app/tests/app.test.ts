@@ -16,6 +16,7 @@ import { SPOTTER_SAETZE, Spotter, seiteAus, spotterSatz } from "../src/spotter.t
 import { abstandSatz, rufname } from "../src/vorlagen.ts";
 import { Feldrunden, deltaZu, verlustIn } from "../src/feldreferenz.ts";
 import { namenErsetzen } from "../src/datenschutz.ts";
+import { spracheVonText, SPRECH_SPRACHEN } from "../src/sprachen.ts";
 
 function fahren(fahrt: DemoFahrt, runden: number, z = new Rundenzaehler()) {
   const fertige = [];
@@ -449,4 +450,16 @@ test("Stint-Planer: unsinnige oder fremde Links werden nicht übernommen", () =>
   assert.equal(nurVerbrauch?.runden, 1);
   assert.equal(nurVerbrauch?.strecke.length, 60);
   assert.equal(messwerteLesen(`#messwerte=${Buffer.from("kein json").toString("base64url")}`), null);
+});
+test("Sprache einer Antwort erkennen (Stimmwahl bei „Automatisch“)", () => {
+  assert.equal(spracheVonText("Sprit reicht noch für sieben Runden, die 27 ist 1,2 vor dir."), "de");
+  assert.equal(spracheVonText("Fuel is fine, box this lap. The car behind is 1.2 seconds away."), "en");
+  assert.equal(spracheVonText("Tienes combustible para siete vueltas, el coche de detrás está a 1,2."), "es");
+  assert.equal(spracheVonText("Il te reste de l'essence pour sept tours, la voiture derrière est à 1,2."), "fr");
+  assert.equal(spracheVonText("Topliva hvatit — топлива хватит на семь кругов."), "ru");
+  assert.equal(spracheVonText("Пального вистачить на сім кіл."), "uk");
+  assert.equal(spracheVonText("燃料は大丈夫です"), "ja");
+  assert.equal(spracheVonText("Brandstof is goed, de auto achter je is dichtbij."), "nl");
+  assert.equal(spracheVonText("123 456"), null);
+  assert.equal(Object.keys(SPRECH_SPRACHEN).length, 25, "Parakeet v3 versteht 25 Sprachen");
 });

@@ -77,7 +77,11 @@ export async function pruefungErzeugen(db, migrationsOrdner) {
     select n.nspname as schema, c.relname as tab, ${REGELNAME} as name, pol.polcmd::text as cmd, pol.polpermissive as perm,
       coalesce((select string_agg(x, ',' order by x) from (select case when r = 0 then 'public' else pg_get_userbyid(r)::text end as x
                 from unnest(pol.polroles) r) s), '') as roles,
-      md5(coalesce(pg_get_expr(pol.polqual, pol.polrelid), '')) as hq, md5(coalesce(pg_get_expr(pol.polwithcheck, pol.polrelid), '')) as hw
+      md5(coalesce(pg_get_expr(pol.polqual, pol.polrelid), '')) as hq, md5(coalesce(pg_get_expr(pol.polwithcheck, pol.polrelid), '')) as hw,
+      -- „schlimmster Fall“: erlaubend, für alle, ohne Bedingung – dieser Zugriff ist im Nachbau als harmlos bewiesen
+      (pol.polpermissive and pol.polroles = '{0}'::oid[]
+        and coalesce(pg_get_expr(pol.polqual, pol.polrelid), 'true') = 'true'
+        and coalesce(pg_get_expr(pol.polwithcheck, pol.polrelid), 'true') = 'true') as wc
     from pg_policy pol join pg_class c on c.oid = pol.polrelid join pg_namespace n on n.oid = c.relnamespace
     where n.nspname in ('public', 'storage') order by 1, 2, 3`);
   const pruefregeln = await q(`
@@ -99,7 +103,7 @@ export async function pruefungErzeugen(db, migrationsOrdner) {
   const ef = funktionen.map((f) => [esc(f.sig), esc(f.name), esc(f.h), b(f.secdef), esc(f.cfg), b(f.anon), b(f.auth), b(ausMig.funktion(f.name))]);
   const et = tabellen.map((t) => [esc(t.name), b(t.rls), ...["a_s", "a_i", "a_u", "a_d", "m_s", "m_i", "m_u", "m_d"].map((k) => b(t[k])), b(migTabellen.has(t.name))]);
   const ek = spalten.map((s) => [esc(s.tab), esc(s.col), esc(s.anon), esc(s.auth)]);
-  const ep = regeln.map((r) => [esc(r.schema), esc(r.tab), esc(r.name), esc(r.cmd), b(r.perm), esc(r.roles), esc(r.hq), esc(r.hw), b(ausMig.regel(r.name))]);
+  const ep = regeln.map((r) => [esc(r.schema), esc(r.tab), esc(r.name), esc(r.cmd), b(r.perm), esc(r.roles), esc(r.hq), esc(r.hw), b(ausMig.regel(r.name)), b(r.wc && !ausMig.regel(r.name))]);
   const ec = pruefregeln.filter((c) => migTabellen.has(c.tab) || ausMig.pruefregel(c.name)).map((c) => [esc(c.tab), esc(c.name), esc(c.typ), esc(c.h), b(c.gueltig)]);
   const etr = trigger.filter((t) => ausMig.trigger(t.name)).map((t) => [esc(t.schema), esc(t.tab), esc(t.name), esc(t.fn)]);
   const eb = speicher.map((s) => [esc(s.id), b(s.public), s.groesse == null ? "null::bigint" : `${s.groesse}::bigint`, esc(s.mime), b(ausMig.speicher(s.id))]);
@@ -115,7 +119,7 @@ with
 ${werte("ef", ["sig", "name", "h", "secdef", "cfg", "anon", "auth", "mig"], ["text", "text", "text", "boolean", "text", "boolean", "boolean", "boolean"], ef)},
 ${werte("et", ["name", "rls", "a_s", "a_i", "a_u", "a_d", "m_s", "m_i", "m_u", "m_d", "mig"], ["text", "boolean", "boolean", "boolean", "boolean", "boolean", "boolean", "boolean", "boolean", "boolean", "boolean"], et)},
 ${werte("ek", ["tab", "col", "anon", "auth"], ["text", "text", "text", "text"], ek)},
-${werte("ep", ["schema", "tab", "name", "cmd", "perm", "roles", "hq", "hw", "mig"], ["text", "text", "text", "text", "boolean", "text", "text", "text", "boolean"], ep)},
+${werte("ep", ["schema", "tab", "name", "cmd", "perm", "roles", "hq", "hw", "mig", "wc"], ["text", "text", "text", "text", "boolean", "text", "text", "text", "boolean", "boolean"], ep)},
 ${werte("ec", ["tab", "name", "typ", "h", "gueltig"], ["text", "text", "text", "text", "boolean"], ec)},
 ${werte("etr", ["schema", "tab", "name", "fn"], ["text", "text", "text", "text"], etr)},
 ${werte("eb", ["id", "public", "groesse", "mime", "mig"], ["text", "boolean", "bigint", "text", "boolean"], eb)},
@@ -229,6 +233,10 @@ befunde(bereich, objekt, status, details) as (
     case
       when l.name is null and e.mig then 'FEHLER'
       when l.name is null then 'ok'
+      -- Zusätzliche erlaubende Regel, aber genau dieser Zugriff (Tabelle + Befehl) ist im Nachbau im schlimmsten Fall
+      -- (für alle, ohne Bedingung) geprüft und durch einschränkende Regeln abgesichert → nur Hinweis
+      when e.name is null and l.perm and exists (select 1 from ep x where x.wc and x.schema = l.schema and x.tab = l.tab
+                                                  and (x.cmd = l.cmd or x.cmd = '*')) then 'HINWEIS'
       when e.name is null and l.perm then 'WARNUNG'
       when e.name is null then 'HINWEIS'
       when e.mig and ((l.perm and not e.perm) or (l.cmd = '*' and e.cmd <> '*')
@@ -238,6 +246,9 @@ befunde(bereich, objekt, status, details) as (
       else 'ok' end,
     case
       when l.name is null then 'Regel fehlt'
+      when e.name is null and l.perm and exists (select 1 from ep x where x.wc and x.schema = l.schema and x.tab = l.tab
+                                                  and (x.cmd = l.cmd or x.cmd = '*'))
+        then 'zusätzliche Altregel – derselbe Zugriff (' || (select t from befehl where c = l.cmd) || ') ist im Nachbau im schlimmsten Fall geprüft: ' || coalesce(l.ausdruck, '')
       when e.name is null then 'nicht aus den Skripten – ' || case when l.perm then 'erlaubend' else 'einschränkend' end || ', ' || (select t from befehl where c = l.cmd) || ', für ' || coalesce(nullif(l.roles, ''), 'alle') || ': ' || coalesce(l.ausdruck, '')
       when not e.mig then 'bekannte Altregel, im Nachbau im schlimmsten Fall geprüft – live: ' || (select t from befehl where c = l.cmd) || ', für ' || l.roles || ': ' || coalesce(l.ausdruck, '')
       else (select t from befehl where c = l.cmd) || ' (erwartet ' || (select t from befehl where c = e.cmd) || '), für ' || l.roles || ' (erwartet ' || e.roles || '), '

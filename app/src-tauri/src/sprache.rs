@@ -1,47 +1,70 @@
-//! Sprechtaste (Wunsch 26.11.: am Wochenende mit dem Renningenieur sprechen).
+//! Sprechtaste (Wunsch 26.11.: mit dem Renningenieur sprechen) – drei Arten:
 //!
-//! Ablauf: Taste drücken → Mikrofon nimmt auf → Taste loslassen → Mikrofon aus → Spracherkennung AUF DEM PC
-//! (Parakeet TDT 0.6B v3, int8, über sherpa-onnx) → der erkannte Text geht an die Oberfläche, die ihn wie eine
-//! getippte Frage an den Renningenieur schickt.
+//! * **Halten**: Taste gedrückt halten → sprechen → loslassen.
+//! * **Antippen**: einmal drücken → er hört zu, bis du aufhörst zu sprechen (Silero VAD erkennt das Ende).
+//! * **Signalwort**: „Hey Kim, reicht der Sprit?“ – das Mikrofon hört dauerhaft mit, aber nur auf dem PC; erst wenn ein
+//!   Satz mit dem Signalwort beginnt, geht der Rest als Frage weiter.
+//! Auslöser: Knopf in der App, globale Tastatur-Taste oder ein Knopf am Lenkrad (lenkrad.rs) – alle über `ausloesen`.
+//!
+//! Erkennung AUF DEM PC: Parakeet TDT 0.6B v3 (int8, 25 Sprachen) über sherpa-onnx; Sprechpausen: Silero VAD.
 //!
 //! Datenschutz und Sicherheit:
-//! * Das Mikrofon läuft NUR, solange die Taste gedrückt ist (höchstens 30 Sekunden). Der Ton bleibt im
-//!   Arbeitsspeicher, wird nie gespeichert und nie gesendet; nach der Erkennung ist er weg.
-//! * Das Sprachmodell wird nur nach ausdrücklichem Klick geladen, von einer festen Adresse mit fester Version
-//!   (Commit), und jede Datei wird gegen Größe und SHA-256 geprüft, bevor sie benutzt wird.
-//! * Ereignisse gehen nur an das Hauptfenster („main“), nie an eingebettete Webseiten.
-//! * Als globale Sprechtaste sind nur Tasten aus einer festen Liste erlaubt (keine Buchstaben, kein Strg/Alt).
+//! * Halten/Antippen: Mikrofon nur während der Frage (höchstens 30 s). Signalwort: Mikrofon dauerhaft an, solange
+//!   die Art gewählt ist (die App zeigt das sichtbar an); Sätze ohne Signalwort werden sofort verworfen.
+//! * Ton bleibt im Arbeitsspeicher, wird nie gespeichert und nie gesendet; weiter geht nur erkannter Text.
+//! * Modelle nur nach ausdrücklichem Klick, feste Adressen mit fester Version, jede Datei gegen Größe und SHA-256
+//!   geprüft (beim Laden und vor jeder Nutzung); abgebrochene Downloads werden fortgesetzt.
+//! * Ereignisse gehen nur an das Hauptfenster („main“). Globale Tasten nur aus einer festen Liste.
 
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager, State};
 
-/// Modell: NVIDIA Parakeet TDT 0.6B v3 (CC BY 4.0), für sherpa-onnx umgewandelt von k2-fsa (csukuangfj)
 const MODELL_ORDNER: &str = "parakeet-tdt-0.6b-v3-int8";
-const MODELL_BASIS: &str =
+/// Parakeet TDT 0.6B v3 (NVIDIA, CC BY 4.0), für sherpa-onnx umgewandelt von k2-fsa – feste Version (Commit)
+const PARAKEET: &str =
     "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/ed5d745623472f97cfc2e6c2916ee248798fc5a8";
-const DATEIEN: &[(&str, u64, &str)] = &[
-    ("encoder.int8.onnx", 652_282_294, "1afbe69c1ffdabee94755f42e4daf1d93549131a3da11356bda84fcef0f2c479"),
-    ("decoder.int8.onnx", 11_845_274, "0222a86147299d4dee90edf95b6d13827edb42ad8b7c9cf0b2582f030937c0b5"),
-    ("joiner.int8.onnx", 6_355_277, "cbd02f3696e9944970111fb439d9c3fd365a80374565f13f2b9c7007d253fc98"),
-    ("tokens.txt", 93_939, "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d"),
+/// Silero VAD (MIT) aus den Modell-Veröffentlichungen von sherpa-onnx
+const SILERO: &str = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models";
+const DATEIEN: &[(&str, u64, &str, &str)] = &[
+    ("encoder.int8.onnx", 652_282_294, "1afbe69c1ffdabee94755f42e4daf1d93549131a3da11356bda84fcef0f2c479", PARAKEET),
+    ("decoder.int8.onnx", 11_845_274, "0222a86147299d4dee90edf95b6d13827edb42ad8b7c9cf0b2582f030937c0b5", PARAKEET),
+    ("joiner.int8.onnx", 6_355_277, "cbd02f3696e9944970111fb439d9c3fd365a80374565f13f2b9c7007d253fc98", PARAKEET),
+    ("tokens.txt", 93_939, "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d", PARAKEET),
+    ("silero_vad.onnx", 643_854, "9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6", SILERO),
 ];
 const MAX_AUFNAHME: Duration = Duration::from_secs(30);
 const MIN_AUFNAHME: Duration = Duration::from_millis(350);
+/// Antippen: so lange auf den Anfang warten, danach „nichts gehört“
+const WARTEN_AUF_SPRACHE: Duration = Duration::from_secs(7);
+/// Signalwort ohne Frage dahinter: so lange auf die Frage warten
+const WARTEN_AUF_FRAGE: Duration = Duration::from_secs(8);
+const VAD_FENSTER: usize = 512;
 /// Erlaubte globale Sprechtasten (Tasten, die Simulationen selten belegen; keine Buchstaben, keine Kombinationen)
 pub const TASTEN: &[&str] = &[
     "F6", "F7", "F8", "F9", "F10", "F11", "F12", "Pause", "ScrollLock", "Insert", "Home", "End", "PageUp",
     "PageDown", "Numpad0", "Numpad1", "Numpad2", "Numpad3", "Numpad4", "Numpad5", "Numpad6", "Numpad7", "Numpad8",
     "Numpad9", "NumpadAdd", "NumpadSubtract", "NumpadMultiply", "NumpadDivide",
 ];
+/// Wörter vor dem Signalwort, die übersprungen werden („Hey Kim“, „Hallo Renningenieur“ …)
+const GRUSS: &[&str] = &["hey", "hallo", "hi", "hello", "ok", "okay", "hola", "salut", "ciao", "hej", "ahoj", "oi"];
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum Modus {
+    #[default]
+    Halten,
+    Antippen,
+    Signalwort,
+}
 
 struct Aufnahme {
+    nr: u64,
     stopp: mpsc::Sender<()>,
     faden: JoinHandle<Result<(Vec<f32>, u32), String>>,
     start: Instant,
@@ -50,14 +73,18 @@ struct Aufnahme {
 #[derive(Default)]
 pub struct Sprache {
     aufnahme: Mutex<Option<Aufnahme>>,
+    nummer: AtomicU64,
     erkenner: Mutex<Option<Arc<sherpa_onnx::OfflineRecognizer>>>,
     laedt: AtomicBool,
     taste: Mutex<Option<String>>,
+    modus: Mutex<Modus>,
+    signalwoerter: Mutex<Vec<String>>,
+    zuhoeren: Mutex<Option<mpsc::Sender<()>>>,
 }
 
 #[derive(Clone, serde::Serialize)]
 struct Meldung {
-    /// "hoert" | "erkennt" | "text" | "fehler" | "leer"
+    /// "hoert" | "erkennt" | "text" | "fehler" | "leer" | "signal" | "dauerhaft" | "dauerhaft-aus"
     zustand: &'static str,
     text: String,
 }
@@ -74,6 +101,7 @@ pub struct Status {
     installiert: bool,
     laedt: bool,
     groesse_mb: u64,
+    fehlt_mb: u64,
     taste: Option<String>,
     tasten: Vec<&'static str>,
 }
@@ -87,9 +115,13 @@ fn modell_pfad(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(basis.join("sprachmodelle").join(MODELL_ORDNER))
 }
 
+fn vollstaendig(ordner: &Path, name: &str, groesse: u64) -> bool {
+    fs::metadata(ordner.join(name)).map(|m| m.len() == groesse).unwrap_or(false)
+}
+
 /// Vollständig = alle Dateien da und in der erwarteten Größe (die Prüfsumme wird beim Laden geprüft)
 fn installiert(ordner: &Path) -> bool {
-    DATEIEN.iter().all(|(name, groesse, _)| fs::metadata(ordner.join(name)).map(|m| m.len() == *groesse).unwrap_or(false))
+    DATEIEN.iter().all(|(name, groesse, _, _)| vollstaendig(ordner, name, *groesse))
 }
 
 pub fn taste_gueltig(taste: &str) -> bool {
@@ -103,12 +135,13 @@ pub fn sprache_status(app: AppHandle, s: State<'_, Sprache>) -> Result<Status, S
         installiert: installiert(&ordner),
         laedt: s.laedt.load(Ordering::SeqCst),
         groesse_mb: DATEIEN.iter().map(|d| d.1).sum::<u64>() / 1_000_000,
+        fehlt_mb: DATEIEN.iter().filter(|d| !vollstaendig(&ordner, d.0, d.1)).map(|d| d.1).sum::<u64>().div_ceil(1_000_000),
         taste: s.taste.lock().map(|t| t.clone()).unwrap_or(None),
         tasten: TASTEN.to_vec(),
     })
 }
 
-/// Lädt das Sprachmodell (nur nach Klick); Fortschritt über „gsra://sprache-laden“
+/// Lädt die Sprachmodelle (nur nach Klick); Fortschritt über „gsra://sprache-laden“
 #[tauri::command]
 pub fn sprache_installieren(app: AppHandle, s: State<'_, Sprache>) -> Result<(), String> {
     let ordner = modell_pfad(&app)?;
@@ -117,7 +150,7 @@ pub fn sprache_installieren(app: AppHandle, s: State<'_, Sprache>) -> Result<(),
         return Ok(());
     }
     if s.laedt.swap(true, Ordering::SeqCst) {
-        return Err("Das Sprachmodell wird schon geladen.".into());
+        return Err("Die Spracherkennung wird schon geladen.".into());
     }
     std::thread::spawn(move || {
         let ergebnis = laden(&app, &ordner);
@@ -136,9 +169,9 @@ fn laden(app: &AppHandle, ordner: &Path) -> Result<(), String> {
     let gesamt: u64 = DATEIEN.iter().map(|d| d.1).sum();
     let mut erledigt: u64 = 0;
     let mut zuletzt: u8 = 255;
-    for (name, groesse, sha) in DATEIEN {
+    for (name, groesse, sha, basis) in DATEIEN {
         let ziel = ordner.join(name);
-        if fs::metadata(&ziel).map(|m| m.len() == *groesse).unwrap_or(false) && pruefsumme(&ziel)? == *sha {
+        if vollstaendig(ordner, name, *groesse) && pruefsumme(&ziel)? == *sha {
             erledigt += groesse;
             continue;
         }
@@ -161,9 +194,7 @@ fn laden(app: &AppHandle, ordner: &Path) -> Result<(), String> {
                 hash.update(&puffer[..n]);
             }
         }
-        let mut anfrage = ureq::get(&format!("{MODELL_BASIS}/{name}"))
-            .set("User-Agent", "GSRA-App")
-            .timeout(Duration::from_secs(60 * 30));
+        let mut anfrage = ureq::get(&format!("{basis}/{name}")).set("User-Agent", "GSRA-App").timeout(Duration::from_secs(60 * 30));
         if vorhanden > 0 && vorhanden < *groesse {
             anfrage = anfrage.set("Range", &format!("bytes={vorhanden}-"));
         }
@@ -177,12 +208,8 @@ fn laden(app: &AppHandle, ordner: &Path) -> Result<(), String> {
             vorhanden = 0;
             hash = Sha256::new();
         }
-        let mut datei = if fortsetzen {
-            fs::OpenOptions::new().append(true).open(&teil)
-        } else {
-            fs::File::create(&teil)
-        }
-        .map_err(|_| "Datei lässt sich nicht speichern.".to_string())?;
+        let mut datei = if fortsetzen { fs::OpenOptions::new().append(true).open(&teil) } else { fs::File::create(&teil) }
+            .map_err(|_| "Datei lässt sich nicht speichern.".to_string())?;
         let mut leser: Box<dyn Read> = match antwort {
             Some(a) => Box::new(a.into_reader().take(groesse - vorhanden + 1)),
             None => Box::new(std::io::empty()),
@@ -190,7 +217,7 @@ fn laden(app: &AppHandle, ordner: &Path) -> Result<(), String> {
         let mut puffer = vec![0u8; 1 << 16];
         let mut gelesen: u64 = vorhanden;
         loop {
-            let n = leser.read(&mut puffer).map_err(|_| "Download abgebrochen.".to_string())?;
+            let n = leser.read(&mut puffer).map_err(|_| "Download abgebrochen – beim nächsten Klick geht es dort weiter.".to_string())?;
             if n == 0 {
                 break;
             }
@@ -233,6 +260,14 @@ fn pruefsumme(pfad: &Path) -> Result<String, String> {
     Ok(hash.finalize().iter().map(|b| format!("{b:02x}")).collect())
 }
 
+fn geprueft(app: &AppHandle) -> Result<PathBuf, String> {
+    let ordner = modell_pfad(app)?;
+    if !installiert(&ordner) {
+        return Err("Die Spracherkennung ist noch nicht (vollständig) installiert.".into());
+    }
+    Ok(ordner)
+}
+
 /// Erkenner einmal laden (dauert einige Sekunden) – vorher jede Datei gegen ihre Prüfsumme prüfen
 fn erkenner(app: &AppHandle) -> Result<Arc<sherpa_onnx::OfflineRecognizer>, String> {
     let s = app.state::<Sprache>();
@@ -240,15 +275,18 @@ fn erkenner(app: &AppHandle) -> Result<Arc<sherpa_onnx::OfflineRecognizer>, Stri
     if let Some(e) = platz.as_ref() {
         return Ok(e.clone());
     }
-    let ordner = modell_pfad(app)?;
-    if !installiert(&ordner) {
-        return Err("Die Spracherkennung ist noch nicht installiert.".into());
-    }
-    for (name, _, sha) in DATEIEN {
+    let ordner = geprueft(app)?;
+    for (name, _, sha, _) in DATEIEN {
         if pruefsumme(&ordner.join(name))? != *sha {
             return Err(format!("{name} ist beschädigt – bitte die Spracherkennung neu installieren."));
         }
     }
+    let e = Arc::new(sherpa_onnx::OfflineRecognizer::create(&erkenner_config(&ordner)).ok_or_else(|| "Die Spracherkennung ließ sich nicht starten.".to_string())?);
+    *platz = Some(e.clone());
+    Ok(e)
+}
+
+fn erkenner_config(ordner: &Path) -> sherpa_onnx::OfflineRecognizerConfig {
     let pfad = |n: &str| Some(ordner.join(n).to_string_lossy().into_owned());
     let mut c = sherpa_onnx::OfflineRecognizerConfig::default();
     c.model_config.transducer = sherpa_onnx::OfflineTransducerModelConfig {
@@ -260,9 +298,29 @@ fn erkenner(app: &AppHandle) -> Result<Arc<sherpa_onnx::OfflineRecognizer>, Stri
     c.model_config.model_type = Some("nemo_transducer".into());
     c.model_config.num_threads = 2; // die Simulation braucht den Rest des Prozessors
     c.model_config.provider = Some("cpu".into());
-    let e = Arc::new(sherpa_onnx::OfflineRecognizer::create(&c).ok_or_else(|| "Die Spracherkennung ließ sich nicht starten.".to_string())?);
-    *platz = Some(e.clone());
-    Ok(e)
+    c
+}
+
+fn vad_config(ordner: &Path, pause: f32) -> sherpa_onnx::VadModelConfig {
+    let mut c = sherpa_onnx::VadModelConfig::default();
+    c.silero_vad = sherpa_onnx::SileroVadModelConfig {
+        model: Some(ordner.join("silero_vad.onnx").to_string_lossy().into_owned()),
+        threshold: 0.5,
+        min_silence_duration: pause,
+        min_speech_duration: 0.25,
+        window_size: VAD_FENSTER as i32,
+        max_speech_duration: 25.0,
+    };
+    c.sample_rate = 16_000;
+    c.num_threads = 1;
+    c.provider = Some("cpu".into());
+    c
+}
+
+/// Silero VAD: erkennt, wann gesprochen wird und wann eine Pause das Ende eines Satzes ist
+fn vad(app: &AppHandle, pause: f32) -> Result<sherpa_onnx::VoiceActivityDetector, String> {
+    let ordner = geprueft(app)?;
+    sherpa_onnx::VoiceActivityDetector::create(&vad_config(&ordner, pause), 40.0).ok_or_else(|| "Die Pausenerkennung ließ sich nicht starten.".to_string())
 }
 
 /// Erkenner im Hintergrund vorbereiten (z. B. beim Start, wenn eine Sprechtaste belegt ist)
@@ -273,45 +331,109 @@ pub fn sprache_vorbereiten(app: AppHandle) {
     });
 }
 
-/// Mikrofon an – nur bis zum Loslassen (höchstens 30 s)
-pub fn druecken(app: &AppHandle) -> Result<(), String> {
+/// Ein Auslöser (App-Knopf, Tastatur, Lenkrad) wurde gedrückt oder losgelassen – je nach Art
+pub fn ausloesen(app: &AppHandle, gedrueckt: bool) {
+    let modus = app.state::<Sprache>().modus.lock().map(|m| *m).unwrap_or_default();
+    let laeuft = app.state::<Sprache>().aufnahme.lock().map(|a| a.is_some()).unwrap_or(false);
+    let _ = match (modus, gedrueckt) {
+        (Modus::Halten, true) => druecken(app, false),
+        (Modus::Halten, false) => loslassen(app),
+        // Antippen und Signalwort: Drücken startet eine Frage, nochmal Drücken beendet sie vorzeitig
+        (_, true) if laeuft => loslassen(app),
+        (_, true) => druecken(app, true),
+        (_, false) => Ok(()),
+    };
+}
+
+/// Mikrofon an. mit_vad: Ende der Frage selbst erkennen (Antippen)
+pub fn druecken(app: &AppHandle, mit_vad: bool) -> Result<(), String> {
     let s = app.state::<Sprache>();
     let mut platz = s.aufnahme.lock().map_err(|_| "Interner Fehler.".to_string())?;
     if platz.is_some() {
         return Ok(());
     }
-    if !installiert(&modell_pfad(app)?) {
-        melden(app, "fehler", "Installiere zuerst die Spracherkennung (Renningenieur → Sprechtaste).");
-        return Err("nicht installiert".into());
+    if let Err(e) = geprueft(app) {
+        melden(app, "fehler", "Installiere zuerst die Spracherkennung (Renningenieur → Sprechtaste einrichten).");
+        return Err(e);
     }
+    let ton = Arc::new(Mutex::new(Vec::<f32>::new()));
     let (stopp, warten) = mpsc::channel::<()>();
-    let (bereit_tx, bereit_rx) = mpsc::channel::<Result<(), String>>();
-    let faden = std::thread::spawn(move || aufnehmen(warten, bereit_tx));
-    match bereit_rx.recv_timeout(Duration::from_secs(5)) {
-        Ok(Ok(())) => {
-            *platz = Some(Aufnahme { stopp, faden, start: Instant::now() });
-            melden(app, "hoert", "");
-            // Sicherheitsnetz: nach 30 s von selbst stoppen
-            let a = app.clone();
-            std::thread::spawn(move || {
-                std::thread::sleep(MAX_AUFNAHME);
-                let _ = loslassen(&a);
-            });
-            // Erkenner schon jetzt laden, falls noch nicht geschehen
-            let a = app.clone();
-            std::thread::spawn(move || {
-                let _ = erkenner(&a);
-            });
-            Ok(())
-        }
+    let (bereit_tx, bereit_rx) = mpsc::channel::<Result<u32, String>>();
+    let t = ton.clone();
+    let faden = std::thread::spawn(move || aufnehmen(warten, bereit_tx, t, true));
+    let rate = match bereit_rx.recv_timeout(Duration::from_secs(5)) {
+        Ok(Ok(rate)) => rate,
         Ok(Err(e)) => {
             melden(app, "fehler", e.clone());
-            Err(e)
+            return Err(e);
         }
         Err(_) => {
             let _ = stopp.send(());
             melden(app, "fehler", "Das Mikrofon reagiert nicht.");
-            Err("Mikrofon reagiert nicht".into())
+            return Err("Mikrofon reagiert nicht".into());
+        }
+    };
+    let nr = s.nummer.fetch_add(1, Ordering::SeqCst) + 1;
+    *platz = Some(Aufnahme { nr, stopp, faden, start: Instant::now() });
+    drop(platz);
+    melden(app, "hoert", "");
+    // Sicherheitsnetz: nach 30 s von selbst stoppen
+    let a = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(MAX_AUFNAHME);
+        if a.state::<Sprache>().aufnahme.lock().map(|x| x.as_ref().is_some_and(|x| x.nr == nr)).unwrap_or(false) {
+            let _ = loslassen(&a);
+        }
+    });
+    // Erkenner schon jetzt laden, falls noch nicht geschehen
+    let a = app.clone();
+    std::thread::spawn(move || {
+        let _ = erkenner(&a);
+    });
+    if mit_vad {
+        let a = app.clone();
+        std::thread::spawn(move || ende_erkennen(&a, nr, ton, rate));
+    }
+    Ok(())
+}
+
+/// Antippen: beobachtet die laufende Aufnahme und beendet sie nach der ersten Sprechpause
+fn ende_erkennen(app: &AppHandle, nr: u64, ton: Arc<Mutex<Vec<f32>>>, rate: u32) {
+    let Ok(v) = vad(app, 0.9) else { return };
+    let umrechner = (rate != 16_000).then(|| sherpa_onnx::LinearResampler::create(rate as i32, 16_000)).flatten();
+    let start = Instant::now();
+    let mut gelesen = 0usize;
+    let mut rest: Vec<f32> = Vec::new();
+    let mut sprach = false;
+    loop {
+        std::thread::sleep(Duration::from_millis(60));
+        let noch_aktiv = app.state::<Sprache>().aufnahme.lock().map(|a| a.as_ref().is_some_and(|a| a.nr == nr)).unwrap_or(false);
+        if !noch_aktiv {
+            return;
+        }
+        let neu: Vec<f32> = match ton.lock() {
+            Ok(t) if t.len() > gelesen => {
+                let n = t[gelesen..].to_vec();
+                gelesen = t.len();
+                n
+            }
+            _ => continue,
+        };
+        rest.extend(match &umrechner {
+            Some(u) => u.resample(&neu, false),
+            None => neu,
+        });
+        let ganze = rest.len() / VAD_FENSTER * VAD_FENSTER;
+        for fenster in rest[..ganze].chunks(VAD_FENSTER) {
+            v.accept_waveform(fenster);
+        }
+        rest.drain(..ganze);
+        if v.detected() {
+            sprach = true;
+        }
+        if (sprach && !v.is_empty()) || (!sprach && start.elapsed() > WARTEN_AUF_SPRACHE) {
+            let _ = loslassen(app);
+            return;
         }
     }
 }
@@ -374,8 +496,195 @@ pub fn text_bereinigen(text: &str) -> String {
     ohne.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(1000).collect()
 }
 
-/// Nimmt auf, bis „stopp“ kommt; gibt Mono-Ton und Abtastrate zurück
-fn aufnehmen(stopp: mpsc::Receiver<()>, bereit: mpsc::Sender<Result<(), String>>) -> Result<(Vec<f32>, u32), String> {
+fn normal(wort: &str) -> String {
+    wort.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).collect()
+}
+
+/// Levenshtein-Abstand (für leicht verschliffene Signalwörter)
+fn abstand(a: &str, b: &str) -> usize {
+    let a: Vec<char> = a.chars().collect();
+    let b: Vec<char> = b.chars().collect();
+    let mut zeile: Vec<usize> = (0..=b.len()).collect();
+    for i in 1..=a.len() {
+        let mut vorher = zeile[0];
+        zeile[0] = i;
+        for j in 1..=b.len() {
+            let alt = zeile[j];
+            zeile[j] = (zeile[j] + 1).min(zeile[j - 1] + 1).min(vorher + usize::from(a[i - 1] != b[j - 1]));
+            vorher = alt;
+        }
+    }
+    zeile[b.len()]
+}
+
+/// Beginnt der Satz mit einem Signalwort? Dann Some(Rest des Satzes, evtl. leer).
+/// Echte Erkennung ist unscharf („Hey Kim“ → „Herr Ikim“), deshalb: Das Signalwort muss in den ersten Wörtern
+/// stehen, darf mit einem kurzen Wort davor verschmolzen sein (Gruß wie „Hey“, „Hallo“ – höchstens 6 Buchstaben
+/// davor) und bei längeren Wörtern einen Buchstaben abweichen. „Ich glaube, Kim hat recht“ löst NICHT aus.
+pub fn signalwort_pruefen(text: &str, signalwoerter: &[String]) -> Option<String> {
+    let woerter: Vec<&str> = text.split_whitespace().collect();
+    // normalisierte Wörter mit Index ins Original
+    let teile: Vec<(usize, String)> = woerter.iter().enumerate().map(|(i, w)| (i, normal(w))).filter(|(_, n)| !n.is_empty()).collect();
+    let rest = |k: usize| -> String {
+        let ab = teile.get(k).map(|t| t.0).unwrap_or(woerter.len());
+        woerter[ab..].join(" ").trim_start_matches([',', '.', '!', '?', ':', ';', ' ']).to_string()
+    };
+    for sw in signalwoerter {
+        let ziel: String = sw.split_whitespace().map(normal).collect();
+        if ziel.chars().count() < 2 {
+            continue;
+        }
+        let mut zusammen = String::new();
+        for k in 1..=teile.len().min(sw.split_whitespace().count() + 2) {
+            zusammen.push_str(&teile[k - 1].1);
+            let davor = zusammen.chars().count().saturating_sub(ziel.chars().count());
+            let genau = zusammen.ends_with(&ziel);
+            let fast = ziel.chars().count() >= 5 && {
+                let ende: String = zusammen.chars().skip(davor).collect();
+                abstand(&ende, &ziel) <= toleranz(&ziel)
+            };
+            if (genau || fast) && davor <= 6 {
+                return Some(rest(k));
+            }
+        }
+        // Gruß + leicht verschliffenes, längeres Signalwort als eigenes Wort („Hallo Renningenieurin“)
+        let i = usize::from(teile.first().is_some_and(|t| GRUSS.contains(&t.1.as_str())));
+        if ziel.chars().count() >= 5 && teile.get(i).is_some_and(|t| abstand(&t.1, &ziel) <= toleranz(&ziel)) {
+            return Some(rest(i + 1));
+        }
+    }
+    None
+}
+
+/// Erlaubte Abweichung: kurze Wörter genau, ab 5 Buchstaben einer, ab 10 Buchstaben zwei
+fn toleranz(wort: &str) -> usize {
+    match wort.chars().count() {
+        0..=4 => 0,
+        5..=9 => 1,
+        _ => 2,
+    }
+}
+
+/// Signalwort-Art: Mikrofon dauerhaft an (nur auf dem PC), jeder gesprochene Satz wird geprüft
+fn zuhoeren(app: AppHandle, stopp: mpsc::Receiver<()>) {
+    let ton = Arc::new(Mutex::new(Vec::<f32>::new()));
+    let (mikro_stopp, mikro_warten) = mpsc::channel::<()>();
+    let (bereit_tx, bereit_rx) = mpsc::channel::<Result<u32, String>>();
+    let t = ton.clone();
+    let faden = std::thread::spawn(move || aufnehmen(mikro_warten, bereit_tx, t, false));
+    let rate = match bereit_rx.recv_timeout(Duration::from_secs(5)) {
+        Ok(Ok(r)) => r,
+        Ok(Err(e)) => return melden(&app, "fehler", e),
+        Err(_) => return melden(&app, "fehler", "Das Mikrofon reagiert nicht."),
+    };
+    let ende = |app: &AppHandle| {
+        let _ = mikro_stopp.send(());
+        melden(app, "dauerhaft-aus", "");
+    };
+    // Anzeige „Mikro an“ sofort, sobald das Mikrofon läuft – auch während die Erkennung noch lädt
+    melden(&app, "dauerhaft", "");
+    let (Ok(v), Ok(e)) = (vad(&app, 0.7), erkenner(&app)) else {
+        ende(&app);
+        return melden(&app, "fehler", "Die Spracherkennung ist nicht bereit.");
+    };
+    let umrechner = (rate != 16_000).then(|| sherpa_onnx::LinearResampler::create(rate as i32, 16_000)).flatten();
+    let mut rest: Vec<f32> = Vec::new();
+    let mut frage_bis: Option<Instant> = None;
+    loop {
+        if stopp.recv_timeout(Duration::from_millis(80)).is_ok() || matches!(stopp.try_recv(), Err(mpsc::TryRecvError::Disconnected)) {
+            break;
+        }
+        // Während einer Frage per Taste (Halten/Antippen) nicht doppelt hören
+        let taste_aktiv = app.state::<Sprache>().aufnahme.lock().map(|a| a.is_some()).unwrap_or(false);
+        let neu = std::mem::take(&mut *ton.lock().unwrap_or_else(|p| p.into_inner()));
+        if taste_aktiv {
+            v.reset();
+            rest.clear();
+            continue;
+        }
+        rest.extend(match &umrechner {
+            Some(u) => u.resample(&neu, false),
+            None => neu,
+        });
+        let ganze = rest.len() / VAD_FENSTER * VAD_FENSTER;
+        for fenster in rest[..ganze].chunks(VAD_FENSTER) {
+            v.accept_waveform(fenster);
+        }
+        rest.drain(..ganze);
+        while let Some(satz) = v.front() {
+            let proben = satz.samples().to_vec();
+            v.pop();
+            let stream = e.create_stream();
+            stream.accept_waveform(16_000, &proben);
+            e.decode(&stream);
+            let text = text_bereinigen(&stream.get_result().map(|r| r.text).unwrap_or_default());
+            let woerter = app.state::<Sprache>().signalwoerter.lock().map(|w| w.clone()).unwrap_or_default();
+            let wartet = frage_bis.is_some_and(|b| Instant::now() < b);
+            match signalwort_pruefen(&text, &woerter) {
+                Some(frage) if frage.chars().filter(|c| c.is_alphanumeric()).count() >= 2 => {
+                    frage_bis = None;
+                    melden(&app, "signal", "");
+                    melden(&app, "text", frage);
+                }
+                Some(_) => {
+                    frage_bis = Some(Instant::now() + WARTEN_AUF_FRAGE);
+                    melden(&app, "signal", "");
+                    melden(&app, "hoert", "");
+                }
+                None if wartet && text.chars().filter(|c| c.is_alphanumeric()).count() >= 2 => {
+                    frage_bis = None;
+                    melden(&app, "text", text);
+                }
+                None => {} // kein Signalwort: Satz wird verworfen
+            }
+        }
+        if frage_bis.is_some_and(|b| Instant::now() >= b) {
+            frage_bis = None;
+            melden(&app, "leer", "");
+        }
+    }
+    ende(&app);
+    let _ = faden.join();
+}
+
+/// Art der Sprechtaste setzen; bei „signalwort“ hört das Mikrofon dauerhaft mit (bis zur nächsten Änderung)
+#[tauri::command]
+pub fn hoermodus_setzen(app: AppHandle, s: State<'_, Sprache>, modus: String, signalwoerter: Vec<String>) -> Result<(), String> {
+    let m = match modus.as_str() {
+        "halten" => Modus::Halten,
+        "antippen" => Modus::Antippen,
+        "signalwort" => Modus::Signalwort,
+        _ => return Err("Unbekannte Art.".into()),
+    };
+    let woerter: Vec<String> = signalwoerter
+        .iter()
+        .map(|w| text_bereinigen(w))
+        .filter(|w| (2..=30).contains(&w.chars().count()) && w.chars().all(|c| c.is_alphabetic() || c == ' ' || c == '-'))
+        .take(6)
+        .collect();
+    if m == Modus::Signalwort && woerter.is_empty() {
+        return Err("Bitte gib mindestens ein Signalwort an.".into());
+    }
+    *s.signalwoerter.lock().map_err(|_| "Interner Fehler.".to_string())? = woerter;
+    *s.modus.lock().map_err(|_| "Interner Fehler.".to_string())? = m;
+    // Dauerhaftes Zuhören nur in der Signalwort-Art
+    let mut platz = s.zuhoeren.lock().map_err(|_| "Interner Fehler.".to_string())?;
+    if let Some(alt) = platz.take() {
+        let _ = alt.send(());
+    }
+    if m == Modus::Signalwort {
+        geprueft(&app)?;
+        let (tx, rx) = mpsc::channel();
+        *platz = Some(tx);
+        let a = app.clone();
+        std::thread::spawn(move || zuhoeren(a, rx));
+    }
+    Ok(())
+}
+
+/// Nimmt auf, bis „stopp“ kommt; schreibt Mono-Ton in `ton`, meldet die Abtastrate über `bereit`.
+/// begrenzt: höchstens 31 s sammeln (Halten/Antippen); sonst leert der Abnehmer den Speicher laufend.
+fn aufnehmen(stopp: mpsc::Receiver<()>, bereit: mpsc::Sender<Result<u32, String>>, ton: Arc<Mutex<Vec<f32>>>, begrenzt: bool) -> Result<(Vec<f32>, u32), String> {
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
     let fehler = |t: &str| {
         let _ = bereit.send(Err(t.to_string()));
@@ -392,8 +701,8 @@ fn aufnehmen(stopp: mpsc::Receiver<()>, bereit: mpsc::Sender<Result<(), String>>
     let rate = einstellung.sample_rate().0;
     let format = einstellung.sample_format();
     let config: cpal::StreamConfig = einstellung.into();
-    let ton = Arc::new(Mutex::new(Vec::<f32>::with_capacity(rate as usize * 10)));
-    let grenze = rate as usize * MAX_AUFNAHME.as_secs() as usize + rate as usize;
+    // Obergrenze: 31 s (Halten/Antippen) bzw. 60 s Puffer, falls der Abnehmer hängt (Signalwort)
+    let grenze = rate as usize * if begrenzt { MAX_AUFNAHME.as_secs() as usize + 1 } else { 60 };
     let fehlerfall = |_e: cpal::StreamError| {};
 
     fn mono<T: Copy>(daten: &[T], kanaele: usize, ziel: &Arc<Mutex<Vec<f32>>>, grenze: usize, wandeln: impl Fn(T) -> f32) {
@@ -421,21 +730,21 @@ fn aufnehmen(stopp: mpsc::Receiver<()>, bereit: mpsc::Sender<Result<(), String>>
     if strom.play().is_err() {
         return fehler("Das Mikrofon lässt sich nicht starten.");
     }
-    let _ = bereit.send(Ok(()));
-    let _ = stopp.recv_timeout(MAX_AUFNAHME + Duration::from_secs(2));
+    let _ = bereit.send(Ok(rate));
+    if begrenzt {
+        let _ = stopp.recv_timeout(MAX_AUFNAHME + Duration::from_secs(2));
+    } else {
+        let _ = stopp.recv();
+    }
     drop(strom); // Mikrofon aus
     let daten = std::mem::take(&mut *ton.lock().map_err(|_| "Interner Fehler.".to_string())?);
     Ok((daten, rate))
 }
 
-/// Taste in der App (Knopf gedrückt halten)
+/// Taste in der App (Knopf)
 #[tauri::command]
-pub fn sprechtaste(app: AppHandle, gedrueckt: bool) -> Result<(), String> {
-    if gedrueckt {
-        druecken(&app)
-    } else {
-        loslassen(&app)
-    }
+pub fn sprechtaste(app: AppHandle, gedrueckt: bool) {
+    ausloesen(&app, gedrueckt);
 }
 
 /// Globale Sprechtaste (funktioniert auch, wenn die Simulation im Vordergrund ist); None = aus
@@ -496,13 +805,62 @@ mod tests {
     }
 
     #[test]
-    fn modell_ist_fest_angegeben() {
-        assert!(MODELL_BASIS.starts_with("https://huggingface.co/"));
-        assert!(MODELL_BASIS.contains("/resolve/ed5d745623472f97cfc2e6c2916ee248798fc5a8"), "feste Version");
-        for (_, groesse, sha) in DATEIEN {
+    fn signalwort_am_satzanfang() {
+        let w = vec!["Kim".to_string(), "Renningenieur".to_string(), "Race Engineer".to_string()];
+        assert_eq!(signalwort_pruefen("Hey Kim, reicht der Sprit?", &w).as_deref(), Some("reicht der Sprit?"));
+        assert_eq!(signalwort_pruefen("kim wer fährt vor mir", &w).as_deref(), Some("wer fährt vor mir"));
+        assert_eq!(signalwort_pruefen("Hallo Renningenieur.", &w).as_deref(), Some(""));
+        assert_eq!(signalwort_pruefen("Okay race engineer, box this lap", &w).as_deref(), Some("box this lap"));
+        assert_eq!(signalwort_pruefen("Ich glaube Kim hat recht", &w), None, "nur am Satzanfang");
+        assert_eq!(signalwort_pruefen("Kimmich spielt gut", &w), None, "nur ganze Wörter");
+        assert_eq!(signalwort_pruefen("", &w), None);
+        // so verschleift die echte Erkennung kurze Namen
+        assert_eq!(signalwort_pruefen("Herr Ikim, reicht der Sprit bis ins Ziel.", &w).as_deref(), Some("reicht der Sprit bis ins Ziel."));
+        assert_eq!(signalwort_pruefen("Hallo Renningenieurin, wie weit ist es?", &w).as_deref(), Some("wie weit ist es?"));
+        assert_eq!(signalwort_pruefen("Ich fahre heute ins Bar.", &w), None);
+        assert_eq!(signalwort_pruefen("Das war eine gute Runde.", &w), None);
+        assert_eq!(signalwort_pruefen("Wir nehmen im Rennen alles mit", &w), None);
+    }
+
+    /// Echter Ablauf der Signalwort-Art mit einer Aufnahme (nicht in CI: braucht die Modelle)
+    /// GSRA_MODELL=<Ordner> GSRA_TON=<16-kHz-WAV mit Pausen> cargo test signalwort_echt -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn signalwort_echt() {
+        let ordner = PathBuf::from(std::env::var("GSRA_MODELL").expect("GSRA_MODELL"));
+        let ton = sherpa_onnx::Wave::read(&std::env::var("GSRA_TON").expect("GSRA_TON")).expect("WAV");
+        assert_eq!(ton.sample_rate(), 16_000);
+        let v = sherpa_onnx::VoiceActivityDetector::create(&vad_config(&ordner, 0.7), 40.0).expect("VAD");
+        let e = sherpa_onnx::OfflineRecognizer::create(&erkenner_config(&ordner)).expect("Erkenner");
+        let mut saetze = Vec::new();
+        for fenster in ton.samples().chunks(VAD_FENSTER) {
+            if fenster.len() == VAD_FENSTER {
+                v.accept_waveform(fenster);
+            }
+            while let Some(s) = v.front() {
+                let st = e.create_stream();
+                st.accept_waveform(16_000, s.samples());
+                e.decode(&st);
+                saetze.push(text_bereinigen(&st.get_result().map(|r| r.text).unwrap_or_default()));
+                v.pop();
+            }
+        }
+        println!("Sätze: {saetze:?}");
+        let w = vec!["Kim".to_string()];
+        let treffer: Vec<String> = saetze.iter().filter_map(|s| signalwort_pruefen(s, &w)).collect();
+        println!("Fragen nach dem Signalwort: {treffer:?}");
+        assert_eq!(treffer.len(), 1, "genau ein Satz mit Signalwort");
+        assert!(treffer[0].to_lowercase().contains("sprit"));
+    }
+
+    #[test]
+    fn modelle_sind_fest_angegeben() {
+        for (_, groesse, sha, basis) in DATEIEN {
             assert!(*groesse > 0);
             assert_eq!(sha.len(), 64);
             assert!(sha.chars().all(|c| c.is_ascii_hexdigit()));
+            assert!(basis.starts_with("https://huggingface.co/csukuangfj/") || basis.starts_with("https://github.com/k2-fsa/sherpa-onnx/releases/download/"));
         }
+        assert!(PARAKEET.contains("/resolve/ed5d745623472f97cfc2e6c2916ee248798fc5a8"), "feste Version");
     }
 }

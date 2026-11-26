@@ -356,6 +356,7 @@ const initAuthNav = async () => {
 
     addNavToggle();
     addSiteFooter();
+    addAppBanner();
     kopfHoeheMerken();
     // Login-Knopf in der Kopfzeile führt nach der Anmeldung zurück zur aktuellen Unterseite
     if (loginNavBtn && !PUBLIC_PAGES.includes(currentPageName())) loginNavBtn.href = loginLinkHere();
@@ -622,6 +623,34 @@ function kopfHoeheMerken() {
 
 // Fußzeile auf jeder Seite: schlanke Leiste mit Abos, Kündigen, Impressum, Datenschutz, Nutzungsbedingungen.
 // „Folge GSRA“ steht nur noch auf der Startseite (eigener Bereich, Wunsch 25.11.).
+// Hinweis „App installieren“ (Wunsch 26.11.): oben auf jeder Seite, nur am Windows-PC, nicht in der App selbst,
+// nicht auf der App-Seite; ausblendbar (30 Tage). Alle Texte fest im Code, kein Inhalt von außen.
+function addAppBanner() {
+    const ohne = ["app", "messenger", "login", "app-verbinden", "passwort-neu", "admin", "kuendigen"];
+    if (document.documentElement.classList.contains("gsra-app") || ohne.includes(currentPageName())) return;
+    if (!/Windows NT/i.test(navigator.userAgent) || /Mobile|Android/i.test(navigator.userAgent)) return;
+    let zu = 0;
+    try { zu = Number(localStorage.getItem("gsra_app_banner_zu") || 0); } catch { /* egal */ }
+    if (Date.now() - zu < 30 * 24 * 60 * 60 * 1000) return;
+    const ziel = document.querySelector("main") || document.querySelector(".container");
+    if (!ziel || document.getElementById("gsraAppBanner")) return;
+    const banner = document.createElement("div");
+    banner.id = "gsraAppBanner";
+    banner.className = "gsra-app-banner";
+    banner.setAttribute("role", "region");
+    banner.setAttribute("aria-label", "GSRA-App");
+    banner.innerHTML = `
+        <i class="fa-solid fa-desktop" aria-hidden="true"></i>
+        <span><strong>Neu: die GSRA-App für Windows</strong> – Live-Telemetrie, Spotter und dein Renningenieur per Funk und Sprechtaste.</span>
+        <a href="app.html#installieren" class="gsra-dialog-btn primary">App installieren</a>
+        <button type="button" class="gsra-app-banner-zu" aria-label="Hinweis ausblenden">×</button>`;
+    banner.querySelector("button").addEventListener("click", () => {
+        try { localStorage.setItem("gsra_app_banner_zu", String(Date.now())); } catch { /* egal */ }
+        banner.remove();
+    });
+    ziel.prepend(banner);
+}
+
 function addSiteFooter() {
     if (document.getElementById("gsraSiteFooter")) return;
     const footer = document.createElement("footer");

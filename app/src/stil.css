@@ -136,7 +136,8 @@ body.web-aktiv main { overflow: hidden; padding: 0; }
 .web-flaeche { height: 100%; display: grid; place-items: center; background: var(--grund); }
 .web-vorschau { display: flex; flex-direction: column; align-items: center; gap: 12px; color: var(--leise); text-align: center; padding: 24px; max-width: 460px; }
 .web-vorschau[hidden] { display: none; }
-.web-vorschau-logo { width: 96px; opacity: 0.85; }
+.web-vorschau-logo { width: min(260px, 50vw); }
+.web-vorschau-logo .gsra-lade-logo { width: 100%; }
 .web-vorschau p { margin: 0; }
 .web-leiste { display: flex; align-items: center; gap: 6px; }
 .web-leiste[hidden] { display: none; }
@@ -457,7 +458,105 @@ body.hoert .led { background: var(--rot); box-shadow: 0 0 10px var(--rot); }
 .sprech-einstellung .hinweis { margin: 0 0 10px; }
 .sprech-installation { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
 .sprech-installation .balken { width: 220px; }
-.sprech-taste { display: flex; flex-direction: column; gap: 6px; color: var(--leise); font-size: 12.5px; max-width: 360px; }
+.sprech-art { border: 0; padding: 0; margin: 4px 0 12px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.sprech-art legend, .re-feld legend { font-family: var(--anzeige); font-size: 11.5px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--leise); margin-bottom: 8px; padding: 0; }
+.sprech-art label, .re-chips label { position: relative; cursor: pointer; }
+.sprech-art input, .re-chips input { position: absolute; opacity: 0; pointer-events: none; }
+.sprech-art span, .re-chips span {
+  display: flex; flex-direction: column; gap: 3px; height: 100%; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid var(--rand-stark); background: rgba(255, 255, 255, 0.02); transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.sprech-art strong, .re-chips strong { font-size: 13.5px; }
+.sprech-art small, .re-chips small { color: var(--leise); font-size: 12px; line-height: 1.35; }
+.sprech-art label:hover span, .re-chips label:hover span { border-color: rgba(0, 85, 255, 0.6); }
+.sprech-art input:checked + span, .re-chips input:checked + span { border-color: var(--gelb); background: rgba(255, 204, 0, 0.07); box-shadow: 0 0 0 1px var(--gelb), var(--glow-gelb); }
+.sprech-art input:focus-visible + span, .re-chips input:focus-visible + span { outline: 2px solid var(--gelb); outline-offset: 2px; }
+.sprech-art input:disabled + span { opacity: 0.45; cursor: default; }
+.sprech-signal { margin-bottom: 12px; }
+.sprech-signal input { width: 100%; max-width: 420px; margin-top: 6px; }
+.sprech-signal .hinweis { margin-top: 6px; }
+.sprech-ausloeser { display: flex; flex-direction: column; gap: 8px; }
+.sprech-belegung { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sprech-belegung strong { font-family: var(--anzeige); letter-spacing: 0.4px; padding: 6px 12px; border-radius: 8px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--rand); }
+.sprech-lernen { margin: 0; padding: 10px 12px; border-radius: 10px; border: 1px dashed var(--gelb); color: #fff; background: rgba(255, 204, 0, 0.06); animation: puls 1.6s ease-in-out infinite; }
+.sprech-lernen span { color: var(--leise); }
+/* Signalwort: Mikrofon hört dauerhaft mit – sichtbar in der Seitenleiste */
+body.signalwort-an .verbindung::after { content: "Mikro an (Signalwort)"; margin-left: auto; padding: 2px 8px; border-radius: 999px; font-size: 11px; color: #fff; background: rgba(239, 68, 68, 0.25); border: 1px solid rgba(239, 68, 68, 0.6); white-space: nowrap; }
+@media (max-width: 1100px) { .sprech-art { grid-template-columns: 1fr; } }
+
+/* Messenger direkt in der App */
+.mx-seite.aktiv { max-width: none; }
+.mx {
+  display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); height: calc(100vh - 66px - 50px); min-height: 420px;
+  border: 1px solid var(--rand); border-radius: 14px; overflow: hidden; background: linear-gradient(180deg, var(--flaeche-2), var(--flaeche));
+}
+.mx[hidden] { display: none; }
+.mx-seitenteil { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--rand); background: rgba(0, 0, 0, 0.25); }
+.mx-kopf { display: flex; gap: 8px; padding: 12px; border-bottom: 1px solid var(--rand); }
+.mx-kopf input { flex: 1; min-width: 0; }
+.mx-kopf .knopf { white-space: nowrap; padding: 6px 10px; font-size: 12px; }
+.mx-liste { list-style: none; margin: 0; padding: 6px; overflow-y: auto; flex: 1; }
+.mx-eintrag { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border: 0; border-radius: 10px; background: none; color: var(--text); text-align: left; cursor: pointer; }
+.mx-eintrag:hover { background: rgba(255, 255, 255, 0.05); }
+.mx-eintrag.aktiv { background: linear-gradient(90deg, rgba(0, 85, 255, 0.3), rgba(0, 85, 255, 0.06)); box-shadow: inset 3px 0 0 var(--gelb); }
+.mx-bild { flex: none; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-family: var(--anzeige); font-weight: 700; background: rgba(0, 85, 255, 0.25); color: #fff; }
+.mx-bild.forum { background: linear-gradient(135deg, var(--blau), #002a80); color: var(--gelb); }
+.mx-bild.gruppe { background: rgba(255, 204, 0, 0.18); color: var(--gelb); }
+.mx-eintrag-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mx-eintrag-kopf { display: flex; justify-content: space-between; gap: 8px; }
+.mx-eintrag-kopf strong { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mx-eintrag-kopf small { color: var(--leise); font-size: 11px; flex: none; }
+.mx-vorschau { color: var(--leise); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mx-eintrag.ungelesen .mx-vorschau { color: #fff; font-weight: 600; }
+.mx-leer { color: var(--leise); padding: 14px; margin: 0; }
+.mx-chat { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.mx-chat-kopf { display: flex; align-items: baseline; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--rand); }
+.mx-chat-kopf strong { font-family: var(--anzeige); font-size: 16px; letter-spacing: 0.6px; }
+.mx-chat-kopf small { color: var(--leise); }
+.mx-verlauf { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; }
+.mx-nachricht { align-self: flex-start; max-width: min(620px, 78%); padding: 8px 12px 6px; border-radius: 12px 12px 12px 4px; background: var(--flaeche-3); border: 1px solid var(--rand); }
+.mx-nachricht.eigen { align-self: flex-end; border-radius: 12px 12px 4px 12px; background: rgba(0, 85, 255, 0.22); border-color: rgba(0, 85, 255, 0.45); }
+.mx-nachricht p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; }
+.mx-wer { display: block; font-size: 11.5px; font-weight: 700; color: var(--gelb); margin-bottom: 2px; }
+.mx-medium { display: block; font-size: 12.5px; color: var(--leise); font-style: italic; }
+.mx-zeit { display: block; text-align: right; color: var(--leise); font-size: 10.5px; margin-top: 2px; }
+.mx-form { display: flex; gap: 8px; align-items: flex-end; padding: 12px 14px; border-top: 1px solid var(--rand); }
+.mx-form[hidden] { display: none; }
+.mx-form textarea { flex: 1; min-width: 0; resize: none; max-height: 180px; line-height: 1.45; }
+@media (max-width: 900px) { .mx { grid-template-columns: 220px minmax(0, 1fr); } }
+
+/* Renningenieur einstellen */
+.re-einstellen h3 { color: var(--text); margin-top: 20px; }
+.re-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 18px; }
+.re-form[hidden], .re-gedaechtnis[hidden] { display: none; }
+.re-feld { display: flex; flex-direction: column; gap: 6px; border: 0; padding: 0; margin: 0; min-width: 0; }
+.re-feld > span:first-child, .re-feld > span#reSpracheTitel { color: var(--leise); font-size: 12.5px; font-weight: 600; }
+.re-breit { grid-column: 1 / -1; }
+.re-chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.re-themen { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+.re-themen span { flex-direction: row; align-items: center; padding: 8px 12px; font-weight: 600; }
+.re-aktionen { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sprachwahl { position: relative; max-width: 420px; }
+.sprachwahl input { width: 100%; }
+.sprachwahl-liste {
+  position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 15; margin: 0; padding: 6px; list-style: none; max-height: 280px; overflow-y: auto;
+  border-radius: 12px; border: 1px solid var(--rand-stark); background: var(--flaeche-2); box-shadow: 0 18px 44px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(0, 85, 255, 0.12);
+}
+.sprachwahl-liste li { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 8px 12px; border-radius: 8px; cursor: pointer; color: var(--leise); }
+.sprachwahl-liste li small { font-size: 11.5px; opacity: 0.8; }
+.sprachwahl-liste li:hover, .sprachwahl-liste li.markiert { background: rgba(0, 85, 255, 0.18); color: #fff; }
+.sprachwahl-liste li.gewaehlt strong { color: var(--gelb); }
+.sprachwahl-liste li.leer { cursor: default; }
+.re-merken { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0 12px; }
+.re-merken input { flex: 1; min-width: 220px; }
+.re-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.re-liste li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 9px 12px; border-radius: 10px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--rand); }
+.re-liste li.leer { color: var(--leise); }
+.re-art { font-family: var(--anzeige); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--gelb); }
+.re-eintrag { flex: 1; min-width: 160px; }
+.re-quelle { color: var(--leise); font-size: 11.5px; }
+.re-weg { padding: 4px 10px; font-size: 12px; }
+@media (max-width: 1100px) { .re-form { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { .sprech-knopf { transition: none; } }
 
 .spar-tipps { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: rgba(34, 197, 94, 0.07); border: 1px solid rgba(34, 197, 94, 0.25); }

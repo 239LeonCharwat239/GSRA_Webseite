@@ -35,6 +35,15 @@
     "publisher": "GSRA",
     "category": "Game",
     "shortDescription": "Live-Telemetrie, Rundenvergleich und Renningenieur",
+    "longDescription": "Die GSRA-App: Live-Telemetrie, Spotter, Funk und Sprechtaste zum KI-Renningenieur – und die ganze GSRA in einem Fenster.",
+    "copyright": "Global Simracing Alliance",
+    "windows": {
+      "nsis": {
+        "languages": ["German", "English"],
+        "displayLanguageSelector": false,
+        "installMode": "currentUser"
+      }
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
