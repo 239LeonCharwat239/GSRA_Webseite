@@ -15,6 +15,11 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
+// Im Supabase-Dashboard erzeugte Regeln enden auf eine Zufallskennung („Public Upload & Read 1ps738_1“). Der Nachbau
+// kennt sie als „Public Upload & Read (Altregel)“ und prüft sie im schlimmsten Fall – live wird der Name zusammengefasst.
+const REGELNAME = `case when n.nspname = 'storage' and pol.polname ~ '^Public Upload & Read [A-Za-z0-9]+_[0-9]+$'
+      then 'Public Upload & Read (Altregel)' else pol.polname::text end`;
+
 const esc = (s) => (s == null ? "null" : `'${String(s).replace(/'/g, "''")}'`);
 const b = (x) => (x ? "true" : "false");
 const reEsc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -69,7 +74,7 @@ export async function pruefungErzeugen(db, migrationsOrdner) {
     where n.nspname = 'public' and c.relkind in ('r', 'p') and a.attnum > 0 and not a.attisdropped and a.attacl is not null
     order by 1, 2`);
   const regeln = await q(`
-    select n.nspname as schema, c.relname as tab, pol.polname as name, pol.polcmd::text as cmd, pol.polpermissive as perm,
+    select n.nspname as schema, c.relname as tab, ${REGELNAME} as name, pol.polcmd::text as cmd, pol.polpermissive as perm,
       coalesce((select string_agg(x, ',' order by x) from (select case when r = 0 then 'public' else pg_get_userbyid(r)::text end as x
                 from unnest(pol.polroles) r) s), '') as roles,
       md5(coalesce(pg_get_expr(pol.polqual, pol.polrelid), '')) as hq, md5(coalesce(pg_get_expr(pol.polwithcheck, pol.polrelid), '')) as hw
@@ -141,7 +146,7 @@ lk as (
   from ek join pg_namespace n on n.nspname = 'public' join pg_class c on c.relnamespace = n.oid and c.relname = ek.tab
   join pg_attribute a on a.attrelid = c.oid and a.attname = ek.col and not a.attisdropped),
 lp as (
-  select n.nspname::text as schema, c.relname::text as tab, pol.polname::text as name, pol.polcmd::text as cmd, pol.polpermissive as perm,
+  select n.nspname::text as schema, c.relname::text as tab, ${REGELNAME} as name, pol.polcmd::text as cmd, pol.polpermissive as perm,
     coalesce((select string_agg(x, ',' order by x) from (select case when r = 0 then 'public' else pg_get_userbyid(r)::text end as x
               from unnest(pol.polroles) r) s), '') as roles,
     md5(coalesce(pg_get_expr(pol.polqual, pol.polrelid), '')) as hq, md5(coalesce(pg_get_expr(pol.polwithcheck, pol.polrelid), '')) as hw,
@@ -234,6 +239,7 @@ befunde(bereich, objekt, status, details) as (
     case
       when l.name is null then 'Regel fehlt'
       when e.name is null then 'nicht aus den Skripten – ' || case when l.perm then 'erlaubend' else 'einschränkend' end || ', ' || (select t from befehl where c = l.cmd) || ', für ' || coalesce(nullif(l.roles, ''), 'alle') || ': ' || coalesce(l.ausdruck, '')
+      when not e.mig then 'bekannte Altregel, im Nachbau im schlimmsten Fall geprüft – live: ' || (select t from befehl where c = l.cmd) || ', für ' || l.roles || ': ' || coalesce(l.ausdruck, '')
       else (select t from befehl where c = l.cmd) || ' (erwartet ' || (select t from befehl where c = e.cmd) || '), für ' || l.roles || ' (erwartet ' || e.roles || '), '
         || case when l.perm then 'erlaubend' else 'einschränkend' end || case when l.hq <> e.hq or l.hw <> e.hw then ', anderer Ausdruck' else '' end || ': ' || coalesce(l.ausdruck, '') end
   from ep e full join lp l on l.schema = e.schema and l.tab = e.tab and l.name = e.name

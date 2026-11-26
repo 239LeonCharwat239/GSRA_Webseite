@@ -1,8 +1,8 @@
--- GSRA: Prüfung der Live-Datenbank gegen den getesteten Stand (Skripte 001–056)
+-- GSRA: Prüfung der Live-Datenbank gegen den getesteten Stand (Skripte 001–058)
 -- NUR LESEN: ändert nichts. Im Supabase SQL Editor komplett einfügen und ausführen („Run“).
 -- Ergebnis: erste Zeile „GESAMT“. Steht dort nicht „Alles in Ordnung“, das Ergebnis bitte an Claude schicken.
 -- Erzeugt automatisch aus dem Nachbau (tests/db/datenbank.test.mjs, PRUEFUNG_SCHREIBEN=1) – nicht von Hand ändern.
--- Erfasst: 204 Funktionen, 66 Tabellen, 0 Spalten-Rechte, 202 Zugriffsregeln,
+-- Erfasst: 205 Funktionen, 66 Tabellen, 0 Spalten-Rechte, 232 Zugriffsregeln,
 --          266 Prüfregeln, 46 Trigger, 8 Speicher, 5 Zeitpläne.
 with
 ef(sig, name, h, secdef, cfg, anon, auth, mig) as (values
@@ -124,6 +124,7 @@ ef(sig, name, h, secdef, cfg, anon, auth, mig) as (values
     ('public.messages_guard_delete()', 'messages_guard_delete', 'd3b5f4ab051deb0e4aa679cb6ff6015b', true, 'search_path=public', false, false, true),
     ('public.messages_keep_history()', 'messages_keep_history', 'd605bf6854ea45ceb7440b2c77359c7a', true, 'search_path=public', false, false, true),
     ('public.messages_set_expiry()', 'messages_set_expiry', 'e6c9d0c159687cbad4790978a8d79966', true, 'search_path=public', false, false, true),
+    ('public.messenger_hinweis()', 'messenger_hinweis', '73956bb90de35c1561a2b460b90ddb62', false, 'search_path=public', false, true, true),
     ('public.mfa_ok()', 'mfa_ok', '89a43abcc6a61d060b03b3bf8bffd881', true, 'search_path=public', false, true, true),
     ('public.moderation_ban_rules()', 'moderation_ban_rules', '0f42087980b63bffce930ed81ce8c085', true, 'search_path=public', false, false, true),
     ('public.moderation_log_write()', 'moderation_log_write', '3a3513316e8500faccef5e3feef87e12', true, 'search_path=public', false, false, true),
@@ -291,7 +292,9 @@ ep(schema, tab, name, cmd, perm, roles, hq, hw, mig) as (values
     ('public', 'career_entries', 'GSRA: Karriere nicht mit gesperrtem Konto', 'a', false, 'authenticated', 'd41d8cd98f00b204e9800998ecf8427e', 'a182b7011f8b647b01c71a23986850b2', true),
     ('public', 'career_entries', 'GSRA: Karriere nicht ändern mit gesperrtem Konto', 'w', false, 'authenticated', 'a182b7011f8b647b01c71a23986850b2', 'd41d8cd98f00b204e9800998ecf8427e', true),
     ('public', 'chat_favorites', 'GSRA Zwei-Faktor erforderlich', '*', false, 'authenticated', '2b0fc89c16f1a2e07a2a8bc387b5ffe5', '2b0fc89c16f1a2e07a2a8bc387b5ffe5', true),
+    ('public', 'chat_favorites', 'GSRA: Nur eigene Favoriten', '*', false, 'public', '3a807491e0a912fbfbee0ffa087b82f6', '3a807491e0a912fbfbee0ffa087b82f6', true),
     ('public', 'chat_favorites', 'Gesperrte Konten haben keinen Zugriff', '*', false, 'authenticated', 'a182b7011f8b647b01c71a23986850b2', 'a182b7011f8b647b01c71a23986850b2', true),
+    ('public', 'chat_favorites', 'Nutzer verwalten eigene Favoriten', '*', true, 'public', 'b326b5062b2f0e69046810717534cb09', 'b326b5062b2f0e69046810717534cb09', false),
     ('public', 'chat_favorites', 'fav', '*', true, 'authenticated', '19300d155780585259ede73ac370586c', '19300d155780585259ede73ac370586c', false),
     ('public', 'chat_members', 'GSRA Zwei-Faktor erforderlich', '*', false, 'authenticated', '2b0fc89c16f1a2e07a2a8bc387b5ffe5', '2b0fc89c16f1a2e07a2a8bc387b5ffe5', true),
     ('public', 'chat_members', 'Gesperrte Konten haben keinen Zugriff', '*', false, 'authenticated', 'a182b7011f8b647b01c71a23986850b2', 'a182b7011f8b647b01c71a23986850b2', true),
@@ -302,6 +305,9 @@ ep(schema, tab, name, cmd, perm, roles, hq, hw, mig) as (values
     ('public', 'chats', 'Gesperrte Konten haben keinen Zugriff', '*', false, 'authenticated', 'a182b7011f8b647b01c71a23986850b2', 'a182b7011f8b647b01c71a23986850b2', true),
     ('public', 'chats', 'Gruppenadmins können ihre Gruppe bearbeiten', 'w', true, 'authenticated', '3b199dcf3b903b2b18871984be37c56d', '3b199dcf3b903b2b18871984be37c56d', true),
     ('public', 'chats', 'Neue Direktchats nur zwischen Freunden', 'a', false, 'authenticated', 'd41d8cd98f00b204e9800998ecf8427e', 'ba25d044339d3ae9cc150dfc23850a87', true),
+    ('public', 'chats', 'Nutzer können Chats aktualisieren', 'w', true, 'public', 'b326b5062b2f0e69046810717534cb09', 'b326b5062b2f0e69046810717534cb09', false),
+    ('public', 'chats', 'Nutzer können Chats erstellen', 'a', true, 'public', 'd41d8cd98f00b204e9800998ecf8427e', 'b326b5062b2f0e69046810717534cb09', false),
+    ('public', 'chats', 'Nutzer können eigene Chats löschen', 'd', true, 'public', 'b326b5062b2f0e69046810717534cb09', 'd41d8cd98f00b204e9800998ecf8427e', false),
     ('public', 'chats', 'Nutzer können ihre eigenen Chats sehen', 'r', true, 'authenticated', '63a4e3016d8029b70cb61ce4d34ccb6f', 'd41d8cd98f00b204e9800998ecf8427e', false),
     ('public', 'chats', 'Website-Admins bearbeiten das offizielle Forum', 'w', true, 'authenticated', '6057e17e3600c71407205555f6a8fc5f', '6057e17e3600c71407205555f6a8fc5f', true),
     ('public', 'chats', 'ci', 'a', true, 'authenticated', 'd41d8cd98f00b204e9800998ecf8427e', '211484f4e0ddcaefd7bc3e33880b8ff8', false),
@@ -353,6 +359,10 @@ ep(schema, tab, name, cmd, perm, roles, hq, hw, mig) as (values
     ('public', 'events', 'GSRA: Events nur von Admins ändern', 'w', false, 'public', '19a9481e5307ccb75a2db40dc292a15e', '19a9481e5307ccb75a2db40dc292a15e', true),
     ('public', 'events', 'GSRA: Events ändern (Admins)', 'w', true, 'authenticated', '19a9481e5307ccb75a2db40dc292a15e', '19a9481e5307ccb75a2db40dc292a15e', true),
     ('public', 'events', 'Gesperrte Konten haben keinen Zugriff', '*', false, 'authenticated', 'a182b7011f8b647b01c71a23986850b2', 'a182b7011f8b647b01c71a23986850b2', true),
+    ('public', 'events', 'Jeder kann Events sehen', 'r', true, 'public', 'b326b5062b2f0e69046810717534cb09', 'd41d8cd98f00b204e9800998ecf8427e', false),
+    ('public', 'events', 'Nur Admins können Events bearbeiten', 'w', true, 'public', 'b326b5062b2f0e69046810717534cb09', 'b326b5062b2f0e69046810717534cb09', false),
+    ('public', 'events', 'Nur Admins können Events erstellen', 'a', true, 'public', 'd41d8cd98f00b204e9800998ecf8427e', 'b326b5062b2f0e69046810717534cb09', false),
+    ('public', 'events', 'Nur Admins können Events löschen', 'd', true, 'public', 'b326b5062b2f0e69046810717534cb09', 'd41d8cd98f00b204e9800998ecf8427e', false),
     ('public', 'friendships', 'Eigene Freundschaften sehen', 'r', true, 'authenticated', '5fa0ca0005a6c64cbb5e8253b7e29b91', 'd41d8cd98f00b204e9800998ecf8427e', true),
     ('public', 'friendships', 'GSRA Zwei-Faktor erforderlich', '*', false, 'authenticated', '2b0fc89c16f1a2e07a2a8bc387b5ffe5', '2b0fc89c16f1a2e07a2a8bc387b5ffe5', true),
     ('public', 'friendships', 'Gesperrte Konten haben keinen Zugriff', '*', false, 'authenticated', 'a182b7011f8b647b01c71a23986850b2', 'a182b7011f8b647b01c71a23986850b2', true),
@@ -361,6 +371,7 @@ ep(schema, tab, name, cmd, perm, roles, hq, hw, mig) as (values
     ('public', 'known_devices', 'GSRA: Eigene Geräte lesen', 'r', true, 'authenticated', '6a6b7c2a3a520c44377894171204e8d2', 'd41d8cd98f00b204e9800998ecf8427e', true),
     ('public', 'livery_offers', 'GSRA Livery-Angebote ansehen', 'r', true, 'authenticated', 'ae9ff14de6f5b6298aa2742af8f26b4f', 'd41d8cd98f00b204e9800998ecf8427e', true),
     ('public', 'livery_offers', 'Gesperrte Konten haben keinen Zugriff', '*', false, 'authenticated', 'a182b7011f8b647b01c71a23986850b2', 'a182b7011f8b647b01c71a23986850b2', true),
+    ('public', 'marketplace', 'Eingeloggte Nutzer können Angebote erstellen', 'a', true, 'public', 'd41d8cd98f00b204e9800998ecf8427e', 'b326b5062b2f0e69046810717534cb09', false),
     ('public', 'marketplace', 'Enable all for everyone', '*', true, 'public', 'b326b5062b2f0e69046810717534cb09', 'b326b5062b2f0e69046810717534cb09', false),
     ('public', 'marketplace', 'GSRA Zwei-Faktor erforderlich', '*', false, 'authenticated', '2b0fc89c16f1a2e07a2a8bc387b5ffe5', '2b0fc89c16f1a2e07a2a8bc387b5ffe5', true),
     ('public', 'marketplace', 'GSRA: Eigene Inserate anlegen', 'a', true, 'authenticated', 'd41d8cd98f00b204e9800998ecf8427e', '3e952d3537773b94b13f05baa339de92', true),
@@ -371,15 +382,26 @@ ep(schema, tab, name, cmd, perm, roles, hq, hw, mig) as (values
     ('public', 'marketplace', 'GSRA: Inserate nur vom Eigentümer löschen', 'd', false, 'public', '3c11cd4512ce983c7cfc6b24bd7406b0', 'd41d8cd98f00b204e9800998ecf8427e', true),
     ('public', 'marketplace', 'GSRA: Inserate nur vom Eigentümer ändern', 'w', false, 'public', '3c11cd4512ce983c7cfc6b24bd7406b0', '3c11cd4512ce983c7cfc6b24bd7406b0', true),
     ('public', 'marketplace', 'Gesperrte Konten haben keinen Zugriff', '*', false, 'authenticated', 'a182b7011f8b647b01c71a23986850b2', 'a182b7011f8b647b01c71a23986850b2', true),
+    ('public', 'marketplace', 'Jeder kann Marktplatz-Einträge sehen', 'r', true, 'public', 'b326b5062b2f0e69046810717534cb09', 'd41d8cd98f00b204e9800998ecf8427e', false),
+    ('public', 'marketplace', 'Nutzer können eigene Angebote bearbeiten', 'w', true, 'public', 'b326b5062b2f0e69046810717534cb09', 'b326b5062b2f0e69046810717534cb09', false),
+    ('public', 'marketplace', 'Nutzer können eigene Angebote löschen', 'd', true, 'public', 'b326b5062b2f0e69046810717534cb09', 'd41d8cd98f00b204e9800998ecf8427e', false),
     ('public', 'message_hides', 'Eigene ausgeblendete Nachrichten', '*', true, 'authenticated', '3a807491e0a912fbfbee0ffa087b82f6', '3a807491e0a912fbfbee0ffa087b82f6', true),
     ('public', 'message_hides', 'GSRA Zwei-Faktor erforderlich', '*', false, 'authenticated', '2b0fc89c16f1a2e07a2a8bc387b5ffe5', '2b0fc89c16f1a2e07a2a8bc387b5ffe5', true),
     ('public', 'message_hides', 'Gesperrte Konten haben keinen Zugriff', '*', false, 'authenticated', 'a182b7011f8b647b01c71a23986850b2', 'a182b7011f8b647b01c71a23986850b2', true),
     ('public', 'message_history', 'GSRA Zwei-Faktor erforderlich', '*', false, 'authenticated', '2b0fc89c16f1a2e07a2a8bc387b5ffe5', '2b0fc89c16f1a2e07a2a8bc387b5ffe5', true),
     ('public', 'message_history', 'Nur Admins sehen gesicherte Nachrichten', 'r', true, 'authenticated', 'b3aa6182bf09661f5c7dfe85dab59e9b', 'd41d8cd98f00b204e9800998ecf8427e', true),
+    ('public', 'messages', 'Chat participants can update reactions', 'w', true, 'public', 'b326b5062b2f0e69046810717534cb09', 'b326b5062b2f0e69046810717534cb09', false),
+    ('public', 'messages', 'Erlaube Reaktionen auf Nachrichten', 'w', true, 'public', 'b326b5062b2f0e69046810717534cb09', 'b326b5062b2f0e69046810717534cb09', false),
     ('public', 'messages', 'GSRA Zwei-Faktor erforderlich', '*', false, 'authenticated', '2b0fc89c16f1a2e07a2a8bc387b5ffe5', '2b0fc89c16f1a2e07a2a8bc387b5ffe5', true),
+    ('public', 'messages', 'GSRA: Gäste lesen keine Nachrichten', 'r', false, 'anon', '68934a3e9455fa72420237eb05902327', 'd41d8cd98f00b204e9800998ecf8427e', true),
     ('public', 'messages', 'Gesperrte Konten haben keinen Zugriff', '*', false, 'authenticated', 'a182b7011f8b647b01c71a23986850b2', 'a182b7011f8b647b01c71a23986850b2', true),
     ('public', 'messages', 'Nachrichten nur aus eigenen Chats und nicht von Blockierten', 'r', false, 'authenticated', '0da52fb1d321b2ca5f794b5183298810', 'd41d8cd98f00b204e9800998ecf8427e', true),
+    ('public', 'messages', 'Nutzer können Nachrichten ihrer Chats lesen', 'r', true, 'public', 'b326b5062b2f0e69046810717534cb09', 'd41d8cd98f00b204e9800998ecf8427e', false),
+    ('public', 'messages', 'Nutzer können Nachrichten in ihren Chats löschen', 'd', true, 'public', 'ed932b3d13b191b8c86675fb19eaebee', 'd41d8cd98f00b204e9800998ecf8427e', false),
+    ('public', 'messages', 'Nutzer können Nachrichten in ihren Chats senden', 'a', true, 'public', 'd41d8cd98f00b204e9800998ecf8427e', 'b326b5062b2f0e69046810717534cb09', false),
     ('public', 'messages', 'Schreiben nur als Teilnehmer', 'a', false, 'authenticated', 'd41d8cd98f00b204e9800998ecf8427e', 'eba4acba539dfb3c3dc9a6f9f5d33668', true),
+    ('public', 'messages', 'Users can update their own messages', 'w', true, 'public', 'b326b5062b2f0e69046810717534cb09', 'b326b5062b2f0e69046810717534cb09', false),
+    ('public', 'messages', 'messages_update_reactions', 'w', true, 'authenticated', 'b326b5062b2f0e69046810717534cb09', 'b326b5062b2f0e69046810717534cb09', false),
     ('public', 'messages', 'r_insert', 'a', true, 'public', 'd41d8cd98f00b204e9800998ecf8427e', 'ed932b3d13b191b8c86675fb19eaebee', false),
     ('public', 'messages', 'r_select', 'r', true, 'public', 'b326b5062b2f0e69046810717534cb09', 'd41d8cd98f00b204e9800998ecf8427e', false),
     ('public', 'messages', 'r_upd', 'w', true, 'public', 'd233dbe819c0e63f764be54f54a59cb3', 'd233dbe819c0e63f764be54f54a59cb3', false),
@@ -402,7 +424,10 @@ ep(schema, tab, name, cmd, perm, roles, hq, hw, mig) as (values
     ('public', 'profiles', 'Eigenes Profil bearbeiten', 'w', true, 'authenticated', 'bc9c729a84690340789a4e4f01175335', 'd41d8cd98f00b204e9800998ecf8427e', false),
     ('public', 'profiles', 'GSRA Profile nicht für Gäste', 'r', false, 'anon', '68934a3e9455fa72420237eb05902327', 'd41d8cd98f00b204e9800998ecf8427e', true),
     ('public', 'profiles', 'GSRA Zwei-Faktor erforderlich', '*', false, 'authenticated', '2b0fc89c16f1a2e07a2a8bc387b5ffe5', '2b0fc89c16f1a2e07a2a8bc387b5ffe5', true),
+    ('public', 'profiles', 'GSRA: Profile nur selbst ändern', 'w', false, 'public', 'ea1f5df45681e1946eaa85c22966d773', 'ea1f5df45681e1946eaa85c22966d773', true),
+    ('public', 'profiles', 'Nutzer können ihr eigenes Profil aktualisieren', 'w', true, 'public', 'b326b5062b2f0e69046810717534cb09', 'b326b5062b2f0e69046810717534cb09', false),
     ('public', 'profiles', 'Profile lesen', 'r', true, 'public', 'b326b5062b2f0e69046810717534cb09', 'd41d8cd98f00b204e9800998ecf8427e', false),
+    ('public', 'profiles', 'Öffentliche Profile sind für jeden sichtbar', 'r', true, 'public', 'b326b5062b2f0e69046810717534cb09', 'd41d8cd98f00b204e9800998ecf8427e', false),
     ('public', 'race_engineer_memory', 'GSRA eigenes Gedächtnis lesen', 'r', true, 'authenticated', '6a6b7c2a3a520c44377894171204e8d2', 'd41d8cd98f00b204e9800998ecf8427e', true),
     ('public', 'race_engineer_memory', 'GSRA eigenes Gedächtnis löschen', 'd', true, 'authenticated', '6a6b7c2a3a520c44377894171204e8d2', 'd41d8cd98f00b204e9800998ecf8427e', true),
     ('public', 'race_engineer_memory', 'Gesperrte Konten haben keinen Zugriff', '*', false, 'authenticated', 'a182b7011f8b647b01c71a23986850b2', 'a182b7011f8b647b01c71a23986850b2', true),
@@ -425,6 +450,8 @@ ep(schema, tab, name, cmd, perm, roles, hq, hw, mig) as (values
     ('public', 'setup_votes', 'GSRA Zwei-Faktor erforderlich', '*', false, 'authenticated', '2b0fc89c16f1a2e07a2a8bc387b5ffe5', '2b0fc89c16f1a2e07a2a8bc387b5ffe5', true),
     ('public', 'setup_votes', 'GSRA: Eigene Stimmen sehen', 'r', true, 'authenticated', '6a6b7c2a3a520c44377894171204e8d2', 'd41d8cd98f00b204e9800998ecf8427e', true),
     ('public', 'setup_votes', 'Gesperrte Konten haben keinen Zugriff', '*', false, 'authenticated', 'a182b7011f8b647b01c71a23986850b2', 'a182b7011f8b647b01c71a23986850b2', true),
+    ('public', 'setups', 'Eingeloggte Nutzer können Setups eintragen', 'a', true, 'public', 'd41d8cd98f00b204e9800998ecf8427e', 'b326b5062b2f0e69046810717534cb09', false),
+    ('public', 'setups', 'Eingeloggte Nutzer können Setups lesen', 'r', true, 'public', 'b326b5062b2f0e69046810717534cb09', 'd41d8cd98f00b204e9800998ecf8427e', false),
     ('public', 'setups', 'GSRA Zwei-Faktor erforderlich', '*', false, 'authenticated', '2b0fc89c16f1a2e07a2a8bc387b5ffe5', '2b0fc89c16f1a2e07a2a8bc387b5ffe5', true),
     ('public', 'setups', 'GSRA: Eigene Setups hochladen', 'a', true, 'authenticated', 'd41d8cd98f00b204e9800998ecf8427e', '6a87e40fdb7d9f9ce93409db56f0c6e1', true),
     ('public', 'setups', 'GSRA: Eigene Setups löschen', 'd', true, 'authenticated', 'c96d52c9b8e9b28e3ce3a2d88b8bc620', 'd41d8cd98f00b204e9800998ecf8427e', true),
@@ -453,6 +480,7 @@ ep(schema, tab, name, cmd, perm, roles, hq, hw, mig) as (values
     ('public', 'user_warnings', 'Eigene Verwarnungen sehen', 'r', true, 'authenticated', 'f60991adf049a8766a0aab30ceb0e527', 'd41d8cd98f00b204e9800998ecf8427e', true),
     ('public', 'user_warnings', 'GSRA Moderation sieht Verwarnungen', 'r', true, 'authenticated', '19a9481e5307ccb75a2db40dc292a15e', 'd41d8cd98f00b204e9800998ecf8427e', true),
     ('public', 'user_warnings', 'GSRA Zwei-Faktor erforderlich', '*', false, 'authenticated', '2b0fc89c16f1a2e07a2a8bc387b5ffe5', '2b0fc89c16f1a2e07a2a8bc387b5ffe5', true),
+    ('storage', 'objects', 'Eingeloggte Nutzer können Setups hochladen', 'a', true, 'public', 'd41d8cd98f00b204e9800998ecf8427e', 'b326b5062b2f0e69046810717534cb09', false),
     ('storage', 'objects', 'GSRA Bilder hochladen', 'a', true, 'authenticated', 'd41d8cd98f00b204e9800998ecf8427e', '8e8f3451869b17d1a978c9bdc70c1304', true),
     ('storage', 'objects', 'GSRA Chat-Anhänge nicht auflistbar', 'r', false, 'public', 'e7ed572706075709f98440b1d97663cb', 'd41d8cd98f00b204e9800998ecf8427e', true),
     ('storage', 'objects', 'GSRA Chat-Anhänge nicht überschreibbar', 'w', false, 'public', '44f6c9f2f2a520be6712d9f0e921933f', '44f6c9f2f2a520be6712d9f0e921933f', true),
@@ -474,10 +502,13 @@ ep(schema, tab, name, cmd, perm, roles, hq, hw, mig) as (values
     ('storage', 'objects', 'GSRA Pro Setups nur für Abonnenten', 'r', false, 'public', 'd789a07efad507629ed005f08d845fe9', 'd41d8cd98f00b204e9800998ecf8427e', true),
     ('storage', 'objects', 'GSRA Startseite Bilder hochladen', 'a', true, 'authenticated', 'd41d8cd98f00b204e9800998ecf8427e', 'c689175cf98bbf678dca95ca38c42e1e', true),
     ('storage', 'objects', 'GSRA Startseite Bilder löschen', 'd', true, 'authenticated', '1b79aeb6d47aa9b7d802c34c8b7a7b71', 'd41d8cd98f00b204e9800998ecf8427e', true),
-    ('storage', 'objects', 'GSRA Startseite nur Admins', 'a', false, 'public', 'd41d8cd98f00b204e9800998ecf8427e', 'fb5e7fc88d0e59fd6eed42388c35d686', true),
+    ('storage', 'objects', 'GSRA Startseite nur Admins', 'a', false, 'public', 'd41d8cd98f00b204e9800998ecf8427e', '015dac29d67144d5fdf124481a530541', true),
     ('storage', 'objects', 'GSRA Zwei-Faktor erforderlich', '*', false, 'authenticated', '2b0fc89c16f1a2e07a2a8bc387b5ffe5', '2b0fc89c16f1a2e07a2a8bc387b5ffe5', true),
     ('storage', 'objects', 'GSRA eigene Bilder löschen', 'd', true, 'authenticated', 'a53573d1d3d0f1b4bd878e912bfc44f9', 'd41d8cd98f00b204e9800998ecf8427e', true),
     ('storage', 'objects', 'GSRA eigene Dateien sehen', 'r', true, 'authenticated', '5a8c76be87881aad26589e9093d22f84', 'd41d8cd98f00b204e9800998ecf8427e', true),
+    ('storage', 'objects', 'Jeder angemeldete Nutzer kann Avatare hochladen', 'a', true, 'public', 'd41d8cd98f00b204e9800998ecf8427e', 'b326b5062b2f0e69046810717534cb09', false),
+    ('storage', 'objects', 'Jeder angemeldete Nutzer kann Chat-Anhänge hochladen', 'a', true, 'public', 'd41d8cd98f00b204e9800998ecf8427e', 'b326b5062b2f0e69046810717534cb09', false),
+    ('storage', 'objects', 'Public Upload & Read (Altregel)', 'a', true, 'public', 'd41d8cd98f00b204e9800998ecf8427e', 'b326b5062b2f0e69046810717534cb09', false),
     ('storage', 'objects', 'Public deletes', 'd', true, 'public', '405aafc27719478be1074b4c317c2c33', 'd41d8cd98f00b204e9800998ecf8427e', false),
     ('storage', 'objects', 'Public updates', 'w', true, 'public', '405aafc27719478be1074b4c317c2c33', 'd41d8cd98f00b204e9800998ecf8427e', false),
     ('storage', 'objects', 'Public uploads', 'a', true, 'public', 'd41d8cd98f00b204e9800998ecf8427e', '3de6d4e1f4ce91bb8d357718e10171e3', false)),
@@ -836,7 +867,8 @@ lk as (
   from ek join pg_namespace n on n.nspname = 'public' join pg_class c on c.relnamespace = n.oid and c.relname = ek.tab
   join pg_attribute a on a.attrelid = c.oid and a.attname = ek.col and not a.attisdropped),
 lp as (
-  select n.nspname::text as schema, c.relname::text as tab, pol.polname::text as name, pol.polcmd::text as cmd, pol.polpermissive as perm,
+  select n.nspname::text as schema, c.relname::text as tab, case when n.nspname = 'storage' and pol.polname ~ '^Public Upload & Read [A-Za-z0-9]+_[0-9]+$'
+      then 'Public Upload & Read (Altregel)' else pol.polname::text end as name, pol.polcmd::text as cmd, pol.polpermissive as perm,
     coalesce((select string_agg(x, ',' order by x) from (select case when r = 0 then 'public' else pg_get_userbyid(r)::text end as x
               from unnest(pol.polroles) r) s), '') as roles,
     md5(coalesce(pg_get_expr(pol.polqual, pol.polrelid), '')) as hq, md5(coalesce(pg_get_expr(pol.polwithcheck, pol.polrelid), '')) as hw,
@@ -929,6 +961,7 @@ befunde(bereich, objekt, status, details) as (
     case
       when l.name is null then 'Regel fehlt'
       when e.name is null then 'nicht aus den Skripten – ' || case when l.perm then 'erlaubend' else 'einschränkend' end || ', ' || (select t from befehl where c = l.cmd) || ', für ' || coalesce(nullif(l.roles, ''), 'alle') || ': ' || coalesce(l.ausdruck, '')
+      when not e.mig then 'bekannte Altregel, im Nachbau im schlimmsten Fall geprüft – live: ' || (select t from befehl where c = l.cmd) || ', für ' || l.roles || ': ' || coalesce(l.ausdruck, '')
       else (select t from befehl where c = l.cmd) || ' (erwartet ' || (select t from befehl where c = e.cmd) || '), für ' || l.roles || ' (erwartet ' || e.roles || '), '
         || case when l.perm then 'erlaubend' else 'einschränkend' end || case when l.hq <> e.hq or l.hw <> e.hw then ', anderer Ausdruck' else '' end || ': ' || coalesce(l.ausdruck, '') end
   from ep e full join lp l on l.schema = e.schema and l.tab = e.tab and l.name = e.name
@@ -985,7 +1018,7 @@ select nr, bereich, objekt, status, details from (
          else 'Bitte an Claude schicken' end as status,
     count(*) filter (where status = 'FEHLER') || ' Fehler, ' || count(*) filter (where status = 'WARNUNG') || ' Warnungen, '
       || count(*) filter (where status = 'ABWEICHUNG') || ' Abweichungen, ' || count(*) filter (where status = 'HINWEIS') || ' Hinweise – '
-      || count(*) || ' Prüfungen gegen den getesteten Stand nach Skript 056' as details, 0 as rang
+      || count(*) || ' Prüfungen gegen den getesteten Stand nach Skript 058' as details, 0 as rang
   from befunde
   union all
   select 1, bereich, count(*) || ' geprüft', case when count(*) filter (where status <> 'ok' and status <> 'HINWEIS') = 0 then 'ok' else 'prüfen' end,

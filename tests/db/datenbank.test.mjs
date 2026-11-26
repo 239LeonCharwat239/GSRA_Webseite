@@ -11,9 +11,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL, KARRIERE_SQL, STINTPLAN_SQL, LIVERIES_SQL, CHATSICHER_SQL, AUFRAEUMEN_SQL, ONLINE_SQL, RE_STIL_SQL, APP_LOGIN_SQL, RE_KI_SQL, RE_CHAT_SQL, RE_MERKEN_SQL, LAENGER_SQL, STARTSEITE_SQL] =
-    Array.from({ length: 56 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 56);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL, KARRIERE_SQL, STINTPLAN_SQL, LIVERIES_SQL, CHATSICHER_SQL, AUFRAEUMEN_SQL, ONLINE_SQL, RE_STIL_SQL, APP_LOGIN_SQL, RE_KI_SQL, RE_CHAT_SQL, RE_MERKEN_SQL, LAENGER_SQL, STARTSEITE_SQL, ALTREGELN_SQL, HINWEIS_SQL] =
+    Array.from({ length: 58 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 58);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -3971,6 +3971,171 @@ if (STARTSEITE_SQL) {
     check("Admin ohne bestätigten Code: kein Upload", ohneCodeBild.error !== null, ohneCodeBild.error || "durchgelassen!");
     const bucket = await one(`select public, file_size_limit, allowed_mime_types from storage.buckets where id = 'startseite'`);
     check("Speicher: öffentlich lesbar, höchstens 3 MB, nur JPEG/WebP/PNG", bucket?.public === true && Number(bucket.file_size_limit) <= 3145728 && !JSON.stringify(bucket.allowed_mime_types).includes("svg"), JSON.stringify(bucket));
+}
+
+// --- 057: Ergebnis der Live-Prüfung (26.11.): ältere Setup-Prüfung live + 27 Altregeln aus der Anfangszeit ---
+// Die Altregeln der echten Datenbank werden hier im SCHLIMMSTEN Fall nachgebaut (alle Rollen, keine Bedingung;
+// nur das Löschen eigener Nachrichten war eindeutig lesbar). Sie bleiben bis zum Ende des Tests bestehen.
+if (ALTREGELN_SQL && STARTSEITE_SQL && SETUPHUB_SQL) {
+    const A = U.admin, FREE = "30000000-0000-0000-0000-000000000001";
+    const ALTREGELN = `
+      create policy "Nutzer verwalten eigene Favoriten" on public.chat_favorites for all using (true) with check (true);
+      create policy "Nutzer können Chats aktualisieren" on public.chats for update using (true) with check (true);
+      create policy "Nutzer können Chats erstellen" on public.chats for insert with check (true);
+      create policy "Nutzer können eigene Chats löschen" on public.chats for delete using (true);
+      create policy "Jeder kann Events sehen" on public.events for select using (true);
+      create policy "Nur Admins können Events bearbeiten" on public.events for update using (true) with check (true);
+      create policy "Nur Admins können Events erstellen" on public.events for insert with check (true);
+      create policy "Nur Admins können Events löschen" on public.events for delete using (true);
+      create policy "Eingeloggte Nutzer können Angebote erstellen" on public.marketplace for insert with check (true);
+      create policy "Jeder kann Marktplatz-Einträge sehen" on public.marketplace for select using (true);
+      create policy "Nutzer können eigene Angebote bearbeiten" on public.marketplace for update using (true) with check (true);
+      create policy "Nutzer können eigene Angebote löschen" on public.marketplace for delete using (true);
+      create policy "Chat participants can update reactions" on public.messages for update using (true) with check (true);
+      create policy "Erlaube Reaktionen auf Nachrichten" on public.messages for update using (true) with check (true);
+      create policy "Nutzer können Nachrichten ihrer Chats lesen" on public.messages for select using (true);
+      create policy "Nutzer können Nachrichten in ihren Chats senden" on public.messages for insert with check (true);
+      create policy "Nutzer können Nachrichten in ihren Chats löschen" on public.messages for delete using (auth.uid() = sender_id);
+      create policy "Users can update their own messages" on public.messages for update using (true) with check (true);
+      create policy "messages_update_reactions" on public.messages for update to authenticated using (true) with check (true);
+      create policy "Nutzer können ihr eigenes Profil aktualisieren" on public.profiles for update using (true) with check (true);
+      create policy "Öffentliche Profile sind für jeden sichtbar" on public.profiles for select using (true);
+      create policy "Eingeloggte Nutzer können Setups eintragen" on public.setups for insert with check (true);
+      create policy "Eingeloggte Nutzer können Setups lesen" on public.setups for select using (true);
+      create policy "Eingeloggte Nutzer können Setups hochladen" on storage.objects for insert with check (true);
+      create policy "Jeder angemeldete Nutzer kann Avatare hochladen" on storage.objects for insert with check (true);
+      create policy "Jeder angemeldete Nutzer kann Chat-Anhänge hochladen" on storage.objects for insert with check (true);
+      -- im Dashboard erzeugt, live mit Zufallskennung am Ende (die Prüf-SQL fasst solche Namen zusammen)
+      create policy "Public Upload & Read (Altregel)" on storage.objects for insert with check (true);`;
+    await db.exec(ALTREGELN);
+
+    // Vorher: Live lief die ältere Setup-Prüfung aus 006 → Setups ohne Datei scheitern
+    await db.exec(`create or replace function public.setups_https_only() returns trigger language plpgsql set search_path to 'public' as $f$
+        begin if new.file_url is null or new.file_url !~* '^https://' then raise exception 'Der Download-Link muss mit https:// beginnen.'; end if; return new; end; $f$;`);
+    const ohneDatei = () => as(FREE, () => q(`insert into public.setups (simulation, car_model, track_name, setup_type, uploader_id)
+        values ('F1 25', 'McLaren', 'Monza', 'Rennen', '${FREE}') returning id`));
+    const vorherSetup = await ohneDatei();
+    check("Vorher (wie live): Setup ohne Datei scheitert an der alten Link-Prüfung", /https/.test(vorherSetup.error || ""), vorherSetup.error || "durchgelassen");
+    // Vorher: Im schlimmsten Fall öffnen die Altregeln fremde Profile und fremde Ordner der Startseite
+    const fremdProfil = () => as(U.tim, () => q(`update public.profiles set full_name = 'gehackt' where id = '${U.anna}' returning id`));
+    const vorherProfil = await fremdProfil();
+    check("Vorher (schlimmster Fall): fremdes Profil wäre änderbar", vorherProfil.rows.length === 1, vorherProfil.error || `${vorherProfil.rows.length} Zeile(n)`);
+    const fremdFavorit = () => as(U.tim, () => q(`insert into public.chat_favorites (user_id, chat_id) values ('${U.anna}', '${G}') returning user_id`));
+    const vorherFavorit = await fremdFavorit();
+    check("Vorher (schlimmster Fall): Favorit für andere anlegbar", vorherFavorit.rows.length === 1, vorherFavorit.error || `${vorherFavorit.rows.length} Zeile(n)`);
+    await db.exec(`delete from public.chat_favorites where user_id = '${U.anna}' and chat_id = '${G}'`);
+    const gastNachrichten = () => as(null, () => q(`select id from public.messages`));
+    const vorherGast = await gastNachrichten();
+    check("Vorher (schlimmster Fall): Gäste könnten Nachrichten lesen", vorherGast.rows.length > 0, vorherGast.error || `${vorherGast.rows.length} Zeilen`);
+    await db.exec(`update public.profiles set full_name = null where id = '${U.anna}'`);
+    const fremdOrdner = () => mitAnspruch(A, { aal: "aal2" }, () => q(`insert into storage.objects (bucket_id, name) values ('startseite', '${U.max}/fremd-057.webp')`));
+    const vorherOrdner = await fremdOrdner();
+    check("Vorher (schlimmster Fall): Startseiten-Bild in fremden Ordner möglich", vorherOrdner.error === null, vorherOrdner.error || "möglich");
+    await db.exec(`delete from storage.objects where name = '${U.max}/fremd-057.webp'`);
+
+    await db.exec(readFileSync(ALTREGELN_SQL, "utf8"));
+    const ctl57 = await db.exec(readFileSync(ALTREGELN_SQL, "utf8")); // zweiter Lauf
+    const k57 = ctl57[ctl57.length - 1].rows;
+    console.log("Kontrolle 057:\n  " + k57.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+    check("057: Kontrollabfrage vollständig", k57.every(r => ["bereit", "ja"].includes(r.ergebnis)), JSON.stringify(k57));
+
+    const nachherSetup = await ohneDatei();
+    check("Nachher: Setup ohne Datei (F1 mit Werten) speicherbar", nachherSetup.error === null, nachherSetup.error || "");
+    const mitHttp = await as(FREE, () => q(`insert into public.setups (simulation, car_model, track_name, file_url, file_name, uploader_id)
+        values ('iRacing', 'BMW M4 GT3', 'Spa', 'http://x/a.sto', 'a.sto', '${FREE}')`));
+    check("Nachher: Link ohne https weiterhin abgelehnt", /https/.test(mitHttp.error || ""), mitHttp.error || "durchgelassen!");
+    const nachherProfil = await fremdProfil();
+    check("Nachher: fremdes Profil nicht änderbar – egal, was die Altregel erlaubt", nachherProfil.rows.length === 0, nachherProfil.error || `${nachherProfil.rows.length} Zeile(n)`);
+    const eigenesProfil = await as(U.tim, () => q(`update public.profiles set full_name = 'Tim T.' where id = '${U.tim}' returning id`));
+    check("Nachher: eigenes Profil weiterhin änderbar", eigenesProfil.rows.length === 1, eigenesProfil.error || `${eigenesProfil.rows.length} Zeile(n)`);
+    const nachherFavorit = await fremdFavorit();
+    check("Nachher: Favorit für andere abgelehnt", nachherFavorit.error !== null || nachherFavorit.rows.length === 0, nachherFavorit.error || "durchgelassen!");
+    const eigenerFavorit = await as(U.tim, () => q(`insert into public.chat_favorites (user_id, chat_id) values ('${U.tim}', '${FORUM}') returning user_id`));
+    check("Nachher: eigener Favorit weiterhin möglich", eigenerFavorit.rows.length === 1, eigenerFavorit.error || `${eigenerFavorit.rows.length} Zeile(n)`);
+    const nachherGast = await gastNachrichten();
+    check("Nachher: Gäste lesen keine Nachrichten", nachherGast.rows.length === 0, nachherGast.error || `${nachherGast.rows.length} Zeilen`);
+    const mitgliedLiest = await as(U.anna, () => q(`select id from public.messages where chat_id = '${G}'`));
+    check("Nachher: Mitglieder lesen ihre Chats weiterhin", mitgliedLiest.rows.length > 0, mitgliedLiest.error || `${mitgliedLiest.rows.length} Zeilen`);
+    const nachherOrdner = await fremdOrdner();
+    check("Nachher: Startseiten-Bild in fremden Ordner abgelehnt", nachherOrdner.error !== null, nachherOrdner.error || "durchgelassen!");
+    const eigenerOrdner = await mitAnspruch(A, { aal: "aal2" }, () => q(`insert into storage.objects (bucket_id, name) values ('startseite', '${A}/eigen-057.webp')`));
+    check("Nachher: Admin lädt weiterhin in den eigenen Ordner", eigenerOrdner.error === null, eigenerOrdner.error || "");
+
+    // Je Altregel ein verbotener Zugriff – im schlimmsten Fall, nach 057
+    await db.exec(`insert into public.messages (id, chat_id, sender_id, text) values ('57000000-0000-0000-0000-000000000001', '${D}', '${U.anna}', 'Privat 057')
+                   on conflict (id) do nothing`);
+    const MSG = "57000000-0000-0000-0000-000000000001";
+    const EVENT = (await one(`select id::text as id from public.events order by created_at limit 1`)).id;
+    const FREMDES_INSERAT = (await one(`select id::text as id from public.marketplace where user_id <> '${U.tim}' order by created_at limit 1`))?.id;
+    const ANNAS_SETUP = S1;
+    const abgelehnt = (r) => r.error !== null || r.rows.length === 0;
+    const katalog = [
+        ["Favoriten: für andere anlegen", U.tim, `insert into public.chat_favorites (user_id, chat_id) values ('${U.anna}', '${G}') returning user_id`],
+        ["Chats: fremden Privatchat umbenennen", U.tim, `update public.chats set title = 'gehackt' where id = '${D}' returning id`],
+        ["Chats: Chat zwischen zwei anderen anlegen", U.tim, `insert into public.chats (user1_id, user2_id) values ('${U.anna}', '${U.max}') returning id`],
+        ["Chats: fremden Privatchat löschen", U.tim, `delete from public.chats where id = '${D}' returning id`],
+        ["Events: Gäste lesen keine Events (Server-Passwörter)", null, `select id from public.events`],
+        ["Events: Mitglied ändert Event", U.max, `update public.events set title = 'gehackt' where id = '${EVENT}' returning id`],
+        ["Events: Mitglied legt Event an", U.max, `insert into public.events (title, simulation, track, event_date) values ('Spam', 'iRacing', 'Spa', now()) returning id`],
+        ["Events: Mitglied löscht Event", U.max, `delete from public.events where id = '${EVENT}' returning id`],
+        ["Marktplatz: Inserat im Namen anderer", U.seller, `insert into public.marketplace (user_id, title, price) values ('${U.anna}', 'Fake', 1) returning id`],
+        ["Marktplatz: Gäste legen nichts an", null, `insert into public.marketplace (user_id, title, price) values ('${U.anna}', 'Gast', 1) returning id`],
+        ["Marktplatz: fremdes Inserat ändern", U.tim, `update public.marketplace set price = 1 where id = '${FREMDES_INSERAT}' returning id`],
+        ["Marktplatz: fremdes Inserat löschen", U.tim, `delete from public.marketplace where id = '${FREMDES_INSERAT}' returning id`],
+        ["Nachrichten: fremden Privatchat lesen", U.tim, `select id from public.messages where chat_id = '${D}'`],
+        ["Nachrichten: Gäste lesen keine Nachrichten", null, `select id from public.messages`],
+        ["Nachrichten: in fremden Privatchat schreiben", U.tim, `insert into public.messages (chat_id, sender_id, text) values ('${D}', '${U.tim}', 'x') returning id`],
+        ["Nachrichten: im Namen anderer schreiben", U.tim, `insert into public.messages (chat_id, sender_id, text) values ('${G}', '${U.anna}', 'x') returning id`],
+        ["Nachrichten: fremde Nachricht löschen", U.tim, `delete from public.messages where id = '${MSG}' returning id`],
+        ["Nachrichten: fremden Text ändern (4 alte Änderungs-Regeln)", U.tim, `update public.messages set text = 'gehackt' where id = '${MSG}' returning id`],
+        ["Nachrichten: Reaktion in fremdem Privatchat", U.tim, `update public.messages set reactions = '{"x":["${U.tim}"]}' where id = '${MSG}' returning id`],
+        ["Profile: fremdes Profil ändern", U.tim, `update public.profiles set bio = 'gehackt' where id = '${U.anna}' returning id`],
+        ["Profile: Gäste ändern nichts", null, `update public.profiles set bio = 'gehackt' where id = '${U.anna}' returning id`],
+        ["Setups: im Namen anderer eintragen", U.seller, `insert into public.setups (simulation, car_model, track_name, file_url, file_name, uploader_id) values ('iRacing', 'x', 'y', 'https://x/z.sto', 'z.sto', '${U.anna}') returning id`],
+        ["Chats: Gäste lesen keine Chats", null, `select id from public.chats`],
+        ["Favoriten: Gäste lesen keine Favoriten", null, `select user_id from public.chat_favorites`],
+        ["Favoriten: fremde Favoriten lesen", U.tim, `select user_id from public.chat_favorites where user_id <> '${U.tim}'`],
+        ["Setups: fremdes Setup ändern", U.tim, `update public.setups set car_model = 'gehackt' where id = '${ANNAS_SETUP}' returning id`],
+        ["Speicher: Setup-Datei in fremden Ordner", U.tim, `insert into storage.objects (bucket_id, name) values ('setups', '${U.anna}/x.sto') returning id`],
+        ["Speicher: Avatar in fremden Ordner", U.tim, `insert into storage.objects (bucket_id, name) values ('avatars', '${U.anna}/x.webp') returning id`],
+        ["Speicher: Anhang in fremden Chat", U.tim, `insert into storage.objects (bucket_id, name) values ('chat_attachments', '${D}/x.webp') returning id`],
+        ["Speicher: Marktplatz-Bild in fremden Ordner", U.tim, `insert into storage.objects (bucket_id, name) values ('marketplace', '${U.max}/x.webp') returning id`],
+        ["Speicher: Gäste laden nichts hoch", null, `insert into storage.objects (bucket_id, name) values ('marketplace', 'gast/x.webp') returning id`],
+    ];
+    for (const [text, wer, sql] of katalog) {
+        const r = await as(wer, () => q(sql));
+        check(`Trotz Altregel (schlimmster Fall): ${text}`, abgelehnt(r), r.error || `${r.rows.length} Zeile(n) durchgelassen!`);
+    }
+    await db.exec(`delete from storage.objects where name = '${A}/eigen-057.webp'`);
+}
+
+// --- 058: „Neues im Messenger?“ für die App (nur ja/nein, nur eigene sichtbare Nachrichten, nur Angemeldete) ---
+if (HINWEIS_SQL) {
+    await db.exec(readFileSync(HINWEIS_SQL, "utf8"));
+    const ctl58 = await db.exec(readFileSync(HINWEIS_SQL, "utf8")); // zweiter Lauf
+    const k58 = ctl58[ctl58.length - 1].rows;
+    check("058: Kontrollabfrage vollständig", k58.every(r => ["bereit", "ja"].includes(r.ergebnis)), JSON.stringify(k58));
+    const hinweis = (wer) => as(wer, () => q(`select public.messenger_hinweis() as h`));
+    const gast = await hinweis(null);
+    check("058: Gäste dürfen nicht fragen", gast.error !== null, gast.error || "durchgelassen!");
+    // Eigener Privatchat Anna ↔ Max: Lesestand beider auf „jetzt“, dann neue Nachricht von Anna
+    const ruhig = `delete from public.friendships where friend_id in ('${U.max}', '${U.tim}') and status = 'pending';
+                   delete from public.user_warnings where user_id in ('${U.max}', '${U.tim}');
+                   insert into public.chat_reads (chat_id, user_id, last_read_at)
+                     select c.id, u.id, now() + interval '1 second' from public.chats c cross join (values ('${U.max}'::uuid), ('${U.tim}'::uuid)) u(id)
+                   on conflict (chat_id, user_id) do update set last_read_at = excluded.last_read_at;`;
+    await db.exec(ruhig);
+    const vorher = await hinweis(U.max);
+    check("058: alles gelesen → kein Hinweis", vorher.rows[0]?.h === false, vorher.error || JSON.stringify(vorher.rows[0]));
+    await db.exec(`insert into public.messages (chat_id, sender_id, text, created_at) values ('${D}', '${U.anna}', 'Neu für Max', now() + interval '5 seconds')`);
+    const neu = await hinweis(U.max);
+    check("058: neue Nachricht im eigenen Chat → Hinweis", neu.rows[0]?.h === true, neu.error || JSON.stringify(neu.rows[0]));
+    const fremd = await hinweis(U.tim);
+    check("058: Nachricht in fremdem Privatchat → kein Hinweis für andere", fremd.rows[0]?.h === false, fremd.error || JSON.stringify(fremd.rows[0]));
+    await db.exec(`update public.chat_reads set last_read_at = now() + interval '10 seconds' where chat_id = '${D}' and user_id = '${U.max}'`);
+    const gelesen = await hinweis(U.max);
+    check("058: nach dem Lesen → kein Hinweis mehr", gelesen.rows[0]?.h === false, gelesen.error || JSON.stringify(gelesen.rows[0]));
+    await db.exec(`delete from public.messages where text = 'Neu für Max'`);
 }
 
 // --- Versehentlich ein ALTES Skript erneut ausgeführt (25.11.: 043 nach 054): darf nichts zurücksetzen ---

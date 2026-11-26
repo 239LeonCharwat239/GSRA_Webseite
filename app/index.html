@@ -30,7 +30,7 @@
 
       <p class="navi-gruppe">Community</p>
       <button type="button" data-web="index.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h13v14H6a2 2 0 0 1-2-2V5zm13 4h3v8a2 2 0 0 1-2 2M8 9h5M8 13h5M8 17h3"/></svg><span>Neuigkeiten</span></button>
-      <button type="button" data-web="messenger.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5z"/></svg><span>Messenger</span></button>
+      <button type="button" data-web="messenger.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5z"/></svg><span>Messenger</span><i class="neu-punkt" id="messengerPunkt" hidden></i><span class="sr-only" id="messengerPunktText" hidden> – neue Nachrichten</span></button>
       <button type="button" data-web="kalender.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v14H4zM4 10h16M8 3v5M16 3v5"/></svg><span>Rennkalender</span></button>
       <button type="button" data-web="videos.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM10 9l5 3-5 3z"/></svg><span>Videos</span></button>
 
@@ -114,6 +114,7 @@
       <li>Der Stand der anderen Autos (Plätze, Abstände, Zweikämpfe, Referenz aus der Lobby) – nur während der Sitzung.</li>
       <li>Spotter, Ansagen ohne KI, Sprachausgabe und deine eigene Testaufnahme durch den Funk-Filter.</li>
       <li>Deine Einstellungen für Funk und Karte (nur in dieser App).</li>
+      <li>Sprechtaste: Das Mikrofon läuft nur, solange du die Taste drückst (höchstens 30 Sekunden). Die Spracherkennung läuft auf deinem PC; dein Ton wird nie gespeichert und nie gesendet. Weiter geht – wie bei einer getippten Frage – nur der erkannte Text. Modell: NVIDIA Parakeet TDT 0.6B v3 (Lizenz CC BY 4.0), ausgeführt mit sherpa-onnx.</li>
     </ul>
     <h3>Geht an die GSRA (verschlüsselte Verbindung, Datenbank in Frankfurt)</h3>
     <ul>
@@ -303,6 +304,26 @@
           <textarea id="cFeld" rows="1" maxlength="7000" placeholder="Schreib deinem Renningenieur … (Enter sendet, Shift+Enter = neue Zeile)" aria-label="Nachricht an den Renningenieur"></textarea>
           <button class="knopf" type="submit">Senden</button>
         </form>
+        <!-- Sprechtaste: gedrückt halten, sprechen, loslassen (src/sprechtaste.ts) -->
+        <div class="sprech-zeile" id="sZeile">
+          <button type="button" class="sprech-knopf" id="sKnopf" aria-describedby="sStatus">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zM6 11a6 6 0 0 0 12 0M12 17v4M8 21h8"/></svg>
+            <span>Halten und sprechen</span>
+          </button>
+          <span class="sprech-status" id="sStatus" aria-live="polite"></span>
+        </div>
+        <details class="sprech-einstellung" id="sEinstellung">
+          <summary>Sprechtaste einrichten</summary>
+          <p class="hinweis" id="sInfo">Die Spracherkennung läuft auf deinem PC – dein Ton wird nie gespeichert oder gesendet. Sie versteht 25 europäische Sprachen und erkennt die Sprache selbst.</p>
+          <div class="sprech-installation" id="sInstallation">
+            <button type="button" class="knopf leise" id="sInstallieren">Spracherkennung installieren</button>
+            <div class="balken" id="sBalken" hidden><i id="sBalkenWert"></i></div>
+            <span class="hinweis" id="sInstallText"></span>
+          </div>
+          <label class="feld-klein sprech-taste">Taste auf der Tastatur – funktioniert auch, während die Simulation läuft
+            <select id="sTaste"><option value="">Keine</option></select>
+          </label>
+        </details>
         <p class="hinweis">Der Verlauf bleibt nur in dieser Sitzung der App. Angemeldet antwortet dein KI-Renningenieur in seinem Stil – sonst sagt er dir Sprit, Abstände und Rundenzeiten direkt aus den Messwerten.</p>
       </div>
     </section>

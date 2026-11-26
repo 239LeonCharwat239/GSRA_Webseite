@@ -80,6 +80,12 @@ h3 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacin
   box-shadow: inset 3px 0 0 var(--gelb);
 }
 .navi button[aria-current="page"] svg { color: var(--gelb); filter: drop-shadow(0 0 6px rgba(255, 204, 0, 0.45)); }
+/* Neues im Messenger: roter, leuchtender Punkt (wie auf der Webseite) */
+.neu-punkt { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--rot); box-shadow: 0 0 10px rgba(239, 68, 68, 0.85); animation: neu-puls 2s ease-in-out infinite; }
+.navi button.ungelesen { color: #fff; }
+@keyframes neu-puls { 50% { box-shadow: 0 0 2px rgba(239, 68, 68, 0.4); } }
+@media (prefers-reduced-motion: reduce) { .neu-punkt { animation: none; } }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .anzahl { font-family: var(--anzeige); font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 9px; background: rgba(255, 255, 255, 0.1); color: #fff; font-variant-numeric: tabular-nums; }
 
 .leiste-fuss { padding: 12px; border-top: 1px solid var(--rand); display: flex; flex-direction: column; gap: 10px; }
@@ -154,19 +160,21 @@ body.web-aktiv main { overflow: hidden; padding: 0; }
 .web-ort[data-art="laedt"]::before { animation: puls 1s ease-in-out infinite; }
 
 /* ================================================================ Bedienelemente */
+/* Wie auf der Webseite: gelb gefüllt – beim Darüberfahren schwarz mit gelber Schrift, gelbem Rand und Leuchten */
 .knopf {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  border: 0; cursor: pointer; padding: 8px 16px; border-radius: 9px;
+  border: 2px solid var(--gelb); cursor: pointer; padding: 6px 14px; border-radius: 9px;
   font-size: 12.5px; font-weight: 800; letter-spacing: 0.7px; text-transform: uppercase;
-  background: var(--gelb); color: #000; transition: box-shadow 0.2s, transform 0.1s, background 0.2s, border-color 0.2s;
+  background: var(--gelb); color: #000; transition: box-shadow 0.25s, transform 0.25s, background 0.25s, color 0.25s, border-color 0.25s;
 }
-.knopf:hover { box-shadow: var(--glow-gelb); }
-.knopf:active { transform: translateY(1px); }
+.knopf:hover:not(:disabled) { background: transparent; color: var(--gelb); box-shadow: var(--glow-gelb); transform: translateY(-2px); }
+.knopf:active:not(:disabled) { transform: translateY(0); }
+@media (prefers-reduced-motion: reduce) { .knopf, .knopf:hover:not(:disabled) { transition: none; transform: none; } }
 .knopf.leise {
   background: rgba(255, 255, 255, 0.03); color: var(--text); font-weight: 700; letter-spacing: 0.4px; text-transform: none;
-  font-size: 13px; box-shadow: inset 0 0 0 1px var(--rand-stark);
+  font-size: 13px; border: 1px solid var(--rand-stark); padding: 7px 15px;
 }
-.knopf.leise:hover { box-shadow: inset 0 0 0 1px var(--blau), var(--glow-blau); }
+.knopf.leise:hover:not(:disabled) { background: rgba(0, 85, 255, 0.1); color: #fff; border-color: var(--blau); box-shadow: var(--glow-blau); }
 .knopf:disabled { opacity: 0.55; cursor: default; box-shadow: none; }
 .link-knopf { background: none; border: 0; padding: 0; color: var(--blau-hell); text-decoration: underline; cursor: pointer; font-size: 12px; }
 
@@ -426,6 +434,32 @@ body.web-aktiv .toast { right: auto; left: 12px; bottom: 210px; max-width: calc(
 .chat-schnell { display: flex; flex-wrap: wrap; gap: 8px; }
 .chat-form { display: flex; gap: 8px; align-items: flex-end; }
 .chat-form textarea { flex: 1; min-width: 0; resize: none; max-height: 220px; overflow-y: auto; line-height: 1.45; border-radius: 10px; padding: 10px 13px; }
+/* Sprechtaste */
+.sprech-zeile { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.sprech-knopf {
+  display: inline-flex; align-items: center; gap: 10px; padding: 10px 20px 10px 14px; border-radius: 999px; cursor: pointer;
+  border: 1px solid rgba(255, 204, 0, 0.55); background: rgba(255, 204, 0, 0.08); color: var(--text);
+  font-family: var(--anzeige); font-weight: 700; font-size: 13.5px; letter-spacing: 0.8px; text-transform: uppercase;
+  user-select: none; touch-action: none; transition: background 0.15s, box-shadow 0.15s, border-color 0.15s;
+}
+.sprech-knopf svg { width: 20px; height: 20px; fill: none; stroke: var(--gelb); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.sprech-knopf:hover:not(:disabled) { box-shadow: var(--glow-gelb); }
+.sprech-knopf.aktiv { background: rgba(239, 68, 68, 0.2); border-color: var(--rot); box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.18), 0 0 18px rgba(239, 68, 68, 0.45); }
+.sprech-knopf.aktiv svg { stroke: #fff; }
+.sprech-knopf:disabled { opacity: 0.45; cursor: default; }
+.sprech-status { color: var(--leise); font-size: 13px; }
+body.hoert .sprech-status { color: #fff; }
+body.hoert .led { background: var(--rot); box-shadow: 0 0 10px var(--rot); }
+.sprech-einstellung { border-top: 1px solid var(--rand); padding-top: 10px; }
+.sprech-einstellung summary { cursor: pointer; color: var(--leise); font-size: 13px; font-weight: 600; }
+.sprech-einstellung summary:hover { color: #fff; }
+.sprech-einstellung[open] summary { margin-bottom: 8px; }
+.sprech-einstellung .hinweis { margin: 0 0 10px; }
+.sprech-installation { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.sprech-installation .balken { width: 220px; }
+.sprech-taste { display: flex; flex-direction: column; gap: 6px; color: var(--leise); font-size: 12.5px; max-width: 360px; }
+@media (prefers-reduced-motion: reduce) { .sprech-knopf { transition: none; } }
+
 .spar-tipps { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: rgba(34, 197, 94, 0.07); border: 1px solid rgba(34, 197, 94, 0.25); }
 .spar-tipps ul { margin: 6px 0 0; padding-left: 18px; }
 

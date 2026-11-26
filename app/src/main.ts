@@ -21,6 +21,8 @@ import { karteBauen, karteZeichnen, verlustJeAbschnitt, type Karte } from "./str
 import { Rennbeobachter, berichtErstellen, rundenzeitText, stelleText } from "./rennbericht.ts";
 import { startbildZeigen } from "./startbild.ts";
 import { webAktiv, webEinrichten, webVerbergen, webZeigen } from "./webbereich.ts";
+import { sprechtasteEinrichten } from "./sprechtaste.ts";
+import { messengerHinweis } from "./konto.ts";
 
 startbildZeigen();
 
@@ -716,6 +718,8 @@ function lokaleAntwort(frage: string): string | null {
 }
 
 let chat: Chat | null = null;
+/** Wer per Sprechtaste fragt, bekommt die Antwort auch gesprochen (Funk) – auch wenn „Vorlesen“ aus ist */
+let sprachfrageZeit = 0;
 function chatEinrichten() {
   chat = new Chat($("cListe"), {
     lage: () => kiLage(chatLage()),
@@ -723,7 +727,11 @@ function chatEinrichten() {
     art: () => persoenlichkeit?.art ?? "kumpel",
     name: () => persoenlichkeit?.name ?? "Renningenieur",
     lokal: lokaleAntwort,
-    vorlesen: (text) => { if (funkE.vorlesen) void vorlesen(text); },
+    vorlesen: (text) => {
+      const perSprache = Date.now() - sprachfrageZeit < 120_000;
+      if (funkE.vorlesen || perSprache) void vorlesen(text);
+      if (perSprache && aktiverReiter !== "chat") hinweis(`${persoenlichkeit?.name ?? "Renningenieur"}: ${text.slice(0, 220)}`, "ok");
+    },
     sparenStarten: () => {
       if (!spar.aktiv) return sparStarten();
       const a = spar.runden.at(-1);
@@ -1229,6 +1237,23 @@ funkEinrichten();
 void webEinrichten(istApp);
 berichtKiEinrichten();
 chatEinrichten();
+// Roter Punkt am Messenger (wie auf der Webseite): alle 45 s und beim Zurückkehren in die App nachsehen
+async function messengerPunkt() {
+  const neu = angemeldet() && !document.hidden ? await messengerHinweis().catch(() => false) : false;
+  $("messengerPunkt").hidden = !neu;
+  $("messengerPunktText").hidden = !neu;
+  document.querySelector('[data-web="messenger.html"]')?.classList.toggle("ungelesen", neu);
+}
+setInterval(() => void messengerPunkt(), 45_000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) void messengerPunkt(); });
+beiKontoWechsel(() => void messengerPunkt());
+void messengerPunkt();
+
+void sprechtasteEinrichten(istApp, (text) => {
+  sprachfrageZeit = Date.now();
+  if (aktiverReiter !== "chat") hinweis(`Du: ${text.slice(0, 160)}`, "ok");
+  void chat?.senden(text);
+}, hinweis).catch(() => { /* ohne Sprechtaste weiter */ });
 sparZeigen();
 void kontoStarten(istApp);
 window.addEventListener("resize", () => {

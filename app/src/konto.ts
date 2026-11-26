@@ -82,6 +82,12 @@ export async function codeBestaetigen(code: string): Promise<void> {
   if (fehler) throw new Error("Der Code stimmt nicht. Bitte versuche es noch einmal.");
 }
 
+/** Neues im Messenger? (ungelesene Nachrichten, Freundschaftsanfragen, Verwarnungen – nur ja/nein, SQL 058) */
+export async function messengerHinweis(): Promise<boolean> {
+  const { data, error } = await sb().rpc("messenger_hinweis");
+  return !error && data === true;
+}
+
 /** Nur diese App abmelden (andere Geräte bleiben angemeldet) */
 export async function abmelden(): Promise<void> {
   await sb().auth.signOut({ scope: "local" });
