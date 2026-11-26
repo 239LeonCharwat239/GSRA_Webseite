@@ -20,12 +20,15 @@
         "minWidth": 960,
         "minHeight": 620,
         "backgroundColor": "#0b0c10",
-        "center": true
+        "center": true,
+        "maximized": true,
+        "decorations": false,
+        "shadow": true
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src ipc: http://ipc.localhost https://mqqyvpmddaastacldbyy.supabase.co wss://mqqyvpmddaastacldbyy.supabase.co; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'",
-      "devCsp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src ipc: http://ipc.localhost ws://localhost:1420 https://mqqyvpmddaastacldbyy.supabase.co wss://mqqyvpmddaastacldbyy.supabase.co; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'",
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https://mqqyvpmddaastacldbyy.supabase.co; media-src 'self' blob: https://mqqyvpmddaastacldbyy.supabase.co; font-src 'self'; connect-src ipc: http://ipc.localhost https://mqqyvpmddaastacldbyy.supabase.co wss://mqqyvpmddaastacldbyy.supabase.co; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'",
+      "devCsp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://mqqyvpmddaastacldbyy.supabase.co; media-src 'self' blob: https://mqqyvpmddaastacldbyy.supabase.co; font-src 'self'; connect-src ipc: http://ipc.localhost ws://localhost:1420 https://mqqyvpmddaastacldbyy.supabase.co wss://mqqyvpmddaastacldbyy.supabase.co; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'",
       "freezePrototype": true
     }
   },

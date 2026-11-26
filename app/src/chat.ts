@@ -5,6 +5,7 @@
 //  * Ohne Anmeldung oder ohne Verbindung antwortet er auf einfache Fakten aus den Messwerten, ohne KI.
 //  * Alles per textContent; der Verlauf bleibt nur in dieser Sitzung der App (wird nicht gespeichert).
 import { kiFragen, kiVerfuegbar } from "./ki.ts";
+import { ansage, pruefenIn } from "./ansagen.ts";
 
 export type ChatBeitrag = { wer: "fahrer" | "ingenieur"; text: string };
 export type ChatUmgebung = {
@@ -14,6 +15,8 @@ export type ChatUmgebung = {
   name: () => string;
   /** Antwort ohne KI auf einfache Fakten – null, wenn die Frage dafür nicht passt */
   lokal: (frage: string) => string | null;
+  /** Sprache der Antwort (eingestellte Sprache; bei „Automatisch“ die Sprache der Frage) */
+  sprache: (frage?: string) => string;
   vorlesen: (text: string) => void;
   /** „Ich möchte Sprit sparen“: Spar-Modus einschalten; gibt eine kurze Rückmeldung (oder null) */
   sparenStarten: () => string | null;
@@ -96,10 +99,8 @@ export class Chat {
     let sparHinweis: string | null = null;
     if (willSparen(frage)) sparHinweis = this.u.sparenStarten();
 
-    const ohneKi = () => this.u.lokal(frage) ?? sparHinweis
-      ?? (this.u.angemeldet()
-        ? "Dafür brauche ich die KI – sie ist gerade nicht erreichbar. Einfache Dinge wie Sprit, Abstände oder Rundenzeiten kann ich dir trotzdem sagen."
-        : "Melde dich oben rechts an – dann kann ich dir dazu ausführlich antworten. Sprit, Abstände und Rundenzeiten sage ich dir auch so.");
+    const code = this.u.sprache(frage);
+    const ohneKi = () => this.u.lokal(frage) ?? sparHinweis ?? ansage(code, this.u.angemeldet() ? "keineKi" : "anmelden");
     if (!this.u.angemeldet() || !kiVerfuegbar()) {
       this.sagen(ohneKi());
       return;
@@ -107,15 +108,13 @@ export class Chat {
 
     const schwierig = istSchwierig(frage);
     let wartet: HTMLElement | null = null;
-    if (schwierig) this.sagen(pruefSatz(this.u.art()), "pruefen");
+    if (schwierig) this.sagen((code === "de" ? null : pruefenIn(code)) ?? pruefSatz(this.u.art()), "pruefen");
     else wartet = this.blase({ wer: "ingenieur", text: "…" }, "tippt");
 
     const e = await kiFragen(schwierig ? "analyse" : "frage", this.u.lage(), { frage, verlauf: vorher });
     wartet?.remove();
     if (nr !== this.laeuft && !schwierig) return; // überholt von einer neueren Frage
     if ("text" in e) this.sagen(e.text);
-    else this.sagen(this.u.lokal(frage) ?? sparHinweis ?? (e.grund === "einrichtung"
-      ? "Der KI-Renningenieur wird gerade eingerichtet – Sprit, Abstände und Rundenzeiten kann ich dir aber schon sagen."
-      : "Funkstörung – das hat gerade nicht geklappt. Frag mich gleich noch einmal."));
+    else this.sagen(this.u.lokal(frage) ?? sparHinweis ?? ansage(code, e.grund === "einrichtung" ? "einrichtung" : "stoerung"));
   }
 }

@@ -7,6 +7,7 @@ mod lenkrad;
 mod live;
 mod simulation;
 mod sprache;
+mod stimme;
 mod webbereich;
 
 fn main() {
@@ -25,6 +26,7 @@ fn main() {
         .manage(webbereich::Bereiche::default())
         .manage(sprache::Sprache::default())
         .manage(lenkrad::Lenkrad::default())
+        .manage(stimme::Stimme::default())
         .invoke_handler(tauri::generate_handler![
             live::status,
             anmeldung::anmeldung_starten,
@@ -39,9 +41,16 @@ fn main() {
             sprache::sprechtaste,
             sprache::sprechtaste_belegen,
             sprache::hoermodus_setzen,
+            sprache::sprache_mitschrift,
             lenkrad::lenkrad_lernen,
             lenkrad::lenkrad_belegen,
-            simulation::simulation_erkennen
+            simulation::simulation_erkennen,
+            stimme::stimme_status,
+            stimme::stimme_installieren,
+            stimme::stimme_referenz_setzen,
+            stimme::stimme_referenz_loeschen,
+            stimme::stimme_sprechen,
+            stimme::stimme_vorbereiten
         ])
         .setup(|app| {
             live::starten(app.handle().clone());

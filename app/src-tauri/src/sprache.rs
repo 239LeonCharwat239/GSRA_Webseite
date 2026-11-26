@@ -32,7 +32,9 @@ const PARAKEET: &str =
     "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/ed5d745623472f97cfc2e6c2916ee248798fc5a8";
 /// Silero VAD (MIT) aus den Modell-Veröffentlichungen von sherpa-onnx
 const SILERO: &str = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models";
-const DATEIEN: &[(&str, u64, &str, &str)] = &[
+/// Modelldatei: Name, Größe in Bytes, SHA-256, Adresse des Ordners (feste Version)
+pub type Datei = (&'static str, u64, &'static str, &'static str);
+const DATEIEN: &[Datei] = &[
     ("encoder.int8.onnx", 652_282_294, "1afbe69c1ffdabee94755f42e4daf1d93549131a3da11356bda84fcef0f2c479", PARAKEET),
     ("decoder.int8.onnx", 11_845_274, "0222a86147299d4dee90edf95b6d13827edb42ad8b7c9cf0b2582f030937c0b5", PARAKEET),
     ("joiner.int8.onnx", 6_355_277, "cbd02f3696e9944970111fb439d9c3fd365a80374565f13f2b9c7007d253fc98", PARAKEET),
@@ -53,7 +55,9 @@ pub const TASTEN: &[&str] = &[
     "Numpad9", "NumpadAdd", "NumpadSubtract", "NumpadMultiply", "NumpadDivide",
 ];
 /// Wörter vor dem Signalwort, die übersprungen werden („Hey Kim“, „Hallo Renningenieur“ …)
-const GRUSS: &[&str] = &["hey", "hallo", "hi", "hello", "ok", "okay", "hola", "salut", "ciao", "hej", "ahoj", "oi"];
+const GRUSS: &[&str] = &[
+    "hey", "hei", "he", "ey", "hay", "herr", "hallo", "halo", "hi", "hello", "ok", "okay", "oke", "hola", "salut", "ciao", "hej", "ahoj", "oi", "zdravei",
+];
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum Modus {
@@ -90,10 +94,10 @@ struct Meldung {
 }
 
 #[derive(Clone, serde::Serialize)]
-struct Fortschritt {
-    prozent: u8,
-    fertig: bool,
-    fehler: Option<String>,
+pub struct Fortschritt {
+    pub prozent: u8,
+    pub fertig: bool,
+    pub fehler: Option<String>,
 }
 
 #[derive(serde::Serialize)]
@@ -106,7 +110,7 @@ pub struct Status {
     tasten: Vec<&'static str>,
 }
 
-fn melden(app: &AppHandle, zustand: &'static str, text: impl Into<String>) {
+pub fn melden(app: &AppHandle, zustand: &'static str, text: impl Into<String>) {
     let _ = app.emit_to("main", "gsra://sprache", Meldung { zustand, text: text.into() });
 }
 
@@ -115,7 +119,7 @@ fn modell_pfad(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(basis.join("sprachmodelle").join(MODELL_ORDNER))
 }
 
-fn vollstaendig(ordner: &Path, name: &str, groesse: u64) -> bool {
+pub fn vollstaendig(ordner: &Path, name: &str, groesse: u64) -> bool {
     fs::metadata(ordner.join(name)).map(|m| m.len() == groesse).unwrap_or(false)
 }
 
@@ -153,7 +157,7 @@ pub fn sprache_installieren(app: AppHandle, s: State<'_, Sprache>) -> Result<(),
         return Err("Die Spracherkennung wird schon geladen.".into());
     }
     std::thread::spawn(move || {
-        let ergebnis = laden(&app, &ordner);
+        let ergebnis = laden(&app, &ordner, DATEIEN, "gsra://sprache-laden");
         app.state::<Sprache>().laedt.store(false, Ordering::SeqCst);
         let f = match ergebnis {
             Ok(()) => Fortschritt { prozent: 100, fertig: true, fehler: None },
@@ -164,12 +168,13 @@ pub fn sprache_installieren(app: AppHandle, s: State<'_, Sprache>) -> Result<(),
     Ok(())
 }
 
-fn laden(app: &AppHandle, ordner: &Path) -> Result<(), String> {
-    fs::create_dir_all(ordner).map_err(|_| "Ordner für das Sprachmodell lässt sich nicht anlegen.".to_string())?;
-    let gesamt: u64 = DATEIEN.iter().map(|d| d.1).sum();
+/// Lädt Modelldateien (auch für die eigene Stimme, stimme.rs); Fortschritt als Ereignis an das Hauptfenster
+pub fn laden(app: &AppHandle, ordner: &Path, dateien: &[Datei], ereignis: &str) -> Result<(), String> {
+    fs::create_dir_all(ordner).map_err(|_| "Ordner für das Modell lässt sich nicht anlegen.".to_string())?;
+    let gesamt: u64 = dateien.iter().map(|d| d.1).sum();
     let mut erledigt: u64 = 0;
     let mut zuletzt: u8 = 255;
-    for (name, groesse, sha, basis) in DATEIEN {
+    for (name, groesse, sha, basis) in dateien {
         let ziel = ordner.join(name);
         if vollstaendig(ordner, name, *groesse) && pruefsumme(&ziel)? == *sha {
             erledigt += groesse;
@@ -231,7 +236,7 @@ fn laden(app: &AppHandle, ordner: &Path) -> Result<(), String> {
             let prozent = (((erledigt + gelesen) * 100) / gesamt).min(99) as u8;
             if prozent != zuletzt {
                 zuletzt = prozent;
-                let _ = app.emit_to("main", "gsra://sprache-laden", Fortschritt { prozent, fertig: false, fehler: None });
+                let _ = app.emit_to("main", ereignis, Fortschritt { prozent, fertig: false, fehler: None });
             }
         }
         drop(datei);
@@ -246,7 +251,7 @@ fn laden(app: &AppHandle, ordner: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn pruefsumme(pfad: &Path) -> Result<String, String> {
+pub fn pruefsumme(pfad: &Path) -> Result<String, String> {
     let mut datei = fs::File::open(pfad).map_err(|_| "Datei des Sprachmodells fehlt.".to_string())?;
     let mut hash = Sha256::new();
     let mut puffer = vec![0u8; 1 << 16];
@@ -482,6 +487,24 @@ fn erkennen(app: &AppHandle, ton: &[f32], rate: u32) -> Result<String, String> {
     Ok(text_bereinigen(&text))
 }
 
+/// Mitschrift einer Sprachnachricht im Messenger (wie auf der Webseite, aber auf dem PC erkannt): Ton als 16-Bit-Werte,
+/// höchstens 125 s; nur wenn die Spracherkennung installiert ist. Der Ton wird nicht gespeichert.
+#[tauri::command]
+pub async fn sprache_mitschrift(app: AppHandle, ton: Vec<i16>, rate: u32) -> Result<String, String> {
+    if !(8_000..=48_000).contains(&rate) || ton.len() > rate as usize * 125 {
+        return Err("Die Aufnahme passt nicht.".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let ton: Vec<f32> = ton.iter().map(|x| f32::from(*x) / 32_768.0).collect();
+        if zu_leise(&ton) {
+            return Ok(String::new());
+        }
+        erkennen(&app, &ton, rate)
+    })
+    .await
+    .map_err(|_| "Interner Fehler.".to_string())?
+}
+
 /// Stille oder stummgeschaltetes Mikrofon: lautester Abschnitt (50 ms) unter etwa −50 dBFS → nichts erkennen
 pub fn zu_leise(ton: &[f32]) -> bool {
     ton.chunks(800)
@@ -547,13 +570,32 @@ pub fn signalwort_pruefen(text: &str, signalwoerter: &[String]) -> Option<String
                 return Some(rest(k));
             }
         }
-        // Gruß + leicht verschliffenes, längeres Signalwort als eigenes Wort („Hallo Renningenieurin“)
-        let i = usize::from(teile.first().is_some_and(|t| GRUSS.contains(&t.1.as_str())));
-        if ziel.chars().count() >= 5 && teile.get(i).is_some_and(|t| abstand(&t.1, &ziel) <= toleranz(&ziel)) {
+        // Gruß + leicht verschliffenes Signalwort als eigenes Wort („Hallo Renningenieurin“, „Hey Lass“ für „Lars“).
+        // Nach einem Gruß sind auch kurze Namen etwas unscharf erlaubt; ohne Gruß nur längere Wörter.
+        let gruss = teile.first().is_some_and(|t| GRUSS.contains(&t.1.as_str()));
+        let i = usize::from(gruss);
+        let erlaubt = if gruss { toleranz(&ziel).max(usize::from(ziel.chars().count() >= 4)) } else { toleranz(&ziel) };
+        if erlaubt > 0 && teile.get(i).is_some_and(|t| abstand(&klang(&t.1), &klang(&ziel)) <= erlaubt) {
             return Some(rest(i + 1));
         }
     }
     None
+}
+
+/// Grobe Lautform: Umlaute, stummes h und Doppelbuchstaben angleichen („Lars“ ≈ „Lahrs“, „Kimm“ ≈ „Kim“)
+fn klang(wort: &str) -> String {
+    let w = wort.replace("ä", "e").replace("ö", "o").replace("ü", "u").replace("ß", "s").replace("ck", "k").replace("ph", "f");
+    let mut aus = String::new();
+    for c in w.chars() {
+        if c == 'h' && !aus.is_empty() {
+            continue;
+        }
+        if aus.ends_with(c) {
+            continue;
+        }
+        aus.push(if c == 'c' { 'k' } else { c });
+    }
+    aus
 }
 
 /// Erlaubte Abweichung: kurze Wörter genau, ab 5 Buchstaben einer, ab 10 Buchstaben zwei
@@ -635,7 +677,9 @@ fn zuhoeren(app: AppHandle, stopp: mpsc::Receiver<()>) {
                     frage_bis = None;
                     melden(&app, "text", text);
                 }
-                None => {} // kein Signalwort: Satz wird verworfen
+                // kein Signalwort: Satz wird verworfen – die App zeigt nur kurz an, was sie gehört hat (bleibt auf dem PC)
+                None if text.chars().filter(|c| c.is_alphanumeric()).count() >= 2 => melden(&app, "gehoert", text),
+                None => {}
             }
         }
         if frage_bis.is_some_and(|b| Instant::now() >= b) {
@@ -820,6 +864,14 @@ mod tests {
         assert_eq!(signalwort_pruefen("Ich fahre heute ins Bar.", &w), None);
         assert_eq!(signalwort_pruefen("Das war eine gute Runde.", &w), None);
         assert_eq!(signalwort_pruefen("Wir nehmen im Rennen alles mit", &w), None);
+        // kurzer Name „Lars“ (Test 26.11.): nach einem Gruß auch leicht verschliffen
+        let l = vec!["Lars".to_string(), "Renningenieur".to_string()];
+        assert_eq!(signalwort_pruefen("Hey Lars, reicht der Sprit?", &l).as_deref(), Some("reicht der Sprit?"));
+        assert_eq!(signalwort_pruefen("Hey, Lass, reicht der Sprit?", &l).as_deref(), Some("reicht der Sprit?"));
+        assert_eq!(signalwort_pruefen("He Lahrs reicht der Sprit", &l).as_deref(), Some("reicht der Sprit"));
+        assert_eq!(signalwort_pruefen("Lars, wer ist vor mir?", &l).as_deref(), Some("wer ist vor mir?"));
+        assert_eq!(signalwort_pruefen("Lass uns mal schauen", &l), None, "ohne Gruß nur genau");
+        assert_eq!(signalwort_pruefen("Hey Leute, alles gut", &l), None);
     }
 
     /// Echter Ablauf der Signalwort-Art mit einer Aufnahme (nicht in CI: braucht die Modelle)

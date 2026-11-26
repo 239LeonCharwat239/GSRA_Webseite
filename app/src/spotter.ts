@@ -26,6 +26,22 @@ export const SPOTTER_SAETZE: Record<string, Record<Seite, string>> = {
   ru: { links: "Машина слева", rechts: "Машина справа", beide: "Три в ряд", zweiLinks: "Две машины слева", zweiRechts: "Две машины справа", frei: "Чисто" },
   zh: { links: "左边有车", rechts: "右边有车", beide: "三车并排", zweiLinks: "左边两辆车", zweiRechts: "右边两辆车", frei: "安全" },
   ja: { links: "左に車", rechts: "右に車", beide: "3台並走", zweiLinks: "左に2台", zweiRechts: "右に2台", frei: "クリア" },
+  uk: { links: "Машина зліва", rechts: "Машина справа", beide: "Три в ряд", zweiLinks: "Дві машини зліва", zweiRechts: "Дві машини справа", frei: "Чисто" },
+  sv: { links: "Bil vänster", rechts: "Bil höger", beide: "Tre i bredd", zweiLinks: "Två bilar vänster", zweiRechts: "Två bilar höger", frei: "Fritt" },
+  da: { links: "Bil venstre", rechts: "Bil højre", beide: "Tre side om side", zweiLinks: "To biler venstre", zweiRechts: "To biler højre", frei: "Fri" },
+  fi: { links: "Auto vasemmalla", rechts: "Auto oikealla", beide: "Kolme rinnakkain", zweiLinks: "Kaksi autoa vasemmalla", zweiRechts: "Kaksi autoa oikealla", frei: "Vapaa" },
+  cs: { links: "Auto vlevo", rechts: "Auto vpravo", beide: "Tři vedle sebe", zweiLinks: "Dvě auta vlevo", zweiRechts: "Dvě auta vpravo", frei: "Volno" },
+  sk: { links: "Auto vľavo", rechts: "Auto vpravo", beide: "Tri vedľa seba", zweiLinks: "Dve autá vľavo", zweiRechts: "Dve autá vpravo", frei: "Voľno" },
+  sl: { links: "Avto levo", rechts: "Avto desno", beide: "Trije vzporedno", zweiLinks: "Dva avta levo", zweiRechts: "Dva avta desno", frei: "Prosto" },
+  hr: { links: "Auto lijevo", rechts: "Auto desno", beide: "Tri u nizu", zweiLinks: "Dva auta lijevo", zweiRechts: "Dva auta desno", frei: "Čisto" },
+  hu: { links: "Autó balra", rechts: "Autó jobbra", beide: "Hárman egymás mellett", zweiLinks: "Két autó balra", zweiRechts: "Két autó jobbra", frei: "Tiszta" },
+  ro: { links: "Mașină stânga", rechts: "Mașină dreapta", beide: "Trei în paralel", zweiLinks: "Două mașini stânga", zweiRechts: "Două mașini dreapta", frei: "Liber" },
+  bg: { links: "Кола отляво", rechts: "Кола отдясно", beide: "Три в редица", zweiLinks: "Две коли отляво", zweiRechts: "Две коли отдясно", frei: "Чисто" },
+  el: { links: "Αυτοκίνητο αριστερά", rechts: "Αυτοκίνητο δεξιά", beide: "Τρία δίπλα δίπλα", zweiLinks: "Δύο αυτοκίνητα αριστερά", zweiRechts: "Δύο αυτοκίνητα δεξιά", frei: "Καθαρό" },
+  et: { links: "Auto vasakul", rechts: "Auto paremal", beide: "Kolm kõrvuti", zweiLinks: "Kaks autot vasakul", zweiRechts: "Kaks autot paremal", frei: "Vaba" },
+  lv: { links: "Auto pa kreisi", rechts: "Auto pa labi", beide: "Trīs blakus", zweiLinks: "Divi auto pa kreisi", zweiRechts: "Divi auto pa labi", frei: "Brīvs" },
+  lt: { links: "Automobilis kairėje", rechts: "Automobilis dešinėje", beide: "Trys greta", zweiLinks: "Du automobiliai kairėje", zweiRechts: "Du automobiliai dešinėje", frei: "Laisva" },
+  mt: { links: "Karozza xellug", rechts: "Karozza lemin", beide: "Tlieta ħdejn xulxin", zweiLinks: "Żewġ karozzi xellug", zweiRechts: "Żewġ karozzi lemin", frei: "Ċar" },
 };
 
 export const spotterSatz = (seite: Seite, sprache: string) => (SPOTTER_SAETZE[sprache] ?? SPOTTER_SAETZE.de)[seite];

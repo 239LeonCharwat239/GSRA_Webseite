@@ -12,7 +12,7 @@ interface Status {
   tasten: string[];
 }
 interface Meldung {
-  zustand: "hoert" | "erkennt" | "text" | "fehler" | "leer" | "signal" | "dauerhaft" | "dauerhaft-aus";
+  zustand: "hoert" | "erkennt" | "text" | "fehler" | "leer" | "signal" | "dauerhaft" | "dauerhaft-aus" | "gehoert";
   text: string;
 }
 interface Fortschritt { prozent: number; fertig: boolean; fehler: string | null }
@@ -93,6 +93,7 @@ export async function sprechtasteEinrichten(istApp: boolean, beiText: (text: str
       r.disabled = !stand.installiert;
     }
     $("sSignal").hidden = art !== "signalwort";
+    $("sSignalAktiv").textContent = `Hört auf: ${signalwoerter().map((w) => `„${w}“`).join(", ")} – auch mit „Hey“, „Hallo“ oder „Okay“ davor.`;
     $("sBelegung").textContent = belegung ? belegung.name : "Keine";
     $("sEntfernen").hidden = !belegung;
     $<HTMLButtonElement>("sFestlegen").disabled = !stand.installiert;
@@ -130,10 +131,16 @@ export async function sprechtasteEinrichten(istApp: boolean, beiText: (text: str
   for (const r of document.querySelectorAll<HTMLInputElement>('input[name="sArt"]')) {
     r.addEventListener("change", () => { if (r.checked) void artSetzen(r.value as Art); });
   }
-  signalFeld.addEventListener("change", () => {
+  // Signalwörter gelten sofort beim Tippen (Fund 26.11.: bisher erst nach Verlassen des Feldes)
+  let tippen = 0;
+  const woerterUebernehmen = () => {
+    window.clearTimeout(tippen);
     schreiben(SPEICHER.woerter, signalFeld.value.trim());
     if (art === "signalwort") void artSetzen("signalwort", true);
-  });
+    else zeigen();
+  };
+  signalFeld.addEventListener("input", () => { window.clearTimeout(tippen); tippen = window.setTimeout(woerterUebernehmen, 600); });
+  signalFeld.addEventListener("change", woerterUebernehmen);
 
   // Taste festlegen: nächste Taste auf der Tastatur ODER nächster Knopf am Lenkrad
   let lernt = false;
@@ -219,6 +226,8 @@ export async function sprechtasteEinrichten(istApp: boolean, beiText: (text: str
     if (m.zustand === "hoert") status.textContent = "Ich höre …";
     else if (m.zustand === "signal") status.textContent = "Ja?";
     else if (m.zustand === "erkennt") status.textContent = "Verstehe …";
+    // Signalwort-Modus: etwas gehört, aber ohne Signalwort am Anfang – zeigen, was verstanden wurde
+    else if (m.zustand === "gehoert") status.textContent = `Gehört: „${m.text.slice(0, 80)}“ – kein Signalwort erkannt`;
     else if (m.zustand === "text") {
       status.textContent = "";
       beiText(m.text);

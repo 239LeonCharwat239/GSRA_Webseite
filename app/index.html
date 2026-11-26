@@ -3,23 +3,38 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>GSRA Telemetrie</title>
+  <title>GSRA</title>
   <link rel="stylesheet" href="/src/stil.css">
 </head>
 <body>
   <!-- Startbild: das Logo baut sich auf (Klick überspringt) -->
   <div class="start" id="start" title="Klicken zum Überspringen"></div>
-  <div class="rahmen">
-  <!-- Seitenleiste: Rennen (Telemetrie) und die ganze GSRA – alles in einem Fenster (Wunsch 26.11.) -->
-  <aside class="leiste-seite" aria-label="GSRA">
-    <div class="marke">
-      <img src="/gsra-logo.png" alt="" class="logo">
-      <div class="marke-text">
-        <strong>GSRA</strong>
-        <span class="slogan"><span class="blau">United by speed.</span> <span class="gelb">Driven globally.</span></span>
-      </div>
+  <!-- Kopfzeile wie auf der Webseite: Logo, Slogan, durchlaufende Namen (Pole/Alliance) – zugleich die Fensterleiste
+       der App (verschieben, Doppelklick = maximieren; eigene Knöpfe rechts) -->
+  <header class="app-kopf" data-tauri-drag-region>
+    <div class="gsra-visibility" id="sichtbarkeit" aria-hidden="true"></div>
+    <div class="app-marke" data-tauri-drag-region>
+      <img src="/gsra-logo.png" alt="GSRA" class="app-logo" data-tauri-drag-region>
+      <span class="app-slogan" data-tauri-drag-region><span class="blau">United by speed.</span> <span class="gelb">Driven globally.</span></span>
     </div>
+    <div class="app-kopf-platz" data-tauri-drag-region></div>
+    <div class="fenster-knoepfe" id="fensterKnoepfe" hidden>
+      <button type="button" class="fenster-knopf" id="fMin" title="Minimieren" aria-label="Minimieren"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+      <button type="button" class="fenster-knopf" id="fMax" title="Maximieren" aria-label="Maximieren"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h12v12H6z"/></svg></button>
+      <button type="button" class="fenster-knopf" id="fVoll" title="Vollbild (F11)" aria-label="Vollbild"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+      <button type="button" class="fenster-knopf zu" id="fZu" title="Schließen" aria-label="Schließen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+  </header>
+  <div class="rahmen">
+  <!-- Seitenleiste: die ganze GSRA – Community, Rennen (Telemetrie), Garage … (Wunsch 26.11.) -->
+  <aside class="leiste-seite" aria-label="GSRA">
     <nav class="navi" aria-label="Bereiche">
+      <p class="navi-gruppe">GSRA</p>
+      <button type="button" data-web="index.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h13v14H6a2 2 0 0 1-2-2V5zm13 4h3v8a2 2 0 0 1-2 2M8 9h5M8 13h5M8 17h3"/></svg><span>Neuigkeiten</span></button>
+      <button type="button" data-reiter="messenger" data-webseite="messenger.html" id="navMessenger"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5z"/></svg><span>Messenger</span><i class="neu-punkt" id="messengerPunkt" hidden></i><span class="sr-only" id="messengerPunktText" hidden> – neue Nachrichten</span></button>
+      <button type="button" data-web="kalender.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v14H4zM4 10h16M8 3v5M16 3v5"/></svg><span>Rennkalender</span></button>
+      <button type="button" data-web="videos.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM10 9l5 3-5 3z"/></svg><span>Videos</span></button>
+
       <p class="navi-gruppe">Rennen</p>
       <button type="button" data-reiter="live" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.6 18a8.5 8.5 0 1 1 14.8 0M12 14l4.5-5M12 14h.01"/></svg><span>Live</span></button>
       <button type="button" data-reiter="runden"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 9v4l2.5 2M9 2.5h6"/></svg><span>Runden</span> <span class="anzahl" id="rundenAnzahl">0</span></button>
@@ -27,12 +42,6 @@
       <button type="button" data-reiter="sprit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16M3 21h12M14 9h2a2 2 0 0 1 2 2v5a1.5 1.5 0 0 0 3 0V8l-3-3M7 7h4"/></svg><span>Sprit &amp; Stint</span></button>
       <button type="button" data-reiter="bericht"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6v3H9zM7 4.5H5V21h14V4.5h-2M8 11h8M8 15h8M8 19h5"/></svg><span>Bericht</span></button>
       <button type="button" data-reiter="chat"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14v-2a8 8 0 0 1 16 0v2M4 14h3v5H4zM17 14h3v5h-3z"/></svg><span>Renningenieur</span></button>
-
-      <p class="navi-gruppe">Community</p>
-      <button type="button" data-web="index.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h13v14H6a2 2 0 0 1-2-2V5zm13 4h3v8a2 2 0 0 1-2 2M8 9h5M8 13h5M8 17h3"/></svg><span>Neuigkeiten</span></button>
-      <button type="button" data-reiter="messenger" data-webseite="messenger.html" id="navMessenger"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5z"/></svg><span>Messenger</span><i class="neu-punkt" id="messengerPunkt" hidden></i><span class="sr-only" id="messengerPunktText" hidden> – neue Nachrichten</span></button>
-      <button type="button" data-web="kalender.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v14H4zM4 10h16M8 3v5M16 3v5"/></svg><span>Rennkalender</span></button>
-      <button type="button" data-web="videos.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM10 9l5 3-5 3z"/></svg><span>Videos</span></button>
 
       <p class="navi-gruppe">Garage</p>
       <button type="button" data-web="setups.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8M14 5v4M8 15v4"/></svg><span>Setups</span></button>
@@ -105,6 +114,12 @@
       </div>
     </form>
   </dialog>
+  <!-- Bild im Messenger groß ansehen -->
+  <dialog id="mxBildDialog" class="mx-bild-dialog" aria-label="Bild">
+    <img id="mxBildGross" alt="">
+    <button type="button" class="knopf leise" id="mxBildZu">Schließen</button>
+  </dialog>
+
   <!-- Datenschutz in der App: was auf dem PC bleibt und was wohin geht -->
   <dialog id="dsDialog" class="dialog ds-dialog" aria-labelledby="dsTitel">
     <h2 id="dsTitel">Datenschutz in der GSRA-App</h2>
@@ -117,6 +132,7 @@
       <li>Sprechtaste: Beim Halten und Antippen läuft das Mikrofon nur während deiner Frage (höchstens 30 Sekunden). Bei „Signalwort“ hört es dauerhaft mit, solange du diese Art gewählt hast – links unten steht dann „Mikro an“; Sätze ohne Signalwort werden sofort verworfen. Die Spracherkennung läuft auf deinem PC; dein Ton wird nie gespeichert und nie gesendet. Weiter geht – wie bei einer getippten Frage – nur der erkannte Text. Modelle: NVIDIA Parakeet TDT 0.6B v3 (CC BY 4.0) und Silero VAD (MIT), ausgeführt mit sherpa-onnx.</li>
       <li>Knopf am Lenkrad: Die App liest nur, welcher Knopf gedrückt wird (keine Achsen, keine Tastatur) und nur, um deine Sprechtaste zu erkennen.</li>
       <li>Welche Simulation läuft, erkennt die App am Namen des laufenden Programms – nur auf deinem PC.</li>
+      <li>Eigene Stimme: Die Aufnahme (höchstens 20 Sekunden) wird nur angenommen, wenn du bestätigst, dass die Person zugestimmt hat oder es deine eigene Stimme ist. Sie liegt nur im Datenordner der App auf diesem PC, wird nie hochgeladen und ist mit „Aufnahme löschen“ sofort weg. Die Stimme entsteht auf deinem PC (Kyutai Pocket TTS, CC BY 4.0, ausgeführt mit sherpa-onnx).</li>
     </ul>
     <h3>Geht an die GSRA (verschlüsselte Verbindung, Datenbank in Frankfurt)</h3>
     <ul>
@@ -183,6 +199,22 @@
           <label class="knopf leise datei" title="Die Datei bleibt auf deinem PC – sie wird nur abgespielt, nicht hochgeladen">Eigene Aufnahme durch den Funk
             <input type="file" id="fAufnahme" accept="audio/*,.ogg,.opus,.m4a,.mp3,.wav"></label>
         </div>
+        <details class="sprech-einstellung" id="esBereich">
+          <summary>Eigene Stimme für den Renningenieur (Deutsch)</summary>
+          <p class="hinweis">Aus einer kurzen Aufnahme (5 bis 20 Sekunden, nur eine Person, ohne Musik) spricht dein Renningenieur mit dieser Stimme – komplett auf deinem PC, ohne Kosten. Die Aufnahme bleibt hier gespeichert, wird nie hochgeladen und lässt sich jederzeit löschen. Erst einmal nur Deutsch; andere Sprachen sprechen weiter mit der Windows-Stimme.</p>
+          <div class="sprech-installation">
+            <button type="button" class="knopf leise" id="esInstallieren">Stimm-Modell laden</button>
+            <div class="balken" id="esBalken" hidden><i id="esBalkenWert"></i></div>
+            <span class="hinweis" id="esStand"></span>
+          </div>
+          <label class="schalter es-zustimmung"><input type="checkbox" id="esEinverstanden"> Die Person auf der Aufnahme hat zugestimmt, dass ihre Stimme hier nachgebildet wird – oder es ist meine eigene Stimme.</label>
+          <div class="funk-zeile">
+            <label class="knopf leise datei" id="esDateiKnopf">Aufnahme wählen <input type="file" id="esDatei" accept="audio/*,.ogg,.opus,.m4a,.mp3,.wav"></label>
+            <label class="schalter"><input type="checkbox" id="esAn"> Eigene Stimme verwenden</label>
+            <button class="knopf leise" id="esProbe" type="button">Probe hören</button>
+            <button class="knopf leise" id="esLoeschen" type="button">Aufnahme löschen</button>
+          </div>
+        </details>
         <p class="hinweis" id="fHinweis">Angemeldet formuliert dein KI-Renningenieur die Ansagen in seinem Stil (links unter „Renningenieur einstellen“).</p>
         <p class="hinweis"><button type="button" class="link-knopf" id="dsKnopf">Datenschutz in der App: was bleibt auf dem PC, was geht wohin?</button></p>
       </div>
@@ -202,15 +234,20 @@
 
     <!-- VERGLEICH -->
     <section class="seite" data-seite="vergleich" aria-label="Vergleich">
+      <div class="strecken-bereich">
+        <h3 class="strecken-titel">Deine Strecken <small>auf diesem PC gespeichert: je Auto die 5 schnellsten und die 20 letzten Runden</small></h3>
+        <div class="strecken-karten" id="vStrecken" role="list"></div>
+      </div>
       <div class="leiste">
         <label>Referenz <select id="vRef"></select></label>
         <label>Vergleich <select id="vX"></select></label>
+        <button type="button" class="knopf" id="vKi" title="Dein Renningenieur erklärt den Vergleich im Chat – danach kannst du nachfragen">Renningenieur erklärt</button>
         <div class="umschalter" role="tablist" aria-label="Ansicht">
           <button type="button" role="tab" data-ebene="kurz" aria-selected="true">Kurz gesagt</button>
           <button type="button" role="tab" data-ebene="genau" aria-selected="false">Genau hinsehen</button>
         </div>
       </div>
-      <p class="leer" id="vLeer">Für einen Vergleich brauchst du zwei aufgezeichnete Runden. Fahr los – oder starte die Demo.</p>
+      <p class="leer" id="vLeer">Für einen Vergleich brauchst du zwei Runden: aus dieser Sitzung oder gespeicherte von einer Strecke oben. Fahr los – oder starte die Demo.</p>
       <div class="vergleich-raster" id="vRaster" hidden>
         <div class="vergleich-inhalt">
           <div id="vKurz" hidden>
@@ -332,6 +369,7 @@
           <div class="sprech-signal" id="sSignal" hidden>
             <label class="feld-klein">Signalwörter <small>(mit Komma getrennt; der Name deines Renningenieurs ist immer dabei)</small>
               <input type="text" id="sSignalwoerter" maxlength="120" placeholder="Renningenieur, Box" autocomplete="off"></label>
+            <p class="signal-aktiv" id="sSignalAktiv" aria-live="polite"></p>
             <p class="hinweis">Dafür hört das Mikrofon dauerhaft mit – nur auf deinem PC, nichts wird gespeichert oder gesendet. Erst ein Satz, der mit dem Signalwort beginnt, geht an deinen Renningenieur. Tipp: Namen mit zwei Silben werden sicherer erkannt.</p>
           </div>
           <div class="sprech-ausloeser">
@@ -446,7 +484,7 @@
         <aside class="mx-seitenteil">
           <div class="mx-kopf">
             <input type="search" id="mxSuche" placeholder="Chats durchsuchen …" aria-label="Chats durchsuchen" autocomplete="off">
-            <button type="button" class="knopf leise" id="mxWeb" title="Bilder, Sprachnachrichten, Reaktionen, Gruppen, Freunde">Alle Funktionen</button>
+            <button type="button" class="knopf leise" id="mxWeb" title="Reaktionen, Gruppen verwalten, Freunde, Videos senden">Alle Funktionen</button>
           </div>
           <ul class="mx-liste" id="mxListe" aria-label="Chats"></ul>
         </aside>
@@ -454,9 +492,23 @@
           <header class="mx-chat-kopf"><strong id="mxTitel">Wähle einen Chat</strong><small id="mxUnter"></small></header>
           <div class="mx-verlauf" id="mxVerlauf" aria-live="polite"></div>
           <form class="mx-form" id="mxForm" autocomplete="off" hidden>
+            <label class="mx-werkzeug" title="Fotos senden (werden verkleinert, ohne Standortdaten)" aria-label="Fotos senden">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h9M3 16l5-5 4 4M14 13l2-2 3 3M17 19h6M20 16v6"/></svg>
+              <input type="file" id="mxBilder" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden>
+            </label>
             <textarea id="mxFeld" rows="1" maxlength="4000" placeholder="Nachricht schreiben … (Enter sendet, Shift+Enter = neue Zeile)" aria-label="Nachricht"></textarea>
+            <button type="button" class="mx-werkzeug" id="mxMikro" title="Sprachnachricht aufnehmen" aria-label="Sprachnachricht aufnehmen">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zM6 11a6 6 0 0 0 12 0M12 17v4M8 21h8"/></svg>
+            </button>
             <button type="submit" class="knopf">Senden</button>
           </form>
+          <div class="mx-aufnahme" id="mxAufnahme" hidden>
+            <span class="mx-rec-punkt" aria-hidden="true"></span>
+            <span id="mxAufnahmeZeit">0:00</span>
+            <span class="hinweis">Sprachnachricht wird aufgenommen …</span>
+            <button type="button" class="knopf leise" id="mxAufnahmeWeg">Verwerfen</button>
+            <button type="button" class="knopf" id="mxAufnahmeSenden">Senden</button>
+          </div>
         </div>
       </div>
     </section>

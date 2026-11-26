@@ -16,7 +16,10 @@ import { SPOTTER_SAETZE, Spotter, seiteAus, spotterSatz } from "../src/spotter.t
 import { abstandSatz, rufname } from "../src/vorlagen.ts";
 import { Feldrunden, deltaZu, verlustIn } from "../src/feldreferenz.ts";
 import { namenErsetzen } from "../src/datenschutz.ts";
-import { spracheVonText, SPRECH_SPRACHEN } from "../src/sprachen.ts";
+import { spracheVonText, SPRECH_SPRACHEN, LAENDERCODE } from "../src/sprachen.ts";
+import { dauerText, istVideo, pfadVon, uploadPfad, verlaufVerdichten, vorschauPfad } from "../src/chat-medien.ts";
+import { aufraeumen, entpacken, packen, streckenKarten, BESTE_JE_AUTO, LETZTE_JE_AUTO, type ArchivRunde } from "../src/rundenarchiv.ts";
+import { ANSAGE_SPRACHEN, absicht, ansage, ordnungWort, pruefenIn, zahlenAusschreiben, zahlIn, zahlWort, zumSprechen } from "../src/ansagen.ts";
 
 function fahren(fahrt: DemoFahrt, runden: number, z = new Rundenzaehler()) {
   const fertige = [];
@@ -314,7 +317,8 @@ test("Spotter: sofort bei Auto daneben, „Frei“ erst nach echtem Nebeneinande
     assert.equal(Object.keys(saetze).length, 6, sprache);
     for (const t of Object.values(saetze)) assert.ok(t.length >= 2 && t.length <= 30, `${sprache}: ${t}`);
   }
-  assert.equal(Object.keys(SPOTTER_SAETZE).length, 12);
+  // alle 28 Sprachen des Renningenieurs (Fund 26.11.: 16 Sprachen fehlten, dort sprach der Spotter Deutsch)
+  assert.deepEqual(Object.keys(SPOTTER_SAETZE).sort(), Object.keys(LAENDERCODE).sort());
   assert.equal(spotterSatz("links", "en"), "Car left");
   assert.equal(spotterSatz("frei", "xx"), "Frei");
 });
@@ -462,4 +466,125 @@ test("Sprache einer Antwort erkennen (Stimmwahl bei „Automatisch“)", () => {
   assert.equal(spracheVonText("Brandstof is goed, de auto achter je is dichtbij."), "nl");
   assert.equal(spracheVonText("123 456"), null);
   assert.equal(Object.keys(SPRECH_SPRACHEN).length, 25, "Parakeet v3 versteht 25 Sprachen");
+});
+test("Ansagen: alle 28 Sprachen vollständig, gleiche Platzhalter wie Deutsch, keine deutschen Reste", () => {
+  assert.deepEqual([...ANSAGE_SPRACHEN].sort(), Object.keys(LAENDERCODE).sort());
+  const platzhalter = (s: string) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort().join(",");
+  const schluessel = ["probe", "vor", "hinter", "niemand", "sprit", "letzte", "beste", "platz", "nochNichts", "anmelden", "keineKi", "stoerung", "einrichtung", "rundeUngueltig", "neueBestzeit", "hinterBest", "runde", "nachbesprechung"] as const;
+  for (const code of ANSAGE_SPRACHEN) {
+    for (const k of schluessel) {
+      const roh = ansage(code, k, Object.fromEntries(["name", "wer", "s", "l", "v", "r", "zeit", "nr", "p", "d"].map((x) => [`${x}`, `{${x}}`])));
+      assert.equal(platzhalter(roh), platzhalter(ansage("de", k, Object.fromEntries(["name", "wer", "s", "l", "v", "r", "zeit", "nr", "p", "d"].map((x) => [`${x}`, `{${x}}`])))), `${code}.${k}`);
+      if (code !== "de") assert.ok(!/\b(Runde|Sprit|Bestzeit|hinter dir)\b/.test(roh), `${code}.${k} enthält Deutsch: ${roh}`);
+    }
+    if (code !== "de") assert.ok(pruefenIn(code), code);
+  }
+  // Probefunk: Deutsch „am Ende der 23. Runde“ (Wunsch 26.11.), Englisch „lap 23“ – nie „Round 23“
+  assert.match(ansage("de", "probe", { name: "Lars" }), /Hier ist Lars.*am Ende der 23\. Runde/);
+  assert.match(ansage("en", "probe", { name: "Lars" }), /This is Lars.*end of lap 23/);
+  assert.ok(!/round/i.test(ansage("en", "probe", { name: "Lars" })));
+  assert.match(ansage("bg", "probe", { name: "Ларс" }), /Тук е Ларс/);
+  assert.equal(ansage("xx", "platz", { p: 3 }), "Du liegst auf Platz 3.");
+});
+
+test("Vorlesen: Einheiten ausgeschrieben, Komma je Sprache, Rundenzeit wie am Funk", () => {
+  // Fund 26.11.: „4L“ statt „4 Liter“
+  assert.equal(zumSprechen("Du hast 4 l im Tank, 2,35 l pro Runde.", "de"), "Du hast 4 Liter im Tank, 2,35 Liter pro Runde.");
+  assert.equal(zumSprechen("4L übrig", "de"), "4 Liter übrig");
+  assert.equal(zumSprechen("You have 4 l left, gap 1,2 s.", "en"), "You have 4 litres left, gap 1.2 seconds.");
+  assert.equal(zumSprechen("Bestzeit 1:27,120 – 0,3 s schneller", "de"), "Bestzeit 1 27,1 – 0,3 Sekunden schneller");
+  assert.equal(zumSprechen("Best lap 1:27.120", "en"), "Best lap 1 27.1");
+  assert.equal(zumSprechen("Имаш 4 l, 240 km/h, 80 m", "bg"), "Имаш 4 литра, 240 километра в час, 80 метра");
+  // nichts verschlimmbessern: Wörter mit l/s/m am Anfang, Uhrzeiten ohne Nachkommastelle
+  assert.equal(zumSprechen("Kurve 3 links, Box um 14:30", "de"), "Kurve 3 links, Box um 14:30");
+  assert.equal(zumSprechen("die 27 ist 1,2 vor dir", "en"), "die 27 ist 1.2 vor dir");
+  assert.equal(zahlIn("de", 1.25, 2), "1,25");
+  assert.equal(zahlIn("en", 1.25, 2), "1.25");
+});
+
+test("Fragen werden in jeder Sprache erkannt (feste Antworten ohne KI)", () => {
+  assert.equal(absicht("Hey Lars, reicht der Sprit?", "de"), "sprit");
+  assert.equal(absicht("Wer fährt vor mir?", "de"), "vor");
+  assert.equal(absicht("Was war meine letzte Runde?", "de"), "letzte");
+  assert.equal(absicht("Wie kann ich Sprit sparen?", "de"), null);
+  assert.equal(absicht("How much fuel do I have?", "en"), "sprit");
+  assert.equal(absicht("Who is behind me?", "en"), "hinter");
+  assert.equal(absicht("What was my best lap?", "en"), "beste");
+  assert.equal(absicht("Колко гориво ми остава?", "bg"), "sprit");
+  assert.equal(absicht("Кой е пред мен?", "bg"), "vor");
+  assert.equal(absicht("Która jest moja pozycja?", "pl"), "platz");
+  assert.equal(absicht("¿Quién va delante?", "es"), "vor");
+  assert.equal(absicht("Mennyi üzemanyagom van?", "hu"), "sprit");
+  assert.equal(absicht("Warum verliere ich in Kurve 4 Zeit?", "de"), null);
+  assert.equal(absicht("¿Puedes analizar mi frenada?", "es"), null);
+  assert.equal(absicht("Tko je iza mene?", "hr"), "hinter");
+  assert.equal(absicht("Napravi analizu", "hr"), null);
+});
+test("Eigene Stimme: deutsche Zahlen in Worten (die geklonte Stimme liest keine Ziffern)", () => {
+  assert.equal(zahlWort(0), "null");
+  assert.equal(zahlWort(1), "eins");
+  assert.equal(zahlWort(21), "einundzwanzig");
+  assert.equal(zahlWort(23), "dreiundzwanzig");
+  assert.equal(zahlWort(30), "dreißig");
+  assert.equal(zahlWort(101), "hunderteins".replace(/^/, "ein"));
+  assert.equal(zahlWort(1300), "eintausenddreihundert");
+  assert.equal(zahlWort(250_000), "zweihundertfünfzigtausend");
+  assert.equal(ordnungWort(1), "ersten");
+  assert.equal(ordnungWort(3), "dritten");
+  assert.equal(ordnungWort(12), "zwölften");
+  assert.equal(ordnungWort(23), "dreiundzwanzigsten");
+  assert.equal(zahlenAusschreiben("Wir holen dich am Ende der 23. Runde rein."), "Wir holen dich am Ende der dreiundzwanzigsten Runde rein.");
+  assert.equal(zahlenAusschreiben("Du liegst auf Platz 3. Stark!"), "Du liegst auf Platz drei. Stark!");
+  assert.equal(zahlenAusschreiben("#27 ist 1,25 Sekunden vor dir"), "Nummer siebenundzwanzig ist eins Komma zwei fünf Sekunden vor dir");
+  // zusammen mit dem Aufbereiten: Rundenzeit wie am Funk, Einheiten ausgeschrieben
+  assert.equal(zahlenAusschreiben(zumSprechen("Bestzeit 1:27,120, 4 l im Tank", "de")), "Bestzeit eins siebenundzwanzig Komma eins, vier Liter im Tank");
+});
+test("Messenger: Anhänge aus dem privaten Speicher – Pfade, Vorschaubilder, Sprachverlauf", () => {
+  const basis = "https://x.supabase.co/storage/v1/object/public/chat_attachments/";
+  const chat = "11111111-2222-3333-4444-555555555555";
+  assert.equal(pfadVon(`${basis}${chat}/u1/chatv_123_abcde.jpg`), `${chat}/u1/chatv_123_abcde.jpg`);
+  assert.equal(pfadVon(`${basis}${chat}/u1/voice_1_a.webm?token=x`), `${chat}/u1/voice_1_a.webm`);
+  assert.equal(pfadVon("https://boese.example/bild.jpg"), null);
+  assert.equal(pfadVon(`${basis}../../geheim`), null, "keine Pfade nach oben");
+  assert.equal(pfadVon(`${basis}%00x`), null, "keine Steuerzeichen");
+  assert.equal(vorschauPfad(`${chat}/u1/chatv_123_abcde.jpg`), `${chat}/u1/chatv_123_abcde.vorschau.jpg`);
+  assert.equal(vorschauPfad(`${chat}/u1/chatv_123_abcde_42s.mp4`), `${chat}/u1/chatv_123_abcde.vorschau.jpg`);
+  assert.equal(vorschauPfad(`${chat}/u1/chat_123_abcde.jpg`), null, "ältere Anhänge ohne Vorschau");
+  assert.ok(istVideo("a/b/c.mp4") && !istVideo("a/b/c.jpg"));
+  assert.equal(uploadPfad(chat, "u1", "voice_1.webm"), `${chat}/u1/voice_1.webm`);
+  const v = verlaufVerdichten([0.1, 0.2, 0.4, 0.8, 0.4, 0.2], 3);
+  assert.equal(v.length, 3);
+  assert.ok(v.every((x) => x >= 0.08 && x <= 1));
+  assert.equal(verlaufVerdichten([]).length, 48);
+  assert.equal(dauerText(65.4), "1:05");
+});
+test("Rundenarchiv: Messpunkte verdichten, je Auto 5 schnellste + 20 letzte behalten, Kärtchen je Strecke", () => {
+  const punkte = Array.from({ length: 5400 }, (_, i) => ({ a: i / 5399, t: i / 60, v: 50 + (i % 7), g: 1, b: 0, gang: 4, l: 0.5, r: 0.1 }));
+  const d = packen(punkte);
+  const zurueck = entpacken(d);
+  assert.ok(zurueck.length <= 2000 && zurueck.length > 1700, `Punkte: ${zurueck.length}`);
+  assert.equal(zurueck.at(-1)!.a, 1, "der letzte Punkt bleibt");
+  assert.ok(Math.abs(zurueck[10].t - punkte[30].t) < 1e-4);
+  // die Lücke zwischen zwei Punkten bleibt klein (sonst baut die Karte nicht)
+  assert.ok(zurueck.every((p, i) => i === 0 || p.t - zurueck[i - 1].t < 0.2));
+
+  const runde = (id: number, zeit: number, tag: number, gueltig = true, fahrzeug = "BMW M4 GT3", strecke = "Monza"): ArchivRunde =>
+    ({ id, strecke, fahrzeug, laengeM: 5793, sitzung: "Practice", datum: new Date(Date.UTC(2026, 10, tag, 12, id % 60)).toISOString(), nr: id, zeit, gueltig, grund: null, daten: new Float32Array(0) });
+  const liste: ArchivRunde[] = [];
+  for (let i = 1; i <= 40; i++) liste.push(runde(i, 110 - (i === 3 ? 5 : 0) + (i % 5), 1 + Math.floor(i / 3), i % 9 !== 0));
+  liste.push(runde(100, 120, 1, true, "Porsche 911 GT3 R"));
+  const weg = new Set(aufraeumen(liste));
+  const bleibt = liste.filter((r) => !weg.has(r.id!));
+  const bmw = bleibt.filter((r) => r.fahrzeug === "BMW M4 GT3");
+  assert.ok(bmw.some((r) => r.id === 3), "die schnellste Runde bleibt, auch wenn sie alt ist");
+  assert.ok(bmw.length <= BESTE_JE_AUTO + LETZTE_JE_AUTO && bmw.length >= LETZTE_JE_AUTO);
+  assert.ok(bleibt.some((r) => r.id === 100), "jedes Auto behält seine Runden");
+  const neueste20 = [...liste].filter((r) => r.fahrzeug === "BMW M4 GT3").sort((a, b) => b.datum.localeCompare(a.datum)).slice(0, 20);
+  assert.ok(neueste20.every((r) => !weg.has(r.id!)), "die 20 letzten bleiben");
+
+  const karten = streckenKarten([...bleibt, runde(200, 95, 20, true, "Ferrari 296", "Spa")]);
+  assert.equal(karten[0].strecke, "Spa", "zuletzt gefahrene Strecke zuerst");
+  const monza = karten.find((k) => k.strecke === "Monza")!;
+  assert.equal(monza.beste, Math.min(...bleibt.filter((r) => r.gueltig && r.strecke === "Monza").map((r) => r.zeit)));
+  assert.deepEqual(monza.autos.sort(), ["BMW M4 GT3", "Porsche 911 GT3 R"]);
 });

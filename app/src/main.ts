@@ -8,7 +8,9 @@ import { DemoQuelle } from "./demo.ts";
 import { Diagramme, verlaufZeichnen, type Plot } from "./diagramm.ts";
 import type { Feld, Probe, Sitzung, Status } from "./typen.ts";
 import { angemeldet, beiKontoWechsel, hinweis, kontoStarten } from "./konto-ansicht.ts";
-import { aufnahmeAbspielen, funkLaden, funkSpeichern, sprechen, spotterSprechen, stimmenFuer } from "./funk.ts";
+import { aufnahmeAbspielen, beiFehlenderStimme, funkLaden, funkSpeichern, sprechen, spotterSprechen, stimmenFuer } from "./funk.ts";
+import { absicht, ansage, mitPunkt, zahlIn } from "./ansagen.ts";
+import { spracheName, spracheVonText } from "./sprachen.ts";
 import { kiFragen, kiVerfuegbar, merkenSpeichern, persoenlichkeitLaden, type Persoenlichkeit } from "./ki.ts";
 import { messwerteKodieren } from "../../src/stint-messwerte.ts";
 import { bremspunkte, sparAuswerten, sparBasis, sparText, sparTipp, type Bremspunkt, type SparAuswertung, type SparBasis } from "./sparen.ts";
@@ -25,6 +27,10 @@ import { sprechtasteEinrichten } from "./sprechtaste.ts";
 import { messengerHinweis } from "./konto.ts";
 import { reEinstellungenEinrichten } from "./re-einstellungen.ts";
 import { messengerEinrichten } from "./messenger.ts";
+import { fensterEinrichten, sichtbarkeitStarten } from "./kopf.ts";
+import { eigeneStimmeEinrichten } from "./eigene-stimme.ts";
+import { alsSechzehnKilohertz } from "./chat-medien.ts";
+import { ablegen, alleRunden, alsRunde, rundenDerStrecke, streckeLoeschen, streckenKarten, type ArchivRunde, type StreckenKarte } from "./rundenarchiv.ts";
 
 startbildZeigen();
 
@@ -67,9 +73,22 @@ const typischeRundenzeit = () => rundenzeitSchnitt(zaehler.runden) ?? zaehler.be
 // Spotter: „Auto links/rechts“ sofort und ohne KI (Wunsch 25.11.)
 let letzteSeite: number | null = null;
 const spotter = new Spotter((s) => {
-  const sprache = persoenlichkeit?.sprache ?? "de";
+  const sprache = ansageSprache();
   spotterSprechen(spotterSatz(s, sprache), funkE, sprache);
 });
+
+// Sprache der festen Ansagen (Wunsch 26.11.: alle Sprachen, nicht nur Deutsch): die eingestellte Sprache, bei
+// „Automatisch“ die Sprache der letzten Frage (sonst Deutsch)
+let frageSprache: string | null = null;
+function ansageSprache(frage?: string): string {
+  const s = persoenlichkeit?.sprache ?? "auto"; // ohne Anmeldung: Sprache der Frage
+  if (s !== "auto") return s;
+  const erkannt = frage ? spracheVonText(frage) : null;
+  if (erkannt) frageSprache = erkannt;
+  return frageSprache ?? "de";
+}
+/** Rundenzeit in der Schreibweise der Sprache (1:27,120 bzw. 1:27.120) */
+const zeitIn = (code: string, s: number | null | undefined) => (mitPunkt(code) ? zeitText(s).replace(",", ".") : zeitText(s));
 
 let letztesFeld: Feld | null = null;
 // Referenz aus der Lobby: schnellste geprüfte Runde eines anderen Fahrers (nur auf diesem PC)
@@ -96,6 +115,14 @@ const messenger = messengerEinrichten({
   hinweis,
   webansicht: () => webBereichZeigen("messenger.html"),
   ungelesen: (gibt) => punktSetzen(gibt),
+  // Mitschrift der Sprachnachricht mit der Spracherkennung auf dem PC (nur wenn installiert; der Ton bleibt hier)
+  mitschrift: istApp ? async (blob) => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const stand = await invoke<{ installiert: boolean }>("sprache_status");
+    if (!stand.installiert) return null;
+    const text = await invoke<string>("sprache_mitschrift", { ton: await alsSechzehnKilohertz(blob), rate: 16_000 });
+    return text.trim() || null;
+  } : undefined,
 });
 
 const laenge = () => sitzung?.streckenlaengeM ?? (groessterMeter > 500 ? groessterMeter : null);
@@ -116,7 +143,10 @@ function reiterZeigen(name: string) {
   aktiverReiter = name;
   webVerbergen();
   navMarkieren(document.querySelector<HTMLElement>(`[data-reiter="${name}"]`), name);
-  if (name === "vergleich") vergleichZeigen();
+  if (name === "vergleich") {
+    void streckenZeigen();
+    vergleichZeigen();
+  }
   if (name === "sprit") spritZeigen();
   if (name === "runden") rundenZeigen();
   if (name === "bericht") berichtZeigen();
@@ -289,6 +319,23 @@ function proben(liste: Probe[]) {
   }
 }
 
+/** Rundenmeldung in anderen Sprachen als Deutsch: kurz, ohne die (deutsche) Kurvenanalyse – die formuliert
+ *  angemeldet die KI in der richtigen Sprache */
+function rundenSatz(code: string, r: Runde, beste: Runde | null, gegner: { vor: Gegner | null; hinter: Gegner | null }): string {
+  const teile = [
+    !r.gueltig ? ansage(code, "rundeUngueltig", { nr: r.nr })
+      : beste === r ? ansage(code, "neueBestzeit", { zeit: zeitIn(code, r.zeit) })
+      : beste ? ansage(code, "hinterBest", { zeit: zeitIn(code, r.zeit), d: zahlIn(code, r.zeit - beste.zeit, 3) })
+      : ansage(code, "runde", { nr: r.nr, zeit: zeitIn(code, r.zeit) }),
+  ];
+  const wer = (g: Gegner) => `${g.nummer ? `#${g.nummer} ` : ""}${g.name}`;
+  if (gegner.vor && gegner.vor.abstand <= 3) teile.push(ansage(code, "vor", { wer: wer(gegner.vor), s: zahlIn(code, gegner.vor.abstand) }));
+  if (gegner.hinter && gegner.hinter.abstand <= 1.5 && (gegner.hinter.trend == null || gegner.hinter.trend <= 0.05)) {
+    teile.push(ansage(code, "hinter", { wer: wer(gegner.hinter), s: zahlIn(code, gegner.hinter.abstand) }));
+  }
+  return teile.join(" ");
+}
+
 function rundeFertig(r: Runde) {
   $("rundenAnzahl").textContent = String(zaehler.runden.length);
   const beste = zaehler.beste;
@@ -314,12 +361,20 @@ function rundeFertig(r: Runde) {
   const sparSatz = sparRunde(r);
   // Abstände nach vorn/hinten mit Tendenz – als Vorlage, ohne KI (Thema „Abstände“)
   const gegner = gegnerMitTrend();
-  const abstand = abstandSatz(persoenlichkeit?.art ?? "kumpel", gegner.vor, gegner.hinter);
-  funkMelden([sparSatz ?? text, abstand].filter(Boolean).join(" "), { ...rundenLage(r, befund), vor_mir: gegner.vor, hinter_mir: gegner.hinter });
+  const code = ansageSprache();
+  const vorlage = code === "de"
+    ? [sparSatz ?? text, abstandSatz(persoenlichkeit?.art ?? "kumpel", gegner.vor, gegner.hinter)].filter(Boolean).join(" ")
+    : rundenSatz(code, r, beste, gegner);
+  funkMelden(vorlage, { ...rundenLage(r, befund), vor_mir: gegner.vor, hinter_mir: gegner.hinter });
   // Karte aus der ersten gültigen Runde mit Fahrtrichtung; Kurvennummern aus der Bestzeit
   if (!karte && r.gueltig) karte = karteBauen(r.punkte);
   if (beste && beste.punkte.length > 10) kurvenMarken = kurvenFinden(spur(beste), laenge() ?? 4000).map((k) => ({ i: k.scheitel, text: String(k.nr) }));
   if (beste === r) letzterVerlust = null;
+  // Rundenarchiv: jede Runde mit Messpunkten auf diesem PC ablegen (Strecken-Kärtchen im Vergleich)
+  void ablegen(r, {
+    strecke: sitzung?.strecke ?? (demo.laeuft ? "Demo-Strecke" : null), fahrzeug: sitzung?.fahrzeug ?? (demo.laeuft ? "Demo-Auto" : null),
+    laengeM: laenge(), sitzung: sitzung?.sitzungsart ?? (demo.laeuft ? "Demo" : null),
+  }).then((ok) => { if (ok && aktiverReiter === "vergleich") void streckenZeigen(); }, () => { /* ohne Archiv weiter */ });
   if (aktiverReiter === "runden") rundenZeigen();
   if (aktiverReiter === "vergleich") vergleichZeigen();
   if (aktiverReiter === "sprit") spritZeigen();
@@ -335,7 +390,9 @@ const runden3 = (x: number | null | undefined) => (x == null || !Number.isFinite
 
 /** Datenschutz-Schalter „Fahrernamen an die KI“: aus = Namen anderer Fahrer werden vor dem Senden durch die
  *  Startnummer ersetzt (Spotter, Vorlagen-Funk und Anzeigen bleiben auf dem PC und behalten die Namen) */
-function kiLage(lage: Record<string, unknown>): Record<string, unknown> {
+function kiLage(roh: Record<string, unknown>): Record<string, unknown> {
+  // Bei „Automatisch“: Funk ohne Frage in der Sprache, in der zuletzt gefragt wurde (Regel 7 der Edge Function)
+  const lage = persoenlichkeit?.sprache === "auto" && frageSprache ? { ...roh, sprache_letzte_frage: frageSprache } : roh;
   if (funkE.namenAnKi) return lage;
   return namenErsetzen(lage, sitzung?.fahrer ?? []) as Record<string, unknown>;
 }
@@ -427,8 +484,8 @@ function funkEinrichten() {
   stimmenFuellen();
   if ("speechSynthesis" in window) window.speechSynthesis.addEventListener("voiceschanged", stimmenFuellen);
   $("fProbe").addEventListener("click", () => {
-    const name = persoenlichkeit?.name ?? "Kim";
-    void vorlesen(`Funkcheck. Hier ist ${name}, ich höre dich laut und deutlich. Sprit reicht für sieben Runden, Box in Runde 23.`);
+    const code = ansageSprache();
+    void sprechen(ansage(code, "probe", { name: persoenlichkeit?.name ?? "Kim" }), { ...funkE, vorlesen: true }, { sprache: code, stimmlage: persoenlichkeit?.stimme ?? "ruhig" });
   });
   $<HTMLInputElement>("fAufnahme").addEventListener("change", async (e) => {
     const feld = e.target as HTMLInputElement;
@@ -697,7 +754,7 @@ function chatLage(): Record<string, unknown> {
   const sprit = zaehler.jetzt?.sprit ?? null;
   const { vor, hinter } = nachbarn();
   const b = g.length >= 2 ? berichtErstellen(zaehler.runden, beobachter, laenge() ?? 4000, sitzung?.fahrer ?? []) : null;
-  if (phase === "nachbesprechung") return { anlass: "frage", phase, ...berichtLage() };
+  if (phase === "nachbesprechung") return { anlass: "frage", phase, ...berichtLage(), vergleich: vergleichFuerKi };
   return {
     anlass: "frage",
     phase,
@@ -721,33 +778,38 @@ function chatLage(): Record<string, unknown> {
     zweikaempfe: b ? b.kaempfe.slice(-3).map((k) => ({ gegner: k.name, runden: k.dauerRunden, knappster_abstand_s: runden3(k.minAbstand) })) : [],
     sparen: sparLage(),
     gegen_schnellsten: gegenSchnellstenLage(),
+    vergleich: vergleichFuerKi,
   };
 }
 
 /** Einfache Fakten ohne KI (sofort, auch offline) */
 function lokaleAntwort(frage: string): string | null {
-  const t = frage.toLowerCase();
-  const { vor, hinter } = nachbarn();
-  const nachbarText = (n: Nachbar, wo: string) => n
-    ? `${wo} fährt ${n.nummer ? `#${n.nummer} ` : ""}${n.name}${n.abstand_s != null ? `, etwa ${zahl(n.abstand_s, 1)} s` : ""}.`
-    : `${wo} ist gerade niemand – oder ich habe noch keine Daten vom Feld.`;
-  const live = /vor mir|vordermann|vorne|vorn\b|vorder|hinter mir|hintermann|hinten/.test(t);
-  if (live && phase === "nachbesprechung") return "Die Sitzung ist vorbei – frag mich lieber, was du in den Zweikämpfen oder an einer Stelle besser machen kannst.";
-  if (/vor mir|vordermann|vorne|vorn\b|vorder/.test(t)) return nachbarText(vor, "Vor dir");
-  if (/hinter mir|hintermann|hinten/.test(t)) return nachbarText(hinter, "Hinter dir");
-  if (/sprit|tank|reicht|verbrauch/.test(t) && !/spar/.test(t)) {
+  // In der Sprache der Antwort; erkannt wird die Frage in jeder Sprache (Stichwörter aus ansagen.ts)
+  const code = ansageSprache(frage);
+  const a = absicht(frage, code);
+  if (!a) return null;
+  const z = (x: number, stellen = 1) => zahlIn(code, x, stellen);
+  if ((a === "vor" || a === "hinter") && phase === "nachbesprechung") return ansage(code, "nachbesprechung");
+  if (a === "vor" || a === "hinter") {
+    const n = nachbarn()[a];
+    if (!n) return ansage(code, "niemand");
+    if (n.abstand_s == null) return ansage(code, "nochNichts");
+    return ansage(code, a, { wer: `${n.nummer ? `#${n.nummer} ` : ""}${n.name}`, s: z(n.abstand_s) });
+  }
+  if (a === "sprit") {
     const v = verbrauchProRunde(zaehler.runden);
     const sprit = zaehler.jetzt?.sprit;
-    if (!v || sprit == null) return "Für den Verbrauch brauche ich erst eine saubere Runde.";
-    return `Du hast ${zahl(sprit, 1)} l im Tank und verbrauchst ${zahl(v, 2)} l pro Runde – das reicht für etwa ${zahl(Math.floor((sprit / v) * 10) / 10, 1)} Runden. Ob es bis ins Ziel reicht, siehst du unter „Sprit & Stint“.`;
+    if (!v || sprit == null) return ansage(code, "nochNichts");
+    const satz = ansage(code, "sprit", { l: z(sprit), v: z(v, 2), r: z(Math.floor((sprit / v) * 10) / 10) });
+    return code === "de" ? `${satz} Ob es bis ins Ziel reicht, siehst du unter „Sprit & Stint“.` : satz;
   }
-  if (/letzte runde/.test(t)) {
+  if (a === "letzte") {
     const r = zaehler.runden.at(-1);
-    return r ? `Deine letzte Runde: ${zeitText(r.zeit)}${r.gueltig ? "" : ` (zählt nicht: ${r.grund ?? "ungültig"})`}.` : "Du hast noch keine Runde beendet.";
+    if (!r) return ansage(code, "nochNichts");
+    return `${ansage(code, "letzte", { zeit: zeitIn(code, r.zeit) })}${r.gueltig ? "" : ` ${ansage(code, "rundeUngueltig", { nr: r.nr })}`}`;
   }
-  if (/bestzeit|beste runde|schnellste/.test(t)) return zaehler.beste ? `Deine Bestzeit: ${zeitText(zaehler.beste.zeit)} in Runde ${zaehler.beste.nr}.` : "Noch keine gültige Runde – noch keine Bestzeit.";
-  if (/platz|position/.test(t)) return beobachter.platz != null ? `Du liegst auf Platz ${beobachter.platz}.` : "Den Platz kenne ich nur im Rennen mit anderen Autos.";
-  return null;
+  if (a === "beste") return zaehler.beste ? ansage(code, "beste", { zeit: zeitIn(code, zaehler.beste.zeit), nr: zaehler.beste.nr }) : ansage(code, "nochNichts");
+  return beobachter.platz != null ? ansage(code, "platz", { p: beobachter.platz }) : ansage(code, "nochNichts");
 }
 
 let chat: Chat | null = null;
@@ -760,15 +822,17 @@ function chatEinrichten() {
     art: () => persoenlichkeit?.art ?? "kumpel",
     name: () => persoenlichkeit?.name ?? "Renningenieur",
     lokal: lokaleAntwort,
+    sprache: (frage) => ansageSprache(frage),
     vorlesen: (text) => {
       const perSprache = Date.now() - sprachfrageZeit < 120_000;
       if (funkE.vorlesen || perSprache) void vorlesen(text);
       if (perSprache && aktiverReiter !== "chat") hinweis(`${persoenlichkeit?.name ?? "Renningenieur"}: ${text.slice(0, 220)}`, "ok");
     },
     sparenStarten: () => {
-      if (!spar.aktiv) return sparStarten();
       const a = spar.runden.at(-1);
-      return a ? sparText(a, null, sparStelle) : "Der Spar-Modus läuft schon – nach der nächsten Runde sage ich dir, ob es reicht.";
+      const satz = !spar.aktiv ? sparStarten() : a ? sparText(a, null, sparStelle) : "Der Spar-Modus läuft schon – nach der nächsten Runde sage ich dir, ob es reicht.";
+      // Die Spar-Sätze gibt es nur auf Deutsch; in anderen Sprachen erklärt es die KI
+      return ansageSprache() === "de" ? satz : null;
     },
   });
   // Mehrzeilige Eingabe wie im Messenger: wächst mit (bis zur Höchsthöhe), Enter sendet, Shift+Enter = neue Zeile
@@ -884,35 +948,172 @@ let diagramme: Diagramme | null = null;
 let zoom: { von: number; bis: number } | null = null;
 
 const rundenName = (r: Runde, beste: Runde | null) => `Runde ${r.nr} · ${zeitText(r.zeit)}${r === beste ? " · Bestzeit" : ""}${r.gueltig ? "" : ` · ${r.grund ?? "ungültig"}`}`;
+const datumKurz = (iso: string) => new Date(iso).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+
+// Gespeicherte Runden der gewählten Strecke (Rundenarchiv) – zusätzlich zu den Runden dieser Sitzung
+const archiv = { strecke: null as string | null, runden: [] as Runde[], info: new Map<Runde, ArchivRunde>() };
+const archivKarten = new Map<Runde, Karte | null>();
+/** Streckenlänge für den Vergleich: aus der gespeicherten Referenzrunde, sonst aus der laufenden Sitzung */
+function vLaenge(): number {
+  const a = auswahl.ref ? archiv.info.get(auswahl.ref) : undefined;
+  return a?.laengeM ?? laenge() ?? 4000;
+}
+const rundeBeschreiben = (r: Runde) => {
+  const a = archiv.info.get(r);
+  return a ? `gespeicherte Runde vom ${datumKurz(a.datum)}${a.fahrzeug ? ` (${a.fahrzeug})` : ""}` : `Runde ${r.nr} dieser Sitzung`;
+};
 
 function auswahlFuellen() {
-  const mitDaten = zaehler.runden.filter((r) => r.punkte.length > 10);
+  const sitzungRunden = zaehler.runden.filter((r) => r.punkte.length > 10);
+  const alle = [...sitzungRunden, ...archiv.runden];
   const beste = zaehler.beste;
-  if (!auswahl.ref || !mitDaten.includes(auswahl.ref)) auswahl.ref = beste ?? mitDaten[0] ?? null;
-  if (!auswahl.x || !mitDaten.includes(auswahl.x) || auswahl.x === auswahl.ref) {
-    auswahl.x = [...mitDaten].reverse().find((r) => r !== auswahl.ref && r.gueltig) ?? [...mitDaten].reverse().find((r) => r !== auswahl.ref) ?? null;
+  const archivBeste = archiv.runden.filter((r) => r.gueltig).reduce<Runde | null>((b, r) => (!b || r.zeit < b.zeit ? r : b), null);
+  if (!auswahl.ref || !alle.includes(auswahl.ref)) auswahl.ref = archivBeste ?? beste ?? sitzungRunden[0] ?? archiv.runden[0] ?? null;
+  if (!auswahl.x || !alle.includes(auswahl.x) || auswahl.x === auswahl.ref) {
+    const kandidaten = [...[...sitzungRunden].reverse(), ...archiv.runden];
+    auswahl.x = kandidaten.find((r) => r !== auswahl.ref && r.gueltig) ?? kandidaten.find((r) => r !== auswahl.ref) ?? null;
   }
+  const option = (wert: string, text: string, an: boolean) => {
+    const o = neu("option", "", text);
+    o.value = wert;
+    o.selected = an;
+    return o;
+  };
   for (const [id, gewaehlt] of [["vRef", auswahl.ref], ["vX", auswahl.x]] as const) {
     const sel = $<HTMLSelectElement>(id);
-    const optionen = [...mitDaten].reverse().map((r) => {
-      const o = neu("option", "", rundenName(r, beste));
-      o.value = String(zaehler.runden.indexOf(r));
-      o.selected = r === gewaehlt;
-      return o;
-    });
+    const teile: HTMLElement[] = [];
     if (!gewaehlt) {
-      const leer = neu("option", "", id === "vRef" ? "– noch keine Runde –" : "– noch keine zweite Runde –");
-      leer.value = "";
+      const leer = option("", id === "vRef" ? "– noch keine Runde –" : "– noch keine zweite Runde –", true);
       leer.disabled = true;
-      leer.selected = true;
-      optionen.unshift(leer);
+      teile.push(leer);
     }
-    sel.replaceChildren(...optionen);
+    if (sitzungRunden.length) {
+      const g = neu("optgroup");
+      g.label = "Diese Sitzung";
+      g.append(...[...sitzungRunden].reverse().map((r) => option(`s:${zaehler.runden.indexOf(r)}`, rundenName(r, beste), r === gewaehlt)));
+      teile.push(g);
+    }
+    if (archiv.runden.length) {
+      const g = neu("optgroup");
+      g.label = `Gespeichert – ${archiv.strecke ?? ""}`;
+      g.append(...archiv.runden.map((r, i) => {
+        const a = archiv.info.get(r);
+        return option(`a:${i}`, `${a ? datumKurz(a.datum) : ""} · ${zeitText(r.zeit)}${a?.fahrzeug ? ` · ${a.fahrzeug.slice(0, 32)}` : ""}${r === archivBeste ? " · Bestzeit" : ""}${r.gueltig ? "" : " · ungültig"}`, r === gewaehlt);
+      }));
+      teile.push(g);
+    }
+    sel.replaceChildren(...teile);
   }
 }
+
+/** Kärtchen je gespeicherter Strecke; Klick lädt ihre Runden in die Auswahl */
+async function streckenZeigen() {
+  const box = $("vStrecken");
+  let karten: StreckenKarte[] = [];
+  try { karten = streckenKarten(await alleRunden()); } catch { /* ohne IndexedDB: nur diese Sitzung */ }
+  if (!karten.length) {
+    box.replaceChildren(neu("p", "hinweis", "Noch keine gespeicherten Runden – nach jeder Runde (auch in der Demo) landet sie hier, sortiert nach Strecke."));
+    return;
+  }
+  const elemente: HTMLElement[] = karten.map((k) => {
+    const an = k.strecke === archiv.strecke;
+    const b = neu("button", `strecke-karte${an ? " aktiv" : ""}`);
+    b.type = "button";
+    b.setAttribute("role", "listitem");
+    b.setAttribute("aria-pressed", String(an));
+    b.title = an ? "Gespeicherte Runden ausblenden" : "Gespeicherte Runden dieser Strecke vergleichen";
+    b.append(neu("strong", "", k.strecke), neu("span", "strecke-zeit", k.beste ? zeitText(k.beste) : "–"),
+      neu("small", "", `${k.runden} ${k.runden === 1 ? "Runde" : "Runden"}${k.besteAuto ? ` · ${k.besteAuto}` : ""} · zuletzt ${datumKurz(k.zuletzt)}`));
+    b.addEventListener("click", () => void streckeWaehlen(an ? null : k.strecke));
+    return b;
+  });
+  if (archiv.strecke) {
+    const weg = neu("button", "knopf leise strecke-loeschen", "Gespeicherte Runden dieser Strecke löschen");
+    weg.type = "button";
+    let sicher = false;
+    weg.addEventListener("click", () => {
+      if (!sicher) {
+        sicher = true;
+        weg.textContent = `Wirklich alle Runden von „${archiv.strecke}“ löschen? Nochmal klicken.`;
+        window.setTimeout(() => { sicher = false; weg.textContent = "Gespeicherte Runden dieser Strecke löschen"; }, 5000);
+        return;
+      }
+      const s = archiv.strecke;
+      if (s) void streckeLoeschen(s).then(() => streckeWaehlen(null)).then(() => hinweis(`Gespeicherte Runden von „${s}“ gelöscht.`, "ok"));
+    });
+    elemente.push(weg);
+  }
+  box.replaceChildren(...elemente);
+}
+
+async function streckeWaehlen(strecke: string | null) {
+  archiv.strecke = strecke;
+  archiv.runden = [];
+  archiv.info.clear();
+  archivKarten.clear();
+  if (strecke) {
+    for (const a of await rundenDerStrecke(strecke).catch(() => [] as ArchivRunde[])) {
+      const r = alsRunde(a);
+      archiv.runden.push(r);
+      archiv.info.set(r, a);
+    }
+  }
+  auswahl = { ref: null, x: null };
+  zoom = null;
+  void streckenZeigen();
+  vergleichZeigen();
+}
+
+function archivKarte(r: Runde): Karte | null {
+  if (!archivKarten.has(r)) archivKarten.set(r, karteBauen(r.punkte));
+  return archivKarten.get(r) ?? null;
+}
+
+// Renningenieur erklärt den Vergleich (Wunsch 26.11.) – im Chat, danach sind Rückfragen möglich
+let vergleichFuerKi: Record<string, unknown> | null = null;
+function vergleichLage(): Record<string, unknown> | null {
+  const { ref, x } = auswahl;
+  if (!ref || !x || ref === x) return null;
+  const l = vLaenge();
+  const v = vergleichen(spur(ref), spur(x), l);
+  return {
+    strecke: archiv.info.get(ref)?.strecke ?? sitzung?.strecke ?? null,
+    referenz: { runde: rundeBeschreiben(ref), zeit_s: runden3(ref.zeit), gueltig: ref.gueltig },
+    vergleich: { runde: rundeBeschreiben(x), zeit_s: runden3(x.zeit), gueltig: x.gueltig },
+    unterschied_s: runden3(x.zeit - ref.zeit),
+    zusammenfassung: v.zusammenfassung.slice(0, 400),
+    groesste_verluste: v.befunde.slice(0, 4).map((b) => ({ stelle: kurvenName(b.kurve, l), verlust_s: runden3(b.verlust), ursachen: b.ursachen.slice(0, 2), tipp: b.tipp.slice(0, 180) })),
+    hier_schneller: v.staerken.slice(0, 3).map((b) => ({ stelle: kurvenName(b.kurve, l), gewinn_s: runden3(Math.abs(b.verlust)) })),
+  };
+}
+$("vKi").addEventListener("click", () => {
+  const lage = vergleichLage();
+  if (!lage) {
+    hinweis("Wähle zuerst zwei verschiedene Runden.", "fehler");
+    return;
+  }
+  vergleichFuerKi = lage;
+  reiterZeigen("chat");
+  if (angemeldet() && kiVerfuegbar()) {
+    void chat?.senden("Erklär mir diesen Vergleich: Wo verliere ich die meiste Zeit, warum, und wie hole ich sie mir zurück?");
+    return;
+  }
+  // Ohne KI: die Auswertung der App als Nachricht, mit Hinweis auf die ausführliche Erklärung
+  const schonGesagt = new Set<string>();
+  const verluste = (lage.groesste_verluste as { stelle: string; verlust_s: number | null; tipp: string }[])
+    .map((b) => {
+      const tipp = schonGesagt.has(b.tipp) ? "" : ` – ${b.tipp}`; // gleicher Tipp nur einmal
+      schonGesagt.add(b.tipp);
+      return `${b.stelle}: ${zahl(b.verlust_s ?? 0, 2)} s${tipp}${tipp ? "" : "."}`;
+    });
+  chat?.melden([String(lage.zusammenfassung), ...verluste,
+    angemeldet() ? "" : "Angemeldet erklärt dir dein KI-Renningenieur das ausführlich, und du kannst nachfragen."].filter(Boolean).join(" "), "nachbesprechung");
+});
+
 for (const id of ["vRef", "vX"] as const) {
   $<HTMLSelectElement>(id).addEventListener("change", (e) => {
-    const r = zaehler.runden[Number((e.target as HTMLSelectElement).value)] ?? null;
+    const [art, nr] = (e.target as HTMLSelectElement).value.split(":");
+    const r = (art === "a" ? archiv.runden[Number(nr)] : zaehler.runden[Number(nr)]) ?? null;
     if (id === "vRef") auswahl.ref = r;
     else auswahl.x = r;
     zoom = null;
@@ -928,7 +1129,7 @@ for (const b of document.querySelectorAll<HTMLButtonElement>("[data-ebene]")) {
 $("vGanz").addEventListener("click", () => diagramme?.bereich(0, RASTER));
 
 function befundKarte(b: Befund, staerke: boolean) {
-  const l = laenge() ?? 4000;
+  const l = vLaenge();
   const karte = neu("article", staerke ? "befund staerke" : "befund");
   const kopf = neu("div", "befund-kopf");
   kopf.append(neu("strong", "", kurvenName(b.kurve, l)), neu("span", staerke ? "gewinn" : "verlust", sekunden(b.verlust)));
@@ -1075,7 +1276,7 @@ function vergleichZeigen() {
   $("vKurz").hidden = !bereit || ebene !== "kurz";
   $("vGenau").hidden = !bereit || ebene !== "genau";
   if (!bereit || !ref || !x) return;
-  const l = laenge() ?? 4000;
+  const l = vLaenge();
   const sr = spur(ref);
   const sx = spur(x);
   const v = vergleichen(sr, sx, l);
@@ -1083,7 +1284,7 @@ function vergleichZeigen() {
   vKarteDaten = {
     verlust: verlustJeAbschnitt(v.delta),
     marken: v.kurven.map((k) => ({ i: k.scheitel, text: String(k.nr), wichtig: v.befunde.some((b) => b.kurve.nr === k.nr) })),
-    karte: karte ?? karteBauen(ref.punkte),
+    karte: archiv.info.has(ref) ? archivKarte(ref) : karte ?? karteBauen(ref.punkte),
   };
   vCursor = null;
   vKarteZeichnen();
@@ -1102,7 +1303,7 @@ function vergleichZeigen() {
     return;
   }
 
-  const xText = (i: number) => (laenge() ? meterText((i / RASTER) * l) : `${Math.round((i / RASTER) * 100)} %`);
+  const xText = (i: number) => (laenge() || archiv.info.get(ref)?.laengeM ? meterText((i / RASTER) * l) : `${Math.round((i / RASTER) * 100)} %`);
   if (!diagramme) {
     diagramme = new Diagramme($("vDiagramme"), xText);
     diagramme.onBereich = (von, bis, ganz) => {
@@ -1268,6 +1469,9 @@ $("dsZu").addEventListener("click", () => $<HTMLDialogElement>("dsDialog").close
 
 funkEinrichten();
 void webEinrichten(istApp);
+void fensterEinrichten(istApp).catch(() => { /* ohne eigene Fensterleiste weiter */ });
+// Namen nur für angemeldete Mitglieder (Datenbank-Regel wie auf der Webseite) – also auch nach der Anmeldung starten
+beiKontoWechsel(() => { if (angemeldet()) void sichtbarkeitStarten().catch(() => { /* ohne Namen weiter */ }); });
 berichtKiEinrichten();
 chatEinrichten();
 // Roter Punkt am Messenger (wie auf der Webseite): alle 45 s und beim Zurückkehren in die App nachsehen
@@ -1291,6 +1495,9 @@ const sprechtaste = sprechtasteEinrichten(istApp, (text) => {
   void chat?.senden(text);
 }, hinweis, () => persoenlichkeit?.name ?? "Kim").catch(() => null);
 
+// Eigene Stimme (geklont aus einer Aufnahme mit Zustimmung, nur auf dem PC)
+void eigeneStimmeEinrichten(istApp, hinweis, () => funkE, () => persoenlichkeit?.name ?? "Kim").catch(() => undefined);
+
 // Renningenieur einstellen (unten im Bereich Renningenieur)
 const reEinstellungen = reEinstellungenEinrichten({
   angemeldet,
@@ -1302,12 +1509,18 @@ const reEinstellungen = reEinstellungenEinrichten({
     (await sprechtaste)?.nameGeaendert(persoenlichkeit?.name ?? "Kim");
   },
   probe: (e) => {
-    const name = e.name || "Kim";
-    const satz = e.sprache === "en"
-      ? `Radio check. This is ${name}, loud and clear. Fuel is good for seven laps, box in lap 23.`
-      : `Funkcheck. Hier ist ${name}, ich höre dich laut und deutlich. Sprit reicht für sieben Runden, Box in Runde 23.`;
-    void sprechen(satz, { ...funkE, vorlesen: true }, { sprache: e.sprache, stimmlage: e.stimme as "ruhig" });
+    // Probefunk in der gewählten Sprache (Fund 26.11.: bisher deutscher Satz, z. B. von der englischen Stimme gelesen)
+    const code = e.sprache === "auto" ? (frageSprache ?? "de") : e.sprache;
+    void sprechen(ansage(code, "probe", { name: e.name || "Kim" }), { ...funkE, vorlesen: true }, { sprache: code, stimmlage: e.stimme as "ruhig" });
   },
+});
+
+// Keine Stimme für die Sprache installiert: einmal je Sprache erklären, wie man sie in Windows hinzufügt
+const stimmeGemeldet = new Set<string>();
+beiFehlenderStimme((code) => {
+  if (stimmeGemeldet.has(code)) return;
+  stimmeGemeldet.add(code);
+  hinweis(`Für ${spracheName(code)} ist auf diesem PC keine Vorlese-Stimme installiert – deshalb bleibt der Funk stumm statt mit einer fremden Stimme zu sprechen. So kommt sie dazu: Windows-Einstellungen › Zeit und Sprache › Sprache und Region › Sprache hinzufügen › ${spracheName(code)} (mit „Sprachausgabe“), danach die App neu starten.`, "fehler");
 });
 beiKontoWechsel(() => void reEinstellungen.laden());
 void reEinstellungen.laden();

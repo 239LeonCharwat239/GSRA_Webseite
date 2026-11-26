@@ -16,8 +16,10 @@
   --rand-stark: rgba(255, 255, 255, 0.14);
   --text: #ffffff;
   --leise: #a0a5b1;
-  --schrift: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
-  --anzeige: "Bahnschrift", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  /* Schrift wie auf der Webseite (Segoe UI, Überschriften kräftig und in Großbuchstaben) */
+  --schrift: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --anzeige: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --kopf-hoehe: 74px;
   --glow-blau: 0 0 16px rgba(0, 85, 255, 0.45);
   --glow-gelb: 0 0 16px rgba(255, 204, 0, 0.4);
   --leiste-breite: 248px;
@@ -43,8 +45,45 @@ h3 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacin
 * { scrollbar-color: rgba(255, 255, 255, 0.16) transparent; scrollbar-width: thin; }
 :focus-visible { outline: 2px solid var(--gelb); outline-offset: 2px; }
 
+/* ================================================================ Kopfzeile wie auf der Webseite (zugleich Fensterleiste) */
+.app-kopf {
+  position: relative; z-index: 6; display: flex; align-items: stretch; height: var(--kopf-hoehe); overflow: hidden;
+  background: #000; border-bottom: 3px solid var(--blau); box-shadow: 0 4px 25px rgba(0, 0, 0, 0.9); user-select: none;
+}
+.app-marke { position: relative; z-index: 1; display: flex; align-items: center; gap: 18px; padding: 0 22px; }
+.app-logo { height: 62px; width: auto; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.8)); }
+/* Slogan größer als auf der Webseite (Wunsch 26.11.), gleiche Schrift und Farben */
+.app-slogan { display: flex; gap: 9px; font-size: 20px; font-weight: 800; letter-spacing: 1.8px; text-transform: uppercase; white-space: nowrap; }
+@media (max-width: 1100px) { .app-slogan { font-size: 16px; letter-spacing: 1.3px; } }
+@media (max-width: 820px) { .app-slogan { display: none; } }
+.app-slogan .blau { color: var(--blau); text-shadow: 0 0 12px rgba(0, 85, 255, 0.45); }
+.app-slogan .gelb { color: var(--gelb); text-shadow: 0 0 12px rgba(255, 204, 0, 0.3); }
+.app-kopf-platz { flex: 1; position: relative; z-index: 1; }
+.fenster-knoepfe { position: relative; z-index: 2; display: flex; align-self: flex-start; height: 40px; }
+.fenster-knoepfe[hidden] { display: none; }
+.fenster-knopf { width: 48px; height: 40px; display: grid; place-items: center; border: 0; background: transparent; color: var(--leise); cursor: pointer; transition: background 0.15s, color 0.15s; }
+.fenster-knopf svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.fenster-knopf:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+.fenster-knopf.zu:hover { background: #e81123; color: #fff; }
+/* Sichtbarkeits-Leiste: Namen fahren hinter der Kopfzeile (wie auf der Webseite) */
+.gsra-visibility { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.gsra-vis-name { --vis-color: var(--gelb); position: absolute; left: 0; white-space: nowrap; opacity: 0; animation-name: gsraVisDrive; animation-timing-function: linear; animation-fill-mode: forwards; will-change: transform, opacity; }
+.gsra-vis-name.alliance { --vis-color: #6f9bff; }
+.gsra-vis-inner {
+  position: relative; display: inline-block; padding: 0 4px; font-size: 13px; font-weight: 900; font-style: italic; letter-spacing: 1.6px; text-transform: uppercase;
+  color: var(--vis-color); background: linear-gradient(100deg, var(--vis-color) 0%, var(--vis-color) 38%, #fff 50%, var(--vis-color) 62%, var(--vis-color) 100%);
+  background-size: 260% 100%; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 6px var(--vis-color)); animation: gsraVisBob var(--bob, 3s) ease-in-out infinite alternate, gsraVisShine 3.4s linear infinite;
+}
+.gsra-vis-inner::before, .gsra-vis-inner::after { content: ""; position: absolute; top: 50%; height: 2px; border-radius: 2px; background: linear-gradient(90deg, transparent, var(--vis-color)); }
+.gsra-vis-inner::before { right: calc(100% + 6px); width: 64px; margin-top: -1px; opacity: 0.85; }
+.gsra-vis-inner::after { right: calc(100% + 14px); width: 34px; margin-top: -7px; height: 1px; opacity: 0.55; }
+@keyframes gsraVisDrive { 0% { transform: translateX(-130%); opacity: 0; } 7% { opacity: 0.38; } 93% { opacity: 0.38; } 100% { transform: translateX(100vw); opacity: 0; } }
+@keyframes gsraVisBob { 0% { transform: translateY(calc(var(--amp, 3px) * -1)) skewX(-12deg) rotate(-1deg); } 100% { transform: translateY(var(--amp, 3px)) skewX(-12deg) rotate(1deg); } }
+@keyframes gsraVisShine { 0% { background-position: 160% 0; } 100% { background-position: -60% 0; } }
+
 /* ================================================================ Rahmen: Seitenleiste + Inhalt */
-.rahmen { display: grid; grid-template-columns: var(--leiste-breite) minmax(0, 1fr); height: 100vh; }
+.rahmen { display: grid; grid-template-columns: var(--leiste-breite) minmax(0, 1fr); height: calc(100vh - var(--kopf-hoehe)); }
 
 .leiste-seite {
   display: flex; flex-direction: column; min-height: 0;
@@ -110,7 +149,7 @@ h3 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacin
 .konto-menue p { margin: 0 0 2px; color: var(--leise); font-size: 12.5px; overflow-wrap: anywhere; }
 .konto-menue strong { color: var(--text); }
 
-.inhalt { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100vh; }
+.inhalt { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; }
 .kopfzeile {
   display: flex; align-items: center; gap: 18px; min-height: 66px; padding: 10px 26px;
   border-bottom: 1px solid var(--rand); background: rgba(11, 12, 16, 0.92);
@@ -475,6 +514,7 @@ body.hoert .led { background: var(--rot); box-shadow: 0 0 10px var(--rot); }
 .sprech-signal { margin-bottom: 12px; }
 .sprech-signal input { width: 100%; max-width: 420px; margin-top: 6px; }
 .sprech-signal .hinweis { margin-top: 6px; }
+.signal-aktiv { margin: 6px 0 0; font-size: 12.5px; color: var(--gelb, #facc15); }
 .sprech-ausloeser { display: flex; flex-direction: column; gap: 8px; }
 .sprech-belegung { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .sprech-belegung strong { font-family: var(--anzeige); letter-spacing: 0.4px; padding: 6px 12px; border-radius: 8px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--rand); }
@@ -487,7 +527,7 @@ body.signalwort-an .verbindung::after { content: "Mikro an (Signalwort)"; margin
 /* Messenger direkt in der App */
 .mx-seite.aktiv { max-width: none; }
 .mx {
-  display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); height: calc(100vh - 66px - 50px); min-height: 420px;
+  display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); height: calc(100vh - var(--kopf-hoehe) - 66px - 50px); min-height: 420px;
   border: 1px solid var(--rand); border-radius: 14px; overflow: hidden; background: linear-gradient(180deg, var(--flaeche-2), var(--flaeche));
 }
 .mx[hidden] { display: none; }
@@ -523,6 +563,34 @@ body.signalwort-an .verbindung::after { content: "Mikro an (Signalwort)"; margin
 .mx-form { display: flex; gap: 8px; align-items: flex-end; padding: 12px 14px; border-top: 1px solid var(--rand); }
 .mx-form[hidden] { display: none; }
 .mx-form textarea { flex: 1; min-width: 0; resize: none; max-height: 180px; line-height: 1.45; }
+/* Fotos und Sprachnachrichten */
+.mx-werkzeug { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 10px; border: 1px solid var(--rand); background: transparent; color: var(--leise); cursor: pointer; transition: color 0.15s, border-color 0.15s, box-shadow 0.15s; }
+.mx-werkzeug:hover, .mx-werkzeug:focus-within { color: var(--gelb); border-color: var(--gelb); box-shadow: 0 0 12px rgba(255, 204, 0, 0.25); }
+.mx-werkzeug svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.mx-aufnahme { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-top: 1px solid var(--rand); }
+.mx-aufnahme[hidden] { display: none; }
+.mx-aufnahme .hinweis { flex: 1; }
+.mx-rec-punkt { width: 12px; height: 12px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 10px rgba(239, 68, 68, 0.8); animation: mxRec 1s ease-in-out infinite; }
+@keyframes mxRec { 50% { opacity: 0.35; } }
+#mxAufnahmeZeit { font-variant-numeric: tabular-nums; font-weight: 700; min-width: 42px; }
+.mx-bilder { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 6px; }
+.mx-foto { padding: 0; border: 0; background: none; cursor: zoom-in; border-radius: 8px; overflow: hidden; line-height: 0; }
+.mx-foto img { display: block; max-width: 280px; max-height: 240px; width: auto; height: auto; object-fit: cover; border-radius: 8px; }
+.mx-video { display: block; max-width: 320px; max-height: 260px; border-radius: 8px; background: #000; }
+.mx-sprache-box { margin: 2px 0 4px; }
+.mx-sprache { display: flex; align-items: center; gap: 10px; min-width: 240px; }
+.mx-sprache-knopf { flex: none; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--gelb); background: transparent; color: var(--gelb); cursor: pointer; font-size: 12px; }
+.mx-sprache-knopf:hover { background: var(--gelb); color: #000; }
+.mx-sprache-knopf:disabled { opacity: 0.4; cursor: default; }
+.mx-sprache-balken { --fortschritt: 0%; position: relative; flex: 1; display: flex; align-items: center; gap: 2px; height: 28px; }
+.mx-sprache-balken i { flex: 1; min-width: 2px; border-radius: 2px; background: rgba(255, 255, 255, 0.35); }
+.mx-sprache-balken::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--fortschritt); background: linear-gradient(90deg, rgba(255, 204, 0, 0.25), rgba(255, 204, 0, 0.12)); border-right: 2px solid var(--gelb); pointer-events: none; }
+.mx-sprache-zeit { flex: none; color: var(--leise); font-variant-numeric: tabular-nums; }
+.mx-mitschrift { margin: 6px 0 0; font-size: 12.5px; color: var(--leise); font-style: italic; }
+.mx-bild-dialog { padding: 0; border: 1px solid var(--rand); border-radius: 12px; background: #000; max-width: 92vw; max-height: 92vh; }
+.mx-bild-dialog::backdrop { background: rgba(0, 0, 0, 0.8); }
+.mx-bild-dialog img { display: block; max-width: 92vw; max-height: calc(92vh - 56px); margin: 0 auto; }
+.mx-bild-dialog .knopf { display: block; margin: 8px auto; }
 @media (max-width: 900px) { .mx { grid-template-columns: 220px minmax(0, 1fr); } }
 
 /* Renningenieur einstellen */
@@ -590,3 +658,21 @@ body.signalwort-an .verbindung::after { content: "Mikro an (Signalwort)"; margin
   .kachel.gross strong { font-size: 38px; }
   .tabelle th:nth-child(4), .tabelle td:nth-child(4) { display: none; }
 }
+
+/* Eigene Stimme */
+.es-zustimmung { display: flex; gap: 8px; align-items: flex-start; margin: 10px 0; line-height: 1.45; }
+.knopf.datei.aus { opacity: 0.45; pointer-events: none; }
+#esBereich { margin-top: 12px; }
+/* Vergleich: Kärtchen je gespeicherter Strecke */
+.strecken-bereich { margin-bottom: 16px; }
+.strecken-titel { margin: 0 0 10px; font-size: 15px; }
+.strecken-titel small { display: block; margin-top: 2px; color: var(--leise); font-size: 12px; font-weight: 400; text-transform: none; letter-spacing: 0; }
+.strecken-karten { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.strecke-karte { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 12px 14px; text-align: left; border-radius: 10px; border: 1px solid var(--rand); border-top: 3px solid var(--blau); background: var(--flaeche-2, rgba(255, 255, 255, 0.03)); color: inherit; cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s; }
+.strecke-karte:hover { border-color: var(--gelb); box-shadow: 0 0 14px rgba(255, 204, 0, 0.18); transform: translateY(-1px); }
+.strecke-karte.aktiv { border-color: var(--gelb); border-top-color: var(--gelb); box-shadow: 0 0 16px rgba(255, 204, 0, 0.25); }
+.strecke-karte strong { font-size: 14px; overflow-wrap: anywhere; }
+.strecke-zeit { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--gelb); }
+.strecke-karte small { color: var(--leise); font-size: 12px; }
+.strecke-loeschen { align-self: center; justify-self: start; }
+#vKi { margin-left: auto; }

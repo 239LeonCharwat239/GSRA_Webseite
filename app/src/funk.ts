@@ -7,6 +7,7 @@
 // Ton-Daten heraus) – deshalb dort nur Klick und Rauschen. Mit einer KI-Stimme (später) geht der volle Filter.
 
 import { LAENDERCODE, spracheVonText } from "./sprachen.ts";
+import { zahlenAusschreiben, zumSprechen } from "./ansagen.ts";
 
 export type Stimmlage = "ruhig" | "energisch" | "tief" | "hell";
 /** namenAnKi: Namen anderer Fahrer an den KI-Renningenieur schicken (aus = nur Startnummern; Datenschutz) */
@@ -107,6 +108,50 @@ export function stimmenFuer(sprache: string): SpeechSynthesisVoice[] {
   return window.speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith(code)).sort((a, b) => rang(a) - rang(b));
 }
 
+/** Gibt es auf diesem PC Stimmen, aber keine für die Sprache? Dann lieber schweigen als mit fremder Stimme
+ *  vorlesen (Fund 26.11.: Bulgarisch wurde von der deutschen Stimme gelesen). Leere Liste = Stimmen noch nicht geladen. */
+export function stimmeFehlt(sprache: string): boolean {
+  if (!("speechSynthesis" in window)) return false;
+  return window.speechSynthesis.getVoices().length > 0 && stimmenFuer(sprache).length === 0;
+}
+let fehltMelden: ((sprache: string) => void) | null = null;
+/** Wird aufgerufen, wenn für eine Sprache keine Stimme installiert ist (Hinweis in der App) */
+export function beiFehlenderStimme(f: (sprache: string) => void): void {
+  fehltMelden = f;
+}
+
+/** Eigene (geklonte) Stimme aus der App (stimme.rs): erzeugt den Ton auf dem PC; null = Systemstimmen */
+export type EigeneStimme = { sprache: string; erzeugen: (text: string) => Promise<{ rate: number; ton: Float32Array }> };
+let eigene: EigeneStimme | null = null;
+export function eigeneStimmeSetzen(s: EigeneStimme | null): void {
+  eigene = s;
+}
+
+/** Ton der eigenen Stimme abspielen – durch den echten Funk-Filter (Bandbreite, Verzerrung, Kompressor) */
+function tonAbspielen(rate: number, ton: Float32Array, e: FunkEinstellungen, nr: number): Promise<void> {
+  if (nr !== laufNr || !ton.length) return Promise.resolve();
+  const c = audio();
+  const puffer = c.createBuffer(1, ton.length, rate);
+  puffer.copyToChannel(ton as Float32Array<ArrayBuffer>, 0);
+  const lautstaerke = Math.max(0, Math.min(1, e.lautstaerke));
+  const quelle = new AudioBufferSourceNode(c, { buffer: puffer });
+  const ausgang = new GainNode(c, { gain: lautstaerke });
+  ausgang.connect(c.destination);
+  aktiveAufnahme = quelle;
+  return new Promise((fertig) => {
+    if (e.klang) {
+      quelle.connect(funkKette(c, ausgang));
+      funkKlick(c, c.destination, c.currentTime + 0.01, lautstaerke);
+      const aus = rauschBett(c, lautstaerke);
+      quelle.onended = () => { aus(); if (nr === laufNr) funkKlick(c, c.destination, c.currentTime + 0.02, lautstaerke, 0.16); fertig(); };
+    } else {
+      quelle.connect(ausgang);
+      quelle.onended = () => fertig();
+    }
+    quelle.start(c.currentTime + (e.klang ? 0.16 : 0));
+  });
+}
+
 let laufNr = 0;
 export function funkStoppen(): void {
   laufNr++;
@@ -117,14 +162,33 @@ export function funkStoppen(): void {
 
 /** Spruch vorlesen – mit Funk-Klang, wenn eingeschaltet. Ein neuer Spruch unterbricht den alten. */
 export function sprechen(text: string, e: FunkEinstellungen, opt: { sprache?: string; stimmlage?: Stimmlage } = {}): Promise<void> {
-  const sauber = text.replace(/\s+/g, " ").trim().slice(0, 2400);
-  if (!sauber || !("speechSynthesis" in window)) return Promise.resolve();
+  const roh = text.replace(/\s+/g, " ").trim().slice(0, 2400);
+  if (!roh || !("speechSynthesis" in window)) return Promise.resolve();
+  // „Automatisch“: Stimme in der Sprache der Antwort (sonst Deutsch)
+  const sprache = opt.sprache === "auto" ? (spracheVonText(roh) ?? "de") : opt.sprache || "de";
+  // Eigene Stimme (nur in ihrer Sprache); klappt etwas nicht, spricht die Systemstimme
+  if (eigene && eigene.sprache === sprache) {
+    const stimme = eigene;
+    funkStoppen();
+    const nr = laufNr;
+    return stimme.erzeugen(zahlenAusschreiben(zumSprechen(roh, sprache)))
+      .then(({ rate, ton }) => tonAbspielen(rate, ton, e, nr))
+      .catch(() => (nr === laufNr ? systemSprechen(roh, sprache, e, opt) : undefined));
+  }
+  return systemSprechen(roh, sprache, e, opt);
+}
+
+function systemSprechen(roh: string, sprache: string, e: FunkEinstellungen, opt: { sprache?: string; stimmlage?: Stimmlage }): Promise<void> {
+  if (stimmeFehlt(sprache)) {
+    fehltMelden?.(sprache);
+    return Promise.resolve();
+  }
+  // Zum Vorlesen aufbereiten: „4 Liter“ statt „4 l“, Rundenzeit wie am Funk, Komma/Punkt je Sprache
+  const sauber = zumSprechen(roh, sprache);
   funkStoppen();
   const nr = laufNr;
   return new Promise((fertig) => {
     const u = new SpeechSynthesisUtterance(sauber);
-    // „Automatisch“: Stimme in der Sprache der Antwort (sonst Deutsch)
-    const sprache = opt.sprache === "auto" ? (spracheVonText(sauber) ?? "de") : opt.sprache || "de";
     const alle = stimmenFuer(sprache);
     const gewaehlt = (opt.sprache === "auto" ? undefined : alle.find((v) => v.voiceURI === e.stimme)) || alle[0];
     if (gewaehlt) u.voice = gewaehlt;
@@ -155,9 +219,10 @@ export function sprechen(text: string, e: FunkEinstellungen, opt: { sprache?: st
  *  Spotter und Renningenieur auseinanderhält. */
 export function spotterSprechen(text: string, e: FunkEinstellungen, sprache: string): void {
   if (!e.spotter || !text || !("speechSynthesis" in window)) return;
+  const code = sprache === "auto" ? "de" : sprache; // Spotter-Sätze kommen aus festen Vorlagen
+  if (stimmeFehlt(code)) return; // keine fremde Stimme; der Hinweis kommt beim Funk
   funkStoppen();
   const u = new SpeechSynthesisUtterance(text);
-  const code = sprache === "auto" ? "de" : sprache; // Spotter-Sätze kommen aus festen Vorlagen
   const alle = stimmenFuer(code);
   const ingenieur = alle.find((v) => v.voiceURI === e.stimme) || alle[0];
   const andere = alle.find((v) => v !== ingenieur) || ingenieur;
