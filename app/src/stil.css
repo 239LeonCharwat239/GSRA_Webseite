@@ -524,73 +524,6 @@ body.hoert .led { background: var(--rot); box-shadow: 0 0 10px var(--rot); }
 body.signalwort-an .verbindung::after { content: "Mikro an (Signalwort)"; margin-left: auto; padding: 2px 8px; border-radius: 999px; font-size: 11px; color: #fff; background: rgba(239, 68, 68, 0.25); border: 1px solid rgba(239, 68, 68, 0.6); white-space: nowrap; }
 @media (max-width: 1100px) { .sprech-art { grid-template-columns: 1fr; } }
 
-/* Messenger direkt in der App */
-.mx-seite.aktiv { max-width: none; }
-.mx {
-  display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); height: calc(100vh - var(--kopf-hoehe) - 66px - 50px); min-height: 420px;
-  border: 1px solid var(--rand); border-radius: 14px; overflow: hidden; background: linear-gradient(180deg, var(--flaeche-2), var(--flaeche));
-}
-.mx[hidden] { display: none; }
-.mx-seitenteil { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--rand); background: rgba(0, 0, 0, 0.25); }
-.mx-kopf { display: flex; gap: 8px; padding: 12px; border-bottom: 1px solid var(--rand); }
-.mx-kopf input { flex: 1; min-width: 0; }
-.mx-kopf .knopf { white-space: nowrap; padding: 6px 10px; font-size: 12px; }
-.mx-liste { list-style: none; margin: 0; padding: 6px; overflow-y: auto; flex: 1; }
-.mx-eintrag { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border: 0; border-radius: 10px; background: none; color: var(--text); text-align: left; cursor: pointer; }
-.mx-eintrag:hover { background: rgba(255, 255, 255, 0.05); }
-.mx-eintrag.aktiv { background: linear-gradient(90deg, rgba(0, 85, 255, 0.3), rgba(0, 85, 255, 0.06)); box-shadow: inset 3px 0 0 var(--gelb); }
-.mx-bild { flex: none; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-family: var(--anzeige); font-weight: 700; background: rgba(0, 85, 255, 0.25); color: #fff; }
-.mx-bild.forum { background: linear-gradient(135deg, var(--blau), #002a80); color: var(--gelb); }
-.mx-bild.gruppe { background: rgba(255, 204, 0, 0.18); color: var(--gelb); }
-.mx-eintrag-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.mx-eintrag-kopf { display: flex; justify-content: space-between; gap: 8px; }
-.mx-eintrag-kopf strong { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mx-eintrag-kopf small { color: var(--leise); font-size: 11px; flex: none; }
-.mx-vorschau { color: var(--leise); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mx-eintrag.ungelesen .mx-vorschau { color: #fff; font-weight: 600; }
-.mx-leer { color: var(--leise); padding: 14px; margin: 0; }
-.mx-chat { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-.mx-chat-kopf { display: flex; align-items: baseline; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--rand); }
-.mx-chat-kopf strong { font-family: var(--anzeige); font-size: 16px; letter-spacing: 0.6px; }
-.mx-chat-kopf small { color: var(--leise); }
-.mx-verlauf { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; }
-.mx-nachricht { align-self: flex-start; max-width: min(620px, 78%); padding: 8px 12px 6px; border-radius: 12px 12px 12px 4px; background: var(--flaeche-3); border: 1px solid var(--rand); }
-.mx-nachricht.eigen { align-self: flex-end; border-radius: 12px 12px 4px 12px; background: rgba(0, 85, 255, 0.22); border-color: rgba(0, 85, 255, 0.45); }
-.mx-nachricht p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; }
-.mx-wer { display: block; font-size: 11.5px; font-weight: 700; color: var(--gelb); margin-bottom: 2px; }
-.mx-medium { display: block; font-size: 12.5px; color: var(--leise); font-style: italic; }
-.mx-zeit { display: block; text-align: right; color: var(--leise); font-size: 10.5px; margin-top: 2px; }
-.mx-form { display: flex; gap: 8px; align-items: flex-end; padding: 12px 14px; border-top: 1px solid var(--rand); }
-.mx-form[hidden] { display: none; }
-.mx-form textarea { flex: 1; min-width: 0; resize: none; max-height: 180px; line-height: 1.45; }
-/* Fotos und Sprachnachrichten */
-.mx-werkzeug { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 10px; border: 1px solid var(--rand); background: transparent; color: var(--leise); cursor: pointer; transition: color 0.15s, border-color 0.15s, box-shadow 0.15s; }
-.mx-werkzeug:hover, .mx-werkzeug:focus-within { color: var(--gelb); border-color: var(--gelb); box-shadow: 0 0 12px rgba(255, 204, 0, 0.25); }
-.mx-werkzeug svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.mx-aufnahme { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-top: 1px solid var(--rand); }
-.mx-aufnahme[hidden] { display: none; }
-.mx-aufnahme .hinweis { flex: 1; }
-.mx-rec-punkt { width: 12px; height: 12px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 10px rgba(239, 68, 68, 0.8); animation: mxRec 1s ease-in-out infinite; }
-@keyframes mxRec { 50% { opacity: 0.35; } }
-#mxAufnahmeZeit { font-variant-numeric: tabular-nums; font-weight: 700; min-width: 42px; }
-.mx-bilder { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 6px; }
-.mx-foto { padding: 0; border: 0; background: none; cursor: zoom-in; border-radius: 8px; overflow: hidden; line-height: 0; }
-.mx-foto img { display: block; max-width: 280px; max-height: 240px; width: auto; height: auto; object-fit: cover; border-radius: 8px; }
-.mx-video { display: block; max-width: 320px; max-height: 260px; border-radius: 8px; background: #000; }
-.mx-sprache-box { margin: 2px 0 4px; }
-.mx-sprache { display: flex; align-items: center; gap: 10px; min-width: 240px; }
-.mx-sprache-knopf { flex: none; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--gelb); background: transparent; color: var(--gelb); cursor: pointer; font-size: 12px; }
-.mx-sprache-knopf:hover { background: var(--gelb); color: #000; }
-.mx-sprache-knopf:disabled { opacity: 0.4; cursor: default; }
-.mx-sprache-balken { --fortschritt: 0%; position: relative; flex: 1; display: flex; align-items: center; gap: 2px; height: 28px; }
-.mx-sprache-balken i { flex: 1; min-width: 2px; border-radius: 2px; background: rgba(255, 255, 255, 0.35); }
-.mx-sprache-balken::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--fortschritt); background: linear-gradient(90deg, rgba(255, 204, 0, 0.25), rgba(255, 204, 0, 0.12)); border-right: 2px solid var(--gelb); pointer-events: none; }
-.mx-sprache-zeit { flex: none; color: var(--leise); font-variant-numeric: tabular-nums; }
-.mx-mitschrift { margin: 6px 0 0; font-size: 12.5px; color: var(--leise); font-style: italic; }
-.mx-bild-dialog { padding: 0; border: 1px solid var(--rand); border-radius: 12px; background: #000; max-width: 92vw; max-height: 92vh; }
-.mx-bild-dialog::backdrop { background: rgba(0, 0, 0, 0.8); }
-.mx-bild-dialog img { display: block; max-width: 92vw; max-height: calc(92vh - 56px); margin: 0 auto; }
-.mx-bild-dialog .knopf { display: block; margin: 8px auto; }
 @media (max-width: 900px) { .mx { grid-template-columns: 220px minmax(0, 1fr); } }
 
 /* Renningenieur einstellen */
@@ -680,3 +613,10 @@ body.signalwort-an .verbindung::after { content: "Mikro an (Signalwort)"; margin
 .update-hinweis { display: flex; flex-direction: column; gap: 6px; padding: 10px; margin-bottom: 8px; border: 1px solid var(--gelb); border-radius: 10px; background: rgba(255, 204, 0, 0.08); font-size: 12.5px; }
 .update-hinweis[hidden] { display: none; }
 .update-hinweis .knopf { width: 100%; }
+
+/* Konto oben in der Kopfzeile (Wunsch 27.11.) */
+.app-kopf { overflow: visible; }
+.app-kopf .konto { position: relative; z-index: 3; align-self: center; margin: 0 14px 0 8px; }
+.app-kopf .konto-knopf { width: auto; max-width: 240px; font-size: 13px; padding: 8px 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-kopf .konto-knopf::before { content: none; }
+.app-kopf .konto-menue { left: auto; right: 0; bottom: auto; top: calc(100% + 8px); width: 250px; }

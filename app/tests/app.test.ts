@@ -17,7 +17,6 @@ import { abstandSatz, rufname } from "../src/vorlagen.ts";
 import { Feldrunden, deltaZu, verlustIn } from "../src/feldreferenz.ts";
 import { namenErsetzen } from "../src/datenschutz.ts";
 import { spracheVonText, SPRECH_SPRACHEN, LAENDERCODE } from "../src/sprachen.ts";
-import { dauerText, istVideo, pfadVon, uploadPfad, verlaufVerdichten, vorschauPfad } from "../src/chat-medien.ts";
 import { aufraeumen, entpacken, packen, streckenKarten, BESTE_JE_AUTO, LETZTE_JE_AUTO, type ArchivRunde } from "../src/rundenarchiv.ts";
 import { ANSAGE_SPRACHEN, absicht, ansage, FERTIGE_SAETZE, nichtVerstanden, ordnungWort, pruefenIn, zahlenAusschreiben, zahlIn, zahlWort, zumSprechen } from "../src/ansagen.ts";
 
@@ -538,25 +537,6 @@ test("Eigene Stimme: deutsche Zahlen in Worten (die geklonte Stimme liest keine 
   assert.equal(zahlenAusschreiben("#27 ist 1,25 Sekunden vor dir"), "Nummer siebenundzwanzig ist eins Komma zwei fünf Sekunden vor dir");
   // zusammen mit dem Aufbereiten: Rundenzeit wie am Funk, Einheiten ausgeschrieben
   assert.equal(zahlenAusschreiben(zumSprechen("Bestzeit 1:27,120, 4 l im Tank", "de")), "Bestzeit eins siebenundzwanzig Komma eins, vier Liter im Tank");
-});
-test("Messenger: Anhänge aus dem privaten Speicher – Pfade, Vorschaubilder, Sprachverlauf", () => {
-  const basis = "https://x.supabase.co/storage/v1/object/public/chat_attachments/";
-  const chat = "11111111-2222-3333-4444-555555555555";
-  assert.equal(pfadVon(`${basis}${chat}/u1/chatv_123_abcde.jpg`), `${chat}/u1/chatv_123_abcde.jpg`);
-  assert.equal(pfadVon(`${basis}${chat}/u1/voice_1_a.webm?token=x`), `${chat}/u1/voice_1_a.webm`);
-  assert.equal(pfadVon("https://boese.example/bild.jpg"), null);
-  assert.equal(pfadVon(`${basis}../../geheim`), null, "keine Pfade nach oben");
-  assert.equal(pfadVon(`${basis}%00x`), null, "keine Steuerzeichen");
-  assert.equal(vorschauPfad(`${chat}/u1/chatv_123_abcde.jpg`), `${chat}/u1/chatv_123_abcde.vorschau.jpg`);
-  assert.equal(vorschauPfad(`${chat}/u1/chatv_123_abcde_42s.mp4`), `${chat}/u1/chatv_123_abcde.vorschau.jpg`);
-  assert.equal(vorschauPfad(`${chat}/u1/chat_123_abcde.jpg`), null, "ältere Anhänge ohne Vorschau");
-  assert.ok(istVideo("a/b/c.mp4") && !istVideo("a/b/c.jpg"));
-  assert.equal(uploadPfad(chat, "u1", "voice_1.webm"), `${chat}/u1/voice_1.webm`);
-  const v = verlaufVerdichten([0.1, 0.2, 0.4, 0.8, 0.4, 0.2], 3);
-  assert.equal(v.length, 3);
-  assert.ok(v.every((x) => x >= 0.08 && x <= 1));
-  assert.equal(verlaufVerdichten([]).length, 48);
-  assert.equal(dauerText(65.4), "1:05");
 });
 test("Rundenarchiv: Messpunkte verdichten, je Auto 5 schnellste + 20 letzte behalten, Kärtchen je Strecke", () => {
   const punkte = Array.from({ length: 5400 }, (_, i) => ({ a: i / 5399, t: i / 60, v: 50 + (i % 7), g: 1, b: 0, gang: 4, l: 0.5, r: 0.1 }));

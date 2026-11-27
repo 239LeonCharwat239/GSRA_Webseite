@@ -18,6 +18,15 @@
       <span class="app-slogan" data-tauri-drag-region><span class="blau">United by speed.</span> <span class="gelb">Driven globally.</span></span>
     </div>
     <div class="app-kopf-platz" data-tauri-drag-region></div>
+    <!-- Konto oben (Wunsch 27.11.: Anmelden muss man sofort finden) -->
+    <div class="konto">
+        <button class="knopf leise konto-knopf" id="kontoKnopf" type="button">Anmelden</button>
+        <div class="konto-menue" id="kontoMenue" hidden>
+          <p>Angemeldet als <strong id="kontoName"></strong></p>
+          <button class="knopf leise" id="abmeldenKnopf" type="button">In der App abmelden</button>
+          <button class="knopf leise" id="dsKnopf2" type="button">Datenschutz in der App</button>
+        </div>
+      </div>
     <div class="fenster-knoepfe" id="fensterKnoepfe" hidden>
       <button type="button" class="fenster-knopf" id="fMin" title="Minimieren" aria-label="Minimieren"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
       <button type="button" class="fenster-knopf" id="fMax" title="Maximieren" aria-label="Maximieren"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h12v12H6z"/></svg></button>
@@ -31,7 +40,7 @@
     <nav class="navi" aria-label="Bereiche">
       <p class="navi-gruppe">GSRA</p>
       <button type="button" data-web="index.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h13v14H6a2 2 0 0 1-2-2V5zm13 4h3v8a2 2 0 0 1-2 2M8 9h5M8 13h5M8 17h3"/></svg><span>Neuigkeiten</span></button>
-      <button type="button" data-reiter="messenger" data-webseite="messenger.html" id="navMessenger"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5z"/></svg><span>Messenger</span><i class="neu-punkt" id="messengerPunkt" hidden></i><span class="sr-only" id="messengerPunktText" hidden> – neue Nachrichten</span></button>
+      <button type="button" data-web="messenger.html" id="navMessenger"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4V5z"/></svg><span>Messenger</span><i class="neu-punkt" id="messengerPunkt" hidden></i><span class="sr-only" id="messengerPunktText" hidden> – neue Nachrichten</span></button>
       <button type="button" data-web="kalender.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v14H4zM4 10h16M8 3v5M16 3v5"/></svg><span>Rennkalender</span></button>
       <button type="button" data-web="videos.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM10 9l5 3-5 3z"/></svg><span>Videos</span></button>
 
@@ -58,7 +67,6 @@
 
       <p class="navi-gruppe">Konto</p>
       <button type="button" data-web="dashboard.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20a8 8 0 0 1 16 0"/></svg><span>Dashboard</span></button>
-      <button type="button" data-reiter="chat" data-anker="reEinstellen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1M15 4v4M9 10v4M17 16v4"/></svg><span>Renningenieur einstellen</span></button>
       <button type="button" data-web="abo.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8l4 4 4-7 4 7 4-4-2 11H6L4 8z"/></svg><span>Mitgliedschaft</span></button>
     </nav>
 
@@ -79,14 +87,6 @@
           <option value="4">4× schneller</option>
           <option value="12">12× schneller</option>
         </select>
-      </div>
-      <div class="konto">
-        <button class="knopf leise konto-knopf" id="kontoKnopf" type="button">Anmelden</button>
-        <div class="konto-menue" id="kontoMenue" hidden>
-          <p>Angemeldet als <strong id="kontoName"></strong></p>
-          <button class="knopf leise" id="abmeldenKnopf" type="button">In der App abmelden</button>
-          <button class="knopf leise" id="dsKnopf2" type="button">Datenschutz in der App</button>
-        </div>
       </div>
     </div>
   </aside>
@@ -119,11 +119,6 @@
       </div>
     </form>
   </dialog>
-  <!-- Bild im Messenger groß ansehen -->
-  <dialog id="mxBildDialog" class="mx-bild-dialog" aria-label="Bild">
-    <img id="mxBildGross" alt="">
-    <button type="button" class="knopf leise" id="mxBildZu">Schließen</button>
-  </dialog>
 
   <!-- Datenschutz in der App: was auf dem PC bleibt und was wohin geht -->
   <dialog id="dsDialog" class="dialog ds-dialog" aria-labelledby="dsTitel">
@@ -152,7 +147,7 @@
     </ul>
     <h3>GSRA-Seiten in der App (Messenger, Kalender, Setups …)</h3>
     <ul>
-      <li>Messenger und „Renningenieur einstellen“ sind direkt in der App gebaut und nutzen deine App-Anmeldung – mit denselben Regeln wie auf der Webseite (wer was sehen und schreiben darf, entscheidet die Datenbank).</li>
+      <li>„Renningenieur einstellen“ ist direkt in der App gebaut und nutzt deine App-Anmeldung – mit denselben Regeln wie auf der Webseite (was gespeichert werden darf, entscheidet die Datenbank). Der Messenger ist der Messenger der Webseite (gleiche Funktionen, gleiches Aussehen); dort meldest du dich einmal mit deinem GSRA-Konto an.</li>
       <li>Sie laufen direkt in der App, aber getrennt von der Telemetrie: Sie haben keinen Zugriff auf deine Messwerte, deine App-Anmeldung oder die Befehle der App. Es gilt dieselbe Datenschutzerklärung wie auf der Webseite.</li>
       <li>Angezeigt werden nur Seiten der GSRA und – zum Bezahlen – die Seiten unseres Zahlungsdienstleisters; oben siehst du immer, wo du gerade bist. Links zu anderen Seiten öffnen sich in deinem normalen Browser.</li>
     </ul>
@@ -194,35 +189,7 @@
       <div class="karte funk">
         <h2>Nach der Runde <small id="lFunkQuelle">Kurz gesagt</small></h2>
         <p id="lFunkText">Fahr eine Runde – danach sage ich dir, wo du Zeit liegen lässt.</p>
-        <div class="funk-leiste">
-          <label class="schalter"><input type="checkbox" id="fVorlesen"> Vorlesen</label>
-          <label class="schalter"><input type="checkbox" id="fKlang"> Funk-Klang</label>
-          <label class="schalter" title="Sagt sofort „Auto links“, „Auto rechts“, „Frei“ – ohne KI, in der Sprache deines Renningenieurs"><input type="checkbox" id="fSpotter"> Spotter</label>
-          <label class="schalter" title="Aus: Der KI-Renningenieur bekommt von anderen Fahrern nur die Startnummer, keine Namen (Spotter und Ansagen ohne KI bleiben auf deinem PC)"><input type="checkbox" id="fNamen"> Fahrernamen an die KI</label>
-          <label class="feld-klein">Stimme <select id="fStimme"></select></label>
-          <label class="feld-klein">Lautstärke <input type="range" id="fLaut" min="0" max="1" step="0.05"></label>
-          <button class="knopf leise" id="fProbe" type="button">Probe-Funk</button>
-          <label class="knopf leise datei" title="Die Datei bleibt auf deinem PC – sie wird nur abgespielt, nicht hochgeladen">Eigene Aufnahme durch den Funk
-            <input type="file" id="fAufnahme" accept="audio/*,.ogg,.opus,.m4a,.mp3,.wav"></label>
-        </div>
-        <details class="sprech-einstellung" id="esBereich">
-          <summary>Eigene Stimme für den Renningenieur (Deutsch)</summary>
-          <p class="hinweis">Aus einer kurzen Aufnahme (5 bis 20 Sekunden, nur eine Person, ohne Musik) spricht dein Renningenieur mit dieser Stimme – komplett auf deinem PC, ohne Kosten. Die Aufnahme bleibt hier gespeichert, wird nie hochgeladen und lässt sich jederzeit löschen. Erst einmal nur Deutsch; andere Sprachen sprechen weiter mit der Windows-Stimme.</p>
-          <div class="sprech-installation">
-            <button type="button" class="knopf leise" id="esInstallieren">Stimm-Modell laden</button>
-            <div class="balken" id="esBalken" hidden><i id="esBalkenWert"></i></div>
-            <span class="hinweis" id="esStand"></span>
-          </div>
-          <label class="schalter es-zustimmung"><input type="checkbox" id="esEinverstanden"> Die Person auf der Aufnahme hat zugestimmt, dass ihre Stimme hier nachgebildet wird – oder es ist meine eigene Stimme.</label>
-          <div class="funk-zeile">
-            <label class="knopf leise datei" id="esDateiKnopf">Aufnahme wählen <input type="file" id="esDatei" accept="audio/*,.ogg,.opus,.m4a,.mp3,.wav"></label>
-            <label class="schalter"><input type="checkbox" id="esAn"> Eigene Stimme verwenden</label>
-            <button class="knopf leise" id="esProbe" type="button">Probe hören</button>
-            <button class="knopf leise" id="esLoeschen" type="button">Aufnahme löschen</button>
-          </div>
-        </details>
-        <p class="hinweis" id="fHinweis">Angemeldet formuliert dein KI-Renningenieur die Ansagen in seinem Stil (links unter „Renningenieur einstellen“).</p>
-        <p class="hinweis"><button type="button" class="link-knopf" id="dsKnopf">Datenschutz in der App: was bleibt auf dem PC, was geht wohin?</button></p>
+        <p class="hinweis">Vorlesen, Stimme, Lautstärke und Spotter stellst du im <button type="button" class="link-knopf" data-gehe="funkEinstellungen">Renningenieur</button> ein.</p>
       </div>
     </section>
 
@@ -378,6 +345,11 @@
             <p class="signal-aktiv" id="sSignalAktiv" aria-live="polite"></p>
             <p class="hinweis">Dafür hört das Mikrofon dauerhaft mit – nur auf deinem PC, nichts wird gespeichert oder gesendet. Erst ein Satz, der mit dem Signalwort beginnt, geht an deinen Renningenieur. Tipp: Namen mit zwei Silben werden sicherer erkannt.</p>
           </div>
+          <div class="sprech-mikrofon">
+            <label class="feld-klein">Mikrofon <small>(nimm das Headset – Webcam- und Laptop-Mikrofone hören den Raum mit)</small>
+              <select id="sMikrofon" aria-describedby="sMikroInfo"></select></label>
+            <p class="hinweis" id="sMikroInfo"></p>
+          </div>
           <div class="sprech-ausloeser">
             <span class="feld-klein">Taste auf der Tastatur oder Knopf am Lenkrad – funktioniert auch, während die Simulation läuft</span>
             <div class="sprech-belegung">
@@ -392,6 +364,40 @@
       </div>
 
       <!-- Renningenieur einstellen (wie auf der Webseite, SQL 048/050/059) – src/re-einstellungen.ts -->
+      <!-- Funk & Stimme (Wunsch 27.11.: direkt beim Renningenieur statt unter Live) -->
+      <div class="karte funk-einstellungen" id="funkEinstellungen">
+        <h2>Funk &amp; Stimme <small>Vorlesen, Stimme, Lautstärke, Spotter</small></h2>
+        <div class="funk-leiste">
+          <label class="schalter"><input type="checkbox" id="fVorlesen"> Vorlesen</label>
+          <label class="schalter"><input type="checkbox" id="fKlang"> Funk-Klang</label>
+          <label class="schalter" title="Sagt sofort „Auto links“, „Auto rechts“, „Frei“ – ohne KI, in der Sprache deines Renningenieurs"><input type="checkbox" id="fSpotter"> Spotter</label>
+          <label class="schalter" title="Aus: Der KI-Renningenieur bekommt von anderen Fahrern nur die Startnummer, keine Namen (Spotter und Ansagen ohne KI bleiben auf deinem PC)"><input type="checkbox" id="fNamen"> Fahrernamen an die KI</label>
+          <label class="feld-klein">Stimme <select id="fStimme"></select></label>
+          <label class="feld-klein">Lautstärke <input type="range" id="fLaut" min="0" max="1" step="0.05"></label>
+          <button class="knopf leise" id="fProbe" type="button">Probe-Funk</button>
+          <label class="knopf leise datei" title="Die Datei bleibt auf deinem PC – sie wird nur abgespielt, nicht hochgeladen">Eigene Aufnahme durch den Funk
+            <input type="file" id="fAufnahme" accept="audio/*,.ogg,.opus,.m4a,.mp3,.wav"></label>
+        </div>
+        <details class="sprech-einstellung" id="esBereich">
+          <summary>Eigene Stimme für den Renningenieur (Deutsch)</summary>
+          <p class="hinweis">Aus einer kurzen Aufnahme (5 bis 20 Sekunden, nur eine Person, ohne Musik) spricht dein Renningenieur mit dieser Stimme – komplett auf deinem PC, ohne Kosten. Die Aufnahme bleibt hier gespeichert, wird nie hochgeladen und lässt sich jederzeit löschen. Erst einmal nur Deutsch; andere Sprachen sprechen weiter mit der Windows-Stimme.</p>
+          <div class="sprech-installation">
+            <button type="button" class="knopf leise" id="esInstallieren">Stimm-Modell laden</button>
+            <div class="balken" id="esBalken" hidden><i id="esBalkenWert"></i></div>
+            <span class="hinweis" id="esStand"></span>
+          </div>
+          <label class="schalter es-zustimmung"><input type="checkbox" id="esEinverstanden"> Die Person auf der Aufnahme hat zugestimmt, dass ihre Stimme hier nachgebildet wird – oder es ist meine eigene Stimme.</label>
+          <div class="funk-zeile">
+            <label class="knopf leise datei" id="esDateiKnopf">Aufnahme wählen <input type="file" id="esDatei" accept="audio/*,.ogg,.opus,.m4a,.mp3,.wav"></label>
+            <label class="schalter"><input type="checkbox" id="esAn"> Eigene Stimme verwenden</label>
+            <button class="knopf leise" id="esProbe" type="button">Probe hören</button>
+            <button class="knopf leise" id="esLoeschen" type="button">Aufnahme löschen</button>
+          </div>
+        </details>
+        <p class="hinweis" id="fHinweis">Angemeldet formuliert dein KI-Renningenieur die Ansagen in seinem Stil (unten im Bereich Renningenieur).</p>
+        <p class="hinweis"><button type="button" class="link-knopf" id="dsKnopf">Datenschutz in der App: was bleibt auf dem PC, was geht wohin?</button></p>
+      </div>
+
       <div class="karte re-einstellen" id="reEinstellen">
         <h2>Renningenieur einstellen <small>Gilt in der App und auf der Webseite</small></h2>
         <p class="hinweis" id="reAnmelden">Melde dich an, um deinen Renningenieur einzustellen.</p>
@@ -482,43 +488,6 @@
         </div>
       </div>
     </section>
-
-    <!-- MESSENGER direkt in der App (src/messenger.ts) – alle weiteren Funktionen über „Alle Funktionen“ -->
-    <section class="seite mx-seite" data-seite="messenger" aria-label="Messenger">
-      <p class="hinweis" id="mxAnmelden">Melde dich an (links unten), um den Messenger zu nutzen.</p>
-      <div class="mx" id="mx" hidden>
-        <aside class="mx-seitenteil">
-          <div class="mx-kopf">
-            <input type="search" id="mxSuche" placeholder="Chats durchsuchen …" aria-label="Chats durchsuchen" autocomplete="off">
-            <button type="button" class="knopf leise" id="mxWeb" title="Reaktionen, Gruppen verwalten, Freunde, Videos senden">Alle Funktionen</button>
-          </div>
-          <ul class="mx-liste" id="mxListe" aria-label="Chats"></ul>
-        </aside>
-        <div class="mx-chat">
-          <header class="mx-chat-kopf"><strong id="mxTitel">Wähle einen Chat</strong><small id="mxUnter"></small></header>
-          <div class="mx-verlauf" id="mxVerlauf" aria-live="polite"></div>
-          <form class="mx-form" id="mxForm" autocomplete="off" hidden>
-            <label class="mx-werkzeug" title="Fotos senden (werden verkleinert, ohne Standortdaten)" aria-label="Fotos senden">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h9M3 16l5-5 4 4M14 13l2-2 3 3M17 19h6M20 16v6"/></svg>
-              <input type="file" id="mxBilder" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden>
-            </label>
-            <textarea id="mxFeld" rows="1" maxlength="4000" placeholder="Nachricht schreiben … (Enter sendet, Shift+Enter = neue Zeile)" aria-label="Nachricht"></textarea>
-            <button type="button" class="mx-werkzeug" id="mxMikro" title="Sprachnachricht aufnehmen" aria-label="Sprachnachricht aufnehmen">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zM6 11a6 6 0 0 0 12 0M12 17v4M8 21h8"/></svg>
-            </button>
-            <button type="submit" class="knopf">Senden</button>
-          </form>
-          <div class="mx-aufnahme" id="mxAufnahme" hidden>
-            <span class="mx-rec-punkt" aria-hidden="true"></span>
-            <span id="mxAufnahmeZeit">0:00</span>
-            <span class="hinweis">Sprachnachricht wird aufgenommen …</span>
-            <button type="button" class="knopf leise" id="mxAufnahmeWeg">Verwerfen</button>
-            <button type="button" class="knopf" id="mxAufnahmeSenden">Senden</button>
-          </div>
-        </div>
-      </div>
-    </section>
-
     <!-- GSRA-Seiten (Messenger, Kalender, Setups …): erscheinen GENAU hier, direkt in der App.
          In der App legt sich die Seite passgenau über diese Fläche (src/webbereich.ts); in der Browser-Vorschau
          steht hier ein Hinweis. -->

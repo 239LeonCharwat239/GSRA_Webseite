@@ -20,7 +20,8 @@ type Art = "halten" | "antippen" | "signalwort";
 /** Belegung: Tastatur-Taste (z. B. „F9“) oder Lenkrad-Knopf („VID_…&PID_…#12“) */
 interface Belegung { art: "tastatur" | "lenkrad"; wert: string; name: string }
 
-const SPEICHER = { art: "gsra-sprechart", belegung: "gsra-sprechbelegung", woerter: "gsra-signalwoerter" };
+const SPEICHER = { art: "gsra-sprechart", belegung: "gsra-sprechbelegung", woerter: "gsra-signalwoerter", mikrofon: "gsra-mikrofon" };
+interface Mikrofone { namen: string[]; standard: string | null; gewaehlt: string | null; zuletzt: string }
 const TASTEN_NAMEN: Record<string, string> = {
   Pause: "Pause", ScrollLock: "Rollen", Insert: "Einfg", Home: "Pos1", End: "Ende", PageUp: "Bild ↑", PageDown: "Bild ↓",
   NumpadAdd: "Ziffernblock +", NumpadSubtract: "Ziffernblock −", NumpadMultiply: "Ziffernblock ×", NumpadDivide: "Ziffernblock ÷",
@@ -125,6 +126,41 @@ export async function sprechtasteEinrichten(istApp: boolean, beiText: (text: str
     zeigen();
   };
 
+  // Mikrofon wählen (Fund 27.11.: zu Hause nahm Windows nicht das Headset) – mit Anzeige, welches zuletzt lief
+  const mikroFeld = $<HTMLSelectElement>("sMikrofon");
+  const mikroZeigen = async () => {
+    const m = await aufrufen<Mikrofone>("mikrofone").catch(() => null);
+    if (!m) return;
+    const standard = document.createElement("option");
+    standard.value = "";
+    standard.textContent = `Windows-Standard${m.standard ? ` (${m.standard.slice(0, 60)})` : ""}`;
+    mikroFeld.replaceChildren(standard, ...m.namen.map((n) => {
+      const o = document.createElement("option");
+      o.value = n;
+      o.textContent = n.slice(0, 80);
+      return o;
+    }));
+    mikroFeld.value = m.gewaehlt && m.namen.includes(m.gewaehlt) ? m.gewaehlt : "";
+    const bt = /hands-?free|freisprech/i.test(m.zuletzt || m.gewaehlt || m.standard || "");
+    $("sMikroInfo").textContent = (m.zuletzt ? `Zuletzt benutzt: ${m.zuletzt}.` : "")
+      + (bt ? " Achtung: Bluetooth im Telefon-Modus klingt dumpf und wird schlechter verstanden – besser ein Kabel- oder USB-Headset." : "");
+  };
+  const gespeichertesMikro = lesen(SPEICHER.mikrofon);
+  if (gespeichertesMikro) await aufrufen("mikrofon_setzen", { name: gespeichertesMikro }).catch(() => undefined);
+  void mikroZeigen();
+  mikroFeld.addEventListener("focus", () => void mikroZeigen());
+  mikroFeld.addEventListener("change", async () => {
+    try {
+      await aufrufen("mikrofon_setzen", { name: mikroFeld.value || null });
+      schreiben(SPEICHER.mikrofon, mikroFeld.value);
+      if (art === "signalwort") void artSetzen("signalwort", true); // Zuhören mit dem neuen Mikrofon neu starten
+      hinweis(mikroFeld.value ? `Mikrofon: ${mikroFeld.value.slice(0, 60)}` : "Mikrofon: Windows-Standard", "ok");
+    } catch (e) {
+      hinweis(typeof e === "string" ? e : "Dieses Mikrofon ließ sich nicht wählen.", "fehler");
+      void mikroZeigen();
+    }
+  });
+
   zeigen();
   if (stand.installiert) {
     void artSetzen(art, true);
@@ -228,7 +264,10 @@ export async function sprechtasteEinrichten(istApp: boolean, beiText: (text: str
     knopf.classList.toggle("aktiv", m.zustand === "hoert");
     if (m.zustand === "hoert") status.textContent = "Ich höre …";
     else if (m.zustand === "signal") status.textContent = "Ja?";
-    else if (m.zustand === "erkennt") status.textContent = "Verstehe …";
+    else if (m.zustand === "erkennt") {
+      status.textContent = "Verstehe …";
+      void mikroZeigen();
+    }
     // Signalwort-Modus: etwas gehört, aber ohne Signalwort am Anfang – zeigen, was verstanden wurde
     else if (m.zustand === "gehoert") status.textContent = `Gehört: „${m.text.slice(0, 80)}“ – kein Signalwort erkannt`;
     else if (m.zustand === "text") {

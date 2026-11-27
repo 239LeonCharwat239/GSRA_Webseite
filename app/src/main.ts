@@ -26,11 +26,9 @@ import { webAktiv, webEinrichten, webVerbergen, webZeigen } from "./webbereich.t
 import { sprechtasteEinrichten } from "./sprechtaste.ts";
 import { messengerHinweis } from "./konto.ts";
 import { reEinstellungenEinrichten } from "./re-einstellungen.ts";
-import { messengerEinrichten } from "./messenger.ts";
 import { fensterEinrichten, sichtbarkeitStarten } from "./kopf.ts";
 import { aktualisierungEinrichten } from "./aktualisierung.ts";
 import { eigeneStimmeEinrichten } from "./eigene-stimme.ts";
-import { alsSechzehnKilohertz } from "./chat-medien.ts";
 import { ablegen, alleRunden, alsRunde, rundenDerStrecke, streckeLoeschen, streckenKarten, type ArchivRunde, type StreckenKarte } from "./rundenarchiv.ts";
 
 startbildZeigen();
@@ -111,20 +109,7 @@ function feldAufnehmen(f: Feld) {
 }
 
 const demo = new DemoQuelle((liste) => proben(liste), (f) => feldAufnehmen(f));
-// Messenger direkt in der App; „Alle Funktionen“ öffnet die Webansicht
-const messenger = messengerEinrichten({
-  hinweis,
-  webansicht: () => webBereichZeigen("messenger.html"),
-  ungelesen: (gibt) => punktSetzen(gibt),
-  // Mitschrift der Sprachnachricht mit der Spracherkennung auf dem PC (nur wenn installiert; der Ton bleibt hier)
-  mitschrift: istApp ? async (blob) => {
-    const { invoke } = await import("@tauri-apps/api/core");
-    const stand = await invoke<{ installiert: boolean }>("sprache_status");
-    if (!stand.installiert) return null;
-    const text = await invoke<string>("sprache_mitschrift", { ton: await alsSechzehnKilohertz(blob), rate: 16_000 });
-    return text.trim() || null;
-  } : undefined,
-});
+// Messenger: der Messenger der Webseite (1:1, Wunsch 27.11.) – in der App nur der rote Punkt für neue Nachrichten
 
 const laenge = () => sitzung?.streckenlaengeM ?? (groessterMeter > 500 ? groessterMeter : null);
 
@@ -152,7 +137,6 @@ function reiterZeigen(name: string) {
   if (name === "runden") rundenZeigen();
   if (name === "bericht") berichtZeigen();
   if (name === "live") live();
-  if (name === "messenger") messenger.oeffnen();
   // Spracherkennung schon laden, wenn der Renningenieur geöffnet wird – dann geht die erste Frage ohne Ladezeit
   if (name === "chat") void sprechtaste.then((s) => s?.vorbereiten());
 }
@@ -171,6 +155,11 @@ for (const b of document.querySelectorAll<HTMLButtonElement>("[data-reiter]")) b
     navMarkieren(b, b.dataset.reiter ?? "live");
     document.getElementById(b.dataset.anker)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
+});
+// Verweise wie „im Renningenieur einstellen“: Bereich öffnen und zur Karte scrollen
+for (const b of document.querySelectorAll<HTMLButtonElement>("[data-gehe]")) b.addEventListener("click", () => {
+  reiterZeigen("chat");
+  document.getElementById(b.dataset.gehe ?? "")?.scrollIntoView({ behavior: "smooth", block: "start" });
 });
 for (const b of document.querySelectorAll<HTMLButtonElement>("[data-web]")) b.addEventListener("click", () => webBereichZeigen(b.dataset.web ?? "index.html"));
 
@@ -1490,7 +1479,6 @@ function punktSetzen(neu: boolean) {
 async function messengerPunkt() {
   punktSetzen(angemeldet() && !document.hidden ? await messengerHinweis().catch(() => false) : false);
 }
-beiKontoWechsel(() => messenger.zuruecksetzen());
 setInterval(() => void messengerPunkt(), 45_000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) void messengerPunkt(); });
 beiKontoWechsel(() => void messengerPunkt());

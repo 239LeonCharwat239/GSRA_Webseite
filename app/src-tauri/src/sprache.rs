@@ -48,6 +48,8 @@ const WARTEN_AUF_SPRACHE: Duration = Duration::from_secs(7);
 /// Signalwort ohne Frage dahinter: so lange auf die Frage warten
 const WARTEN_AUF_FRAGE: Duration = Duration::from_secs(8);
 const VAD_FENSTER: usize = 512;
+/// Welches Mikrofon zuletzt benutzt wurde (für die Anzeige in der App)
+static MIKROFON_INFO: Mutex<String> = Mutex::new(String::new());
 /// Erlaubte globale Sprechtasten (Tasten, die Simulationen selten belegen; keine Buchstaben, keine Kombinationen)
 pub const TASTEN: &[&str] = &[
     "F6", "F7", "F8", "F9", "F10", "F11", "F12", "Pause", "ScrollLock", "Insert", "Home", "End", "PageUp",
@@ -84,6 +86,8 @@ pub struct Sprache {
     modus: Mutex<Modus>,
     signalwoerter: Mutex<Vec<String>>,
     zuhoeren: Mutex<Option<mpsc::Sender<()>>>,
+    /// gewähltes Mikrofon (Name wie in Windows); None = Windows-Standard
+    mikrofon: Mutex<Option<String>>,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -396,7 +400,8 @@ pub fn druecken(app: &AppHandle, mit_vad: bool) -> Result<(), String> {
     let (stopp, warten) = mpsc::channel::<()>();
     let (bereit_tx, bereit_rx) = mpsc::channel::<Result<u32, String>>();
     let t = ton.clone();
-    let faden = std::thread::spawn(move || aufnehmen(warten, bereit_tx, t, true));
+    let wunsch = s.mikrofon.lock().map(|m| m.clone()).unwrap_or(None);
+    let faden = std::thread::spawn(move || aufnehmen(warten, bereit_tx, t, true, wunsch));
     let rate = match bereit_rx.recv_timeout(Duration::from_secs(5)) {
         Ok(Ok(rate)) => rate,
         Ok(Err(e)) => {
@@ -519,24 +524,6 @@ fn erkennen(app: &AppHandle, ton: &[f32], rate: u32) -> Result<String, String> {
     Ok(text_bereinigen(&text))
 }
 
-/// Mitschrift einer Sprachnachricht im Messenger (wie auf der Webseite, aber auf dem PC erkannt): Ton als 16-Bit-Werte,
-/// höchstens 125 s; nur wenn die Spracherkennung installiert ist. Der Ton wird nicht gespeichert.
-#[tauri::command]
-pub async fn sprache_mitschrift(app: AppHandle, ton: Vec<i16>, rate: u32) -> Result<String, String> {
-    if !(8_000..=48_000).contains(&rate) || ton.len() > rate as usize * 125 {
-        return Err("Die Aufnahme passt nicht.".into());
-    }
-    tauri::async_runtime::spawn_blocking(move || {
-        let ton: Vec<f32> = ton.iter().map(|x| f32::from(*x) / 32_768.0).collect();
-        if zu_leise(&ton) {
-            return Ok(String::new());
-        }
-        erkennen(&app, &ton, rate)
-    })
-    .await
-    .map_err(|_| "Interner Fehler.".to_string())?
-}
-
 /// Stille oder stummgeschaltetes Mikrofon: lautester Abschnitt (50 ms) unter etwa −50 dBFS → nichts erkennen
 pub fn zu_leise(ton: &[f32]) -> bool {
     ton.chunks(800)
@@ -610,8 +597,21 @@ pub fn signalwort_pruefen(text: &str, signalwoerter: &[String]) -> Option<String
         if erlaubt > 0 && teile.get(i).is_some_and(|t| abstand(&klang(&t.1), &klang(&ziel)) <= erlaubt) {
             return Some(rest(i + 1));
         }
+        // Klingt gleich (Fund 27.11.: „Tim“ für „Kim“, „Laris“ für „Lars“): gleiche Lautform oder nur ein Vokal zu viel
+        if teile.get(i).is_some_and(|t| klingt_gleich(&t.1, &ziel)) {
+            return Some(rest(i + 1));
+        }
     }
     None
+}
+
+/// Gleiche Lautform – oder die erkannte Form hat genau einen Vokal mehr („laris“ ≈ „lars“, nicht aber „lass“)
+fn klingt_gleich(gehoert: &str, ziel: &str) -> bool {
+    let (a, b): (Vec<char>, Vec<char>) = (klang(gehoert).chars().collect(), klang(ziel).chars().collect());
+    if a == b {
+        return b.len() >= 2;
+    }
+    a.len() == b.len() + 1 && b.len() >= 3 && (0..a.len()).any(|j| "aeiouy".contains(a[j]) && a.iter().enumerate().filter(|(k, _)| *k != j).map(|(_, c)| *c).eq(b.iter().copied()))
 }
 
 /// Grobe Lautform: Umlaute, stummes h und Doppelbuchstaben angleichen („Lars“ ≈ „Lahrs“, „Kimm“ ≈ „Kim“)
@@ -625,7 +625,17 @@ fn klang(wort: &str) -> String {
         if aus.ends_with(c) {
             continue;
         }
-        aus.push(if c == 'c' { 'k' } else { c });
+        // Verschlusslaute klingen über Funk und Mikrofon oft gleich (Fund 27.11.: „Kim“ wurde „Tim“):
+        // k/t/p und g/d/b gelten jeweils als ein Laut
+        let laut = match c {
+            'c' | 'k' | 't' | 'p' => 'k',
+            'g' | 'd' | 'b' => 'g',
+            _ => c,
+        };
+        if aus.ends_with(laut) {
+            continue;
+        }
+        aus.push(laut);
     }
     aus
 }
@@ -645,7 +655,8 @@ fn zuhoeren(app: AppHandle, stopp: mpsc::Receiver<()>) {
     let (mikro_stopp, mikro_warten) = mpsc::channel::<()>();
     let (bereit_tx, bereit_rx) = mpsc::channel::<Result<u32, String>>();
     let t = ton.clone();
-    let faden = std::thread::spawn(move || aufnehmen(mikro_warten, bereit_tx, t, false));
+    let wunsch = app.state::<Sprache>().mikrofon.lock().map(|m| m.clone()).unwrap_or(None);
+    let faden = std::thread::spawn(move || aufnehmen(mikro_warten, bereit_tx, t, false, wunsch));
     let rate = match bereit_rx.recv_timeout(Duration::from_secs(5)) {
         Ok(Ok(r)) => r,
         Ok(Err(e)) => return melden(&app, "fehler", e),
@@ -760,14 +771,16 @@ pub fn hoermodus_setzen(app: AppHandle, s: State<'_, Sprache>, modus: String, si
 
 /// Nimmt auf, bis „stopp“ kommt; schreibt Mono-Ton in `ton`, meldet die Abtastrate über `bereit`.
 /// begrenzt: höchstens 31 s sammeln (Halten/Antippen); sonst leert der Abnehmer den Speicher laufend.
-fn aufnehmen(stopp: mpsc::Receiver<()>, bereit: mpsc::Sender<Result<u32, String>>, ton: Arc<Mutex<Vec<f32>>>, begrenzt: bool) -> Result<(Vec<f32>, u32), String> {
+fn aufnehmen(stopp: mpsc::Receiver<()>, bereit: mpsc::Sender<Result<u32, String>>, ton: Arc<Mutex<Vec<f32>>>, begrenzt: bool, wunsch: Option<String>) -> Result<(Vec<f32>, u32), String> {
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
     let fehler = |t: &str| {
         let _ = bereit.send(Err(t.to_string()));
         Err(t.to_string())
     };
     let host = cpal::default_host();
-    let Some(geraet) = host.default_input_device() else {
+    // Gewähltes Mikrofon (Fund 27.11.: zu Hause war das Windows-Standardmikrofon nicht das Headset); sonst Standard
+    let gewaehlt = wunsch.and_then(|n| host.input_devices().ok()?.find(|d| d.name().is_ok_and(|x| x == n)));
+    let Some(geraet) = gewaehlt.or_else(|| host.default_input_device()) else {
         return fehler("Kein Mikrofon gefunden. Prüfe in Windows: Einstellungen → Datenschutz → Mikrofon.");
     };
     let Ok(einstellung) = geraet.default_input_config() else {
@@ -775,6 +788,9 @@ fn aufnehmen(stopp: mpsc::Receiver<()>, bereit: mpsc::Sender<Result<u32, String>
     };
     let kanaele = einstellung.channels().max(1) as usize;
     let rate = einstellung.sample_rate().0;
+    if let Ok(mut info) = MIKROFON_INFO.lock() {
+        *info = format!("{} · {} kHz · {} {}", geraet.name().unwrap_or_else(|_| "Mikrofon".into()), rate / 1000, kanaele, if kanaele == 1 { "Kanal" } else { "Kanäle" });
+    }
     let format = einstellung.sample_format();
     let config: cpal::StreamConfig = einstellung.into();
     // Obergrenze: 31 s (Halten/Antippen) bzw. 60 s Puffer, falls der Abnehmer hängt (Signalwort)
@@ -782,13 +798,27 @@ fn aufnehmen(stopp: mpsc::Receiver<()>, bereit: mpsc::Sender<Result<u32, String>
     let fehlerfall = |_e: cpal::StreamError| {};
 
     fn mono<T: Copy>(daten: &[T], kanaele: usize, ziel: &Arc<Mutex<Vec<f32>>>, grenze: usize, wandeln: impl Fn(T) -> f32) {
-        if let Ok(mut t) = ziel.lock() {
-            for rahmen in daten.chunks(kanaele) {
-                if t.len() >= grenze {
-                    return;
-                }
-                t.push(rahmen.iter().map(|&w| wandeln(w)).sum::<f32>() / kanaele as f32);
+        let Ok(mut t) = ziel.lock() else { return };
+        // Manche Headsets liefern zwei Kanäle gegenphasig oder einen leeren Kanal – dann löscht Mischen die Stimme
+        // aus. Deshalb: Sind die ersten beiden Kanäle gegenläufig, nur den lauteren nehmen, sonst mischen.
+        let (mut e0, mut e1, mut zusammen) = (0.0f32, 0.0f32, 0.0f32);
+        if kanaele >= 2 {
+            for r in daten.chunks(kanaele) {
+                let (a, b) = (wandeln(r[0]), wandeln(r[r.len().min(2) - 1]));
+                e0 += a * a;
+                e1 += b * b;
+                zusammen += a * b;
             }
+        }
+        let nur = if kanaele >= 2 && zusammen < 0.0 { Some(usize::from(e1 > e0)) } else { None };
+        for rahmen in daten.chunks(kanaele) {
+            if t.len() >= grenze {
+                return;
+            }
+            t.push(match nur {
+                Some(k) => wandeln(rahmen[k.min(rahmen.len() - 1)]),
+                None => rahmen.iter().map(|&w| wandeln(w)).sum::<f32>() / rahmen.len().max(1) as f32,
+            });
         }
     }
 
@@ -815,6 +845,46 @@ fn aufnehmen(stopp: mpsc::Receiver<()>, bereit: mpsc::Sender<Result<u32, String>
     drop(strom); // Mikrofon aus
     let daten = std::mem::take(&mut *ton.lock().map_err(|_| "Interner Fehler.".to_string())?);
     Ok((daten, rate))
+}
+
+#[derive(serde::Serialize)]
+pub struct Mikrofone {
+    namen: Vec<String>,
+    standard: Option<String>,
+    gewaehlt: Option<String>,
+    /// zuletzt benutzt: Name · Abtastrate · Kanäle
+    zuletzt: String,
+}
+
+/// Alle Mikrofone (Namen wie in Windows), der Windows-Standard und das gewählte
+#[tauri::command]
+pub fn mikrofone(s: State<'_, Sprache>) -> Mikrofone {
+    use cpal::traits::{DeviceTrait, HostTrait};
+    let host = cpal::default_host();
+    let mut namen: Vec<String> = host.input_devices().map(|g| g.filter_map(|d| d.name().ok()).collect()).unwrap_or_default();
+    namen.sort();
+    namen.dedup();
+    Mikrofone {
+        namen,
+        standard: host.default_input_device().and_then(|d| d.name().ok()),
+        gewaehlt: s.mikrofon.lock().map(|m| m.clone()).unwrap_or(None),
+        zuletzt: MIKROFON_INFO.lock().map(|i| i.clone()).unwrap_or_default(),
+    }
+}
+
+/// Mikrofon wählen (None = Windows-Standard); nur Namen, die es wirklich gibt
+#[tauri::command]
+pub fn mikrofon_setzen(s: State<'_, Sprache>, name: Option<String>) -> Result<(), String> {
+    use cpal::traits::{DeviceTrait, HostTrait};
+    let name = name.filter(|n| !n.is_empty());
+    if let Some(n) = &name {
+        let gibt = cpal::default_host().input_devices().map(|mut g| g.any(|d| d.name().is_ok_and(|x| &x == n))).unwrap_or(false);
+        if !gibt {
+            return Err("Dieses Mikrofon ist gerade nicht angeschlossen.".into());
+        }
+    }
+    *s.mikrofon.lock().map_err(|_| "Interner Fehler.".to_string())? = name;
+    Ok(())
 }
 
 /// Taste in der App (Knopf)
@@ -904,6 +974,13 @@ mod tests {
         assert_eq!(signalwort_pruefen("Lars, wer ist vor mir?", &l).as_deref(), Some("wer ist vor mir?"));
         assert_eq!(signalwort_pruefen("Lass uns mal schauen", &l), None, "ohne Gruß nur genau");
         assert_eq!(signalwort_pruefen("Hey Leute, alles gut", &l), None);
+        // Fund 27.11.: gleich klingende Namen
+        assert_eq!(signalwort_pruefen("Tim, wer ist vor mir?", &w).as_deref(), Some("wer ist vor mir?"));
+        assert_eq!(signalwort_pruefen("Hey Tim reicht der Sprit", &w).as_deref(), Some("reicht der Sprit"));
+        assert_eq!(signalwort_pruefen("Laris, reicht der Sprit?", &l).as_deref(), Some("reicht der Sprit?"));
+        assert_eq!(signalwort_pruefen("Lass uns mal schauen", &l), None, "„Lass“ bleibt aus");
+        assert_eq!(signalwort_pruefen("Lies mal vor", &l), None);
+        assert_eq!(signalwort_pruefen("Kino ist gut", &w), None);
     }
 
     /// Echter Ablauf der Signalwort-Art mit einer Aufnahme (nicht in CI: braucht die Modelle)
@@ -935,6 +1012,36 @@ mod tests {
         println!("Fragen nach dem Signalwort: {treffer:?}");
         assert_eq!(treffer.len(), 1, "genau ein Satz mit Signalwort");
         assert!(treffer[0].to_lowercase().contains("sprit"));
+    }
+
+    /// Wie robust ist die Erkennung? Testfragen unter schwierigen Bedingungen, mit und ohne Vorbereitung des Tons.
+    /// GSRA_MODELL=<Ordner> GSRA_TON_ORDNER=<Ordner mit 16-kHz-WAVs> cargo test erkennung_varianten -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn erkennung_varianten() {
+        let ordner = PathBuf::from(std::env::var("GSRA_MODELL").expect("GSRA_MODELL"));
+        let e = sherpa_onnx::OfflineRecognizer::create(&erkenner_config(&ordner)).expect("Erkenner");
+        let erkenne = |ton: &[f32]| {
+            let st = e.create_stream();
+            st.accept_waveform(16_000, ton);
+            e.decode(&st);
+            text_bereinigen(&st.get_result().map(|r| r.text).unwrap_or_default())
+        };
+        let mut dateien: Vec<_> = fs::read_dir(std::env::var("GSRA_TON_ORDNER").expect("GSRA_TON_ORDNER")).unwrap().flatten().map(|d| d.path()).filter(|p| p.extension().is_some_and(|x| x == "wav")).collect();
+        dateien.sort();
+        for d in dateien {
+            let w = sherpa_onnx::Wave::read(&d.to_string_lossy()).expect("WAV");
+            let ton = w.samples().to_vec();
+            // Bedingungen: wie aufgenommen, Anfang abgeschnitten (früh gesprochen), sehr leise, schmalbandig (Bluetooth-Headset)
+            let ohne_anfang: Vec<f32> = ton.iter().skip(16_000 * 15 / 100).copied().collect();
+            let leise: Vec<f32> = ton.iter().map(|x| x * 0.03).collect();
+            let runter = sherpa_onnx::LinearResampler::create(16_000, 8_000).unwrap().resample(&ton, true);
+            let schmal = sherpa_onnx::LinearResampler::create(8_000, 16_000).unwrap().resample(&runter, true);
+            println!("\n{}", d.file_name().unwrap().to_string_lossy());
+            for (name, t) in [("normal", &ton), ("Anfang fehlt", &ohne_anfang), ("leise", &leise), ("schmalbandig", &schmal)] {
+                println!("  {name:<13} {}", erkenne(t));
+            }
+        }
     }
 
     #[test]
