@@ -918,12 +918,38 @@ function rundenZeigen() {
   $("rundenAnzahl").textContent = String(runden.length);
   $("rLeer").hidden = runden.length > 0;
   $("rTabelle").hidden = runden.length === 0;
+  // Kennzahlen: Bestzeit, Schnitt und Konstanz aus den gültigen Runden (Ausreißer über +5 % zählen nicht zur Konstanz)
+  const gueltige = runden.filter((r) => r.gueltig);
+  $("rBeste").textContent = beste ? zeitText(beste.zeit) : "–";
+  $("rBesteInfo").textContent = beste ? `in Runde ${beste.nr}` : "noch keine gültige Runde";
+  const schnitt = rundenzeitSchnitt(runden);
+  $("rSchnitt").textContent = schnitt != null ? zeitText(schnitt) : "–";
+  $("rSchnittInfo").textContent = schnitt != null && beste ? `+${zahl(schnitt - beste.zeit, 3)} s zur Besten` : "gültige Runden";
+  $("rGueltig").textContent = runden.length ? `${gueltige.length}/${runden.length}` : "–";
+  $("rGueltigInfo").textContent = runden.length ? `${Math.round((gueltige.length / runden.length) * 100)} % sauber gefahren` : " ";
+  const normal = beste ? gueltige.filter((r) => r.zeit <= beste.zeit * 1.05) : [];
+  const mittel = normal.reduce((s, r) => s + r.zeit, 0) / Math.max(1, normal.length);
+  const streuung = normal.length >= 3 ? Math.sqrt(normal.reduce((s, r) => s + (r.zeit - mittel) ** 2, 0) / normal.length) : null;
+  $("rKonstanz").textContent = streuung != null ? `± ${zahl(streuung, 2)} s` : "–";
+  $("rKonstanzInfo").textContent = streuung == null ? "ab 3 sauberen Runden" : streuung < 0.3 ? "sehr konstant" : streuung < 0.7 ? "ordentlich – da geht noch was" : "schwankt stark";
   const zeilen = [...runden].reverse().slice(0, 200).map((r) => {
     const tr = neu("tr", r === beste ? "beste" : r.gueltig ? "" : "ungueltig");
     tr.append(neu("td", "", String(r.nr)), neu("td", "zeit", zeitText(r.zeit)));
-    tr.append(neu("td", "", beste && r.gueltig && r !== beste ? `+${zahl(r.zeit - beste.zeit, 3)}` : r === beste ? "Bestzeit" : "–"));
+    // Abstand zur Besten als Balken (volle Breite = 2 s)
+    const abstand = neu("td", "r-abstand");
+    if (beste && r.gueltig && r !== beste) {
+      const d = r.zeit - beste.zeit;
+      const balken = neu("span", "r-balken");
+      const fuell = neu("i");
+      fuell.style.width = `${Math.min(100, (d / 2) * 100)}%`;
+      balken.append(fuell);
+      abstand.append(neu("span", "r-abstand-zahl", `+${zahl(d, 3)}`), balken);
+    } else abstand.append(neu("span", r === beste ? "r-abstand-zahl beste" : "r-abstand-zahl", r === beste ? "Bestzeit" : "–"));
+    tr.append(abstand);
     tr.append(neu("td", "", liter(r.sprit, 2)));
-    tr.append(neu("td", r.gueltig ? "ok" : "warn", r.gueltig ? "gültig" : (r.grund ?? "ungültig")));
+    const zustand = neu("td");
+    zustand.append(neu("span", `etikett ${r.gueltig ? "ok" : "warn"}`, r.gueltig ? "gültig" : (r.grund ?? "ungültig")));
+    tr.append(zustand);
     const td = neu("td");
     if (r.punkte.length > 10 && beste && r !== beste) {
       const b = neu("button", "knopf leise", "Vergleichen");
@@ -1283,6 +1309,18 @@ function vergleichZeigen() {
   const bereit = !!ref && !!x && ref !== x;
   $("vLeer").hidden = bereit;
   $("vRaster").hidden = !bereit;
+  $("vWerte").hidden = !bereit;
+  if (bereit && ref && x) {
+    $("vRefZeit").textContent = zeitText(ref.zeit);
+    $("vRefInfo").textContent = rundeBeschreiben(ref);
+    $("vXZeit").textContent = zeitText(x.zeit);
+    $("vXInfo").textContent = rundeBeschreiben(x);
+    const d = x.zeit - ref.zeit;
+    const u = $("vUnterschied");
+    u.textContent = `${d > 0 ? "+" : d < 0 ? "−" : "±"}${zahl(Math.abs(d), 3)} s`;
+    u.className = d > 0.0005 ? "langsamer" : d < -0.0005 ? "schneller" : "";
+    $("vUnterschiedInfo").textContent = d > 0.0005 ? "langsamer als die Referenz" : d < -0.0005 ? "schneller als die Referenz" : "gleich schnell";
+  }
   $("vKurz").hidden = !bereit || ebene !== "kurz";
   $("vGenau").hidden = !bereit || ebene !== "genau";
   if (!bereit || !ref || !x) return;

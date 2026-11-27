@@ -244,11 +244,18 @@
 
     <!-- RUNDEN -->
     <section class="seite" data-seite="runden" aria-label="Runden">
+      <!-- Kennzahlen der Sitzung (Wunsch 27.11.: Telemetrie im Niveau der Webseite) -->
+      <div class="werte-reihe">
+        <div class="wert wert-gelb"><span class="titel">Bestzeit</span><strong id="rBeste">–</strong><small id="rBesteInfo">noch keine gültige Runde</small></div>
+        <div class="wert"><span class="titel">Schnitt</span><strong id="rSchnitt">–</strong><small id="rSchnittInfo">gültige Runden</small></div>
+        <div class="wert"><span class="titel">Gültige Runden</span><strong id="rGueltig">–</strong><small id="rGueltigInfo">&nbsp;</small></div>
+        <div class="wert"><span class="titel">Konstanz</span><strong id="rKonstanz">–</strong><small id="rKonstanzInfo">Streuung deiner Runden</small></div>
+      </div>
       <div class="karte">
         <h2>Deine Runden <small>Ungültig sind Runden mit Boxengasse, Zurücksetzen oder Datenlücke</small></h2>
         <p class="leer" id="rLeer">Noch keine Runde. Fahr los – oder starte die Demo oben rechts.</p>
         <table class="tabelle" id="rTabelle" hidden>
-          <thead><tr><th>Runde</th><th>Zeit</th><th>zur Besten</th><th>Sprit</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th>Runde</th><th>Zeit</th><th class="r-abstand-kopf">zur Besten</th><th>Sprit</th><th>Status</th><th></th></tr></thead>
           <tbody id="rZeilen"></tbody>
         </table>
       </div>
@@ -270,6 +277,12 @@
         </div>
       </div>
       <p class="leer" id="vLeer">Für einen Vergleich brauchst du zwei Runden: aus dieser Sitzung oder gespeicherte von einer Strecke oben. Fahr los – oder starte die Demo.</p>
+      <!-- Auf einen Blick: Referenz, Vergleich, Unterschied -->
+      <div class="werte-reihe vergleich-werte" id="vWerte" hidden>
+        <div class="wert"><span class="titel">Referenz</span><strong id="vRefZeit">–</strong><small id="vRefInfo">&nbsp;</small></div>
+        <div class="wert"><span class="titel">Vergleich</span><strong id="vXZeit">–</strong><small id="vXInfo">&nbsp;</small></div>
+        <div class="wert wert-gross"><span class="titel">Unterschied</span><strong id="vUnterschied">–</strong><small id="vUnterschiedInfo">&nbsp;</small></div>
+      </div>
       <div class="vergleich-raster" id="vRaster" hidden>
         <div class="vergleich-inhalt">
           <div id="vKurz" hidden>
