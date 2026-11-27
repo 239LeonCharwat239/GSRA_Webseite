@@ -729,3 +729,22 @@ body.signalwort-an .verbindung::after { content: "Mikro an (Signalwort)"; margin
 .befund.staerke:hover { box-shadow: 0 10px 26px -14px rgba(34, 197, 94, 0.6); }
 .zusammenfassung { padding: 14px 16px; border-radius: 12px; background: rgba(0, 85, 255, 0.08); border: 1px solid rgba(0, 85, 255, 0.3); }
 @media (max-width: 760px) { .vergleich-werte { grid-template-columns: 1fr; } }
+/* Sprachtest */
+.sprachtest { margin: 14px 0; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--rand); background: rgba(255, 255, 255, 0.02); }
+.sprachtest summary { cursor: pointer; font-weight: 700; color: var(--gelb); }
+.st-kopf { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 12px 0; }
+.st-zaehler { font-size: 11px; font-weight: 800; letter-spacing: 1.4px; text-transform: uppercase; color: var(--leise); }
+.st-satz { margin: 4px 0 0; font-size: 18px; font-weight: 700; }
+.st-ergebnis { text-align: right; }
+.st-ergebnis strong { display: block; font-size: 34px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.st-ergebnis strong.gut { color: var(--gruen); }
+.st-ergebnis strong.mittel { color: var(--gelb); }
+.st-ergebnis strong.schlecht { color: var(--rot); }
+.st-ergebnis small { color: var(--leise); font-size: 12px; }
+.st-liste { margin: 12px 0 0; padding-left: 22px; display: grid; gap: 8px; }
+.st-liste li { padding: 8px 10px; border-radius: 8px; background: rgba(255, 255, 255, 0.03); }
+.st-liste li strong { margin-right: 10px; font-variant-numeric: tabular-nums; }
+.st-liste li.gut strong { color: var(--gruen); }
+.st-liste li.mittel strong { color: var(--gelb); }
+.st-liste li.schlecht strong { color: var(--rot); }
+.st-liste li small { display: block; margin-top: 3px; color: var(--leise); }

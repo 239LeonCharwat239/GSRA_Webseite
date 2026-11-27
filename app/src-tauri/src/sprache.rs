@@ -88,6 +88,8 @@ pub struct Sprache {
     zuhoeren: Mutex<Option<mpsc::Sender<()>>>,
     /// gewähltes Mikrofon (Name wie in Windows); None = Windows-Standard
     mikrofon: Mutex<Option<String>>,
+    /// Sprachtest läuft: das Signalwort-Zuhören pausiert so lange (sonst löste „Hey Lars …“ den Renningenieur aus)
+    test_laeuft: AtomicBool,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -524,6 +526,75 @@ fn erkennen(app: &AppHandle, ton: &[f32], rate: u32) -> Result<String, String> {
     Ok(text_bereinigen(&text))
 }
 
+/// Sprachtest (Wunsch 27.11.: „er muss mich verstehen, auch wenn ich nuschle“): ein Satz aufnehmen – bis zur ersten
+/// Sprechpause, höchstens 15 s – und mit dem Modell auf dem PC erkennen. Der Ton bleibt im Arbeitsspeicher und ist danach
+/// weg; zurück geht nur der erkannte Text. Das Signalwort-Zuhören pausiert währenddessen.
+#[tauri::command]
+pub async fn sprachtest(app: AppHandle) -> Result<String, String> {
+    let s = app.state::<Sprache>();
+    if s.test_laeuft.swap(true, Ordering::SeqCst) {
+        return Err("Der Sprachtest nimmt schon auf.".into());
+    }
+    let a = app.clone();
+    let ergebnis = tauri::async_runtime::spawn_blocking(move || sprachtest_satz(&a)).await.map_err(|_| "Interner Fehler.".to_string());
+    app.state::<Sprache>().test_laeuft.store(false, Ordering::SeqCst);
+    ergebnis?
+}
+
+fn sprachtest_satz(app: &AppHandle) -> Result<String, String> {
+    geprueft(app)?;
+    let wunsch = app.state::<Sprache>().mikrofon.lock().map(|m| m.clone()).unwrap_or(None);
+    let ton = Arc::new(Mutex::new(Vec::<f32>::new()));
+    let (stopp, warten) = mpsc::channel::<()>();
+    let (bereit_tx, bereit_rx) = mpsc::channel::<Result<u32, String>>();
+    let t = ton.clone();
+    let faden = std::thread::spawn(move || aufnehmen(warten, bereit_tx, t, true, wunsch));
+    let rate = match bereit_rx.recv_timeout(Duration::from_secs(5)) {
+        Ok(Ok(r)) => r,
+        Ok(Err(e)) => return Err(e),
+        Err(_) => {
+            let _ = stopp.send(());
+            return Err("Das Mikrofon reagiert nicht.".into());
+        }
+    };
+    let v = vad(app, 0.9)?;
+    let umrechner = (rate != 16_000).then(|| sherpa_onnx::LinearResampler::create(rate as i32, 16_000)).flatten();
+    let start = Instant::now();
+    let (mut gelesen, mut rest, mut sprach) = (0usize, Vec::<f32>::new(), false);
+    loop {
+        std::thread::sleep(Duration::from_millis(60));
+        let neu: Vec<f32> = match ton.lock() {
+            Ok(t) if t.len() > gelesen => {
+                let n = t[gelesen..].to_vec();
+                gelesen = t.len();
+                n
+            }
+            _ => Vec::new(),
+        };
+        rest.extend(match &umrechner {
+            Some(u) => u.resample(&neu, false),
+            None => neu,
+        });
+        let ganze = rest.len() / VAD_FENSTER * VAD_FENSTER;
+        for fenster in rest[..ganze].chunks(VAD_FENSTER) {
+            v.accept_waveform(fenster);
+        }
+        rest.drain(..ganze);
+        if v.detected() {
+            sprach = true;
+        }
+        if (sprach && !v.is_empty()) || (!sprach && start.elapsed() > WARTEN_AUF_SPRACHE) || start.elapsed() > Duration::from_secs(15) {
+            break;
+        }
+    }
+    let _ = stopp.send(());
+    let (daten, rate) = faden.join().map_err(|_| "Die Aufnahme ist abgestürzt.".to_string())??;
+    if !sprach || zu_leise(&daten) {
+        return Err("Ich habe nichts gehört – ist das richtige Mikrofon gewählt?".into());
+    }
+    erkennen(app, &daten, rate)
+}
+
 /// Stille oder stummgeschaltetes Mikrofon: lautester Abschnitt (50 ms) unter etwa −50 dBFS → nichts erkennen
 pub fn zu_leise(ton: &[f32]) -> bool {
     ton.chunks(800)
@@ -680,7 +751,8 @@ fn zuhoeren(app: AppHandle, stopp: mpsc::Receiver<()>) {
             break;
         }
         // Während einer Frage per Taste (Halten/Antippen) nicht doppelt hören
-        let taste_aktiv = app.state::<Sprache>().aufnahme.lock().map(|a| a.is_some()).unwrap_or(false);
+        let taste_aktiv = app.state::<Sprache>().aufnahme.lock().map(|a| a.is_some()).unwrap_or(false)
+            || app.state::<Sprache>().test_laeuft.load(Ordering::SeqCst);
         let neu = std::mem::take(&mut *ton.lock().unwrap_or_else(|p| p.into_inner()));
         if taste_aktiv {
             v.reset();

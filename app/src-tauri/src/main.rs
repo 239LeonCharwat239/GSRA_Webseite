@@ -45,6 +45,7 @@ fn main() {
             sprache::hoermodus_setzen,
             sprache::mikrofone,
             sprache::mikrofon_setzen,
+            sprache::sprachtest,
             lenkrad::lenkrad_lernen,
             lenkrad::lenkrad_belegen,
             simulation::simulation_erkennen,

@@ -1,3 +1,4 @@
+import { fehlendeWoerter, TESTSAETZE, trefferquote, woerter } from "../src/sprachtest.ts";
 // Prüfungen der App-Logik (ohne Fenster): Runden, Sprit, Vergleich, Demo
 // Aufruf: npm test   (Node führt TypeScript direkt aus)
 import { test } from "node:test";
@@ -592,4 +593,14 @@ test("Funk: Sätze teilen (erster Satz kommt sofort), „23. Runde“ bleibt zus
   assert.match(nichtVerstanden("de"), /nicht verstanden/);
   assert.match(nichtVerstanden("bg"), /не те разбрах/);
   assert.equal(nichtVerstanden("xx"), nichtVerstanden("de"));
+});
+test("Sprachtest: Trefferquote nach Wortfehlern, Umlaute und Satzzeichen egal", () => {
+  assert.equal(TESTSAETZE.length, 10);
+  assert.deepEqual(woerter("Wer ist vor mir?"), ["wer", "ist", "vor", "mir"]);
+  assert.equal(trefferquote("Wer ist vor mir?", "wer ist vor mir"), 1);
+  assert.equal(trefferquote("Wer ist vor mir?", "Bewehrst vor mir."), 0.5, "zwei Wörter falsch (eins vertauscht, eins fehlt) von vier");
+  assert.equal(trefferquote("Hey Kim, reicht der Sprit?", "Hey Tim reicht der Sprit"), 0.8);
+  assert.equal(trefferquote("Größe", "groesse"), 1);
+  assert.equal(trefferquote("Box diese Runde.", ""), 0);
+  assert.deepEqual(fehlendeWoerter("Hey Kim, reicht der Sprit?", "Hey Tim reicht der Sprit"), ["Kim,"]);
 });

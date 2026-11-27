@@ -412,6 +412,17 @@
               <select id="sMikrofon" aria-describedby="sMikroInfo"></select></label>
             <p class="hinweis" id="sMikroInfo"></p>
           </div>
+          <!-- Sprachtest: wie gut versteht er dich, wenn du ganz normal redest? (src/sprachtest.ts) -->
+          <details class="sprachtest" id="stBereich">
+            <summary>Sprachtest: Wie gut versteht er dich?</summary>
+            <p class="hinweis">Sprich zehn kurze Funksätze so, wie du im Rennen redest – nicht extra deutlich. Der Ton bleibt nur kurz im Arbeitsspeicher; nichts wird gespeichert oder gesendet.</p>
+            <div class="st-kopf">
+              <div><span class="st-zaehler" id="stZaehler"></span><p class="st-satz" id="stSatz"></p></div>
+              <div class="st-ergebnis"><strong id="stGesamt">–</strong><small id="stUrteil"></small></div>
+            </div>
+            <button class="knopf" id="stAufnehmen" type="button">Satz einsprechen</button>
+            <ol class="st-liste" id="stListe"></ol>
+          </details>
           <div class="sprech-ausloeser">
             <span class="feld-klein">Taste auf der Tastatur oder Knopf am Lenkrad – funktioniert auch, während die Simulation läuft</span>
             <div class="sprech-belegung">

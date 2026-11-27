@@ -1,3 +1,4 @@
+import { sprachtestEinrichten } from "./sprachtest.ts";
 // Sprechtaste (Wunsch 26.11.): Halten, Antippen oder Signalwort – ausgelöst über den Knopf in der App, eine Taste
 // auf der Tastatur oder einen Knopf am Lenkrad. Mikrofon und Spracherkennung laufen in Rust (src-tauri/src/sprache.rs,
 // lenkrad.rs), der Ton verlässt den PC nie. Hier: Bedienung, Einrichtung, Installation des Sprachmodells.
@@ -160,6 +161,8 @@ export async function sprechtasteEinrichten(istApp: boolean, beiText: (text: str
       void mikroZeigen();
     }
   });
+
+  sprachtestEinrichten(aufrufen, name);
 
   zeigen();
   if (stand.installiert) {
