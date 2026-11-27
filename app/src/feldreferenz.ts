@@ -3,7 +3,8 @@
 // Zeitverlauf über die ganze Runde, also genau das, was man für „Wo verliere ich gegen den Schnellsten?“ braucht.
 // Pedale und Gänge fremder Autos gibt die Simulation nicht heraus – die Referenz zeigt WO, nicht WIE.
 //
-// Datenschutz: läuft nur auf diesem PC, nichts wird hochgeladen oder gespeichert (nur während der Sitzung).
+// Datenschutz: der Vergleich läuft auf diesem PC. Nur die schnellste Runde mit demselben Auto wird anonym als
+// GSRA-Referenzrunde geteilt (Strecke, Auto, Zeitverlauf – ohne Name, Startnummer, Kennung; abschaltbar; referenz.ts).
 // Prüfungen gegen falsche Referenzen: nur vollständige Runden ohne Box, ohne Lücken (Auto nicht auf der Strecke,
 // fehlende Daten), ohne Rückwärtssprünge und ohne „Teleport“ (unmögliches Tempo); die Zeit muss zur Rundenzeit der
 // Simulation passen und darf nicht deutlich schneller sein als der Rest des Feldes (Abkürzung, Fehler).

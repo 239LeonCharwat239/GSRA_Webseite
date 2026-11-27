@@ -18,6 +18,7 @@ import { SPOTTER_SAETZE, Spotter, seiteAus, spotterSatz } from "../src/spotter.t
 import { abstandSatz, rufname } from "../src/vorlagen.ts";
 import { Feldrunden, deltaZu, verlustIn } from "../src/feldreferenz.ts";
 import { namenErsetzen } from "../src/datenschutz.ts";
+import { aufRaster, PUNKTE, verdichten, zeitverlauf } from "../src/referenz.ts";
 import { spracheVonText, SPRECH_SPRACHEN, LAENDERCODE } from "../src/sprachen.ts";
 import { aufraeumen, entpacken, packen, streckenKarten, BESTE_JE_AUTO, LETZTE_JE_AUTO, type ArchivRunde } from "../src/rundenarchiv.ts";
 import { ANSAGE_SPRACHEN, absicht, ansage, FERTIGE_SAETZE, nichtVerstanden, ordnungWort, pruefenIn, zahlenAusschreiben, zahlIn, zahlWort, zumSprechen } from "../src/ansagen.ts";
@@ -622,4 +623,25 @@ test("Live-Platz: Reihenfolge nach gefahrener Strecke statt offiziellem Platz vo
   assert.deepEqual(liveReihenfolge(g), [3, 2, 1, 0]);
   assert.equal(livePlatz({ ...f, ich: 4 }), null, "nicht auf der Strecke: kein Live-Platz");
   assert.ok(istRennen("Race") && istRennen("Rennen") && !istRennen("Practice") && !istRennen("Open Qualify"));
+});
+
+test("Referenzrunden: 201 Stützstellen hin und zurück, Zeitverlauf beginnt bei 0 und steigt nie", () => {
+  // gleichmäßige Runde über 90 s auf dem Raster der App
+  const t = Float64Array.from({ length: RASTER + 1 }, (_, i) => 3 + (i / RASTER) * 90);
+  const v = verdichten(t);
+  assert.equal(v.length, PUNKTE);
+  assert.equal(v[0], 3);
+  assert.equal(v[PUNKTE - 1], 93);
+  assert.equal(verdichten([0, 1], 3.6)[PUNKTE - 1], 3.6, "Faktor (m/s → km/h)");
+  assert.equal(verdichten([0, Number.NaN])[PUNKTE - 1], 0, "kaputte Werte werden 0, nicht NaN");
+  // Messrauschen: kleiner Rückschritt wird geglättet, Start bei 0
+  const rauschen = Float64Array.from(t, (x, i) => (i === 400 ? x - 0.5 : x));
+  const z = zeitverlauf(rauschen);
+  assert.equal(z[0], 0);
+  assert.ok(z.every((x, i) => i === 0 || x >= z[i - 1]), "nie fallend");
+  assert.ok(Math.abs(z[PUNKTE - 1] - 90) < 0.001);
+  // zurück aufs Raster: passt zur Ausgangsrunde
+  const r = aufRaster(zeitverlauf(t));
+  assert.equal(r.length, RASTER + 1);
+  for (const i of [0, Math.floor(RASTER / 3), RASTER]) assert.ok(Math.abs(r[i] - (t[i] - 3)) < 0.01, `Punkt ${i}`);
 });

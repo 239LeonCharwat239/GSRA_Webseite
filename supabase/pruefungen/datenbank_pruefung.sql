@@ -1,9 +1,9 @@
--- GSRA: Prüfung der Live-Datenbank gegen den getesteten Stand (Skripte 001–059)
+-- GSRA: Prüfung der Live-Datenbank gegen den getesteten Stand (Skripte 001–060)
 -- NUR LESEN: ändert nichts. Im Supabase SQL Editor komplett einfügen und ausführen („Run“).
 -- Ergebnis: erste Zeile „GESAMT“. Steht dort nicht „Alles in Ordnung“, das Ergebnis bitte an Claude schicken.
 -- Erzeugt automatisch aus dem Nachbau (tests/db/datenbank.test.mjs, PRUEFUNG_SCHREIBEN=1) – nicht von Hand ändern.
--- Erfasst: 205 Funktionen, 66 Tabellen, 0 Spalten-Rechte, 232 Zugriffsregeln,
---          266 Prüfregeln, 46 Trigger, 8 Speicher, 5 Zeitpläne.
+-- Erfasst: 209 Funktionen, 67 Tabellen, 0 Spalten-Rechte, 233 Zugriffsregeln,
+--          274 Prüfregeln, 46 Trigger, 8 Speicher, 5 Zeitpläne.
 with
 ef(sig, name, h, secdef, cfg, anon, auth, mig) as (values
     ('public.acknowledge_warning(_warning_id uuid)', 'acknowledge_warning', '429a9e6981cb920f1240089aa6fb069d', true, 'search_path=public', false, true, true),
@@ -155,6 +155,10 @@ ef(sig, name, h, secdef, cfg, anon, auth, mig) as (values
     ('public.race_engineer_save(_name text, _rufname text, _art text, _gespraechig text, _stimme text, _sprache text, _themen jsonb)', 'race_engineer_save', 'f840ab8cd5f8a2a91f0330f6dab44877', true, 'search_path=public', false, true, true),
     ('public.race_engineer_turn(_art text)', 'race_engineer_turn', 'ddba496ef84465e3fde4eed8d15041a7', true, 'search_path=public', false, true, true),
     ('public.rate_seller(_listing_id text, _rating integer, _tags text[], _comment text)', 'rate_seller', 'dd2aba9c580e9b8b4bf828422bb0eab1', true, 'search_path=public', false, true, true),
+    ('public.reference_lap_add(_strecke text, _fahrzeug text, _laenge_m real, _zeit_s real, _quelle text, _zeitverlauf real[], _tempo real[], _gas real[], _bremse real[])', 'reference_lap_add', '3c354c8d685f6acddcec229fff2cec9f', true, 'search_path=public', false, true, true),
+    ('public.reference_lap_delete(_id uuid)', 'reference_lap_delete', '657b5f9ee62d8769ad99524cf35119ae', true, 'search_path=public', false, true, true),
+    ('public.reference_lap_reihe_ok(_werte real[], _min real, _max real)', 'reference_lap_reihe_ok', 'b6ae3205662d0c8cb3c7f0b98275cf1e', false, 'search_path=public', false, false, true),
+    ('public.reference_laps_get(_strecke text, _fahrzeug text, _anzahl integer)', 'reference_laps_get', 'f9cb16802b3ff6150f3f1cf3cc957a82', true, 'search_path=public', false, true, true),
     ('public.remove_friend(_other uuid)', 'remove_friend', '910c883d91e218d0a4d496fe2ff61ea4', true, 'search_path=public', false, true, true),
     ('public.remove_group_member(_chat_id uuid, _user_id uuid)', 'remove_group_member', '3a628831608e176ef78327ed2612434b', true, 'search_path=public', false, true, true),
     ('public.report_listing(_listing_id text, _reason text, _details text)', 'report_listing', '1cf6887923f917ffa1dc76abe04b6fcd', true, 'search_path=public', false, true, true),
@@ -258,6 +262,7 @@ et(name, rls, a_s, a_i, a_u, a_d, m_s, m_i, m_u, m_d, mig) as (values
     ('race_engineer_monthly', true, false, false, false, false, false, false, false, false, true),
     ('race_engineer_settings', true, false, false, false, false, true, false, false, false, true),
     ('race_engineer_usage', true, false, false, false, false, false, false, false, false, true),
+    ('reference_laps', true, false, false, false, false, false, false, false, false, true),
     ('reports', true, true, true, true, true, true, true, true, true, true),
     ('seller_ratings', true, false, false, false, false, true, false, false, true, true),
     ('setup_contents', true, true, true, true, true, true, true, true, true, true),
@@ -433,6 +438,7 @@ ep(schema, tab, name, cmd, perm, roles, hq, hw, mig, wc) as (values
     ('public', 'race_engineer_memory', 'Gesperrte Konten haben keinen Zugriff', '*', false, 'authenticated', 'a182b7011f8b647b01c71a23986850b2', 'a182b7011f8b647b01c71a23986850b2', true, false),
     ('public', 'race_engineer_settings', 'GSRA eigener Renningenieur', 'r', true, 'authenticated', '6a6b7c2a3a520c44377894171204e8d2', 'd41d8cd98f00b204e9800998ecf8427e', true, false),
     ('public', 'race_engineer_settings', 'Gesperrte Konten haben keinen Zugriff', '*', false, 'authenticated', 'a182b7011f8b647b01c71a23986850b2', 'a182b7011f8b647b01c71a23986850b2', true, false),
+    ('public', 'reference_laps', 'GSRA: Referenzrunden nur über Funktionen', '*', false, 'public', '68934a3e9455fa72420237eb05902327', '68934a3e9455fa72420237eb05902327', true, false),
     ('public', 'reports', 'Admins sehen alle Meldungen', 'r', true, 'authenticated', 'b3aa6182bf09661f5c7dfe85dab59e9b', 'd41d8cd98f00b204e9800998ecf8427e', true, false),
     ('public', 'reports', 'GSRA Moderation sieht Meldungen', 'r', true, 'authenticated', '19a9481e5307ccb75a2db40dc292a15e', 'd41d8cd98f00b204e9800998ecf8427e', true, false),
     ('public', 'reports', 'GSRA Zwei-Faktor erforderlich', '*', false, 'authenticated', '2b0fc89c16f1a2e07a2a8bc387b5ffe5', '2b0fc89c16f1a2e07a2a8bc387b5ffe5', true, false),
@@ -703,6 +709,14 @@ ec(tab, name, typ, h, gueltig) as (values
     ('race_engineer_usage', 'race_engineer_usage_art_check', 'c', '1c782542522400048bc62d92edee0e8b', true),
     ('race_engineer_usage', 'race_engineer_usage_pkey', 'p', '4c6419b3704337bbfe50f018842a9ad3', true),
     ('race_engineer_usage', 'race_engineer_usage_user_id_fkey', 'f', '85d8b2f5f0c0f6b4dcb854efb61a8cb1', true),
+    ('reference_laps', 'reference_laps_feld_check', 'c', '9b116635b8026231544c9ac95a626108', true),
+    ('reference_laps', 'reference_laps_hochgeladen_von_fkey', 'f', '4ec2d96b4326828e49985c92779ef685', true),
+    ('reference_laps', 'reference_laps_pkey', 'p', '4c6419b3704337bbfe50f018842a9ad3', true),
+    ('reference_laps', 'reference_laps_quelle_check', 'c', 'c6ab2c876ffa714e2cff7b73e0e16504', true),
+    ('reference_laps', 'reference_laps_sim_check', 'c', '5754dc39772469891969b2f7615eebe2', true),
+    ('reference_laps', 'reference_laps_text_check', 'c', 'f1efcbda311b8926bf088feeebbfcf47', true),
+    ('reference_laps', 'reference_laps_verlauf_check', 'c', 'ad4525418dca3c067284c99e8d1dd3a1', true),
+    ('reference_laps', 'reference_laps_zeit_check', 'c', 'ef771122a9c5d1188078ec92f6783516', true),
     ('reports', 'reports_chat_id_fkey', 'f', '2876f2812cafc4a7b608a7678d739f25', true),
     ('reports', 'reports_pkey', 'p', '4c6419b3704337bbfe50f018842a9ad3', true),
     ('reports', 'reports_reported_id_fkey', 'f', 'e85391f2e2339d19dbded28bdd8b4841', true),
@@ -1025,7 +1039,7 @@ select nr, bereich, objekt, status, details from (
          else 'Bitte an Claude schicken' end as status,
     count(*) filter (where status = 'FEHLER') || ' Fehler, ' || count(*) filter (where status = 'WARNUNG') || ' Warnungen, '
       || count(*) filter (where status = 'ABWEICHUNG') || ' Abweichungen, ' || count(*) filter (where status = 'HINWEIS') || ' Hinweise – '
-      || count(*) || ' Prüfungen gegen den getesteten Stand nach Skript 059' as details, 0 as rang
+      || count(*) || ' Prüfungen gegen den getesteten Stand nach Skript 060' as details, 0 as rang
   from befunde
   union all
   select 1, bereich, count(*) || ' geprüft', case when count(*) filter (where status <> 'ok' and status <> 'HINWEIS') = 0 then 'ok' else 'prüfen' end,

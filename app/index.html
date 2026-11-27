@@ -133,7 +133,7 @@
     <h3>Bleibt auf deinem PC</h3>
     <ul>
       <li>Alle Messwerte aus der Simulation: Runden, Tempo, Pedale, Sprit, Streckenkarte, Vergleiche, Rennbericht.</li>
-      <li>Der Stand der anderen Autos (Plätze, Abstände, Zweikämpfe, Referenz aus der Lobby) – nur während der Sitzung.</li>
+      <li>Der Stand der anderen Autos (Plätze, Abstände, Zweikämpfe, Referenz aus der Lobby) – nur während der Sitzung. Ausnahme: die Referenzrunde (siehe unten).</li>
       <li>Spotter, Ansagen ohne KI, Sprachausgabe und deine eigene Testaufnahme durch den Funk-Filter.</li>
       <li>Deine Einstellungen für Funk und Karte (nur in dieser App).</li>
       <li>Sprechtaste: Beim Halten und Antippen läuft das Mikrofon nur während deiner Frage (höchstens 30 Sekunden). Bei „Signalwort“ hört es dauerhaft mit, solange du diese Art gewählt hast – links unten steht dann „Mikro an“; Sätze ohne Signalwort werden sofort verworfen. Die Spracherkennung läuft auf deinem PC; dein Ton wird nie gespeichert und nie gesendet. Weiter geht – wie bei einer getippten Frage – nur der erkannte Text. Modelle: NVIDIA Parakeet TDT 0.6B v3 (CC BY 4.0) und Silero VAD (MIT), ausgeführt mit sherpa-onnx.</li>
@@ -147,6 +147,7 @@
       <li>Anmeldung: Die App meldet sich über die GSRA-Webseite an; sie sieht dein Passwort nie.</li>
       <li>Nur wenn du angemeldet bist und den KI-Renningenieur nutzt: die Messwerte, die er für den Spruch braucht (z. B. Rundenzeit, Abstand, Kurve mit dem größten Verlust), deine Frage und deine Renningenieur-Einstellungen. Die GSRA speichert davon nur, wer wann eine Antwort bekommen hat (gegen Missbrauch, nach 2 Tagen gelöscht) – keine Inhalte.</li>
       <li>Was sich dein Renningenieur merkt (höchstens zwei Punkte pro Nachbesprechung) – du siehst und löschst es auf der Webseite unter „Renningenieur“.</li>
+      <li>Referenzrunden (nur angemeldet): Ist „Schnellste Runden anonym teilen“ an (Funk &amp; Stimme), wird die schnellste geprüfte Runde eines anderen Fahrers mit deinem Auto gespeichert – nur Strecke, Auto, Rundenzeit und Zeitverlauf über die Runde, ohne Namen, Startnummer oder Kennung des Fahrers. Deine eigenen Runden teilst du nur per Knopf „Als Referenz teilen“ (dann auch Tempo, Gas und Bremse). Angezeigt werden alle Referenzrunden ohne Namen. Die GSRA hält je Strecke und Auto die 50 schnellsten. Eine geteilte Runde nimmst du mit demselben Knopf zurück; ältere löschen wir auf Anfrage, mit deinem Konto verschwinden alle, die du geteilt hast.</li>
     </ul>
     <h3>Geht an den KI-Anbieter (Auftragsverarbeiter, Verarbeitung auch außerhalb der EU möglich)</h3>
     <ul>
@@ -445,6 +446,7 @@
           <label class="schalter"><input type="checkbox" id="fKlang"> Funk-Klang</label>
           <label class="schalter" title="Sagt sofort „Auto links“, „Auto rechts“, „Frei“ – ohne KI, in der Sprache deines Renningenieurs"><input type="checkbox" id="fSpotter"> Spotter</label>
           <label class="schalter" title="Aus: Der KI-Renningenieur bekommt von anderen Fahrern nur die Startnummer, keine Namen (Spotter und Ansagen ohne KI bleiben auf deinem PC)"><input type="checkbox" id="fNamen"> Fahrernamen an die KI</label>
+          <label class="schalter" title="An: Die schnellste Runde eines anderen Fahrers mit deinem Auto wird anonym als GSRA-Referenzrunde gespeichert – nur Strecke, Auto und Zeitverlauf, ohne Namen, Startnummer oder Kennung"><input type="checkbox" id="fFeldTeilen"> Schnellste Runden anonym teilen</label>
           <label class="feld-klein">Stimme <select id="fStimme"></select></label>
           <label class="feld-klein">Lautstärke <input type="range" id="fLaut" min="0" max="1" step="0.05"></label>
           <button class="knopf leise" id="fProbe" type="button">Probe-Funk</button>

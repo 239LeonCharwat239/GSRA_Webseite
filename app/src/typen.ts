@@ -28,7 +28,7 @@ export type Probe = {
   reparaturOptional?: number | null;
 };
 
-export type FahrerInfo = { idx: number; name: string; nummer: string };
+export type FahrerInfo = { idx: number; name: string; nummer: string; /** Auto des Fahrers (fehlt bei älteren Ständen) */ fahrzeug?: string };
 
 export type Sitzung = {
   strecke: string | null;

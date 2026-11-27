@@ -17,7 +17,8 @@ import { bremspunkte, sparAuswerten, sparBasis, sparText, sparTipp, type Bremspu
 import { Chat, pruefSatz, pruefSaetze } from "./chat.ts";
 import { Spotter, spotterSatz } from "./spotter.ts";
 import { abstandSatz, type Gegner } from "./vorlagen.ts";
-import { Feldrunden, deltaZu, verlustIn } from "./feldreferenz.ts";
+import { Feldrunden, deltaZu, verlustIn, type FeldRunde } from "./feldreferenz.ts";
+import { eigeneRundeTeilen, feldRundeTeilen, referenzenLaden, referenzLoeschen, type Referenz, type SitzungsInfo } from "./referenz.ts";
 import { namenErsetzen } from "./datenschutz.ts";
 import { karteBauen, karteZeichnen, verlustJeAbschnitt, type Karte } from "./strecke.ts";
 import { Rennbeobachter, berichtErstellen, rundenzeitText, stelleText } from "./rennbericht.ts";
@@ -99,8 +100,32 @@ function ansageSprache(frage?: string): string {
 const zeitIn = (code: string, s: number | null | undefined) => (mitPunkt(code) ? zeitText(s).replace(",", ".") : zeitText(s));
 
 let letztesFeld: Feld | null = null;
-// Referenz aus der Lobby: schnellste geprüfte Runde eines anderen Fahrers (nur auf diesem PC)
+// Referenz aus der Lobby: schnellste geprüfte Runde eines anderen Fahrers; die schnellste mit demselben Auto wird
+// anonym als GSRA-Referenzrunde geteilt (SQL 060; abschaltbar unter Renningenieur › Funk & Stimme)
 const feldRef = new Feldrunden();
+let referenzen: Referenz[] = [];
+let referenzFuer = "";
+const geteilt = new Set<string>();
+const geteilteRunden = new WeakMap<object, string>(); // eigene Runden, die geteilt wurden (Knopf zeigt „zurücknehmen“)
+const feldTeilenAn = () => { try { return localStorage.getItem("gsra-feld-teilen") !== "0"; } catch { return true; } };
+const sitzungsInfo = (): SitzungsInfo => ({ strecke: sitzung?.strecke ?? null, fahrzeug: sitzung?.fahrzeug ?? null, laengeM: laenge() });
+/** GSRA-Referenzrunden für Strecke und Auto laden (angemeldet, echte Sitzung) */
+async function referenzenAktualisieren(erzwingen = false) {
+  const schluessel = `${sitzung?.strecke ?? ""}|${sitzung?.fahrzeug ?? ""}|${angemeldet()}`;
+  if (!erzwingen && schluessel === referenzFuer) return;
+  referenzFuer = schluessel;
+  referenzen = angemeldet() && !demo.laeuft ? await referenzenLaden(sitzungsInfo()).catch(() => []) : [];
+}
+function feldRundeMelden(f: Feld) {
+  const s = schnellsteGleichesAuto();
+  const auto = s ? (sitzung?.fahrer ?? []).find((x) => x.idx === s.idx)?.fahrzeug : null;
+  if (!s || !istApp || demo.laeuft || !angemeldet() || !feldTeilenAn() || s.idx === f.ich) return;
+  if (!sitzung?.strecke || !sitzung.fahrzeug || !auto || auto !== sitzung.fahrzeug) return; // nur sicher gleiches Auto
+  const kennung = `${sitzung.strecke}|${auto}|${s.zeit.toFixed(3)}`;
+  if (geteilt.has(kennung)) return;
+  geteilt.add(kennung);
+  void feldRundeTeilen(sitzungsInfo(), s).then(() => referenzenAktualisieren(true), () => { /* später erneut */ geteilt.delete(kennung); });
+}
 let feldRefBekannt = 0;
 function feldAufnehmen(f: Feld) {
   if (!f || !Array.isArray(f.anteil)) return;
@@ -108,6 +133,7 @@ function feldAufnehmen(f: Feld) {
   beobachter.aufnehmen(f, typischeRundenzeit());
   feldRef.laengeSetzen(laenge());
   feldRef.aufnehmen(f);
+  feldRundeMelden(f);
   // neue Referenzrunde? Dann den Vergleich auffrischen
   const s = feldRef.schnellste();
   const kennung = s ? s.idx * 1e6 + Math.round(s.zeit * 1000) : 0;
@@ -296,7 +322,10 @@ function statusSetzen(s: Status) {
     // Simulation beendet (Sitzung verlassen) → Nachbesprechung kommt von selbst
     void nachbesprechung(true);
   }
-  if (!demo.laeuft && s.sitzung) sitzung = s.sitzung;
+  if (!demo.laeuft && s.sitzung) {
+    sitzung = s.sitzung;
+    void referenzenAktualisieren();
+  }
   statusZeigen();
 }
 
@@ -508,6 +537,10 @@ function funkEinrichten() {
     funkSpeichern(funkE);
   };
   for (const f of [vorlesenFeld, klangFeld, spotterFeld, namenFeld, laut, $("fStimme")]) f.addEventListener("change", merken);
+  // Referenzrunden aus dem Feld anonym teilen (SQL 060) – eigener Schalter, nur auf diesem PC gemerkt
+  const teilenFeld = $<HTMLInputElement>("fFeldTeilen");
+  teilenFeld.checked = feldTeilenAn();
+  teilenFeld.addEventListener("change", () => { try { localStorage.setItem("gsra-feld-teilen", teilenFeld.checked ? "1" : "0"); } catch { /* egal */ } });
   stimmenFuellen();
   if ("speechSynthesis" in window) window.speechSynthesis.addEventListener("voiceschanged", stimmenFuellen);
   $("fProbe").addEventListener("click", () => {
@@ -1000,7 +1033,39 @@ function rundenZeigen() {
     const zustand = neu("td");
     zustand.append(neu("span", `etikett ${r.gueltig ? "ok" : "warn"}`, r.gueltig ? "gültig" : (r.grund ?? "ungültig")));
     tr.append(zustand);
-    const td = neu("td");
+    const td = neu("td", "r-aktionen");
+    // Teilen nur für die Bestzeit (langsamere Runden helfen niemandem als Referenz)
+    if ((r === beste || geteilteRunden.has(r)) && r.gueltig && r.punkte.length > 10 && istApp && !demo.laeuft && angemeldet() && sitzung?.strecke && sitzung.fahrzeug) {
+      const teilen = neu("button", "knopf leise", "Als Referenz teilen");
+      teilen.type = "button";
+      teilen.title = "Diese Runde anonym als GSRA-Referenzrunde teilen (mit Tempo, Gas und Bremse)";
+      if (geteilteRunden.has(r)) teilen.textContent = "Geteilt ✓ · zurücknehmen";
+      teilen.addEventListener("click", async () => {
+        let geteiltId = geteilteRunden.get(r) ?? null;
+        teilen.disabled = true;
+        try {
+          if (geteiltId) {
+            // zweiter Klick: wieder zurücknehmen
+            await referenzLoeschen(geteiltId);
+            geteilteRunden.delete(r);
+            teilen.textContent = "Als Referenz teilen";
+            hinweis("Referenzrunde gelöscht.", "ok");
+          } else {
+            geteiltId = await eigeneRundeTeilen(sitzungsInfo(), r.zeit, spur(r));
+            if (geteiltId) geteilteRunden.set(r, geteiltId);
+            teilen.textContent = geteiltId ? "Geteilt ✓ · zurücknehmen" : "Zu langsam für die Top 50";
+            hinweis(geteiltId ? "Danke! Deine Runde ist jetzt eine anonyme GSRA-Referenzrunde." : "Für diese Strecke gibt es schon 50 schnellere Referenzrunden.", "ok");
+            if (!geteiltId) return; // bleibt aus
+          }
+          teilen.disabled = false;
+          void referenzenAktualisieren(true);
+        } catch (e) {
+          teilen.disabled = false;
+          hinweis(e instanceof Error ? e.message : "Das hat nicht geklappt.", "fehler");
+        }
+      });
+      td.append(teilen);
+    }
     if (r.punkte.length > 10 && beste && r !== beste) {
       const b = neu("button", "knopf leise", "Vergleichen");
       b.type = "button";
@@ -1282,8 +1347,24 @@ function vKarteZeichnen() {
 type GegenSchnellsten = { name: string; nummer: string; zeit: number; meine: number; rueckstand: number; delta: Float64Array;
   verluste: Array<{ kurve: number; verlust: number }> };
 
+/** Schnellste Runde im Feld mit DEMSELBEN Auto (Rennen mit mehreren Klassen: andere Autos zählen nicht) */
+function schnellsteGleichesAuto(): FeldRunde | null {
+  const mein = sitzung?.fahrzeug ?? null;
+  const fahrer = sitzung?.fahrer ?? [];
+  let best: FeldRunde | null = null;
+  for (const r of feldRef.beste.values()) {
+    const auto = fahrer.find((x) => x.idx === r.idx)?.fahrzeug;
+    if (mein && auto && auto !== mein) continue;
+    if (!best || r.zeit < best.zeit) best = r;
+  }
+  return best;
+}
+
 function gegenSchnellsten(): GegenSchnellsten | null {
-  const s = feldRef.schnellste();
+  // Schnellster im Feld (gleiches Auto) – oder die schnellste GSRA-Referenzrunde, wenn sie noch schneller ist
+  const lobby = schnellsteGleichesAuto();
+  const ref = referenzen[0];
+  const s: FeldRunde | null = ref && (!lobby || ref.zeit < lobby.zeit - 0.0005) ? { idx: -1, runde: 0, zeit: ref.zeit, t: ref.t } : lobby;
   const beste = zaehler.beste;
   if (!s || !beste || beste.punkte.length < 10) return null;
   const L = laenge() ?? 4000;
@@ -1292,7 +1373,7 @@ function gegenSchnellsten(): GegenSchnellsten | null {
   const kurven = kurvenFinden(meine, L);
   const info = (sitzung?.fahrer ?? []).find((x) => x.idx === s.idx);
   return {
-    name: info?.name ?? `Auto ${s.idx}`, nummer: info?.nummer ?? "", zeit: s.zeit, meine: beste.zeit, rueckstand: beste.zeit - s.zeit, delta: d,
+    name: s.idx === -1 ? "GSRA-Referenzrunde" : info?.name ?? `Auto ${s.idx}`, nummer: s.idx === -1 ? "" : info?.nummer ?? "", zeit: s.zeit, meine: beste.zeit, rueckstand: beste.zeit - s.zeit, delta: d,
     verluste: kurven.map((k) => ({ kurve: k.nr, verlust: verlustIn(d, k.start, k.ende) })).sort((a, b) => b.verlust - a.verlust),
   };
 }

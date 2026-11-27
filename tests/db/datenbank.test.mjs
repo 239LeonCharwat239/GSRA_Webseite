@@ -11,9 +11,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL, KARRIERE_SQL, STINTPLAN_SQL, LIVERIES_SQL, CHATSICHER_SQL, AUFRAEUMEN_SQL, ONLINE_SQL, RE_STIL_SQL, APP_LOGIN_SQL, RE_KI_SQL, RE_CHAT_SQL, RE_MERKEN_SQL, LAENGER_SQL, STARTSEITE_SQL, ALTREGELN_SQL, HINWEIS_SQL, RE_SPRACHEN_SQL] =
-    Array.from({ length: 59 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 59);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL, KARRIERE_SQL, STINTPLAN_SQL, LIVERIES_SQL, CHATSICHER_SQL, AUFRAEUMEN_SQL, ONLINE_SQL, RE_STIL_SQL, APP_LOGIN_SQL, RE_KI_SQL, RE_CHAT_SQL, RE_MERKEN_SQL, LAENGER_SQL, STARTSEITE_SQL, ALTREGELN_SQL, HINWEIS_SQL, RE_SPRACHEN_SQL, REFERENZ_SQL] =
+    Array.from({ length: 60 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 60);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -4158,6 +4158,79 @@ if (RE_SPRACHEN_SQL) {
     }
     const gast = await speichern(null, "auto");
     check("059: Gäste speichern nichts", gast.error !== null, gast.error || "durchgelassen!");
+}
+
+// --- 060: Referenzrunden – nur über geprüfte Funktionen, anonym, Grenzen ---
+if (REFERENZ_SQL) {
+    const verlauf = (zeit, n = 201) => `array[${Array.from({ length: n }, (_, i) => ((i / (n - 1)) * zeit).toFixed(3)).join(",")}]::real[]`;
+    const reihe = (wert, n = 201) => `array[${Array.from({ length: n }, () => wert).join(",")}]::real[]`;
+    const add = (wer, { strecke = "Monza", fahrzeug = "BMW M4 GT3", zeit = 106.5, quelle = "eigen", zv, tempo = reihe(180), gas = reihe(60), bremse = reihe(10) } = {}) =>
+        as(wer, () => q(`select public.reference_lap_add('${strecke}', '${fahrzeug}', 5793, ${zeit}, '${quelle}', ${zv ?? verlauf(zeit)}, ${tempo}, ${gas}, ${bremse}) as id`));
+    const vorher = await add(U.max);
+    check("Vorher: Referenzrunden gibt es noch nicht", vorher.error !== null, vorher.error || "durchgelassen");
+    await db.exec(readFileSync(REFERENZ_SQL, "utf8"));
+    const ctl60 = await db.exec(readFileSync(REFERENZ_SQL, "utf8")); // zweiter Lauf
+    const k60 = ctl60[ctl60.length - 1].rows;
+    check("060: Kontrollabfrage vollständig", k60.every(r => ["bereit", "ja"].includes(r.ergebnis)), JSON.stringify(k60));
+
+    // erlaubt
+    const eigen = await add(U.max);
+    check("060: Mitglied lädt eigene Runde hoch", eigen.error === null && eigen.rows[0]?.id, eigen.error || JSON.stringify(eigen.rows[0]));
+    const feld = await add(U.anna, { zeit: 105.9, quelle: "feld", tempo: "null", gas: "null", bremse: "null" });
+    check("060: Feld-Runde ohne Pedale erlaubt", feld.error === null && feld.rows[0]?.id, feld.error || "");
+    const doppelt = await add(U.tim, { zeit: 105.9, quelle: "feld", tempo: "null", gas: "null", bremse: "null" });
+    check("060: dieselbe Feld-Runde nur einmal gespeichert", doppelt.rows[0]?.id === feld.rows[0]?.id, doppelt.error || JSON.stringify(doppelt.rows[0]));
+    const lesen = await as(U.lena, () => q(`select * from public.reference_laps_get('Monza', 'BMW M4 GT3', 5)`));
+    check("060: Mitglied liest die schnellsten Runden (schnellste zuerst)", lesen.error === null && lesen.rows.length === 2 && Number(lesen.rows[0].zeit_s) < Number(lesen.rows[1].zeit_s), lesen.error || JSON.stringify(lesen.rows.map(r => r.zeit_s)));
+    check("060: Antwort verrät nicht, wer hochgeladen hat", lesen.rows.every(r => !("hochgeladen_von" in r) && !Object.values(r).includes(U.max) && !Object.values(r).includes(U.anna)), Object.keys(lesen.rows[0] || {}).join(","));
+    const tag = await as(U.lena, () => q(`select count(*)::int as n from public.reference_laps_get('Monza', null, 5) where created_at <> date_trunc('day', created_at)`));
+    check("060: Hochlade-Zeit nur tagesgenau (erschwert das Zuordnen zu Rennergebnissen)", tag.error === null && tag.rows[0]?.n === 0, tag.error || JSON.stringify(tag.rows));
+    const eigeneSicht = await as(U.max, () => q(`select eigene from public.reference_laps_get('Monza', null, 5) where quelle = 'eigen'`));
+    check("060: eigene Runde ist für mich als „eigene“ markiert", eigeneSicht.rows[0]?.eigene === true, eigeneSicht.error || JSON.stringify(eigeneSicht.rows));
+
+    // verboten
+    const verboten = [
+        ["Gäste laden nichts hoch", null, {}],
+        ["Gesperrte laden nichts hoch", U.seller, {}],
+        ["Rundenzeit 5 s", U.max, { zeit: 5 }],
+        ["Zeitverlauf mit 200 Werten", U.max, { zv: verlauf(106.5, 200) }],
+        ["Zeitverlauf passt nicht zur Zeit", U.max, { zv: verlauf(80) }],
+        ["Zeitverlauf läuft rückwärts", U.max, { zv: `array[${Array.from({ length: 201 }, (_, i) => (i === 100 ? 1 : (i / 200) * 106.5).toFixed(3)).join(",")}]::real[]` }],
+        ["Feld-Runde mit Pedaldaten", U.max, { quelle: "feld" }],
+        ["Tempo 900 km/h", U.max, { tempo: reihe(900) }],
+        ["Gas über 100 %", U.max, { gas: reihe(150) }],
+        ["unbekannte Herkunft", U.max, { quelle: "fremd" }],
+        ["Strecke leer", U.max, { strecke: " " }],
+    ];
+    for (const [text, wer, opt] of verboten) {
+        const r = await add(wer, opt);
+        check(`060 verboten: ${text}`, r.error !== null, r.error || "durchgelassen!");
+    }
+    const direkt = [
+        ["Tabelle direkt lesen", U.max, `select * from public.reference_laps`],
+        ["Tabelle direkt beschreiben", U.max, `insert into public.reference_laps (strecke, fahrzeug, zeit_s, quelle, zeitverlauf, hochgeladen_von) values ('X', 'Y', 100, 'eigen', ${verlauf(100)}, '${U.max}') returning id`],
+        ["Tabelle direkt ändern", U.max, `update public.reference_laps set zeit_s = 21 returning id`],
+        ["Gäste lesen nichts", null, `select * from public.reference_laps_get('Monza', null, 5)`],
+        ["Gesperrte lesen nichts", U.seller, `select * from public.reference_laps_get('Monza', null, 5)`],
+    ];
+    for (const [text, wer, sql] of direkt) {
+        const r = await as(wer, () => q(sql));
+        check(`060 verboten: ${text}`, r.error !== null || r.rows.length === 0, r.error || `${r.rows.length} Zeile(n) durchgelassen!`);
+    }
+    // löschen: nur eigene
+    const fremdLoeschen = await as(U.tim, () => q(`select public.reference_lap_delete('${eigen.rows[0]?.id}') as ok`));
+    check("060: fremde Runde lässt sich nicht löschen", fremdLoeschen.rows[0]?.ok === false, fremdLoeschen.error || JSON.stringify(fremdLoeschen.rows[0]));
+    const selbstLoeschen = await as(U.max, () => q(`select public.reference_lap_delete('${eigen.rows[0]?.id}') as ok`));
+    check("060: eigene Runde lässt sich löschen", selbstLoeschen.rows[0]?.ok === true, selbstLoeschen.error || JSON.stringify(selbstLoeschen.rows[0]));
+    // nur die 50 schnellsten je Strecke und Auto
+    for (let i = 0; i < 52; i++) await add(U.lena, { strecke: "Spa", zeit: 140 + i / 10, quelle: "eigen" });
+    const spa = await one(`select count(*)::int as n, max(zeit_s) as langsamste from public.reference_laps where strecke = 'Spa'`);
+    check("060: je Strecke und Auto bleiben die 50 schnellsten", spa.n === 50 && Number(spa.langsamste) < 145.0, JSON.stringify(spa));
+    // Tagesgrenze 60 je Person
+    for (let i = 0; i < 10; i++) await add(U.lena, { strecke: "Imola", zeit: 100 + i, quelle: "eigen" });
+    const grenze = await add(U.lena, { strecke: "Imola", zeit: 99, quelle: "eigen" });
+    check("060: höchstens 60 Uploads am Tag", /genug Runden/.test(grenze.error || ""), grenze.error || "durchgelassen!");
+    await db.exec(`delete from public.reference_laps`);
 }
 
 // --- Versehentlich ein ALTES Skript erneut ausgeführt (25.11.: 043 nach 054): darf nichts zurücksetzen ---

@@ -440,6 +440,8 @@ pub struct FahrerInfo {
     pub idx: i32,
     pub name: String,
     pub nummer: String,
+    /// Auto dieses Fahrers (CarScreenName) – in Rennen mit mehreren Klassen fährt nicht jeder dasselbe Auto
+    pub fahrzeug: String,
 }
 
 /// Fahrerliste aus dem Block „Drivers:“ (je Eintrag „- CarIdx: …“, „UserName: …“, „CarNumber: …“)
@@ -465,6 +467,8 @@ fn fahrer_lesen(yaml: &str) -> Vec<FahrerInfo> {
             f.name = sauber(w).map(|s| s.chars().take(40).collect()).unwrap_or_default();
         } else if let Some(w) = t.strip_prefix("CarNumber:") {
             f.nummer = sauber(w).map(|s| s.chars().filter(|c| c.is_ascii_alphanumeric()).take(4).collect()).unwrap_or_default();
+        } else if let Some(w) = t.strip_prefix("CarScreenName:") {
+            f.fahrzeug = sauber(w).map(|s| s.chars().take(80).collect()).unwrap_or_default();
         } else if t.starts_with("CarIsPaceCar: 1") || t.starts_with("IsSpectator: 1") {
             *aus = true;
         } else if !t.is_empty() && !z.starts_with(' ') {
@@ -856,10 +860,10 @@ mod tests {
 
     #[test]
     fn fahrerliste_ohne_pace_car_und_zuschauer() {
-        let yaml = "DriverInfo:\n DriverCarIdx: 1\n Drivers:\n - CarIdx: 0\n   UserName: Pace Car\n   CarNumber: \"0\"\n   CarIsPaceCar: 1\n - CarIdx: 1\n   UserName: Anna Beispiel\n   CarNumber: \"27\"\n   CarIsPaceCar: 0\n   IsSpectator: 0\n - CarIdx: 2\n   UserName: <script>alert(1)</script>\u{0007}Böse\n   CarNumber: \"7<b>\"\n - CarIdx: 3\n   UserName: Zuschauer Zoe\n   IsSpectator: 1\n - CarIdx: 99\n   UserName: Zu Hoch\nSplitTimeInfo:\n Sectors:\n - CarIdx: 5\n";
+        let yaml = "DriverInfo:\n DriverCarIdx: 1\n Drivers:\n - CarIdx: 0\n   UserName: Pace Car\n   CarNumber: \"0\"\n   CarIsPaceCar: 1\n - CarIdx: 1\n   UserName: Anna Beispiel\n   CarNumber: \"27\"\n   CarScreenName: BMW M4 GT3\n   CarIsPaceCar: 0\n   IsSpectator: 0\n - CarIdx: 2\n   UserName: <script>alert(1)</script>\u{0007}Böse\n   CarNumber: \"7<b>\"\n - CarIdx: 3\n   UserName: Zuschauer Zoe\n   IsSpectator: 1\n - CarIdx: 99\n   UserName: Zu Hoch\nSplitTimeInfo:\n Sectors:\n - CarIdx: 5\n";
         let f = fahrer_lesen(yaml);
         assert_eq!(f.len(), 2, "{f:?}");
-        assert_eq!(f[0], FahrerInfo { idx: 1, name: "Anna Beispiel".into(), nummer: "27".into() });
+        assert_eq!(f[0], FahrerInfo { idx: 1, name: "Anna Beispiel".into(), nummer: "27".into(), fahrzeug: "BMW M4 GT3".into() });
         assert_eq!(f[1].idx, 2);
         assert!(!f[1].name.contains('\u{7}'));
         assert_eq!(f[1].nummer, "7b");
