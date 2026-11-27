@@ -50,7 +50,7 @@ export const spotterSatz = (seite: Seite, sprache: string) => (SPOTTER_SAETZE[sp
 const FREI_NACH = 0.45; // s – so lange muss es frei bleiben
 const MIN_NEBEN = 0.6; // s – nur nach echtem Nebeneinander „Frei“ sagen
 const NICHT_WIEDERHOLEN = 1.5; // s – dieselbe Ansage nicht öfter
-const NOCH_NACH = 3.5; // s – so lange nebeneinander, dann „Noch da“ (Wunsch 27.11.: wie „Still there“ in iRacing)
+const NOCH_NACH = 2; // s – so lange nebeneinander, dann „Noch da“ (Wunsch 27.11.: wie „Still there“ in iRacing, nach 1,5–2 s)
 
 export class Spotter {
   private aktuell: Seite = "frei";
