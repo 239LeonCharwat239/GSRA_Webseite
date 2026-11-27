@@ -34,9 +34,9 @@ export function istSchwierig(frage: string): boolean {
 export const willSparen = (frage: string) => SPAREN.test(frage);
 
 const PRUEF_SAETZE: Record<string, string[]> = {
-  kumpel: ["Moment, ich schau mir das kurz an.", "Gute Frage – ich guck mir die Daten an, gib mir ein paar Sekunden.", "Verstanden, wir prüfen das."],
+  kumpel: ["Moment, ich schau mir das kurz an.", "Ich guck mir die Daten an, gib mir ein paar Sekunden.", "Verstanden, wir prüfen das."],
   profi: ["Verstanden. Wir prüfen das.", "Copy. Ich analysiere die Daten.", "Verstanden, Rückmeldung folgt."],
-  motivator: ["Starke Frage – ich check das sofort für dich!", "Bin dran, gleich weißt du mehr!", "Moment, ich hol dir die Antwort!"],
+  motivator: ["Ich check das sofort für dich!", "Bin dran, gleich weißt du mehr!", "Moment, ich hol dir die Antwort!"],
   knapp: ["Copy. Prüfe.", "Moment.", "Prüfe."],
   locker: ["Sekunde, ich check das kurz.", "Yo, ich schau mir das an – gib mir 'nen Moment.", "Okay, ich digg mich kurz in die Daten."],
 };

@@ -369,13 +369,15 @@ async function systemSprechen(a: Auftrag, beginnen: () => Promise<void>): Promis
       window.speechSynthesis.speak(u);
     });
     if (a.abgebrochen) return;
-    if (unterbrochen && spotterAktiv) continue; // Spotter war dazwischen: denselben Satz noch einmal
+    // Spotter war dazwischen: NICHT wiederholen (Fund 27.11.: das Wiederholen nervt im Rennen) – weiter mit dem nächsten Satz
+    if (unterbrochen) while (spotterAktiv) await spotterEnde;
     a.index++;
   }
 }
 
 /** Spotter-Ansage: sofort, kurz, hat Vorrang (Sicherheit). Eigene, zweite Stimme, damit man Spotter und
- *  Renningenieur auseinanderhält. Der Renningenieur wird nicht abgebrochen: Er macht danach weiter. */
+ *  Renningenieur auseinanderhält. Der Renningenieur macht danach mit dem nächsten Satz weiter (der unterbrochene
+ *  Satz wird nicht wiederholt). */
 export function spotterSprechen(text: string, e: FunkEinstellungen, sprache: string): void {
   if (!e.spotter || !text || !("speechSynthesis" in window)) return;
   const code = sprache === "auto" ? "de" : sprache; // Spotter-Sätze kommen aus festen Vorlagen

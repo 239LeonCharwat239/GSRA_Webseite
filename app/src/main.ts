@@ -22,6 +22,7 @@ import { namenErsetzen } from "./datenschutz.ts";
 import { karteBauen, karteZeichnen, verlustJeAbschnitt, type Karte } from "./strecke.ts";
 import { Rennbeobachter, berichtErstellen, rundenzeitText, stelleText } from "./rennbericht.ts";
 import { startbildZeigen } from "./startbild.ts";
+import { istRennen, liveNachbarn, livePlatz } from "./feld-live.ts";
 import { webAktiv, webEinrichten, webSuche, webVerbergen, webZeigen } from "./webbereich.ts";
 import { sprechtasteEinrichten } from "./sprechtaste.ts";
 import { messengerHinweis } from "./konto.ts";
@@ -68,6 +69,14 @@ let spiegeln = (() => { try { return localStorage.getItem("gsra_karte_spiegeln")
 
 // Rennbericht: Plätze und Zweikämpfe aus dem Stand aller Autos
 const beobachter = new Rennbeobachter();
+/** Aktueller Platz: im Rennen live aus der gefahrenen Strecke, sonst der offizielle */
+function platzJetzt(): number | null {
+  if (istRennen(sitzung?.sitzungsart ?? (demo.laeuft ? "Rennen" : null))) {
+    const p = livePlatz(letztesFeld);
+    if (p != null) return p;
+  }
+  return beobachter.platz;
+}
 const typischeRundenzeit = () => rundenzeitSchnitt(zaehler.runden) ?? zaehler.beste?.zeit ?? 90;
 // Spotter: „Auto links/rechts“ sofort und ohne KI (Wunsch 25.11.)
 let letzteSeite: number | null = null;
@@ -359,8 +368,15 @@ function rundeFertig(r: Runde) {
   // Abstände nach vorn/hinten mit Tendenz – als Vorlage, ohne KI (Thema „Abstände“)
   const gegner = gegnerMitTrend();
   const code = ansageSprache();
+  // Gegen den Schnellsten im Feld (Wunsch 27.11.: eigene Runden gegeneinander bringen wenig, der Schnellste zeigt, wo
+  // die echte Zeit liegt)
+  const g = r.gueltig ? gegenSchnellsten() : null;
+  const top = g?.verluste[0];
+  const schnellster = g && g.rueckstand > 0.05
+    ? `Auf den Schnellsten (${g.name.split(/\s+/).at(-1)}, ${zeitText(g.zeit)}) fehlen dir ${zahl(g.rueckstand, 2)} s${top && top.verlust > 0.02 ? ` – am meisten in Kurve ${top.kurve} (${zahl(top.verlust, 2)} s)` : ""}.`
+    : null;
   const vorlage = code === "de"
-    ? [sparSatz ?? text, abstandSatz(persoenlichkeit?.art ?? "kumpel", gegner.vor, gegner.hinter)].filter(Boolean).join(" ")
+    ? [sparSatz ?? text, schnellster, abstandSatz(persoenlichkeit?.art ?? "kumpel", gegner.vor, gegner.hinter)].filter(Boolean).join(" ")
     : rundenSatz(code, r, beste, gegner);
   funkMelden(vorlage, { ...rundenLage(r, befund), vor_mir: gegner.vor, hinter_mir: gegner.hinter });
   // Karte aus der ersten gültigen Runde mit Fahrtrichtung; Kurvennummern aus der Bestzeit
@@ -394,6 +410,15 @@ function kiLage(roh: Record<string, unknown>): Record<string, unknown> {
   return namenErsetzen(lage, sitzung?.fahrer ?? []) as Record<string, unknown>;
 }
 
+/** Schaden am Auto aus iRacing (Wunsch 27.11.): anstehende Reparaturzeiten; null = Simulation liefert nichts */
+function schadenLage(): Record<string, unknown> | string | null {
+  const p = zaehler.jetzt;
+  if (p?.reparatur == null && p?.reparaturOptional == null) return null;
+  const pflicht = Math.round(p?.reparatur ?? 0);
+  const optional = Math.round(p?.reparaturOptional ?? 0);
+  return pflicht > 0 || optional > 0 ? { pflicht_reparatur_s: pflicht, optionale_reparatur_s: optional } : "kein Schaden gemeldet";
+}
+
 /** Nur gemessene Fakten nach einer Runde – daraus formuliert die KI den Funkspruch */
 function rundenLage(r: Runde, b: Befund | undefined): Record<string, unknown> {
   const beste = zaehler.beste;
@@ -408,14 +433,19 @@ function rundenLage(r: Runde, b: Befund | undefined): Record<string, unknown> {
     gueltig: r.gueltig,
     ungueltig_weil: r.gueltig ? null : r.grund ?? "ungültig",
     zeit_s: runden3(r.zeit),
+    // fertig geschriebene Zeiten (Fund 27.11.: aus 103,4 s machte die KI „1,3“ statt „1:43,4“)
+    zeit_text: zeitText(r.zeit),
     bestzeit_s: runden3(beste?.zeit),
+    bestzeit_text: beste ? zeitText(beste.zeit) : null,
     neue_bestzeit: beste === r,
     hinter_bestzeit_s: beste && beste !== r && r.gueltig ? runden3(r.zeit - beste.zeit) : null,
     groesster_verlust: b ? { stelle: kurvenName(b.kurve, laenge() ?? 4000), verlust_s: runden3(b.verlust), ursache: b.ursachen[0] ?? null, tipp: b.tipp } : null,
     sprit_l: runden3(sprit),
     sprit_reicht_runden: v && sprit != null ? Math.floor((sprit / v) * 10) / 10 : null,
-    platz: beobachter.platz,
+    platz: platzJetzt(),
     sparen: sparLage(),
+    gegen_schnellsten: gegenSchnellstenLage(),
+    schaden: schadenLage(),
   };
 }
 
@@ -562,6 +592,17 @@ async function nachbesprechung(automatisch: boolean) {
   if (automatisch) {
     reiterZeigen("chat");
     hinweis("Sitzung vorbei – dein Renningenieur bespricht sie jetzt mit dir.", "ok");
+    // Von selbst ein kurzer Abschluss am Funk (Wunsch 27.11.: „Starkes Rennen, bis auf Platz 8 vorgearbeitet – gleich
+    // folgt die Nachbesprechung“); Plätze aus der offiziellen Wertung, nur im Rennen
+    const start = beobachter.startPlatz;
+    const ende = beobachter.platz;
+    if (ansageSprache() === "de" && istRennen(sitzung?.sitzungsart ?? (demo.laeuft ? "Rennen" : null)) && start != null && ende != null) {
+      const diff = start - ende;
+      const satz = diff > 0 ? `Zielflagge! Starkes Rennen – du hast dich von Platz ${start} auf Platz ${ende} vorgearbeitet. Gleich kommt die Nachbesprechung.`
+        : diff < 0 ? `Zielflagge! Platz ${ende} – heute lief nicht alles rund, aber genau dafür gibt es die Nachbesprechung. Die kommt gleich.`
+        : `Zielflagge! Platz ${ende} gehalten – sauber nach Hause gefahren. Gleich kommt die Nachbesprechung.`;
+      chat?.melden(satz, "nachbesprechung");
+    }
   }
   const b = berichtErstellen(zaehler.runden, beobachter, laenge() ?? 4000, sitzung?.fahrer ?? []);
   const vorlage = b.saetze.join(" ");
@@ -733,13 +774,18 @@ function nachbarn(): { vor: Nachbar; hinter: Nachbar } {
   const meinPlatz = f.platz[f.ich];
   if (meinPlatz == null || meinPlatz <= 0) return { vor: null, hinter: null };
   const fortschritt = (i: number) => (f.runde[i] ?? 0) + Math.max(0, f.anteil[i] ?? 0);
-  const finden = (platz: number): Nachbar => {
-    const i = f.platz.findIndex((p) => p === platz);
-    if (i < 0) return null;
+  const auto = (i: number | null): Nachbar => {
+    if (i == null || i < 0) return null;
     const info = fahrer.find((x) => x.idx === i);
     const abstand = Math.abs(fortschritt(i) - fortschritt(f.ich!)) * typischeRundenzeit();
     return { idx: i, name: info?.name ?? `Auto ${i}`, nummer: info?.nummer ?? "", abstand_s: Number.isFinite(abstand) ? Math.round(abstand * 10) / 10 : null };
   };
+  // Im Rennen live (Fund 27.11.: der offizielle Platz von iRacing gilt erst ab der Ziellinie), sonst offiziell
+  if (istRennen(sitzung?.sitzungsart ?? (demo.laeuft ? "Rennen" : null))) {
+    const live = liveNachbarn(f);
+    if (live.vor != null || live.hinter != null) return { vor: auto(live.vor), hinter: auto(live.hinter) };
+  }
+  const finden = (platz: number) => auto(f.platz.findIndex((p) => p === platz));
   return { vor: meinPlatz > 1 ? finden(meinPlatz - 1) : null, hinter: finden(meinPlatz + 1) };
 }
 
@@ -761,13 +807,15 @@ function chatLage(): Record<string, unknown> {
     aktuelle_runde: zaehler.laufend?.nr ?? null,
     gefahrene_runden: zaehler.runden.length,
     letzte_runde_s: letzte ? runden3(letzte.zeit) : null,
+    letzte_runde_text: letzte ? zeitText(letzte.zeit) : null,
+    bestzeit_text: zaehler.beste ? zeitText(zaehler.beste.zeit) : null,
     letzte_runde_gueltig: letzte?.gueltig ?? null,
     bestzeit_s: runden3(zaehler.beste?.zeit),
     schnitt_s: runden3(rundenzeitSchnitt(zaehler.runden)),
     sprit_l: runden3(sprit),
     verbrauch_pro_runde_l: runden3(v),
     sprit_reicht_runden: v && sprit != null ? Math.floor((sprit / v) * 10) / 10 : null,
-    platz: beobachter.platz,
+    platz: platzJetzt(),
     vor_mir: vor,
     hinter_mir: hinter,
     letzte_runde_groesster_verlust: letzterBefund ? { stelle: kurvenName(letzterBefund.kurve, laenge() ?? 4000), verlust_s: runden3(letzterBefund.verlust), ursachen: letzterBefund.ursachen.slice(0, 3), tipp: letzterBefund.tipp } : null,
@@ -775,6 +823,7 @@ function chatLage(): Record<string, unknown> {
     zweikaempfe: b ? b.kaempfe.slice(-3).map((k) => ({ gegner: k.name, runden: k.dauerRunden, knappster_abstand_s: runden3(k.minAbstand) })) : [],
     sparen: sparLage(),
     gegen_schnellsten: gegenSchnellstenLage(),
+    schaden: schadenLage(),
     vergleich: vergleichFuerKi,
   };
 }
@@ -806,7 +855,8 @@ function lokaleAntwort(frage: string): string | null {
     return `${ansage(code, "letzte", { zeit: zeitIn(code, r.zeit) })}${r.gueltig ? "" : ` ${ansage(code, "rundeUngueltig", { nr: r.nr })}`}`;
   }
   if (a === "beste") return zaehler.beste ? ansage(code, "beste", { zeit: zeitIn(code, zaehler.beste.zeit), nr: zaehler.beste.nr }) : ansage(code, "nochNichts");
-  return beobachter.platz != null ? ansage(code, "platz", { p: beobachter.platz }) : ansage(code, "nochNichts");
+  const p = platzJetzt();
+  return p != null ? ansage(code, "platz", { p }) : ansage(code, "nochNichts");
 }
 
 let chat: Chat | null = null;
@@ -895,7 +945,7 @@ function live() {
   balken.style.left = `${anteil < 0 ? 50 - Math.abs(anteil) * 50 : 50}%`;
   balken.className = deltaEl.className;
   // Position im Feld (nur im Rennen mit anderen Autos)
-  const platz = beobachter.platz;
+  const platz = platzJetzt();
   const feld = sitzung?.fahrer?.length ?? 0;
   $("lPlatz").textContent = platz != null ? `P${platz}` : "–";
   $("lPlatzInfo").textContent = platz != null ? (feld > 1 ? `von ${feld}` : "im Feld") : "nur im Rennen";
@@ -1251,7 +1301,8 @@ function gegenSchnellstenLage(): Record<string, unknown> | null {
   const g = gegenSchnellsten();
   if (!g) return null;
   return {
-    fahrer: `${g.nummer ? `#${g.nummer} ` : ""}${g.name}`, seine_zeit_s: runden3(g.zeit), meine_bestzeit_s: runden3(g.meine), rueckstand_s: runden3(g.rueckstand),
+    fahrer: `${g.nummer ? `#${g.nummer} ` : ""}${g.name}`, seine_zeit_s: runden3(g.zeit), seine_zeit_text: zeitText(g.zeit),
+    meine_bestzeit_s: runden3(g.meine), meine_bestzeit_text: zeitText(g.meine), rueckstand_s: runden3(g.rueckstand),
     groesste_verluste: g.verluste.filter((v) => v.verlust > 0.02).slice(0, 3).map((v) => ({ kurve: `Kurve ${v.kurve}`, verlust_s: runden3(v.verlust) })),
     hier_schneller: g.verluste.filter((v) => v.verlust < -0.02).slice(-2).map((v) => ({ kurve: `Kurve ${v.kurve}`, gewinn_s: runden3(-v.verlust) })),
   };

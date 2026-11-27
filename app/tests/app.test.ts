@@ -1,3 +1,4 @@
+import { istRennen, liveNachbarn, livePlatz, liveReihenfolge } from "../src/feld-live.ts";
 import { fehlendeWoerter, TESTSAETZE, trefferquote, woerter } from "../src/sprachtest.ts";
 // Prüfungen der App-Logik (ohne Fenster): Runden, Sprit, Vergleich, Demo
 // Aufruf: npm test   (Node führt TypeScript direkt aus)
@@ -314,7 +315,7 @@ test("Spotter: sofort bei Auto daneben, „Frei“ erst nach echtem Nebeneinande
   assert.equal(seiteAus(0), null);
   // Alle 12 Sprachen haben alle 6 Ansagen
   for (const [sprache, saetze] of Object.entries(SPOTTER_SAETZE)) {
-    assert.equal(Object.keys(saetze).length, 6, sprache);
+    assert.equal(Object.keys(saetze).length, 7, sprache);
     for (const t of Object.values(saetze)) assert.ok(t.length >= 2 && t.length <= 30, `${sprache}: ${t}`);
   }
   // alle 28 Sprachen des Renningenieurs (Fund 26.11.: 16 Sprachen fehlten, dort sprach der Spotter Deutsch)
@@ -603,4 +604,22 @@ test("Sprachtest: Trefferquote nach Wortfehlern, Umlaute und Satzzeichen egal", 
   assert.equal(trefferquote("Größe", "groesse"), 1);
   assert.equal(trefferquote("Box diese Runde.", ""), 0);
   assert.deepEqual(fehlendeWoerter("Hey Kim, reicht der Sprit?", "Hey Tim reicht der Sprit"), ["Kim,"]);
+});
+test("Live-Platz: Reihenfolge nach gefahrener Strecke statt offiziellem Platz vom Rundenbeginn", () => {
+  // Offiziell (Stand Ziellinie): ich (Auto 2) auf Platz 4. Inzwischen habe ich Auto 0 und 1 überholt.
+  const f = {
+    zeit: 100, ich: 2,
+    anteil: [0.55, 0.60, 0.66, 0.70, -1, 0.10],
+    runde: [5, 5, 5, 5, 5, 6],
+    platz: [2, 3, 4, 1, 5, 0],
+    inBox: [0, 0, 0, 0, 0, 0],
+  };
+  assert.deepEqual(liveReihenfolge(f), [3, 2, 1, 0], "Auto 4 nicht auf der Strecke, Auto 5 ohne Wertung (Pace-Car)");
+  assert.equal(livePlatz(f), 2, "jetzt Platz 2 statt 4");
+  assert.deepEqual(liveNachbarn(f), { vor: 3, hinter: 1 });
+  // überrundetes Auto zählt hinter mir, auch wenn es auf der Strecke vor mir fährt
+  const g = { ...f, anteil: [0.9, 0.60, 0.66, 0.70, -1, 0.10], runde: [4, 5, 5, 5, 5, 6] };
+  assert.deepEqual(liveReihenfolge(g), [3, 2, 1, 0]);
+  assert.equal(livePlatz({ ...f, ich: 4 }), null, "nicht auf der Strecke: kein Live-Platz");
+  assert.ok(istRennen("Race") && istRennen("Rennen") && !istRennen("Practice") && !istRennen("Open Qualify"));
 });

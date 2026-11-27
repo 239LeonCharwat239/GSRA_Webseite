@@ -296,7 +296,7 @@ pub struct Feld {
 }
 
 /// Die Werte, die die App braucht (Namen wie im iRacing-SDK)
-const NAMEN: [&str; 18] = [
+const NAMEN: [&str; 20] = [
     "SessionTime",
     "Lap",
     "LapDistPct",
@@ -316,12 +316,15 @@ const NAMEN: [&str; 18] = [
     "YawNorth",
     // Spotter: 0 aus, 1 frei, 2 Auto links, 3 Auto rechts, 4 links und rechts, 5 zwei links, 6 zwei rechts
     "CarLeftRight",
+    // Schaden (Wunsch 27.11.): Sekunden Pflicht- bzw. optionale Reparatur, die gerade anstehen (0 = kein Schaden)
+    "PitRepairLeft",
+    "PitOptRepairLeft",
 ];
 
 /// Zuordnung Name → Variable (fehlende Werte bleiben leer)
 #[derive(Debug, Clone, Default)]
 pub struct Karte {
-    felder: [Option<Variable>; 18],
+    felder: [Option<Variable>; 20],
     feld: [Option<Variable>; 7],
 }
 
@@ -382,6 +385,8 @@ impl Karte {
             in_box: b(15),
             richtung: z(16),
             seite: z(17).map(|x| x as i32).filter(|x| (0..=6).contains(x)),
+            reparatur: z(18).filter(|x| x.is_finite() && *x >= 0.0),
+            reparatur_optional: z(19).filter(|x| x.is_finite() && *x >= 0.0),
         }
     }
 }
@@ -411,6 +416,10 @@ pub struct Probe {
     pub richtung: Option<f64>,
     /// Spotter (CarLeftRight): 0 aus, 1 frei, 2 links, 3 rechts, 4 beidseitig, 5 zwei links, 6 zwei rechts
     pub seite: Option<i32>,
+    /// Schaden: anstehende Pflicht-Reparatur in Sekunden (PitRepairLeft); 0 = keine
+    pub reparatur: Option<f64>,
+    /// Schaden: anstehende optionale Reparatur in Sekunden (PitOptRepairLeft)
+    pub reparatur_optional: Option<f64>,
 }
 
 /// Strecke und Fahrzeug aus der Sitzungsinfo (nur, was die App anzeigt)
