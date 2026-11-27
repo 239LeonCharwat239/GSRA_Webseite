@@ -28,6 +28,7 @@ import { messengerHinweis } from "./konto.ts";
 import { reEinstellungenEinrichten } from "./re-einstellungen.ts";
 import { messengerEinrichten } from "./messenger.ts";
 import { fensterEinrichten, sichtbarkeitStarten } from "./kopf.ts";
+import { aktualisierungEinrichten } from "./aktualisierung.ts";
 import { eigeneStimmeEinrichten } from "./eigene-stimme.ts";
 import { alsSechzehnKilohertz } from "./chat-medien.ts";
 import { ablegen, alleRunden, alsRunde, rundenDerStrecke, streckeLoeschen, streckenKarten, type ArchivRunde, type StreckenKarte } from "./rundenarchiv.ts";
@@ -1473,7 +1474,9 @@ $("dsZu").addEventListener("click", () => $<HTMLDialogElement>("dsDialog").close
 
 funkEinrichten();
 void webEinrichten(istApp);
-void fensterEinrichten(istApp).catch(() => { /* ohne eigene Fensterleiste weiter */ });
+// Automatische Updates (signiert, von GitHub); ein bereitliegendes Update installiert sich beim Schließen
+const aktualisierung = aktualisierungEinrichten(istApp, hinweis).catch(() => null);
+void fensterEinrichten(istApp, async () => (await aktualisierung)?.vorDemSchliessen() ?? false).catch(() => { /* ohne eigene Fensterleiste weiter */ });
 // Namen nur für angemeldete Mitglieder (Datenbank-Regel wie auf der Webseite) – also auch nach der Anmeldung starten
 beiKontoWechsel(() => { if (angemeldet()) void sichtbarkeitStarten().catch(() => { /* ohne Namen weiter */ }); });
 berichtKiEinrichten();

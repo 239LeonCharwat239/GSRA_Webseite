@@ -676,3 +676,7 @@ body.signalwort-an .verbindung::after { content: "Mikro an (Signalwort)"; margin
 .strecke-karte small { color: var(--leise); font-size: 12px; }
 .strecke-loeschen { align-self: center; justify-self: start; }
 #vKi { margin-left: auto; }
+/* Update bereit (unten in der Seitenleiste) */
+.update-hinweis { display: flex; flex-direction: column; gap: 6px; padding: 10px; margin-bottom: 8px; border: 1px solid var(--gelb); border-radius: 10px; background: rgba(255, 204, 0, 0.08); font-size: 12.5px; }
+.update-hinweis[hidden] { display: none; }
+.update-hinweis .knopf { width: 100%; }

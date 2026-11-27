@@ -53,5 +53,12 @@
       "icons/128x128@2x.png",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDMyRTkyOEU3MTc5NkI1ODMKUldTRHRaWVg1eWpwTXRsc0xyTzhkUHNIYVZDYnBscUhYTzVXUnJXd1Fpc0NnZGtheFUyZ21lUS8K",
+      "endpoints": ["https://github.com/239LeonCharwat239/GSRA_Webseite/releases/latest/download/latest.json"],
+      "windows": { "installMode": "passive" }
+    }
   }
 }

@@ -13,6 +13,8 @@ mod webbereich;
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        // Updates nur von GitHub-Releases und nur mit gültiger Signatur (öffentlicher Schlüssel in tauri.conf.json)
+        .plugin(tauri_plugin_updater::Builder::new().build())
         // Globale Sprechtaste: drücken = Mikrofon an, loslassen = erkennen (Tasten nur aus sprache::TASTEN)
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()

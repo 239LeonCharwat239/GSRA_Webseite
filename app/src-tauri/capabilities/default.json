@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Nur das Hauptfenster und nur der eigene Inhalt der App (keine eingebetteten Webseiten): Ereignisse empfangen und die eigene GSRA-Fensterleiste (verschieben, minimieren, maximieren, Vollbild, schließen). Kein Dateizugriff, keine Shell, keine Fremdseiten.",
+  "description": "Nur das Hauptfenster und nur der eigene Inhalt der App (keine eingebetteten Webseiten): Ereignisse empfangen und die eigene GSRA-Fensterleiste (verschieben, minimieren, maximieren, Vollbild, schließen). Updates nur signiert über GitHub-Releases. Kein Dateizugriff, keine Shell, keine Fremdseiten.",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -10,6 +10,7 @@
     "core:window:allow-minimize",
     "core:window:allow-toggle-maximize",
     "core:window:allow-close",
-    "core:window:allow-set-fullscreen"
+    "core:window:allow-set-fullscreen",
+    "updater:default"
   ]
 }

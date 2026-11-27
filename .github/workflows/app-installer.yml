@@ -1,32 +1,34 @@
-# GSRA-App – Installer bauen und als Download veröffentlichen (Wunsch 26.11.: „die App auf meinem PC installieren“).
-# Läuft NUR, wenn ihr es auslöst: in GitHub unter „Actions › App-Installer › Run workflow“ (Versionsname eintragen)
-# oder mit einem Tag „app-v…“. Ein frischer Windows-Rechner von GitHub baut den Installer (NSIS) aus genau diesem Stand
-# und hängt ihn als „GSRA-Setup.exe“ (mit Prüfsumme) an ein Release. Der Link auf app.html
-# (…/releases/latest/download/GSRA-Setup.exe) zeigt dann immer auf die neueste Fassung.
-# Absicherung: Aktionen auf feste Versionen (Commit) gepinnt, Pakete exakt nach package-lock.json und Cargo.lock,
-# Schreibrecht nur für Releases und nur in diesem Ablauf; der Versionsname wird geprüft (kein Einschleusen von Befehlen).
+# GSRA-App – Installer und automatische Updates (Wunsch 27.11.: „die App aktualisiert sich, sobald ich pushe“).
+# Läuft bei jedem Push auf main, der etwas im Ordner app/ ändert (oder per „Run workflow“). Ein frischer Windows-Rechner
+# von GitHub prüft die App (TypeScript, Tests), baut sie mit der Versionsnummer 0.2.<Laufnummer>, signiert das Update
+# und veröffentlicht ein Release mit:
+#   GSRA-Setup.exe          – Installer (Link auf app.html zeigt immer auf die neueste Fassung)
+#   GSRA-Setup.exe.sha256   – Prüfsumme
+#   latest.json             – danach fragt die installierte App; sie nimmt nur Updates mit gültiger Signatur an
+# Voraussetzung (einmalig, macht ihr): Repository-Secrets TAURI_SIGNING_PRIVATE_KEY und
+# TAURI_SIGNING_PRIVATE_KEY_PASSWORD (Inhalt der beiden Dateien im Ordner .gsra-schluessel auf eurem PC).
+# Absicherung: Aktionen fest gepinnt, Pakete exakt nach package-lock.json und Cargo.lock, Schreibrecht nur für
+# Releases und nur in diesem Ablauf, der Schlüssel steht nur im Bau-Schritt zur Verfügung und wird nie ausgegeben.
 name: App-Installer
 
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: "Versionsname des Releases, z. B. app-v0.1.0"
-        required: true
-        default: "app-v0.1.0"
   push:
-    tags: ["app-v*"]
+    branches: [main]
+    paths:
+      - "app/**"
+      - ".github/workflows/app-installer.yml"
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
   group: app-installer
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   windows:
-    name: Installer für Windows
+    name: Installer und Update für Windows
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
@@ -38,12 +40,20 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: app/package-lock.json
-      - name: Versionsname prüfen
+      - name: Signaturschlüssel vorhanden?
         shell: pwsh
         env:
-          VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+          SCHLUESSEL: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
-          if ($env:VERSION -notmatch '^app-v\d+\.\d+\.\d+$') { throw "Der Versionsname muss so aussehen: app-v0.1.0" }
+          if (-not $env:SCHLUESSEL) { throw "Das Secret TAURI_SIGNING_PRIVATE_KEY fehlt (Settings › Secrets and variables › Actions). Ohne Schlüssel kann es keine signierten Updates geben." }
+      - name: Versionsnummer
+        id: version
+        shell: pwsh
+        run: |
+          $v = "0.2.$env:GITHUB_RUN_NUMBER"
+          "nummer=$v" >> $env:GITHUB_OUTPUT
+          "{`"version`":`"$v`",`"bundle`":{`"createUpdaterArtifacts`":true}}" | Out-File -Encoding ascii app/ci-config.json
+          "Version $v"
       - name: Abhängigkeiten (exakt nach package-lock.json)
         working-directory: app
         run: npm ci
@@ -52,29 +62,43 @@ jobs:
         run: |
           npm run pruefen
           npm test
-      - name: Installer bauen (exakt nach Cargo.lock)
+      - name: Installer bauen und signieren (exakt nach Cargo.lock)
         working-directory: app
-        run: npx tauri build --bundles nsis -- --locked
-      - name: Datei benennen und Prüfsumme
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npx tauri build --bundles nsis --config ci-config.json -- --locked
+      - name: Dateien für das Release
         shell: pwsh
         working-directory: app
+        env:
+          VERSION: ${{ steps.version.outputs.nummer }}
         run: |
-          $datei = Get-ChildItem target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
+          $datei = Get-ChildItem "target/release/bundle/nsis/*_${env:VERSION}_x64-setup.exe" | Select-Object -First 1
           if (-not $datei) { throw "Der Installer fehlt." }
+          $sig = "$($datei.FullName).sig"
+          if (-not (Test-Path $sig)) { throw "Die Update-Signatur fehlt." }
           Copy-Item $datei.FullName GSRA-Setup.exe
           "$((Get-FileHash GSRA-Setup.exe -Algorithm SHA256).Hash.ToLower())  GSRA-Setup.exe" | Out-File -Encoding ascii GSRA-Setup.exe.sha256
+          $url = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/app-v$env:VERSION/GSRA-Setup.exe"
+          $eintrag = @{ signature = (Get-Content $sig -Raw).Trim(); url = $url }
+          $json = [ordered]@{
+            version = $env:VERSION
+            notes = "GSRA-App $env:VERSION"
+            pub_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+            platforms = [ordered]@{ "windows-x86_64" = $eintrag; "windows-x86_64-nsis" = $eintrag }
+          } | ConvertTo-Json -Depth 5
+          [IO.File]::WriteAllText("$PWD/latest.json", $json, (New-Object Text.UTF8Encoding $false))
           Get-Content GSRA-Setup.exe.sha256
       - name: Als Release veröffentlichen
         shell: pwsh
         working-directory: app
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+          VERSION: ${{ steps.version.outputs.nummer }}
         run: |
-          gh release view $env:VERSION *> $null
-          if ($LASTEXITCODE -ne 0) {
-            gh release create $env:VERSION --title "GSRA-App $($env:VERSION.Substring(5))" --notes "Installer für Windows 10/11. Prüfsumme in GSRA-Setup.exe.sha256." --latest
-            if ($LASTEXITCODE -ne 0) { throw "Release ließ sich nicht anlegen." }
-          }
-          gh release upload $env:VERSION GSRA-Setup.exe GSRA-Setup.exe.sha256 --clobber
+          $tag = "app-v$env:VERSION"
+          gh release create $tag --target $env:GITHUB_SHA --title "GSRA-App $env:VERSION" --notes "Automatisch gebaut aus $($env:GITHUB_SHA.Substring(0,7)). Installer für Windows 10/11; installierte Apps aktualisieren sich selbst." --latest
+          if ($LASTEXITCODE -ne 0) { throw "Release ließ sich nicht anlegen." }
+          gh release upload $tag GSRA-Setup.exe GSRA-Setup.exe.sha256 latest.json --clobber
           if ($LASTEXITCODE -ne 0) { throw "Hochladen fehlgeschlagen." }

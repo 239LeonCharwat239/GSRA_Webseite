@@ -65,7 +65,8 @@ export async function sichtbarkeitStarten(): Promise<void> {
 }
 
 /** Eigene Fensterleiste (das Fenster hat keinen Windows-Rahmen) */
-export async function fensterEinrichten(istApp: boolean): Promise<void> {
+/** @param vorSchliessen true = übernimmt das Schließen selbst (z. B. Update installieren) */
+export async function fensterEinrichten(istApp: boolean, vorSchliessen: () => Promise<boolean> = async () => false): Promise<void> {
   if (!istApp) return;
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
   const fenster = getCurrentWindow();
@@ -79,7 +80,9 @@ export async function fensterEinrichten(istApp: boolean): Promise<void> {
   $("fMin").addEventListener("click", () => void fenster.minimize());
   $("fMax").addEventListener("click", () => void fenster.toggleMaximize());
   $("fVoll").addEventListener("click", () => void vollbild());
-  $("fZu").addEventListener("click", () => void fenster.close());
+  $("fZu").addEventListener("click", async () => {
+    if (!(await vorSchliessen().catch(() => false))) void fenster.close();
+  });
   window.addEventListener("keydown", (e) => {
     if (e.key === "F11") {
       e.preventDefault();

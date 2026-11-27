@@ -63,6 +63,11 @@
     </nav>
 
     <div class="leiste-fuss">
+      <!-- Neue Version heruntergeladen (src/aktualisierung.ts): installiert sich beim Neustart -->
+      <div class="update-hinweis" id="updHinweis" role="status" hidden>
+        <span id="updText">Neue Version bereit</span>
+        <button class="knopf" id="updKnopf" type="button" title="Die App schließt sich kurz, installiert die neue Version und startet neu">Jetzt neu starten</button>
+      </div>
       <div class="verbindung">
         <span class="led" id="led" aria-hidden="true"></span>
         <span id="statusText">Starte …</span>
@@ -132,6 +137,7 @@
       <li>Sprechtaste: Beim Halten und Antippen läuft das Mikrofon nur während deiner Frage (höchstens 30 Sekunden). Bei „Signalwort“ hört es dauerhaft mit, solange du diese Art gewählt hast – links unten steht dann „Mikro an“; Sätze ohne Signalwort werden sofort verworfen. Die Spracherkennung läuft auf deinem PC; dein Ton wird nie gespeichert und nie gesendet. Weiter geht – wie bei einer getippten Frage – nur der erkannte Text. Modelle: NVIDIA Parakeet TDT 0.6B v3 (CC BY 4.0) und Silero VAD (MIT), ausgeführt mit sherpa-onnx.</li>
       <li>Knopf am Lenkrad: Die App liest nur, welcher Knopf gedrückt wird (keine Achsen, keine Tastatur) und nur, um deine Sprechtaste zu erkennen.</li>
       <li>Welche Simulation läuft, erkennt die App am Namen des laufenden Programms – nur auf deinem PC.</li>
+      <li>Updates: Die App fragt beim Start und alle paar Stunden bei GitHub nach, ob es eine neue Version gibt (dabei sieht GitHub, wie bei jedem Seitenaufruf, deine IP-Adresse). Neue Versionen werden nur installiert, wenn sie mit dem Schlüssel der GSRA signiert sind.</li>
       <li>Eigene Stimme: Die Aufnahme (höchstens 20 Sekunden) wird nur angenommen, wenn du bestätigst, dass die Person zugestimmt hat oder es deine eigene Stimme ist. Sie liegt nur im Datenordner der App auf diesem PC, wird nie hochgeladen und ist mit „Aufnahme löschen“ sofort weg. Die Stimme entsteht auf deinem PC (Kyutai Pocket TTS, CC BY 4.0, ausgeführt mit sherpa-onnx).</li>
     </ul>
     <h3>Geht an die GSRA (verschlüsselte Verbindung, Datenbank in Frankfurt)</h3>
