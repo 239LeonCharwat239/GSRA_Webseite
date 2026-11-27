@@ -635,3 +635,70 @@ body.signalwort-an .verbindung::after { content: "Mikro an (Signalwort)"; margin
 .app-kopf .konto { display: flex; align-items: center; gap: 8px; }
 .konto-bild { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; border: 2px solid var(--gelb); box-shadow: 0 0 10px rgba(255, 204, 0, 0.25); }
 .konto-bild[hidden] { display: none; }
+/* =========================================================================
+   Live-Telemetrie im GSRA-Design (Wunsch 27.11.)
+   Startkarte ohne Simulation · Cockpit mit großen Werten · Werte-Reihe · Funk
+   ========================================================================= */
+.live-warten {
+  display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; gap: 24px; align-items: center;
+  margin-bottom: 18px; padding: 24px 26px; border-top: 3px solid var(--gelb);
+  background: radial-gradient(120% 140% at 0% 0%, rgba(0, 85, 255, 0.16), transparent 55%), linear-gradient(180deg, var(--flaeche-2), var(--flaeche));
+}
+.live-warten[hidden] { display: none; }
+.live-warten-marke { font-size: 11px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: var(--blau-hell); }
+.live-warten-titel { margin: 6px 0 8px; font-size: 24px; letter-spacing: 1px; }
+.live-warten .live-warten-titel::before { display: none; }
+.live-warten p { margin: 0; color: var(--leise); line-height: 1.55; }
+.live-schritte { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.live-schritte li { display: flex; align-items: center; gap: 12px; color: var(--text); font-weight: 600; }
+.live-schritte b { flex: none; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; border: 2px solid var(--gelb); color: var(--gelb); font-size: 13px; }
+.seite[data-seite="live"].wartet .cockpit, .seite[data-seite="live"].wartet .werte-reihe { opacity: 0.45; }
+
+.cockpit {
+  display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 0.8fr); gap: 0;
+  padding: 0; overflow: hidden; border-top: 3px solid var(--blau); margin-bottom: 14px;
+}
+.cockpit > div { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 22px 16px; min-height: 180px; }
+.cockpit > div + div { border-left: 1px solid var(--rand); }
+.cockpit .titel, .wert .titel { font-size: 11px; font-weight: 800; letter-spacing: 1.6px; text-transform: uppercase; color: var(--leise); }
+.cockpit small, .wert small { color: var(--leise); font-size: 12.5px; text-align: center; }
+.cockpit-tempo strong { font-size: 76px; line-height: 0.95; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -1px; }
+.gang-ring { width: 96px; height: 96px; display: grid; place-items: center; border-radius: 50%; border: 3px solid var(--gelb); box-shadow: 0 0 22px rgba(255, 204, 0, 0.25), inset 0 0 18px rgba(255, 204, 0, 0.12); }
+.gang-ring strong { font-size: 52px; line-height: 1; font-weight: 800; color: var(--gelb); }
+.cockpit-gang .balken.drehzahl { width: 80%; }
+.cockpit-delta strong { font-size: 56px; line-height: 1; font-weight: 800; font-variant-numeric: tabular-nums; }
+.cockpit-delta strong.schneller { color: var(--gruen); text-shadow: 0 0 18px rgba(34, 197, 94, 0.35); }
+.cockpit-delta strong.langsamer { color: var(--rot); text-shadow: 0 0 18px rgba(239, 68, 68, 0.35); }
+.delta-skala { position: relative; width: 86%; height: 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
+.delta-skala i { position: absolute; top: 0; bottom: 0; left: 50%; width: 0; border-radius: 999px; background: var(--leise); transition: width 0.12s linear, left 0.12s linear; }
+.delta-skala i.schneller { background: var(--gruen); box-shadow: 0 0 10px rgba(34, 197, 94, 0.6); }
+.delta-skala i.langsamer { background: var(--rot); box-shadow: 0 0 10px rgba(239, 68, 68, 0.6); }
+.delta-null { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: rgba(255, 255, 255, 0.55); }
+.cockpit-pedale .pedale { height: 120px; }
+
+.werte-reihe { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+.wert {
+  display: flex; flex-direction: column; gap: 4px; padding: 16px 18px; border-radius: 14px;
+  background: linear-gradient(180deg, var(--flaeche-2), var(--flaeche)); border: 1px solid var(--rand); border-top: 3px solid var(--blau);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.wert:hover { border-color: rgba(255, 204, 0, 0.45); box-shadow: 0 8px 24px -12px rgba(255, 204, 0, 0.35); }
+.wert strong { font-size: 30px; line-height: 1.1; font-weight: 800; font-variant-numeric: tabular-nums; }
+.wert small { text-align: left; }
+
+.funk-live { border-left: 0; border-top: 3px solid var(--gelb); }
+.funk-kopf { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.funk-kopf h2 { margin: 0; }
+.funk-kopf h2::before { display: none; }
+.funk-symbol { flex: none; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; background: rgba(255, 204, 0, 0.12); border: 1px solid rgba(255, 204, 0, 0.5); color: var(--gelb); }
+.funk-symbol svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.funk-live #lFunkText { font-size: 17px; line-height: 1.55; padding: 14px 16px; border-radius: 4px 14px 14px 14px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--rand); margin-bottom: 10px; }
+
+@media (max-width: 1100px) {
+  .live-warten { grid-template-columns: 1fr; }
+  .cockpit { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cockpit > div:nth-child(3) { border-left: 0; }
+  .cockpit > div:nth-child(n + 3) { border-top: 1px solid var(--rand); }
+  .werte-reihe { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) { .upd-zeile { display: none; } .live-warten { padding: 18px; } .cockpit-tempo strong { font-size: 60px; } }

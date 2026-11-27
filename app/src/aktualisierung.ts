@@ -28,7 +28,9 @@ export function fehlerText(e: unknown): string {
   return (t || "unbekannter Fehler").replace(/\s+/g, " ").slice(0, 300);
 }
 
-export async function aktualisierungEinrichten(istApp: boolean, hinweis: (t: string, art?: "ok" | "fehler") => void): Promise<Aktualisierung> {
+/** @param ruhig true = gerade keine Sitzung, keine Demo, kein Funk – dann darf sich die App sofort neu starten */
+export async function aktualisierungEinrichten(istApp: boolean, hinweis: (t: string, art?: "ok" | "fehler") => void,
+  ruhig: () => boolean = () => false): Promise<Aktualisierung> {
   const nichts: Aktualisierung = { vorDemSchliessen: async () => false };
   if (!istApp) return nichts;
   const { check } = await import("@tauri-apps/plugin-updater");
@@ -40,6 +42,8 @@ export async function aktualisierungEinrichten(istApp: boolean, hinweis: (t: str
   let bereit: Update | null = null;
   let sucht = false;
   let zuletzt = 0;
+  const start = Date.now();
+  let gleichUhr = 0;
 
   const installieren = async () => {
     if (!bereit) return false;
@@ -84,7 +88,21 @@ export async function aktualisierungEinrichten(istApp: boolean, hinweis: (t: str
       stand.textContent = `Version ${version} · ${u.version.slice(0, 20)} bereit`;
       $("updText").textContent = `Neue Version ${u.version.slice(0, 20)} bereit`;
       $<HTMLButtonElement>("updKnopf").hidden = false;
-      hinweis(`Neue Version ${u.version.slice(0, 20)} ist geladen – „Jetzt neu starten“ links unten installiert sie.`, "ok");
+      // Ganz automatisch (Wunsch 27.11.): Kurz nach dem Start und ohne laufende Sitzung installiert sie sich gleich
+      // selbst (die App startet nach wenigen Sekunden neu); sonst beim Schließen oder auf Klick – nie mitten im Rennen.
+      if (Date.now() - start < 3 * 60_000 && ruhig()) {
+        let sek = 8;
+        $("updText").textContent = `Neue Version ${u.version.slice(0, 20)} – die App aktualisiert sich in ${sek} s`;
+        $<HTMLButtonElement>("updSpaeter").hidden = false;
+        gleichUhr = window.setInterval(() => {
+          sek--;
+          if (!ruhig()) { spaeter(); return; }
+          if (sek > 0) $("updText").textContent = `Neue Version ${u.version.slice(0, 20)} – die App aktualisiert sich in ${sek} s`;
+          else { window.clearInterval(gleichUhr); void installieren(); }
+        }, 1000);
+      } else {
+        hinweis(`Neue Version ${u.version.slice(0, 20)} ist geladen – sie installiert sich beim Schließen der App oder mit „Jetzt neu starten“.`, "ok");
+      }
     } catch (e) {
       $("updHinweis").hidden = !bereit;
       stand.textContent = `Version ${version} · Update-Prüfung fehlgeschlagen (${zeit()}): ${fehlerText(e)}`;
@@ -95,7 +113,13 @@ export async function aktualisierungEinrichten(istApp: boolean, hinweis: (t: str
     }
   };
 
-  $("updKnopf").addEventListener("click", () => void installieren());
+  const spaeter = () => {
+    window.clearInterval(gleichUhr);
+    $<HTMLButtonElement>("updSpaeter").hidden = true;
+    if (bereit) $("updText").textContent = `Neue Version ${bereit.version.slice(0, 20)} bereit – installiert sich beim Schließen`;
+  };
+  $("updKnopf").addEventListener("click", () => { window.clearInterval(gleichUhr); void installieren(); });
+  $("updSpaeter").addEventListener("click", spaeter);
   $("updSuchen").addEventListener("click", () => void suchen(true));
   window.setTimeout(() => void suchen(false), ERSTE_SUCHE_MS);
   window.setInterval(() => void suchen(false), ALLE_MS);

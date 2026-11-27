@@ -81,6 +81,7 @@
       <div class="update-hinweis" id="updHinweis" role="status" hidden>
         <span id="updText">Neue Version bereit</span>
         <button class="knopf" id="updKnopf" type="button" title="Die App schließt sich kurz, installiert die neue Version und startet neu">Jetzt neu starten</button>
+        <button class="link-knopf" id="updSpaeter" type="button" hidden>Später</button>
       </div>
       <div class="verbindung">
         <span class="led" id="led" aria-hidden="true"></span>
@@ -169,17 +170,54 @@
         <span class="spotter-seite links" id="spotterLinks">◀ Auto links</span>
         <span class="spotter-seite rechts" id="spotterRechts">Auto rechts ▶</span>
       </div>
-      <div class="raster">
-        <div class="kachel gross"><span class="titel">Tempo</span><strong id="lTempo">–</strong><small>km/h</small></div>
-        <div class="kachel gross"><span class="titel">Gang</span><strong id="lGang">–</strong><div class="balken drehzahl"><i id="lDrehzahl"></i></div><small id="lDrehzahlText">U/min</small></div>
-        <div class="kachel gross delta"><span class="titel">Delta zur Besten</span><strong id="lDelta">–</strong><small id="lDeltaInfo">Noch keine gültige Runde</small></div>
-        <div class="kachel"><span class="titel">Pedale</span>
+      <!-- Ohne Simulation: Startkarte statt lauter Striche (Wunsch 27.11.: Telemetrie im Niveau der Webseite) -->
+      <div class="karte live-warten" id="lWarten">
+        <div class="live-warten-text">
+          <span class="live-warten-marke">Live-Telemetrie</span>
+          <h2 class="live-warten-titel">Bereit, wenn du es bist</h2>
+          <p>Starte iRacing und fahr auf die Strecke – die App verbindet sich von selbst. Tempo, Delta, Spotter und dein Renningenieur laufen dann automatisch.</p>
+        </div>
+        <ol class="live-schritte">
+          <li><b>1</b><span>iRacing starten</span></li>
+          <li><b>2</b><span>Auf die Strecke fahren</span></li>
+          <li><b>3</b><span>Losfahren – der Rest läuft von selbst</span></li>
+        </ol>
+        <button class="knopf" type="button" id="lDemo">Mit der Demo ausprobieren</button>
+      </div>
+
+      <!-- Cockpit: die wichtigsten Werte groß -->
+      <div class="karte cockpit">
+        <div class="cockpit-tempo">
+          <span class="titel">Tempo</span>
+          <strong id="lTempo">–</strong>
+          <small>km/h</small>
+        </div>
+        <div class="cockpit-gang">
+          <span class="titel">Gang</span>
+          <div class="gang-ring"><strong id="lGang">–</strong></div>
+          <div class="balken drehzahl"><i id="lDrehzahl"></i></div>
+          <small id="lDrehzahlText">U/min</small>
+        </div>
+        <div class="cockpit-delta">
+          <span class="titel">Delta zur Besten</span>
+          <strong id="lDelta">–</strong>
+          <div class="delta-skala" aria-hidden="true"><i id="lDeltaBalken"></i><span class="delta-null"></span></div>
+          <small id="lDeltaInfo">Noch keine gültige Runde</small>
+        </div>
+        <div class="cockpit-pedale">
+          <span class="titel">Pedale</span>
           <div class="pedale"><div class="pedal"><div class="balken senkrecht gas"><i id="lGas"></i></div><small>Gas</small></div><div class="pedal"><div class="balken senkrecht bremse"><i id="lBremse"></i></div><small>Bremse</small></div></div>
         </div>
-        <div class="kachel"><span class="titel">Runde</span><strong id="lRunde">–</strong><small id="lRundenzeit">&nbsp;</small></div>
-        <div class="kachel"><span class="titel">Letzte Runde</span><strong id="lLetzte">–</strong><small id="lBeste">&nbsp;</small></div>
-        <div class="kachel"><span class="titel">Sprit</span><strong id="lSprit">–</strong><small id="lSpritInfo">&nbsp;</small></div>
       </div>
+
+      <!-- Werte-Reihe -->
+      <div class="werte-reihe">
+        <div class="wert"><span class="titel">Runde</span><strong id="lRunde">–</strong><small id="lRundenzeit">&nbsp;</small></div>
+        <div class="wert"><span class="titel">Letzte Runde</span><strong id="lLetzte">–</strong><small id="lBeste">&nbsp;</small></div>
+        <div class="wert"><span class="titel">Sprit</span><strong id="lSprit">–</strong><small id="lSpritInfo">&nbsp;</small></div>
+        <div class="wert"><span class="titel">Position</span><strong id="lPlatz">–</strong><small id="lPlatzInfo">im Rennen</small></div>
+      </div>
+
       <div class="zweispaltig">
         <div class="karte">
           <h2>Die letzten 10 Sekunden <small><span class="punkt weiss"></span>Tempo <span class="punkt gruen"></span>Gas <span class="punkt rot"></span>Bremse</small></h2>
@@ -192,8 +230,13 @@
           <label class="schalter"><input type="checkbox" id="spiegeln"> Karte spiegeln</label>
         </div>
       </div>
-      <div class="karte funk">
-        <h2>Nach der Runde <small id="lFunkQuelle">Kurz gesagt</small></h2>
+
+      <!-- Funk: der letzte Spruch des Renningenieurs -->
+      <div class="karte funk funk-live">
+        <div class="funk-kopf">
+          <span class="funk-symbol" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 14v-2a8 8 0 0 1 16 0v2M4 14a2 2 0 0 0 2 2h1v-5H6a2 2 0 0 0-2 2zm16 0a2 2 0 0 1-2 2h-1v-5h1a2 2 0 0 1 2 2zM17 16v1a3 3 0 0 1-3 3h-2"/></svg></span>
+          <h2>Funk <small id="lFunkQuelle">Kurz gesagt</small></h2>
+        </div>
         <p id="lFunkText">Fahr eine Runde – danach sage ich dir, wo du Zeit liegen lässt.</p>
         <p class="hinweis">Vorlesen, Stimme, Lautstärke und Spotter stellst du im <button type="button" class="link-knopf" data-gehe="funkEinstellungen">Renningenieur</button> ein.</p>
       </div>

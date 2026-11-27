@@ -8,7 +8,7 @@ import { DemoQuelle } from "./demo.ts";
 import { Diagramme, verlaufZeichnen, type Plot } from "./diagramm.ts";
 import type { Feld, Probe, Sitzung, Status } from "./typen.ts";
 import { angemeldet, beiKontoWechsel, hinweis, kontoStarten } from "./konto-ansicht.ts";
-import { aufnahmeAbspielen, beiFehlenderStimme, funkLaden, funkSpeichern, sprechen, spotterSprechen, stimmenFuer } from "./funk.ts";
+import { aufnahmeAbspielen, beiFehlenderStimme, funkBeschaeftigt, funkLaden, funkSpeichern, sprechen, spotterSprechen, stimmenFuer } from "./funk.ts";
 import { absicht, ansage, mitPunkt, nichtVerstanden, nochDran, zahlIn } from "./ansagen.ts";
 import { spracheName, spracheVonText } from "./sprachen.ts";
 import { kiFragen, kiVerfuegbar, merkenSpeichern, persoenlichkeitLaden, type Persoenlichkeit } from "./ki.ts";
@@ -156,6 +156,7 @@ for (const b of document.querySelectorAll<HTMLButtonElement>("[data-reiter]")) b
     document.getElementById(b.dataset.anker)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 });
+$("lDemo").addEventListener("click", () => $("demoKnopf").click());
 // Verweise wie „im Renningenieur einstellen“: Bereich öffnen und zur Karte scrollen
 for (const b of document.querySelectorAll<HTMLButtonElement>("[data-gehe]")) b.addEventListener("click", () => {
   reiterZeigen("chat");
@@ -201,6 +202,10 @@ function statusZeigen() {
     led.className = "led aus";
     text.textContent = "Browser-Vorschau";
   }
+  // Ohne Simulation und ohne Demo: Startkarte statt lauter Striche
+  const leer = !demo.laeuft && !status?.verbunden && !zaehler.runden.length;
+  $("lWarten").hidden = !leer;
+  document.querySelector<HTMLElement>('[data-seite="live"]')?.classList.toggle("wartet", leer);
   const s = sitzung;
   $("sitzungText").textContent = s ? [s.strecke, s.streckenlaengeM ? meterText(s.streckenlaengeM) : null, s.fahrzeug, s.sitzungsart].filter(Boolean).join(" · ") : "";
 }
@@ -883,6 +888,17 @@ function live() {
   }
   deltaEl.textContent = d == null ? "–" : sekunden(d).replace(/(\d),(\d{2})\d/, "$1,$2");
   deltaEl.className = d == null ? "" : d > 0.005 ? "langsamer" : d < -0.005 ? "schneller" : "";
+  // Delta-Balken: Mitte = gleich schnell, volle Breite = 1 Sekunde
+  const anteil = d == null ? 0 : Math.max(-1, Math.min(1, d));
+  const balken = $("lDeltaBalken");
+  balken.style.width = `${Math.abs(anteil) * 50}%`;
+  balken.style.left = `${anteil < 0 ? 50 - Math.abs(anteil) * 50 : 50}%`;
+  balken.className = deltaEl.className;
+  // Position im Feld (nur im Rennen mit anderen Autos)
+  const platz = beobachter.platz;
+  const feld = sitzung?.fahrer?.length ?? 0;
+  $("lPlatz").textContent = platz != null ? `P${platz}` : "–";
+  $("lPlatzInfo").textContent = platz != null ? (feld > 1 ? `von ${feld}` : "im Feld") : "nur im Rennen";
   $("lDeltaInfo").textContent = !beste ? "Noch keine gültige Runde" : l?.grund ? `Diese Runde zählt nicht: ${l.grund}` : "Plus = langsamer als deine Bestzeit";
 
   const v = verbrauchProRunde(zaehler.runden);
@@ -1464,7 +1480,7 @@ $("dsZu").addEventListener("click", () => $<HTMLDialogElement>("dsDialog").close
 funkEinrichten();
 void webEinrichten(istApp);
 // Automatische Updates (signiert, von GitHub); ein bereitliegendes Update installiert sich beim Schließen
-const aktualisierung = aktualisierungEinrichten(istApp, hinweis).catch(() => null);
+const aktualisierung = aktualisierungEinrichten(istApp, hinweis, () => !status?.verbunden && !demo.laeuft && !funkBeschaeftigt()).catch(() => null);
 void fensterEinrichten(istApp, async () => (await aktualisierung)?.vorDemSchliessen() ?? false).catch(() => { /* ohne eigene Fensterleiste weiter */ });
 // Profilbild oben neben dem Konto, Suche der Webseite über die Lupe oder Strg+K (ein Kopf für alles, Wunsch 27.11.)
 beiKontoWechsel(() => void profilbildZeigen().catch(() => undefined));
