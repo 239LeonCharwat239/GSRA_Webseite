@@ -9,12 +9,12 @@ import { Diagramme, verlaufZeichnen, type Plot } from "./diagramm.ts";
 import type { Feld, Probe, Sitzung, Status } from "./typen.ts";
 import { angemeldet, beiKontoWechsel, hinweis, kontoStarten } from "./konto-ansicht.ts";
 import { aufnahmeAbspielen, beiFehlenderStimme, funkLaden, funkSpeichern, sprechen, spotterSprechen, stimmenFuer } from "./funk.ts";
-import { absicht, ansage, mitPunkt, zahlIn } from "./ansagen.ts";
+import { absicht, ansage, mitPunkt, nichtVerstanden, nochDran, zahlIn } from "./ansagen.ts";
 import { spracheName, spracheVonText } from "./sprachen.ts";
 import { kiFragen, kiVerfuegbar, merkenSpeichern, persoenlichkeitLaden, type Persoenlichkeit } from "./ki.ts";
 import { messwerteKodieren } from "../../src/stint-messwerte.ts";
 import { bremspunkte, sparAuswerten, sparBasis, sparText, sparTipp, type Bremspunkt, type SparAuswertung, type SparBasis } from "./sparen.ts";
-import { Chat, pruefSatz } from "./chat.ts";
+import { Chat, pruefSatz, pruefSaetze } from "./chat.ts";
 import { Spotter, spotterSatz } from "./spotter.ts";
 import { abstandSatz, type Gegner } from "./vorlagen.ts";
 import { Feldrunden, deltaZu, verlustIn } from "./feldreferenz.ts";
@@ -152,6 +152,8 @@ function reiterZeigen(name: string) {
   if (name === "bericht") berichtZeigen();
   if (name === "live") live();
   if (name === "messenger") messenger.oeffnen();
+  // Spracherkennung schon laden, wenn der Renningenieur geöffnet wird – dann geht die erste Frage ohne Ladezeit
+  if (name === "chat") void sprechtaste.then((s) => s?.vorbereiten());
 }
 /** Eine GSRA-Seite (Messenger, Setups …) direkt in der App */
 function webBereichZeigen(seite: string, anker?: string) {
@@ -485,7 +487,7 @@ function funkEinrichten() {
   if ("speechSynthesis" in window) window.speechSynthesis.addEventListener("voiceschanged", stimmenFuellen);
   $("fProbe").addEventListener("click", () => {
     const code = ansageSprache();
-    void sprechen(ansage(code, "probe", { name: persoenlichkeit?.name ?? "Kim" }), { ...funkE, vorlesen: true }, { sprache: code, stimmlage: persoenlichkeit?.stimme ?? "ruhig" });
+    void sprechen(ansage(code, "probe", { name: persoenlichkeit?.name ?? "Kim" }), { ...funkE, vorlesen: true }, { sprache: code, stimmlage: persoenlichkeit?.stimme ?? "ruhig", sofort: true });
   });
   $<HTMLInputElement>("fAufnahme").addEventListener("change", async (e) => {
     const feld = e.target as HTMLInputElement;
@@ -823,6 +825,8 @@ function chatEinrichten() {
     name: () => persoenlichkeit?.name ?? "Renningenieur",
     lokal: lokaleAntwort,
     sprache: (frage) => ansageSprache(frage),
+    // „Moment, ich schau nach“ nur, wenn die Antwort auch gesprochen wird (Frage per Sprechtaste oder Vorlesen an)
+    warten: (text) => { if (funkE.vorlesen || Date.now() - sprachfrageZeit < 120_000) void vorlesen(text); },
     vorlesen: (text) => {
       const perSprache = Date.now() - sprachfrageZeit < 120_000;
       if (funkE.vorlesen || perSprache) void vorlesen(text);
@@ -1493,10 +1497,17 @@ const sprechtaste = sprechtasteEinrichten(istApp, (text) => {
   sprachfrageZeit = Date.now();
   if (aktiverReiter !== "chat") hinweis(`Du: ${text.slice(0, 160)}`, "ok");
   void chat?.senden(text);
-}, hinweis, () => persoenlichkeit?.name ?? "Kim").catch(() => null);
+}, hinweis, () => persoenlichkeit?.name ?? "Kim", () => {
+  // Nichts verstanden: sofort ein fertiger Satz in der Sprache des Fahrers, statt still zu bleiben
+  const code = ansageSprache();
+  const satz = nichtVerstanden(code);
+  if (aktiverReiter !== "chat") hinweis(satz, "fehler");
+  void sprechen(satz, { ...funkE, vorlesen: true }, { sprache: code, stimmlage: persoenlichkeit?.stimme ?? "ruhig" });
+}).catch(() => null);
 
 // Eigene Stimme (geklont aus einer Aufnahme mit Zustimmung, nur auf dem PC)
-void eigeneStimmeEinrichten(istApp, hinweis, () => funkE, () => persoenlichkeit?.name ?? "Kim").catch(() => undefined);
+void eigeneStimmeEinrichten(istApp, hinweis, () => funkE, () => persoenlichkeit?.name ?? "Kim",
+  () => [...pruefSaetze(persoenlichkeit?.art ?? "kumpel"), nichtVerstanden("de"), nochDran("de")]).catch(() => undefined);
 
 // Renningenieur einstellen (unten im Bereich Renningenieur)
 const reEinstellungen = reEinstellungenEinrichten({
@@ -1511,7 +1522,7 @@ const reEinstellungen = reEinstellungenEinrichten({
   probe: (e) => {
     // Probefunk in der gewählten Sprache (Fund 26.11.: bisher deutscher Satz, z. B. von der englischen Stimme gelesen)
     const code = e.sprache === "auto" ? (frageSprache ?? "de") : e.sprache;
-    void sprechen(ansage(code, "probe", { name: e.name || "Kim" }), { ...funkE, vorlesen: true }, { sprache: code, stimmlage: e.stimme as "ruhig" });
+    void sprechen(ansage(code, "probe", { name: e.name || "Kim" }), { ...funkE, vorlesen: true }, { sprache: code, stimmlage: e.stimme as "ruhig", sofort: true });
   },
 });
 

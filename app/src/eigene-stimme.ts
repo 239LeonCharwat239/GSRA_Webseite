@@ -2,7 +2,7 @@
 // nur mit bestätigter Zustimmung, nur auf dem PC. Hier: Bedienung (Modell laden, Aufnahme wählen, an/aus, Probe).
 // Die Aufnahme wird im Browser-Teil nur gelesen, auf eine Spur gemischt, auf 24 kHz gebracht und als 16-Bit-Werte an
 // die App gegeben; gespeichert wird sie nur im Datenordner der App.
-import { eigeneStimmeSetzen, type FunkEinstellungen, sprechen } from "./funk.ts";
+import { eigeneStimmeSetzen, type FunkEinstellungen, sprechen, vorwaermen } from "./funk.ts";
 
 type Aufruf = <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
 interface Stand { installiert: boolean; laedt: boolean; groesse_mb: number; fehlt_mb: number; referenz_s: number | null }
@@ -44,7 +44,7 @@ export async function aufnahmeVorbereiten(datei: File): Promise<{ ton: number[];
 }
 
 export async function eigeneStimmeEinrichten(istApp: boolean, hinweis: (t: string, art?: "ok" | "fehler") => void,
-  funk: () => FunkEinstellungen, name: () => string): Promise<void> {
+  funk: () => FunkEinstellungen, name: () => string, vorab: () => string[] = () => []): Promise<void> {
   const bereich = $("esBereich");
   if (!istApp) {
     bereich.hidden = true;
@@ -59,8 +59,13 @@ export async function eigeneStimmeEinrichten(istApp: boolean, hinweis: (t: strin
   let stand = await aufrufen<Stand>("stimme_status");
   try { an.checked = localStorage.getItem(SPEICHER) === "1"; } catch { /* egal */ }
 
+  // Nur bei echter Änderung neu setzen (sonst ginge der Speicher fertiger Sätze verloren)
+  let gesetzt = "";
   const anwenden = () => {
     const aktiv = an.checked && stand.installiert && stand.referenz_s != null;
+    const schluessel = aktiv ? `an|${stand.referenz_s}` : "aus";
+    if (schluessel === gesetzt) return;
+    gesetzt = schluessel;
     eigeneStimmeSetzen(aktiv ? {
       sprache: "de",
       erzeugen: async (text) => {
@@ -68,8 +73,12 @@ export async function eigeneStimmeEinrichten(istApp: boolean, hinweis: (t: strin
         const rate = new DataView(roh).getInt32(0, true);
         return { rate, ton: new Float32Array(roh, 4, (roh.byteLength - 4) / 4) };
       },
+      abbrechen: () => { void aufrufen("stimme_abbrechen").catch(() => undefined); },
     } : null);
-    if (aktiv) void aufrufen("stimme_vorbereiten");
+    if (!aktiv) return;
+    // Modell laden und die häufigsten kurzen Sätze vorab erzeugen („Moment …“, „Nicht verstanden …“) – kommen dann sofort
+    void aufrufen("stimme_vorbereiten");
+    window.setTimeout(() => void vorwaermen(vorab()), 4000);
   };
   const zeigen = () => {
     const knopf = $<HTMLButtonElement>("esInstallieren");
@@ -141,7 +150,7 @@ export async function eigeneStimmeEinrichten(istApp: boolean, hinweis: (t: strin
   $("esProbe").addEventListener("click", () => {
     $("esStand").textContent = "Die Stimme spricht gleich …";
     void sprechen(`Funkcheck. Hier ist ${name()}, ich höre dich laut und deutlich. Sprit reicht noch für 7 Runden, wir holen dich am Ende der 23. Runde rein.`,
-      { ...funk(), vorlesen: true }, { sprache: "de" }).finally(zeigen);
+      { ...funk(), vorlesen: true }, { sprache: "de", sofort: true }).finally(zeigen);
   });
   $("esLoeschen").addEventListener("click", async () => {
     try {

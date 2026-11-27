@@ -11,10 +11,10 @@
 //! * Modell nur nach Klick, feste Adresse mit fester Version, Größe und SHA-256 geprüft (beim Laden und vor der Nutzung).
 //! * Grenzen: Aufnahme 3–20 s, Text höchstens 600 Zeichen; Nullzeichen werden entfernt (sonst Absturz in der C-Schnittstelle).
 
-use crate::sprache::{laden, pruefsumme, vollstaendig, zu_leise, Datei, Fortschritt};
+use crate::sprache::{laden, modell_pruefen, threads_fuer_sprache, vollstaendig, zu_leise, Datei, Fortschritt};
 use std::fs;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -35,12 +35,19 @@ const EREIGNIS: &str = "gsra://stimme-laden";
 pub const MIN_REFERENZ_S: f32 = 3.0;
 pub const MAX_REFERENZ_S: f32 = 20.0;
 pub const MAX_TEXT: usize = 600;
+/// Davon genutzt: höchstens so viele Sekunden Sprache (ohne Stille am Anfang und Ende) – die Aufnahme wird bei jedem
+/// Satz mitverarbeitet, längere Aufnahmen machen jeden Satz langsamer, aber kaum besser
+pub const NUTZ_S: f32 = 10.0;
 
 #[derive(Default)]
 pub struct Stimme {
     tts: Mutex<Option<Arc<sherpa_onnx::OfflineTts>>>,
     referenz: Mutex<Option<Arc<(Vec<f32>, i32)>>>,
     laedt: AtomicBool,
+    /// immer nur ein Satz gleichzeitig (mehrere gleichzeitig teilen sich den Prozessor und werden alle langsam)
+    erzeugung: Mutex<()>,
+    /// erhöht sich bei „abbrechen“ – laufende und wartende Sätze hören dann auf
+    abbruch: Arc<AtomicU64>,
 }
 
 #[derive(serde::Serialize)]
@@ -85,6 +92,19 @@ pub fn referenz_lesen(b: &[u8]) -> Option<(Vec<f32>, i32)> {
     let ton: Vec<f32> = b[4..].chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
     let s = ton.len() as f32 / rate as f32;
     (MIN_REFERENZ_S..=MAX_REFERENZ_S + 0.5).contains(&s).then_some((ton, rate))
+}
+
+/// Stille am Anfang und Ende weg (Abschnitte von 20 ms unter etwa −40 dBFS), höchstens NUTZ_S Sekunden
+pub fn referenz_kuerzen(ton: &[f32], rate: u32) -> Vec<f32> {
+    let fenster = (rate as usize / 50).max(1);
+    let laut = |s: &[f32]| (s.iter().map(|x| x * x).sum::<f32>() / s.len().max(1) as f32).sqrt() > 0.01;
+    let stuecke: Vec<&[f32]> = ton.chunks(fenster).collect();
+    let anfang = stuecke.iter().position(|s| laut(s)).unwrap_or(0);
+    let ende = stuecke.iter().rposition(|s| laut(s)).map(|i| i + 1).unwrap_or(stuecke.len());
+    let von = (anfang * fenster).saturating_sub(fenster * 5); // 100 ms Luft davor
+    let bis = (ende * fenster + fenster * 5).min(ton.len());
+    let max = (NUTZ_S * rate as f32) as usize;
+    ton[von..bis.max(von)].iter().take(max).copied().collect()
 }
 
 /// Prüft die Aufnahme: Abtastrate, Länge, nicht stumm; Werte auf −1…1 begrenzt
@@ -162,7 +182,10 @@ pub fn stimme_referenz_setzen(app: AppHandle, s: State<'_, Stimme>, ton: Vec<i16
         return Err("Die Aufnahme ist zu lang – höchstens 20 Sekunden.".into());
     }
     let ton: Vec<f32> = ton.iter().map(|x| f32::from(*x) / 32_768.0).collect();
-    let sauber = referenz_pruefen(&ton, rate)?;
+    let sauber = referenz_kuerzen(&referenz_pruefen(&ton, rate)?, rate);
+    if (sauber.len() as f32) < MIN_REFERENZ_S * rate as f32 {
+        return Err("Auf der Aufnahme wird zu wenig gesprochen – nimm 5 bis 20 Sekunden, in denen nur diese Person spricht.".into());
+    }
     let datei = referenz_datei(&app)?;
     if let Some(o) = datei.parent() {
         fs::create_dir_all(o).map_err(|_| "Ordner für die Aufnahme lässt sich nicht anlegen.".to_string())?;
@@ -194,13 +217,9 @@ fn tts(app: &AppHandle) -> Result<Arc<sherpa_onnx::OfflineTts>, String> {
     if !installiert(&o) {
         return Err("Das Stimm-Modell ist noch nicht (vollständig) geladen.".into());
     }
-    for (name, _, sha, _) in DATEIEN {
-        if pruefsumme(&o.join(name))? != *sha {
-            return Err(format!("{name} ist beschädigt – bitte das Stimm-Modell neu laden."));
-        }
-    }
+    modell_pruefen(&o, DATEIEN, "bitte das Stimm-Modell neu laden.")?;
     let p = |n: &str| Some(o.join(n).to_string_lossy().into_owned());
-    let threads = std::thread::available_parallelism().map(|n| n.get().clamp(1, 4)).unwrap_or(2) as i32;
+    let threads = threads_fuer_sprache();
     let config = sherpa_onnx::OfflineTtsConfig {
         model: sherpa_onnx::OfflineTtsModelConfig {
             pocket: sherpa_onnx::OfflineTtsPocketModelConfig {
@@ -230,7 +249,8 @@ fn referenz(app: &AppHandle) -> Result<Arc<(Vec<f32>, i32)>, String> {
         return Ok(r.clone());
     }
     let b = fs::read(referenz_datei(app)?).map_err(|_| "Noch keine Aufnahme für die eigene Stimme gewählt.".to_string())?;
-    let r = Arc::new(referenz_lesen(&b).ok_or_else(|| "Die gespeicherte Aufnahme ist beschädigt – bitte neu wählen.".to_string())?);
+    let (ton, rate) = referenz_lesen(&b).ok_or_else(|| "Die gespeicherte Aufnahme ist beschädigt – bitte neu wählen.".to_string())?;
+    let r = Arc::new((referenz_kuerzen(&ton, rate as u32), rate));
     *platz = Some(r.clone());
     Ok(r)
 }
@@ -240,19 +260,38 @@ fn referenz(app: &AppHandle) -> Result<Arc<(Vec<f32>, i32)>, String> {
 #[tauri::command]
 pub async fn stimme_sprechen(app: AppHandle, text: String) -> Result<tauri::ipc::Response, String> {
     let text = text_vorbereiten(&text).ok_or_else(|| "Kein Text.".to_string())?;
+    let abbruch = app.state::<Stimme>().abbruch.clone();
+    let nr = abbruch.load(Ordering::SeqCst);
     tauri::async_runtime::spawn_blocking(move || {
         let tts = tts(&app)?;
         let r = referenz(&app)?;
+        let s = app.state::<Stimme>();
+        let _einer = s.erzeugung.lock().map_err(|_| "Interner Fehler.".to_string())?;
+        if abbruch.load(Ordering::SeqCst) != nr {
+            return Err("abgebrochen".to_string());
+        }
         let gc = sherpa_onnx::GenerationConfig {
             reference_audio: Some(r.0.clone()),
             reference_sample_rate: r.1,
             ..Default::default()
         };
-        let audio = tts.generate_with_config(&text, &gc, None::<fn(&[f32], f32) -> bool>).ok_or_else(|| "Die Stimme konnte den Satz nicht sprechen.".to_string())?;
+        // Während der Erzeugung nachsehen, ob der Spruch noch gebraucht wird (sonst sofort aufhören)
+        let pruef = abbruch.clone();
+        let weiter = move |_: &[f32], _: f32| pruef.load(Ordering::SeqCst) == nr;
+        let audio = tts.generate_with_config(&text, &gc, Some(weiter)).ok_or_else(|| "Die Stimme konnte den Satz nicht sprechen.".to_string())?;
+        if abbruch.load(Ordering::SeqCst) != nr {
+            return Err("abgebrochen".to_string()); // halbe Sätze nie zurückgeben (sie landeten sonst im Speicher)
+        }
         Ok(tauri::ipc::Response::new(referenz_kodieren(audio.samples(), audio.sample_rate())))
     })
     .await
     .map_err(|_| "Interner Fehler.".to_string())?
+}
+
+/// Laufende und wartende Sätze abbrechen (der Funk wurde gestoppt oder ein neuer Spruch hat Vorrang)
+#[tauri::command]
+pub fn stimme_abbrechen(s: State<'_, Stimme>) {
+    s.abbruch.fetch_add(1, Ordering::SeqCst);
 }
 
 /// Modell im Hintergrund laden (erster Satz kommt dann schneller)
@@ -295,6 +334,20 @@ mod tests {
         let s = referenz_pruefen(&wild, 16_000).unwrap();
         assert_eq!(s[10], 0.0);
         assert_eq!(s[11], 1.0);
+    }
+
+    #[test]
+    fn aufnahme_kuerzen() {
+        let rate = 16_000u32;
+        let mut ton = vec![0.0f32; rate as usize * 2]; // 2 s Stille
+        ton.extend((0..rate as usize * 15).map(|i| (i as f32 * 0.05).sin() * 0.3)); // 15 s Sprache
+        ton.extend(vec![0.0f32; rate as usize * 3]); // 3 s Stille
+        let k = referenz_kuerzen(&ton, rate);
+        assert!((k.len() as f32 / rate as f32 - NUTZ_S).abs() < 0.01, "auf {NUTZ_S} s begrenzt");
+        assert!(k[..(rate as usize / 5)].iter().any(|x| x.abs() > 0.1), "Stille am Anfang entfernt");
+        let kurz: Vec<f32> = (0..rate as usize * 4).map(|i| (i as f32 * 0.05).sin() * 0.3).collect();
+        assert_eq!(referenz_kuerzen(&kurz, rate).len(), kurz.len(), "kurze Aufnahme bleibt");
+        assert!(referenz_kuerzen(&[0.0; 1000], rate).len() <= 1000);
     }
 
     #[test]

@@ -50,7 +50,8 @@ fn main() {
             stimme::stimme_referenz_setzen,
             stimme::stimme_referenz_loeschen,
             stimme::stimme_sprechen,
-            stimme::stimme_vorbereiten
+            stimme::stimme_vorbereiten,
+            stimme::stimme_abbrechen
         ])
         .setup(|app| {
             live::starten(app.handle().clone());

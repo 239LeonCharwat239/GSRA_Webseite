@@ -19,7 +19,7 @@ import { namenErsetzen } from "../src/datenschutz.ts";
 import { spracheVonText, SPRECH_SPRACHEN, LAENDERCODE } from "../src/sprachen.ts";
 import { dauerText, istVideo, pfadVon, uploadPfad, verlaufVerdichten, vorschauPfad } from "../src/chat-medien.ts";
 import { aufraeumen, entpacken, packen, streckenKarten, BESTE_JE_AUTO, LETZTE_JE_AUTO, type ArchivRunde } from "../src/rundenarchiv.ts";
-import { ANSAGE_SPRACHEN, absicht, ansage, ordnungWort, pruefenIn, zahlenAusschreiben, zahlIn, zahlWort, zumSprechen } from "../src/ansagen.ts";
+import { ANSAGE_SPRACHEN, absicht, ansage, FERTIGE_SAETZE, nichtVerstanden, ordnungWort, pruefenIn, zahlenAusschreiben, zahlIn, zahlWort, zumSprechen } from "../src/ansagen.ts";
 
 function fahren(fahrt: DemoFahrt, runden: number, z = new Rundenzaehler()) {
   const fertige = [];
@@ -587,4 +587,29 @@ test("Rundenarchiv: Messpunkte verdichten, je Auto 5 schnellste + 20 letzte beha
   const monza = karten.find((k) => k.strecke === "Monza")!;
   assert.equal(monza.beste, Math.min(...bleibt.filter((r) => r.gueltig && r.strecke === "Monza").map((r) => r.zeit)));
   assert.deepEqual(monza.autos.sort(), ["BMW M4 GT3", "Porsche 911 GT3 R"]);
+});
+test("Funk: Sätze teilen (erster Satz kommt sofort), „23. Runde“ bleibt zusammen, fertige Sätze in allen Sprachen", async () => {
+  // funk.ts braucht ein Fenster – hier genügt ein kleiner Ersatz
+  (globalThis as unknown as { window: object }).window ??= {};
+  const { saetze, stueckeFuerEigene } = await import("../src/funk.ts");
+  // eigene Stimme: sehr kurze Sätze hängen am nächsten, fertige (gespeicherte) bleiben einzeln
+  assert.deepEqual(stueckeFuerEigene(["Funkcheck.", "Hier ist Lars, ich höre dich.", "Box."]), ["Funkcheck. Hier ist Lars, ich höre dich. Box."]);
+  assert.deepEqual(stueckeFuerEigene(["Moment.", "Sprit reicht noch für sieben Runden."], (s) => s === "Moment."), ["Moment.", "Sprit reicht noch für sieben Runden."]);
+  assert.deepEqual(stueckeFuerEigene(["Ein ziemlich langer erster Satz mit Inhalt.", "Kurz."]), ["Ein ziemlich langer erster Satz mit Inhalt. Kurz."]);
+  assert.deepEqual(saetze("Funkcheck. Hier ist Lars, ich höre dich. Wir holen dich am Ende der 23. Runde rein."),
+    ["Funkcheck.", "Hier ist Lars, ich höre dich.", "Wir holen dich am Ende der 23. Runde rein."]);
+  assert.deepEqual(saetze("Sprit reicht? Ja! Gut…  Weiter"), ["Sprit reicht?", "Ja!", "Gut…", "Weiter"]);
+  assert.deepEqual(saetze("Bestzeit 1:27,120 – 0,3 s schneller."), ["Bestzeit 1:27,120 – 0,3 s schneller."]);
+  const lang = `${"Die Abstände nach vorne und hinten bleiben gleich, ".repeat(3)}und der Sprit reicht bis ins Ziel, wenn du so weiterfährst.`;
+  const teile = saetze(lang);
+  assert.ok(teile.length >= 2 && teile.every((s) => s.length <= 160), teile.join(" | "));
+  assert.equal(teile.join(" ").replace(/\s+/g, " "), lang.replace(/\s+/g, " ").trim());
+  // „Nicht verstanden“, „Noch dran“ und „Wir prüfen“ für jede Sprache des Renningenieurs
+  for (const [name, liste] of Object.entries(FERTIGE_SAETZE)) {
+    const erwartet = name === "PRUEFEN" ? ANSAGE_SPRACHEN.filter((c) => c !== "de") : ANSAGE_SPRACHEN;
+    assert.deepEqual(Object.keys(liste).sort(), [...erwartet].sort(), name);
+  }
+  assert.match(nichtVerstanden("de"), /nicht verstanden/);
+  assert.match(nichtVerstanden("bg"), /не те разбрах/);
+  assert.equal(nichtVerstanden("xx"), nichtVerstanden("de"));
 });

@@ -540,6 +540,39 @@ const PRUEFEN: Record<string, string> = {
 };
 export const pruefenIn = (code: string): string | null => PRUEFEN[code] ?? null;
 
+/** Spracheingabe nicht verstanden (leer, unklar oder Signalwort ohne Frage) – fertig vorbereitet, kommt sofort */
+const NICHT_VERSTANDEN: Record<string, string> = {
+  de: "Das habe ich leider nicht verstanden. Sag es bitte noch einmal.", en: "Sorry, I didn't catch that. Say again, please.",
+  es: "Perdona, no te he entendido. Repítelo, por favor.", fr: "Désolé, je n'ai pas compris. Tu peux répéter ?",
+  it: "Scusa, non ho capito. Ripeti, per favore.", pt: "Desculpa, não percebi. Repete, por favor.",
+  nl: "Sorry, dat heb ik niet verstaan. Zeg het nog eens.", pl: "Przepraszam, nie zrozumiałem. Powtórz, proszę.",
+  ru: "Извини, не расслышал. Повтори, пожалуйста.", uk: "Вибач, не розчув. Повтори, будь ласка.",
+  sv: "Förlåt, det uppfattade jag inte. Säg det igen.", da: "Undskyld, det fangede jeg ikke. Sig det igen.",
+  fi: "Anteeksi, en saanut selvää. Sano uudelleen.", cs: "Promiň, nerozuměl jsem. Zopakuj to, prosím.",
+  sk: "Prepáč, nerozumel som. Zopakuj to, prosím.", sl: "Oprosti, nisem razumel. Ponovi, prosim.",
+  hr: "Oprosti, nisam razumio. Ponovi, molim te.", hu: "Bocsi, ezt nem értettem. Mondd még egyszer.",
+  ro: "Scuze, nu am înțeles. Repetă, te rog.", bg: "Извинявай, не те разбрах. Повтори, моля.",
+  el: "Συγγνώμη, δεν το κατάλαβα. Πες το ξανά.", et: "Vabandust, ma ei saanud aru. Ütle palun uuesti.",
+  lv: "Atvaino, es nesapratu. Atkārto, lūdzu.", lt: "Atsiprašau, nesupratau. Pakartok, prašau.",
+  mt: "Skużani, ma fhimtx. Erġa' għidha.", tr: "Kusura bakma, anlayamadım. Tekrar söyler misin?",
+  zh: "抱歉，我没听清。请再说一遍。", ja: "すみません、聞き取れませんでした。もう一度お願いします。",
+};
+/** Dauert die Antwort länger: „Gleich – ich bin noch dran.“ */
+const NOCH_DRAN: Record<string, string> = {
+  de: "Gleich, ich bin noch dran.", en: "Stand by, still on it.", es: "Un momento, sigo con ello.", fr: "Un instant, je suis dessus.",
+  it: "Un attimo, ci sto ancora lavorando.", pt: "Só um momento, ainda estou nisso.", nl: "Moment, ik ben er nog mee bezig.",
+  pl: "Chwila, jeszcze nad tym pracuję.", ru: "Секунду, ещё смотрю.", uk: "Секунду, ще дивлюся.", sv: "Strax, jag jobbar på det.",
+  da: "Et øjeblik, jeg er stadig i gang.", fi: "Hetki, olen vielä asian kimpussa.", cs: "Moment, ještě na tom pracuji.",
+  sk: "Moment, ešte na tom pracujem.", sl: "Trenutek, še delam na tem.", hr: "Trenutak, još radim na tome.",
+  hu: "Egy pillanat, még dolgozom rajta.", ro: "O clipă, încă lucrez la asta.", bg: "Момент, още проверявам.",
+  el: "Μια στιγμή, το ψάχνω ακόμα.", et: "Hetk, tegelen veel sellega.", lv: "Mirkli, vēl strādāju pie tā.",
+  lt: "Akimirką, dar tikrinu.", mt: "Mument, għadni fuqha.", tr: "Bir saniye, hâlâ bakıyorum.", zh: "稍等，我还在查。",
+  ja: "少々お待ちください、まだ確認中です。",
+};
+export const nichtVerstanden = (code: string) => NICHT_VERSTANDEN[code] ?? NICHT_VERSTANDEN.de;
+export const nochDran = (code: string) => NOCH_DRAN[code] ?? NOCH_DRAN.de;
+export const FERTIGE_SAETZE = { NICHT_VERSTANDEN, NOCH_DRAN, PRUEFEN };
+
 /** Fester Satz in der Sprache, Platzhalter {name} {wer} {s} … werden ersetzt */
 export function ansage(code: string, schluessel: Schluessel, werte: Record<string, string | number> = {}): string {
   return sprache(code).t[schluessel].replace(/\{(\w+)\}/g, (_, k: string) => String(werte[k] ?? ""));

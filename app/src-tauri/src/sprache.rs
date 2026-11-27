@@ -251,6 +251,35 @@ pub fn laden(app: &AppHandle, ordner: &Path, dateien: &[Datei], ereignis: &str) 
     Ok(())
 }
 
+/// Modelldateien prüfen – mit SHA-256 nur beim ersten Mal nach dem Laden (Fund 26.11.: allein der große
+/// Erkennungs-Teil brauchte bei jedem App-Start 1,5 s). Danach genügt ein Vermerk mit Größe und Änderungszeit jeder
+/// Datei; ändert sich eine Datei, wird wieder vollständig geprüft. (Wer Dateien im Benutzerordner unbemerkt austauschen
+/// kann, könnte auch die App selbst austauschen – der volle Hash bei jedem Start bringt dagegen nichts.)
+pub fn modell_pruefen(ordner: &Path, dateien: &[Datei], meldung: &str) -> Result<(), String> {
+    let stand = |name: &str| -> Option<String> {
+        let m = fs::metadata(ordner.join(name)).ok()?;
+        let zeit = m.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?.as_nanos();
+        Some(format!("{name} {} {zeit}", m.len()))
+    };
+    let soll: Option<Vec<String>> = dateien.iter().map(|d| stand(d.0).map(|s| format!("{s} {}", d.2))).collect();
+    let merker = ordner.join("geprueft.txt");
+    if let Some(soll) = &soll {
+        if fs::read_to_string(&merker).is_ok_and(|ist| ist == soll.join("\n")) {
+            return Ok(());
+        }
+    }
+    for (name, groesse, sha, _) in dateien {
+        if !vollstaendig(ordner, name, *groesse) || pruefsumme(&ordner.join(name))? != *sha {
+            let _ = fs::remove_file(&merker);
+            return Err(format!("{name} ist beschädigt – {meldung}"));
+        }
+    }
+    if let Some(soll) = soll {
+        let _ = fs::write(&merker, soll.join("\n"));
+    }
+    Ok(())
+}
+
 pub fn pruefsumme(pfad: &Path) -> Result<String, String> {
     let mut datei = fs::File::open(pfad).map_err(|_| "Datei des Sprachmodells fehlt.".to_string())?;
     let mut hash = Sha256::new();
@@ -281,11 +310,7 @@ fn erkenner(app: &AppHandle) -> Result<Arc<sherpa_onnx::OfflineRecognizer>, Stri
         return Ok(e.clone());
     }
     let ordner = geprueft(app)?;
-    for (name, _, sha, _) in DATEIEN {
-        if pruefsumme(&ordner.join(name))? != *sha {
-            return Err(format!("{name} ist beschädigt – bitte die Spracherkennung neu installieren."));
-        }
-    }
+    modell_pruefen(&ordner, DATEIEN, "bitte die Spracherkennung neu installieren.")?;
     let e = Arc::new(sherpa_onnx::OfflineRecognizer::create(&erkenner_config(&ordner)).ok_or_else(|| "Die Spracherkennung ließ sich nicht starten.".to_string())?);
     *platz = Some(e.clone());
     Ok(e)
@@ -301,9 +326,15 @@ fn erkenner_config(ordner: &Path) -> sherpa_onnx::OfflineRecognizerConfig {
     };
     c.model_config.tokens = pfad("tokens.txt");
     c.model_config.model_type = Some("nemo_transducer".into());
-    c.model_config.num_threads = 2; // die Simulation braucht den Rest des Prozessors
+    c.model_config.num_threads = threads_fuer_sprache(); // die Simulation braucht den Rest des Prozessors
     c.model_config.provider = Some("cpu".into());
     c
+}
+
+/// Rechen-Threads für Spracherkennung und eigene Stimme: die Hälfte der Kerne, mindestens 2, höchstens 4 –
+/// so bleibt der Rest für die Simulation (iRacing braucht vor allem einen schnellen Kern)
+pub fn threads_fuer_sprache() -> i32 {
+    std::thread::available_parallelism().map(|n| (n.get() / 2).clamp(2, 4)).unwrap_or(2) as i32
 }
 
 fn vad_config(ordner: &Path, pause: f32) -> sherpa_onnx::VadModelConfig {
@@ -404,7 +435,8 @@ pub fn druecken(app: &AppHandle, mit_vad: bool) -> Result<(), String> {
 
 /// Antippen: beobachtet die laufende Aufnahme und beendet sie nach der ersten Sprechpause
 fn ende_erkennen(app: &AppHandle, nr: u64, ton: Arc<Mutex<Vec<f32>>>, rate: u32) {
-    let Ok(v) = vad(app, 0.9) else { return };
+    // 0,8 s Pause = Ende der Frage (vorher 0,9 s – jede Zehntelsekunde zählt bis zur Antwort)
+    let Ok(v) = vad(app, 0.8) else { return };
     let umrechner = (rate != 16_000).then(|| sherpa_onnx::LinearResampler::create(rate as i32, 16_000)).flatten();
     let start = Instant::now();
     let mut gelesen = 0usize;

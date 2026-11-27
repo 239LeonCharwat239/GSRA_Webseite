@@ -5,7 +5,7 @@
 //  * Ohne Anmeldung oder ohne Verbindung antwortet er auf einfache Fakten aus den Messwerten, ohne KI.
 //  * Alles per textContent; der Verlauf bleibt nur in dieser Sitzung der App (wird nicht gespeichert).
 import { kiFragen, kiVerfuegbar } from "./ki.ts";
-import { ansage, pruefenIn } from "./ansagen.ts";
+import { ansage, nochDran, pruefenIn } from "./ansagen.ts";
 
 export type ChatBeitrag = { wer: "fahrer" | "ingenieur"; text: string };
 export type ChatUmgebung = {
@@ -18,6 +18,8 @@ export type ChatUmgebung = {
   /** Sprache der Antwort (eingestellte Sprache; bei „Automatisch“ die Sprache der Frage) */
   sprache: (frage?: string) => string;
   vorlesen: (text: string) => void;
+  /** Die Antwort dauert: kurzer Zwischenspruch („Moment, ich schau nach.“) – nur sprechen, nicht in den Verlauf */
+  warten?: (text: string) => void;
   /** „Ich möchte Sprit sparen“: Spar-Modus einschalten; gibt eine kurze Rückmeldung (oder null) */
   sparenStarten: () => string | null;
 };
@@ -31,16 +33,22 @@ export function istSchwierig(frage: string): boolean {
 }
 export const willSparen = (frage: string) => SPAREN.test(frage);
 
+const PRUEF_SAETZE: Record<string, string[]> = {
+  kumpel: ["Moment, ich schau mir das kurz an.", "Gute Frage – ich guck mir die Daten an, gib mir ein paar Sekunden.", "Verstanden, wir prüfen das."],
+  profi: ["Verstanden. Wir prüfen das.", "Copy. Ich analysiere die Daten.", "Verstanden, Rückmeldung folgt."],
+  motivator: ["Starke Frage – ich check das sofort für dich!", "Bin dran, gleich weißt du mehr!", "Moment, ich hol dir die Antwort!"],
+  knapp: ["Copy. Prüfe.", "Moment.", "Prüfe."],
+  locker: ["Sekunde, ich check das kurz.", "Yo, ich schau mir das an – gib mir 'nen Moment.", "Okay, ich digg mich kurz in die Daten."],
+};
+
+/** Alle „Wir schauen uns das an“-Sätze einer Art (für die eigene Stimme vorab erzeugt) */
+export function pruefSaetze(art: string): string[] {
+  return PRUEF_SAETZE[art] ?? PRUEF_SAETZE.kumpel;
+}
+
 /** „Wir schauen uns das an“ – passend zur Art des Renningenieurs, mit etwas Abwechslung */
 export function pruefSatz(art: string, zufall = Math.random()): string {
-  const saetze: Record<string, string[]> = {
-    kumpel: ["Moment, ich schau mir das kurz an.", "Gute Frage – ich guck mir die Daten an, gib mir ein paar Sekunden.", "Verstanden, wir prüfen das."],
-    profi: ["Verstanden. Wir prüfen das.", "Copy. Ich analysiere die Daten.", "Verstanden, Rückmeldung folgt."],
-    motivator: ["Starke Frage – ich check das sofort für dich!", "Bin dran, gleich weißt du mehr!", "Moment, ich hol dir die Antwort!"],
-    knapp: ["Copy. Prüfe.", "Moment.", "Prüfe."],
-    locker: ["Sekunde, ich check das kurz.", "Yo, ich schau mir das an – gib mir 'nen Moment.", "Okay, ich digg mich kurz in die Daten."],
-  };
-  const liste = saetze[art] ?? saetze.kumpel;
+  const liste = pruefSaetze(art);
   return liste[Math.min(liste.length - 1, Math.floor(zufall * liste.length))];
 }
 
@@ -111,7 +119,17 @@ export class Chat {
     if (schwierig) this.sagen((code === "de" ? null : pruefenIn(code)) ?? pruefSatz(this.u.art()), "pruefen");
     else wartet = this.blase({ wer: "ingenieur", text: "…" }, "tippt");
 
+    // Dauert es länger als 2,5 s, sagt er Bescheid (wie ein echter Renningenieur), nach 9 s noch einmal kurz
+    const zwischen = code === "de" ? pruefSatz(this.u.art()) : pruefenIn(code) ?? pruefSatz(this.u.art());
+    const uhren = [
+      schwierig ? 0 : window.setTimeout(() => {
+        if (wartet) wartet.querySelector("p")!.textContent = zwischen;
+        this.u.warten?.(zwischen);
+      }, 2500),
+      window.setTimeout(() => this.u.warten?.(nochDran(code)), 9000),
+    ];
     const e = await kiFragen(schwierig ? "analyse" : "frage", this.u.lage(), { frage, verlauf: vorher });
+    uhren.forEach((u) => window.clearTimeout(u));
     wartet?.remove();
     if (nr !== this.laeuft && !schwierig) return; // überholt von einer neueren Frage
     if ("text" in e) this.sagen(e.text);

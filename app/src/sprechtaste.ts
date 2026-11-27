@@ -46,17 +46,20 @@ function belegungLesen(): Belegung | null {
 export interface SprechtasteSteuerung {
   /** Signalwörter neu setzen (z. B. wenn der Renningenieur einen neuen Namen bekommt) */
   nameGeaendert: (name: string) => void;
+  /** Spracherkennung im Hintergrund laden (z. B. beim Öffnen des Renningenieurs), damit die erste Frage schnell geht */
+  vorbereiten: () => void;
 }
 
 /**
  * @param beiText erkannter Text (wie eine getippte Frage)
  * @param hinweis kurze Meldung unten (auch wenn gerade ein anderer Bereich offen ist)
+ * @param nichtVerstanden gesprochen, aber nichts verstanden (oder Signalwort ohne Frage) – der Renningenieur sagt es
  */
 export async function sprechtasteEinrichten(istApp: boolean, beiText: (text: string) => void,
-  hinweis: (t: string, art?: "ok" | "fehler") => void, name: () => string): Promise<SprechtasteSteuerung> {
+  hinweis: (t: string, art?: "ok" | "fehler") => void, name: () => string, nichtVerstanden?: () => void): Promise<SprechtasteSteuerung> {
   const knopf = $<HTMLButtonElement>("sKnopf");
   const status = $("sStatus");
-  const leer: SprechtasteSteuerung = { nameGeaendert: () => {} };
+  const leer: SprechtasteSteuerung = { nameGeaendert: () => {}, vorbereiten: () => {} };
   if (!istApp) {
     knopf.disabled = true;
     status.textContent = "Sprechen geht in der GSRA-App für Windows.";
@@ -232,8 +235,10 @@ export async function sprechtasteEinrichten(istApp: boolean, beiText: (text: str
       status.textContent = "";
       beiText(m.text);
     } else {
-      status.textContent = m.text;
+      status.textContent = m.zustand === "leer" && !m.text ? "Signalwort gehört, aber keine Frage." : m.text;
       if (m.zustand === "fehler") hinweis(m.text, "fehler");
+      // „Zu kurz“ ist meist ein versehentlicher Tastendruck – dann still bleiben
+      if (m.zustand === "leer" && !/^Zu kurz/.test(m.text)) nichtVerstanden?.();
     }
   });
 
@@ -250,5 +255,8 @@ export async function sprechtasteEinrichten(istApp: boolean, beiText: (text: str
   knopf.addEventListener("keyup", (e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); druecken(false); } });
   knopf.addEventListener("blur", () => druecken(false));
 
-  return { nameGeaendert: () => { if (art === "signalwort") void artSetzen("signalwort", true); } };
+  return {
+    nameGeaendert: () => { if (art === "signalwort") void artSetzen("signalwort", true); },
+    vorbereiten: () => { if (stand.installiert) void aufrufen("sprache_vorbereiten"); },
+  };
 }
