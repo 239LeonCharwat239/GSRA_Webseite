@@ -275,6 +275,8 @@ function starte() {
   };
 
   knopf.addEventListener("click", oeffnen);
+  // Die GSRA-App öffnet die Suche aus ihrer eigenen Kopfzeile (in der App ist der Kopf der Webseite ausgeblendet)
+  (window as unknown as { gsraSucheOeffnen?: () => void }).gsraSucheOeffnen = oeffnen;
   fenster.querySelector(".gsra-search-close")?.addEventListener("click", schliessen);
   fenster.addEventListener("mousedown", (e) => { if (e.target === fenster) schliessen(); });
   eingabe.addEventListener("input", () => {

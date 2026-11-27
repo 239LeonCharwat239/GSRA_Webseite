@@ -387,7 +387,8 @@ const initAuthNav = async () => {
     if (session?.user?.id) setTimeout(showReviewPrompt, 1500); // nach dem Seitenaufbau, nicht sofort aufdringlich
 
     if (session?.user?.id) {
-        startVisibilityHeader(client);
+        // In der App fliegen die Namen in der Kopfzeile der App – hier nicht noch einmal (Wunsch 27.11.)
+        if (!document.documentElement.classList.contains("gsra-app")) startVisibilityHeader(client);
         checkLiveUnreadMessages(session.user.id, session.user.created_at);
         touchPresence();
         markDelivered();

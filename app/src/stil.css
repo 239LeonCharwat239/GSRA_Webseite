@@ -216,7 +216,11 @@ body.web-aktiv main { overflow: hidden; padding: 0; }
 }
 .knopf.leise:hover:not(:disabled) { background: rgba(0, 85, 255, 0.1); color: #fff; border-color: var(--blau); box-shadow: var(--glow-blau); }
 .knopf:disabled { opacity: 0.55; cursor: default; box-shadow: none; }
-.link-knopf { background: none; border: 0; padding: 0; color: var(--blau-hell); text-decoration: underline; cursor: pointer; font-size: 12px; }
+/* Links im GSRA-Design (Wunsch 27.11.): gelb, ohne Unterstreichung, beim Darüberfahren weiß mit leichtem Leuchten */
+.link-knopf { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; padding: 0; color: var(--gelb); font: inherit; font-size: 12.5px; font-weight: 600; text-decoration: none; cursor: pointer; transition: color 0.15s, text-shadow 0.15s; }
+.link-knopf:hover, .link-knopf:focus-visible { color: #fff; text-shadow: 0 0 10px rgba(255, 204, 0, 0.4); }
+.link-knopf::after { content: "›"; font-size: 1.1em; line-height: 1; transition: transform 0.15s; }
+.link-knopf:hover::after { transform: translateX(2px); }
 
 input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), textarea {
   background: #0f1014; border: 1px solid var(--rand-stark); border-radius: 9px; padding: 8px 12px; color: var(--text);
@@ -623,3 +627,11 @@ body.signalwort-an .verbindung::after { content: "Mikro an (Signalwort)"; margin
 .upd-zeile { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; font-size: 11.5px; }
 .upd-stand { color: var(--leise); overflow-wrap: anywhere; line-height: 1.35; }
 .upd-zeile .link-knopf { align-self: flex-start; font-size: 11.5px; }
+
+/* Lupe und Profilbild in der Kopfzeile */
+.kopf-knopf { align-self: center; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; border: 1px solid transparent; background: transparent; color: var(--leise); cursor: pointer; transition: color 0.15s, border-color 0.15s, box-shadow 0.15s; z-index: 3; }
+.kopf-knopf:hover, .kopf-knopf:focus-visible { color: var(--gelb); border-color: var(--gelb); box-shadow: 0 0 12px rgba(255, 204, 0, 0.25); }
+.kopf-knopf svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.app-kopf .konto { display: flex; align-items: center; gap: 8px; }
+.konto-bild { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; border: 2px solid var(--gelb); box-shadow: 0 0 10px rgba(255, 204, 0, 0.25); }
+.konto-bild[hidden] { display: none; }

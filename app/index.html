@@ -18,12 +18,17 @@
       <span class="app-slogan" data-tauri-drag-region><span class="blau">United by speed.</span> <span class="gelb">Driven globally.</span></span>
     </div>
     <div class="app-kopf-platz" data-tauri-drag-region></div>
+    <!-- Suche der Webseite (Wunsch 27.11.: ein Kopf für alles – Suche und Profilbild sitzen hier oben) -->
+    <button type="button" class="kopf-knopf" id="kopfSuche" title="Suchen (Strg+K)" aria-label="Suchen"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button>
     <!-- Konto oben (Wunsch 27.11.: Anmelden muss man sofort finden) -->
     <div class="konto">
+        <img class="konto-bild" id="kontoBild" alt="" hidden>
         <button class="knopf leise konto-knopf" id="kontoKnopf" type="button">Anmelden</button>
         <div class="konto-menue" id="kontoMenue" hidden>
           <p>Angemeldet als <strong id="kontoName"></strong></p>
           <button class="knopf leise" id="abmeldenKnopf" type="button">In der App abmelden</button>
+          <button class="knopf leise" type="button" data-web="dashboard.html">Mein Dashboard</button>
+          <button class="knopf leise" type="button" data-web="login.html" title="Für Messenger, Dashboard und die anderen GSRA-Seiten in der App">Auf den GSRA-Seiten anmelden</button>
           <button class="knopf leise" id="dsKnopf2" type="button">Datenschutz in der App</button>
         </div>
       </div>

@@ -13751,5 +13751,15 @@ html.gsra-app header .nav-toggle,
 html.gsra-app .gsra-help-btn {
     display: none !important;
 }
-html.gsra-app header .gsra-nav-tools { display: flex !important; margin-left: auto; }
-html.gsra-app .container { padding-top: 84px; }
+/* Ein Kopf genügt (Wunsch 27.11.): In der App übernimmt die Kopfzeile der App Profil, Suche und die fliegenden
+   Namen – der Kopf der Webseite ist dort ganz ausgeblendet. Die Suche öffnet die App über window.gsraSucheOeffnen. */
+html.gsra-app header { display: none !important; }
+html.gsra-app .container { padding-top: 24px; }
+/* =========================================
+   Links im GSRA-Design (Wunsch 27.11.): keine blauen, unterstrichenen Wörter mehr
+   ========================================= */
+a.gsra-dialog-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; text-align: center; text-decoration: none; }
+.gsra-nutzerlink { color: var(--gsra-yellow); text-decoration: none; font-weight: 600; border-bottom: 1px solid rgba(255, 204, 0, 0.35); transition: color 0.15s, border-color 0.15s; }
+.gsra-nutzerlink:hover { color: #fff; border-bottom-color: #fff; }
+main a:not([class]), .container a:not([class]), footer a:not([class]) { color: var(--gsra-yellow); text-decoration: none; transition: color 0.15s, text-shadow 0.15s; }
+main a:not([class]):hover, .container a:not([class]):hover, footer a:not([class]):hover { color: #fff; text-shadow: 0 0 10px rgba(255, 204, 0, 0.35); }

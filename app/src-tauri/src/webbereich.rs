@@ -40,6 +40,7 @@ pub const SEITEN: &[&str] = &[
     "dashboard.html",
     "renningenieur.html",
     "abo.html",
+    "login.html",
 ];
 
 #[derive(Debug, PartialEq, Eq)]
@@ -284,6 +285,8 @@ pub async fn bereich_aktion(app: AppHandle, seite: String, aktion: String) -> Re
         "zurueck" => w.eval("history.back()"),
         "vor" => w.eval("history.forward()"),
         "neu" => w.reload(),
+        // Suche der Webseite öffnen (fester Aufruf, keine Daten von außen)
+        "suche" => w.eval("window.gsraSucheOeffnen && window.gsraSucheOeffnen()"),
         "anfang" => w.navigate(start.parse().map_err(|_| "Ungültige Adresse.".to_string())?),
         _ => return Err("Unbekannte Aktion.".into()),
     };

@@ -90,3 +90,21 @@ export async function fensterEinrichten(istApp: boolean, vorSchliessen: () => Pr
     }
   });
 }
+
+/** Profilbild des angemeldeten Kontos oben neben dem Namen (wie auf der Webseite); nur https-Bilder der GSRA-Datenbank */
+export async function profilbildZeigen(): Promise<void> {
+  const bild = $<HTMLImageElement>("kontoBild");
+  const { data: s } = await sb().auth.getSession();
+  const id = s.session?.user.id;
+  if (!id) {
+    bild.hidden = true;
+    bild.removeAttribute("src");
+    return;
+  }
+  const { data } = await sb().from("profiles").select("avatar_url").eq("id", id).maybeSingle();
+  const url = typeof data?.avatar_url === "string" ? data.avatar_url : "";
+  const erlaubt = /^https:\/\/mqqyvpmddaastacldbyy\.supabase\.co\/storage\/v1\/object\/public\//.test(url);
+  bild.hidden = !erlaubt;
+  if (erlaubt) bild.src = url;
+  else bild.removeAttribute("src");
+}

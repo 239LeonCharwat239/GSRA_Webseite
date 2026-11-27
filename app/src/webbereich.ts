@@ -83,6 +83,21 @@ export function webVerbergen(): void {
 
 export const webAktiv = () => aktiv;
 
+/** Suche der Webseite öffnen (Lupe in der Kopfzeile der App, Strg+K). Ist keine GSRA-Seite offen, öffnet sie die
+ *  Neuigkeiten und darin die Suche – die Treffer führen auf die Seiten in der App. */
+export async function webSuche(oeffneStartseite: () => void): Promise<void> {
+  if (!istApp) return;
+  if (!aktiv) {
+    oeffneStartseite();
+    for (const ms of [900, 1800, 3500]) {
+      await new Promise((ok) => window.setTimeout(ok, ms));
+      if (aktiv && (await aufrufen("bereich_aktion", { seite: aktiv, aktion: "suche" }).then(() => true, () => false))) return;
+    }
+    return;
+  }
+  await aufrufen("bereich_aktion", { seite: aktiv, aktion: "suche" }).catch(() => {});
+}
+
 export async function webEinrichten(app: boolean): Promise<void> {
   istApp = app;
   // Ladeanimation der GSRA statt weißem Bildschirm: Die Seite bleibt versteckt, bis sie fertig ist (webbereich.rs),

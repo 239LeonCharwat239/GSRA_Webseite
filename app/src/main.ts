@@ -22,11 +22,11 @@ import { namenErsetzen } from "./datenschutz.ts";
 import { karteBauen, karteZeichnen, verlustJeAbschnitt, type Karte } from "./strecke.ts";
 import { Rennbeobachter, berichtErstellen, rundenzeitText, stelleText } from "./rennbericht.ts";
 import { startbildZeigen } from "./startbild.ts";
-import { webAktiv, webEinrichten, webVerbergen, webZeigen } from "./webbereich.ts";
+import { webAktiv, webEinrichten, webSuche, webVerbergen, webZeigen } from "./webbereich.ts";
 import { sprechtasteEinrichten } from "./sprechtaste.ts";
 import { messengerHinweis } from "./konto.ts";
 import { reEinstellungenEinrichten } from "./re-einstellungen.ts";
-import { fensterEinrichten, sichtbarkeitStarten } from "./kopf.ts";
+import { fensterEinrichten, profilbildZeigen, sichtbarkeitStarten } from "./kopf.ts";
 import { aktualisierungEinrichten } from "./aktualisierung.ts";
 import { eigeneStimmeEinrichten } from "./eigene-stimme.ts";
 import { ablegen, alleRunden, alsRunde, rundenDerStrecke, streckeLoeschen, streckenKarten, type ArchivRunde, type StreckenKarte } from "./rundenarchiv.ts";
@@ -1466,6 +1466,15 @@ void webEinrichten(istApp);
 // Automatische Updates (signiert, von GitHub); ein bereitliegendes Update installiert sich beim Schließen
 const aktualisierung = aktualisierungEinrichten(istApp, hinweis).catch(() => null);
 void fensterEinrichten(istApp, async () => (await aktualisierung)?.vorDemSchliessen() ?? false).catch(() => { /* ohne eigene Fensterleiste weiter */ });
+// Profilbild oben neben dem Konto, Suche der Webseite über die Lupe oder Strg+K (ein Kopf für alles, Wunsch 27.11.)
+beiKontoWechsel(() => void profilbildZeigen().catch(() => undefined));
+$("kopfSuche").addEventListener("click", () => void webSuche(() => webBereichZeigen("index.html")));
+window.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+    e.preventDefault();
+    void webSuche(() => webBereichZeigen("index.html"));
+  }
+});
 // Namen nur für angemeldete Mitglieder (Datenbank-Regel wie auf der Webseite) – also auch nach der Anmeldung starten
 beiKontoWechsel(() => { if (angemeldet()) void sichtbarkeitStarten().catch(() => { /* ohne Namen weiter */ }); });
 berichtKiEinrichten();
