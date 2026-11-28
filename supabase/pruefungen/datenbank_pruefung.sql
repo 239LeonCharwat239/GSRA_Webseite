@@ -1,8 +1,8 @@
--- GSRA: Prüfung der Live-Datenbank gegen den getesteten Stand (Skripte 001–061)
+-- GSRA: Prüfung der Live-Datenbank gegen den getesteten Stand (Skripte 001–062)
 -- NUR LESEN: ändert nichts. Im Supabase SQL Editor komplett einfügen und ausführen („Run“).
 -- Ergebnis: erste Zeile „GESAMT“. Steht dort nicht „Alles in Ordnung“, das Ergebnis bitte an Claude schicken.
 -- Erzeugt automatisch aus dem Nachbau (tests/db/datenbank.test.mjs, PRUEFUNG_SCHREIBEN=1) – nicht von Hand ändern.
--- Erfasst: 212 Funktionen, 67 Tabellen, 0 Spalten-Rechte, 233 Zugriffsregeln,
+-- Erfasst: 213 Funktionen, 67 Tabellen, 0 Spalten-Rechte, 233 Zugriffsregeln,
 --          274 Prüfregeln, 46 Trigger, 8 Speicher, 5 Zeitpläne.
 with
 ef(sig, name, h, secdef, cfg, anon, auth, mig) as (values
@@ -151,9 +151,10 @@ ef(sig, name, h, secdef, cfg, anon, auth, mig) as (values
     ('public.purge_message_history()', 'purge_message_history', 'a5672b07df902be2178e6920bb90dff3', true, 'search_path=public', false, false, true),
     ('public.race_engineer_clean(_t text, _max integer)', 'race_engineer_clean', '52fe792343d7dfc3bf0e6abb6db546b5', false, 'search_path=public', true, true, true),
     ('public.race_engineer_learn(_art text, _text text)', 'race_engineer_learn', 'd2418b484f8ea2e3d95c20d219ca2791', true, 'search_path=public', false, true, true),
+    ('public.race_engineer_memory_compact(_eintraege jsonb)', 'race_engineer_memory_compact', '4f15729874846c38150705e3a6a3101e', true, 'search_path=public', false, true, true),
     ('public.race_engineer_remember(_art text, _text text)', 'race_engineer_remember', '3168c1da73374ef1cfb9dca6fa7a346a', true, 'search_path=public', false, true, true),
     ('public.race_engineer_save(_name text, _rufname text, _art text, _gespraechig text, _stimme text, _sprache text, _themen jsonb)', 'race_engineer_save', 'f840ab8cd5f8a2a91f0330f6dab44877', true, 'search_path=public', false, true, true),
-    ('public.race_engineer_turn(_art text)', 'race_engineer_turn', 'ddba496ef84465e3fde4eed8d15041a7', true, 'search_path=public', false, true, true),
+    ('public.race_engineer_turn(_art text)', 'race_engineer_turn', '0cc3d75440f820fb2a42ccf7a3bc37e9', true, 'search_path=public', false, true, true),
     ('public.rate_seller(_listing_id text, _rating integer, _tags text[], _comment text)', 'rate_seller', 'dd2aba9c580e9b8b4bf828422bb0eab1', true, 'search_path=public', false, true, true),
     ('public.reference_lap_add(_strecke text, _fahrzeug text, _laenge_m real, _zeit_s real, _quelle text, _zeitverlauf real[], _tempo real[], _gas real[], _bremse real[])', 'reference_lap_add', '3c354c8d685f6acddcec229fff2cec9f', true, 'search_path=public', false, true, true),
     ('public.reference_lap_admin_delete(_id uuid)', 'reference_lap_admin_delete', 'c900583052ed94ae752f5a0b6998adf3', true, 'search_path=public', false, true, true),
@@ -709,7 +710,7 @@ ec(tab, name, typ, h, gueltig) as (values
     ('race_engineer_settings', 'race_engineer_settings_sprache_check', 'c', '5bf1e7156358e516ea8425e92876e226', true),
     ('race_engineer_settings', 'race_engineer_settings_stimme_check', 'c', '5ebec8c47f5e64504b21417937b628a1', true),
     ('race_engineer_settings', 'race_engineer_settings_user_id_fkey', 'f', '85d8b2f5f0c0f6b4dcb854efb61a8cb1', true),
-    ('race_engineer_usage', 'race_engineer_usage_art_check', 'c', '1c782542522400048bc62d92edee0e8b', true),
+    ('race_engineer_usage', 'race_engineer_usage_art_check', 'c', '6edbd4d960f135334ca7df5f683f45c0', true),
     ('race_engineer_usage', 'race_engineer_usage_pkey', 'p', '4c6419b3704337bbfe50f018842a9ad3', true),
     ('race_engineer_usage', 'race_engineer_usage_user_id_fkey', 'f', '85d8b2f5f0c0f6b4dcb854efb61a8cb1', true),
     ('reference_laps', 'reference_laps_feld_check', 'c', '9b116635b8026231544c9ac95a626108', true),
@@ -1042,7 +1043,7 @@ select nr, bereich, objekt, status, details from (
          else 'Bitte an Claude schicken' end as status,
     count(*) filter (where status = 'FEHLER') || ' Fehler, ' || count(*) filter (where status = 'WARNUNG') || ' Warnungen, '
       || count(*) filter (where status = 'ABWEICHUNG') || ' Abweichungen, ' || count(*) filter (where status = 'HINWEIS') || ' Hinweise – '
-      || count(*) || ' Prüfungen gegen den getesteten Stand nach Skript 061' as details, 0 as rang
+      || count(*) || ' Prüfungen gegen den getesteten Stand nach Skript 062' as details, 0 as rang
   from befunde
   union all
   select 1, bereich, count(*) || ' geprüft', case when count(*) filter (where status <> 'ok' and status <> 'HINWEIS') = 0 then 'ok' else 'prüfen' end,

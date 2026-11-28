@@ -7,6 +7,7 @@
 // Ton-Daten heraus) – deshalb dort nur Klick und Rauschen. Mit einer KI-Stimme (später) geht der volle Filter.
 
 import { LAENDERCODE, spracheVonText } from "./sprachen.ts";
+import { amSatzende } from "./kuerzen.ts";
 import { zahlenAusschreiben, zumSprechen } from "./ansagen.ts";
 
 export type Stimmlage = "ruhig" | "energisch" | "tief" | "hell";
@@ -247,7 +248,7 @@ export function funkStoppen(): void {
 
 /** Spruch vorlesen – mit Funk-Klang, wenn eingeschaltet. Läuft schon einer, kommt dieser danach dran. */
 export function sprechen(text: string, e: FunkEinstellungen, opt: SprechOptionen = {}): Promise<void> {
-  const roh = text.replace(/\s+/g, " ").trim().slice(0, 2400);
+  const roh = amSatzende(text.replace(/\s+/g, " "), 2400);
   if (!roh || !("speechSynthesis" in window)) return Promise.resolve();
   // „Automatisch“: Stimme in der Sprache der Antwort (sonst Deutsch)
   const sprache = opt.sprache === "auto" ? (spracheVonText(roh) ?? "de") : opt.sprache || "de";

@@ -5,6 +5,7 @@
 //    mitten im Rennen. Nach „noch nicht eingerichtet“ fragt die App in dieser Sitzung nicht weiter nach.
 //  * Grenzen sind unsichtbar (Entscheidung 24.11.): Die App zeigt keine Kontingente an.
 import { SUPABASE_ANON_KEY, SUPABASE_URL, sb } from "./konto.ts";
+import { amSatzende } from "./kuerzen.ts";
 
 export type KiArt = "funk" | "nachbesprechung" | "frage" | "analyse";
 export type Merken = { art: "staerke" | "schwaeche" | "ziel"; text: string };
@@ -78,7 +79,7 @@ export async function kiFragen(art: KiArt, lage: Record<string, unknown>, chat?:
           return art && typeof e.text === "string" && e.text.trim().length >= 2 ? [{ art, text: e.text.trim().slice(0, 200) }] : [];
         }).slice(0, 2)
       : [];
-    return { text: daten.text.trim().slice(0, 2400), merken };
+    return { text: amSatzende(daten.text, 2400), merken };
   }
   const grund = typeof daten.grund === "string" ? daten.grund : String(antwort.status);
   if (antwort.status === 503 && grund === "einrichtung") eingerichtet = false;
@@ -89,4 +90,25 @@ export async function kiFragen(art: KiArt, lage: Record<string, unknown>, chat?:
     else pauseAlle = Date.now() + 30 * 60_000;
   }
   return { fehler: typeof daten.fehler === "string" ? daten.fehler.slice(0, 200) : "Der Renningenieur ist gerade nicht erreichbar.", grund };
+}
+
+/** Gedächtnis verdichten (SQL 062, Wunsch 28.11.): ab 10 eigenen Einträgen fasst der Renningenieur sie zusammen –
+ *  Wichtiges bleibt, Doppeltes und Überholtes fällt weg; was die Person selbst eingetragen hat, bleibt immer.
+ *  Läuft still nach der Nachbesprechung; Antwort: Anzahl der verdichteten Einträge oder null (nicht nötig/Fehler). */
+export async function gedaechtnisVerdichten(): Promise<number | null> {
+  const { data } = await sb().auth.getSession();
+  const token = data.session?.access_token;
+  if (!token || !eingerichtet) return null;
+  try {
+    const antwort = await fetch(`${SUPABASE_URL}/functions/v1/renningenieur`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ art: "gedaechtnis", lage: {} }),
+      signal: AbortSignal.timeout(70_000),
+    });
+    const d = (await antwort.json().catch(() => ({}))) as { anzahl?: unknown };
+    return antwort.ok && typeof d.anzahl === "number" ? d.anzahl : null;
+  } catch {
+    return null;
+  }
 }

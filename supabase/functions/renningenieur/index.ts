@@ -101,6 +101,12 @@ Wichtigste Regeln:
    ("strafe"). Daraus darfst du eine kurze Einschätzung ableiten (viele X = Vorsicht beim Überholen). Eigene Werte
    stehen unter "ich": "Wie viele X habe ich?", "Habe ich eine Strafe?" beantwortest du daraus; fehlt ein Wert, sag
    ehrlich, dass iRacing ihn gerade nicht liefert.
+17. Kurven: "Kurve 1", "Kurve 2" … zählt die App in Fahrtrichtung ab Start/Ziel – Kurve 5 kommt also immer VOR Kurve 6
+   (die Zählung kann von der offiziellen Nummerierung der Strecke abweichen; "bei_m" sagt, wo sie liegt). Listen wie
+   "zeitverlust_kurven" sind nach Kurvennummer sortiert, "rang" sagt, wo am meisten Zeit liegt. Nennst du mehrere Kurven,
+   sag "am meisten … am zweitmeisten …" oder nenne sie in Fahrtrichtung – sag nie "nach Kurve 6 folgt Kurve 5".
+18. Sprich immer in ganzen Sätzen und bleib unter der Länge für die Anfrage – lieber ein Gedanke weniger als ein
+   abgebrochener Satz.
 
 Arten (so klingst du – genau eine gilt, siehe <persoenlichkeit>):
 - kumpel: freundlich, locker-kollegial, duzt, ermutigt nebenbei. Beispiel: "Sprit sieht gut aus – reicht noch für sieben Runden. Wir holen dich in Runde 23 rein, alles entspannt."
@@ -112,8 +118,11 @@ Arten (so klingst du – genau eine gilt, siehe <persoenlichkeit>):
 Gesprächigkeit: still = nur wenn es wirklich wichtig ist, ein Satz; normal = ein bis zwei Sätze; viel = zwei Sätze,
 gern mit einem kurzen Satz Motivation.
 Themen: Was unter <persoenlichkeit> bei "themen" auf false steht, sprichst du nicht von dir aus an.
-Gedächtnis: Einträge unter <gedaechtnis> hat die Person selbst gespeichert (Ziele, Vorlieben, Schwächen). Beziehe dich
-darauf nur, wenn es zur Lage passt – nicht bei jedem Funkspruch.
+Gedächtnis: Unter <gedaechtnis> stehen Ziele, Vorlieben, Stärken und Baustellen ("schwaeche" = daran übt die Person
+noch) – von der Person selbst eingetragen oder "(von dir gemerkt)" aus früheren Nachbesprechungen. Beziehe dich darauf
+nur, wenn es zur Lage passt – nicht bei jedem Funkspruch. Fragt die Person, was du dir gemerkt hast ("Was weißt du über
+mich?", "Was hast du dir gemerkt?"), zähl die Einträge kurz und ehrlich auf (die wichtigsten zuerst, höchstens sechs) –
+nichts dazuerfinden; ist es leer, sag das.
 Anrede: Steht ein Rufname dabei, nutze ihn gelegentlich (nicht in jedem Satz). Du heißt so wie unter "name" angegeben.
 
 Funk-Anlässe (Feld "anlass" in <messwerte>):
@@ -156,7 +165,7 @@ function merkenLesen(text: string): { rest: string; merken: Array<{ art: string;
 }
 
 type Einstellungen = { name: string; rufname: string | null; art: string; gespraechig: string; stimme: string; sprache: string; themen: Record<string, boolean> };
-type Freigabe = { erlaubt: boolean; grund?: string; einstellungen?: Einstellungen; gedaechtnis?: Array<{ art: string; text: string }> };
+type Freigabe = { erlaubt: boolean; grund?: string; einstellungen?: Einstellungen; gedaechtnis?: Array<{ art: string; text: string; quelle?: string }> };
 
 function persoenlichkeit(e: Einstellungen, merk: Freigabe["gedaechtnis"]): string {
   const themen = { sprit: true, abstaende: true, flaggen: true, reifen: true, coaching: true, wetter: true, ...(e.themen || {}) };
@@ -164,7 +173,7 @@ function persoenlichkeit(e: Einstellungen, merk: Freigabe["gedaechtnis"]): strin
   // Gedächtnis: Einträge bis 1.000 Zeichen (055), zusammen höchstens etwa 6.000 Zeichen (neueste zuerst)
   let rest = 6000;
   const g = (merk || []).slice(0, 20).flatMap((m) => {
-    const zeile = `- ${textSauber(m.art, 12)}: ${textSauber(m.text, 1000)}`;
+    const zeile = `- ${textSauber(m.art, 12)}${m.quelle === "renningenieur" ? " (von dir gemerkt)" : ""}: ${textSauber(m.text, 1000)}`;
     if (zeile.length > rest) return [];
     rest -= zeile.length;
     return [zeile];
@@ -172,10 +181,48 @@ function persoenlichkeit(e: Einstellungen, merk: Freigabe["gedaechtnis"]): strin
   return `<persoenlichkeit>\n${JSON.stringify(p)}\n</persoenlichkeit>\n<gedaechtnis>\n${g || "(leer)"}\n</gedaechtnis>`;
 }
 
-function antwortSauber(t: string, max: number): string {
-  return t.replace(/[\u0000-\u0009\u000B-\u001F\u007F]/g, " ").replace(/[*#_`]+/g, "").replace(/[ \t]+/g, " ")
-    .replace(/\n{3,}/g, "\n\n").trim().replace(/^["„»]|["“«]$/g, "").slice(0, max).trim();
+/** Text auf höchstens max Zeichen – aber nie mitten im Wort oder Satz (Fund 28.11.: Nachbesprechung brach mitten im
+ *  Wort ab). abgebrochen = die KI wurde durch max_tokens gestoppt: dann bis zum letzten vollständigen Satz. */
+export function amSatzende(t: string, max: number, abgebrochen = false): string {
+  let s = t.trim();
+  if (s.length <= max && !abgebrochen) return s;
+  s = s.slice(0, max);
+  const ende = Math.max(...[". ", "! ", "? ", "… ", ".\n", "!\n", "?\n"].map((z) => s.lastIndexOf(z)));
+  const letzt = /[.!?…]$/.test(s) ? s.length - 1 : -1;
+  const stelle = Math.max(ende, letzt);
+  // abgebrochen: jeder ganze Satz ist besser als ein halber; sonst nur, wenn nicht zu viel wegfällt
+  if (stelle > 0 && (abgebrochen || stelle >= max * 0.4)) return s.slice(0, stelle + 1).trim();
+  const wort = s.lastIndexOf(" ");
+  return `${s.slice(0, wort > 0 ? wort : s.length).replace(/[,;:–-]\s*$/, "").trim()} …`;
 }
+
+function antwortSauber(t: string, max: number, abgebrochen = false): string {
+  return amSatzende(t.replace(/[\u0000-\u0009\u000B-\u001F\u007F]/g, " ").replace(/[*#_`]+/g, "").replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n").trim().replace(/^["„»]|["“«]$/g, ""), max, abgebrochen);
+}
+
+/** Verdichtetes Gedächtnis aus der KI-Antwort lesen (höchstens 10 Einträge, nur erlaubte Arten) */
+function eintraegeLesen(text: string): Array<{ art: string; text: string }> {
+  const liste: Array<{ art: string; text: string }> = [];
+  for (const m of text.matchAll(/<eintrag>\s*(schwaeche|staerke|ziel)\s*:\s*([^<]{2,200})<\/eintrag>/gi)) {
+    if (liste.length < 10) liste.push({ art: m[1].toLowerCase(), text: textSauber(m[2], 200) });
+  }
+  return liste;
+}
+
+const GEDAECHTNIS_AUFTRAG = `Du bist das Gedächtnis eines Renningenieurs im Sim-Racing. Unter <eintraege> stehen alle Notizen über eine
+Fahrerin oder einen Fahrer, jeweils mit Herkunft: "renningenieur" (hast du dir nach Nachbesprechungen gemerkt) oder
+"fahrer" (hat die Person selbst eingetragen), neueste zuerst. Verdichte NUR die Einträge mit Herkunft "renningenieur" zu
+höchstens 8 Einträgen – so, wie sich ein guter Renningenieur nach vielen Rennen erinnert:
+- Wichtiges bleibt (wiederkehrende Schwächen, echte Stärken, Ziele), Ähnliches wird zusammengelegt
+  (z. B. dreimal "Spa, Kurve 4 zu früh gebremst" → ein Eintrag "Spa, Kurve 4: bremst oft zu früh").
+- Überholtes fällt weg (eine alte Schwäche, die neuere Einträge als behoben zeigen, wird zur Stärke oder entfällt).
+- Bei Widersprüchen gilt der neuere Eintrag. Nichts erfinden, nur zusammenfassen.
+- Strecke und Stelle immer mit nennen, wenn sie in den Einträgen stehen. Höchstens 160 Zeichen je Eintrag, Deutsch.
+- Einträge mit Herkunft "fahrer" nicht wiederholen – sie bleiben ohnehin.
+Gib ausschließlich Zeilen in genau dieser Form aus, sonst nichts:
+<eintrag>schwaeche: Spa, Kurve 4 – bremst oft etwa 10 m zu früh</eintrag>
+(Art: schwaeche = daran übt die Person noch, staerke, ziel).`;
 
 Deno.serve(async (req) => {
   const herkunft = req.headers.get("origin");
@@ -192,7 +239,7 @@ Deno.serve(async (req) => {
   if (roh.length > MAX_ANFRAGE) return antwort({ fehler: "Anfrage zu groß." }, 413);
   let daten: { art?: unknown; lage?: unknown; frage?: unknown; verlauf?: unknown };
   try { daten = JSON.parse(roh); } catch { return antwort({ fehler: "Ungültige Anfrage." }, 400); }
-  const ARTEN = ["funk", "nachbesprechung", "frage", "analyse"] as const;
+  const ARTEN = ["funk", "nachbesprechung", "frage", "analyse", "gedaechtnis"] as const;
   const art = ARTEN.find((a) => a === daten?.art) ?? null;
   if (!art || !daten.lage || typeof daten.lage !== "object") return antwort({ fehler: "Ungültige Anfrage." }, 400);
   const lage = JSON.stringify(stutzen(daten.lage));
@@ -227,10 +274,34 @@ Deno.serve(async (req) => {
       return antwort({ fehler: text }, 403);
     }
     const freigabe = data as Freigabe;
+    // Gedächtnis verdichten erst ab 10 eigenen Einträgen (die Datenbank entscheidet, zählt dann nicht)
+    if (art === "gedaechtnis" && freigabe?.grund === "nicht_noetig") return antwort({ text: "", art, unveraendert: true });
     if (!freigabe?.erlaubt || !freigabe.einstellungen) return antwort({ fehler: "Gerade zu viele Anfragen.", grund: freigabe?.grund ?? "grenze" }, 429);
 
     const schnell = art === "funk" || art === "frage";
     const ki = new Anthropic({ apiKey: schluessel, maxRetries: 1, timeout: schnell ? 12_000 : 60_000 });
+
+    // Gedächtnis verdichten (062): Sonnet fasst die eigenen Einträge zusammen, die Datenbank ersetzt sie geprüft
+    if (art === "gedaechtnis") {
+      const eintraege = (freigabe.gedaechtnis || []).slice(0, 100).map((m) => ({
+        art: textSauber(m.art, 12), quelle: m.quelle === "renningenieur" ? "renningenieur" : "fahrer", text: textSauber(m.text, 300),
+      }));
+      const v = await ki.messages.create({
+        model: "claude-sonnet-5-5",
+        max_tokens: 1500,
+        thinking: { type: "between_tools" },
+        output_config: { effort: "medium" },
+        system: GEDAECHTNIS_AUFTRAG,
+        messages: [{ role: "user", content: `<eintraege>\n${JSON.stringify(eintraege)}\n</eintraege>` }],
+      });
+      if (v.stop_reason === "refusal" || v.stop_reason === "max_tokens") return antwort({ fehler: "Gedächtnis bleibt wie es ist.", grund: "leer" }, 502);
+      const neu = eintraegeLesen(v.content.filter((b) => b.type === "text").map((b) => (b as { text: string }).text).join("\n"));
+      if (!neu.length) return antwort({ fehler: "Gedächtnis bleibt wie es ist.", grund: "leer" }, 502);
+      const { data: anzahl, error: fehler } = await db.rpc("race_engineer_memory_compact", { _eintraege: neu });
+      if (fehler) return antwort({ fehler: "Gedächtnis bleibt wie es ist.", grund: "datenbank" }, 502);
+      console.log(`Renningenieur gedaechtnis: ${eintraege.length} Einträge → ${anzahl} verdichtet`);
+      return antwort({ text: `${anzahl}`, art, anzahl, gedaechtnis: neu });
+    }
     const system = [
       { type: "text" as const, text: GRUNDREGELN, cache_control: { type: "ephemeral" as const } },
       { type: "text" as const, text: persoenlichkeit(freigabe.einstellungen, freigabe.gedaechtnis), cache_control: { type: "ephemeral" as const } },
@@ -258,7 +329,7 @@ Deno.serve(async (req) => {
           })
         : await ki.messages.create({
             model: "claude-sonnet-5-5",
-            max_tokens: 1200,
+            max_tokens: 2000, // vorher 1200 – die Nachbesprechung brach manchmal mitten im Satz ab
             thinking: { type: "between_tools" },
             output_config: { effort: "medium" },
             system,
@@ -271,7 +342,7 @@ Deno.serve(async (req) => {
     const kiText = nachricht.content.filter((b) => b.type === "text").map((b) => (b as { text: string }).text).join(" ");
     // Nur die Nachbesprechung darf sich etwas merken; aus allen anderen Antworten werden solche Zeilen entfernt
     const { rest, merken } = merkenLesen(kiText);
-    const sauber = antwortSauber(rest, art === "funk" ? 320 : art === "frage" ? 600 : 2400);
+    const sauber = antwortSauber(rest, art === "funk" ? 320 : art === "frage" ? 600 : 2400, nachricht.stop_reason === "max_tokens");
     if (!sauber) return antwort({ fehler: "Keine Antwort erhalten.", grund: "leer" }, 502);
     return antwort(art === "nachbesprechung" ? { text: sauber, art, merken } : { text: sauber, art });
   } catch (e) {

@@ -11,9 +11,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL, KARRIERE_SQL, STINTPLAN_SQL, LIVERIES_SQL, CHATSICHER_SQL, AUFRAEUMEN_SQL, ONLINE_SQL, RE_STIL_SQL, APP_LOGIN_SQL, RE_KI_SQL, RE_CHAT_SQL, RE_MERKEN_SQL, LAENGER_SQL, STARTSEITE_SQL, ALTREGELN_SQL, HINWEIS_SQL, RE_SPRACHEN_SQL, REFERENZ_SQL, KARTEN_SQL] =
-    Array.from({ length: 61 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 61);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL, KARRIERE_SQL, STINTPLAN_SQL, LIVERIES_SQL, CHATSICHER_SQL, AUFRAEUMEN_SQL, ONLINE_SQL, RE_STIL_SQL, APP_LOGIN_SQL, RE_KI_SQL, RE_CHAT_SQL, RE_MERKEN_SQL, LAENGER_SQL, STARTSEITE_SQL, ALTREGELN_SQL, HINWEIS_SQL, RE_SPRACHEN_SQL, REFERENZ_SQL, KARTEN_SQL, GEDAECHTNIS_SQL] =
+    Array.from({ length: 62 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 62);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -4275,6 +4275,69 @@ if (REFERENZ_SQL) {
         check("061 fehlt im Ordner supabase/migrations", false);
     }
     await db.exec(`delete from public.reference_laps`);
+}
+
+// --- 062: Gedächtnis des Renningenieurs verdichten ---
+if (RE_MERKEN_SQL && RE_CHAT_SQL) {
+    const G = "70000000-0000-0000-0000-000000000062", H = "70000000-0000-0000-0000-000000000063";
+    await db.exec(`insert into auth.users (id) values ('${G}'), ('${H}') on conflict do nothing;
+      insert into public.profiles (id, username) values ('${G}', 'Gedächtnis Gina'), ('${H}', 'Helfer Hans') on conflict do nothing;`);
+    const kompakt = (uid, liste) => as(uid, async () => q(`select public.race_engineer_memory_compact($$${JSON.stringify(liste)}$$::jsonb) as n`));
+    const vorher62 = await kompakt(G, [{ art: "ziel", text: "x" }]);
+    check("Vor 062: Gedächtnis lässt sich nicht verdichten (Lücke nachgewiesen)", vorher62.error !== null, vorher62.error || "durchgelassen");
+    if (GEDAECHTNIS_SQL) {
+        await db.exec(readFileSync(GEDAECHTNIS_SQL, "utf8"));
+        const ctl62 = await db.exec(readFileSync(GEDAECHTNIS_SQL, "utf8")); // zweiter Lauf
+        const rows62 = ctl62[ctl62.length - 1].rows;
+        console.log("Kontrolle 062:\n  " + rows62.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "));
+        check("Kontrolle 062: bereit, Gäste ausgeschlossen", rows62.map(r => r.ergebnis).join(",") === "bereit,ja", rows62.map(r => r.ergebnis).join(", "));
+        const turn = (uid, art) => as(uid, async () => q(`select public.race_engineer_turn('${art}') as r`));
+        const zaehlen = async (uid) => (await one(`select count(*)::int as n from public.race_engineer_usage where user_id = '${uid}' and art = 'gedaechtnis'`)).n;
+        await db.exec(`insert into public.race_engineer_memory (user_id, art, text, quelle) select '${G}', 'schwaeche', 'Alte Schwäche ' || g, 'renningenieur' from generate_series(1, 3) g`);
+        const zuWenig = (await turn(G, "gedaechtnis")).rows[0]?.r;
+        check("062: unter 10 eigenen Einträgen „nicht nötig“ – und zählt nicht", zuWenig?.grund === "nicht_noetig" && (await zaehlen(G)) === 0, JSON.stringify(zuWenig));
+        await db.exec(`insert into public.race_engineer_memory (user_id, art, text, quelle) select '${G}', 'ziel', 'Ziel ' || g, 'renningenieur' from generate_series(1, 9) g;
+          insert into public.race_engineer_memory (user_id, art, text, quelle) values ('${G}', 'vorliebe', 'Mag kurze Ansagen', 'fahrer'), ('${G}', 'ziel', 'Spa unter 2:18', 'fahrer');
+          insert into public.race_engineer_memory (user_id, art, text, quelle) select '${H}', 'ziel', 'Hans Ziel ' || g, 'renningenieur' from generate_series(1, 4) g;`);
+        const ohneTurn = await kompakt(G, [{ art: "ziel", text: "Neu" }]);
+        check("062 verboten: ersetzen ohne vorherige Gedächtnis-Anfrage", /nur nach einer Zusammenfassung/.test(ohneTurn.error || ""), ohneTurn.error || "durchgelassen!");
+        const erlaubt = (await turn(G, "gedaechtnis")).rows[0]?.r;
+        check("062: Gedächtnis-Anfrage bekommt alle Einträge mit Herkunft", erlaubt?.erlaubt === true && erlaubt.gedaechtnis.length === 14 && erlaubt.gedaechtnis.every(e => e.quelle === "renningenieur" || e.quelle === "fahrer"), JSON.stringify(erlaubt).slice(0, 200));
+        const stand = async () => one(`select count(*)::int as n, count(*) filter (where quelle = 'fahrer')::int as eigen from public.race_engineer_memory where user_id = '${G}'`);
+        for (const [text, liste] of [
+            ["mehr als 10 Einträge", Array.from({ length: 11 }, (_, i) => ({ art: "ziel", text: `Z ${i}` }))],
+            ["falsche Art", [{ art: "notiz", text: "Irgendwas" }]],
+            ["leerer Text", [{ art: "ziel", text: "  " }, { art: "ziel", text: "Gut" }]],
+            ["kein Array", { art: "ziel", text: "x" }],
+        ]) {
+            const r = await kompakt(G, liste);
+            const s = await stand();
+            check(`062 verboten: ${text} (nichts wird gelöscht)`, r.error !== null && s.n === 14, r.error || "durchgelassen!");
+        }
+        const ok = await kompakt(G, [
+            { art: "schwaeche", text: "Spa, Kurve 4: bremst 10 m zu früh <b>fett</b>" },
+            { art: "schwaeche", text: "SPA, KURVE 4: BREMST 10 M ZU FRÜH <b>fett</b>" },
+            { art: "ziel", text: "Spa unter 2:18" },
+            { art: "staerke", text: "Saubere Zweikämpfe" },
+        ]);
+        const s = await one(`select count(*)::int as n, count(*) filter (where quelle = 'fahrer')::int as eigen, count(*) filter (where quelle = 'renningenieur')::int as re, bool_or(text like '%<%') as html from public.race_engineer_memory where user_id = '${G}'`);
+        check("062: verdichtet – Doppeltes weg, eigene Einträge der Person bleiben, Text bereinigt", ok.error === null && ok.rows[0]?.n === 2 && s.eigen === 2 && s.re === 2 && s.html === false, ok.error || JSON.stringify([ok.rows, s]));
+        const hans = await one(`select count(*)::int as n from public.race_engineer_memory where user_id = '${H}'`);
+        check("062: fremdes Gedächtnis bleibt unberührt", hans.n === 4, JSON.stringify(hans));
+        const gast = await as(null, async () => q(`select public.race_engineer_memory_compact('[{"art":"ziel","text":"x"}]'::jsonb) as n`));
+        check("062 verboten: Gast", gast.error !== null, gast.error || "durchgelassen!");
+        const gesperrt = await kompakt(U.seller, [{ art: "ziel", text: "x y" }]);
+        check("062 verboten: Gesperrter", gesperrt.error !== null, gesperrt.error || "durchgelassen!");
+        // höchstens 5 Gedächtnis-Anfragen am Tag
+        await db.exec(`insert into public.race_engineer_memory (user_id, art, text, quelle) select '${G}', 'ziel', 'Mehr ' || g, 'renningenieur' from generate_series(1, 10) g`);
+        for (let i = 0; i < 4; i++) await turn(G, "gedaechtnis");
+        const sechste = (await turn(G, "gedaechtnis")).rows[0]?.r;
+        check("062: höchstens 5 Verdichtungen am Tag", sechste?.erlaubt === false && sechste.grund === "tag", JSON.stringify(sechste));
+        const funk = (await turn(G, "funk")).rows[0]?.r;
+        check("062: normale Anfragen bekommen weiter höchstens 20 Einträge (mit Herkunft)", funk?.erlaubt === true && funk.gedaechtnis.length <= 20 && funk.gedaechtnis[0].quelle != null, JSON.stringify(funk?.gedaechtnis?.length));
+    } else {
+        check("062 fehlt im Ordner supabase/migrations", false);
+    }
 }
 
 // --- Versehentlich ein ALTES Skript erneut ausgeführt (25.11.: 043 nach 054): darf nichts zurücksetzen ---

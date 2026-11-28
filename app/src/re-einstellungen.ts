@@ -9,7 +9,7 @@ const STANDARD: ReEinstellungen = {
   themen: { sprit: true, abstaende: true, flaggen: true, reifen: true, coaching: true, wetter: true },
 };
 const THEMEN: Record<ReThema, string> = { sprit: "Sprit", abstaende: "Abstände", flaggen: "Flaggen", reifen: "Reifen", coaching: "Fahrtipps", wetter: "Wetter" };
-const GEDAECHTNIS_ARTEN: Record<string, string> = { vorliebe: "Vorliebe", ziel: "Ziel", staerke: "Stärke", schwaeche: "Daran arbeite ich", notiz: "Notiz" };
+const GEDAECHTNIS_ARTEN: Record<string, string> = { vorliebe: "Vorliebe", ziel: "Ziel", staerke: "Stärke", schwaeche: "Daran übst du", notiz: "Notiz" };
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => {
   const e = document.getElementById(id);

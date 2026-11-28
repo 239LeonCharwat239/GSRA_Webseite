@@ -22,6 +22,7 @@ import { aufRaster, PUNKTE, verdichten, zeitverlauf } from "../src/referenz.ts";
 import { CRASH_SAETZE, CrashWaechter, schadenBild } from "../src/crash.ts";
 import { FAHRER_SAETZE, NachbarWaechter, StrafenWaechter, strafeAus, werMitInfo } from "../src/fahrer-info.ts";
 import { bremsStellen, bremsStellenAusReferenz, Mitfahrer } from "../src/mitfahren.ts";
+import { amSatzende } from "../src/kuerzen.ts";
 import { spracheVonText, SPRECH_SPRACHEN, LAENDERCODE } from "../src/sprachen.ts";
 import { aufraeumen, entpacken, packen, streckenKarten, BESTE_JE_AUTO, LETZTE_JE_AUTO, type ArchivRunde } from "../src/rundenarchiv.ts";
 import { ANSAGE_SPRACHEN, absicht, ansage, FERTIGE_SAETZE, nichtVerstanden, ordnungWort, pruefenIn, zahlenAusschreiben, zahlIn, zahlWort, zumSprechen } from "../src/ansagen.ts";
@@ -767,4 +768,14 @@ test("Fahr eine Runde mit mir: Bremspunkte finden und genau dort piepen", () => 
   const m2 = new Mitfahrer(stellen, L);
   m2.aufnehmen(0.1, 50);
   assert.equal(m2.aufnehmen(0.5, 50), false);
+});
+
+test("Kürzen: nie mitten im Wort oder Satz (Nachbesprechung brach ab)", () => {
+  const text = "Starkes Rennen von Platz 12 auf 8. In Kurve 4 liegt die meiste Zeit. Bremse dort etwa 10 Meter später und rolle mehr Tempo hinein.";
+  assert.equal(amSatzende(text, 500), text, "kurz genug: unverändert");
+  assert.equal(amSatzende(text, 80), "Starkes Rennen von Platz 12 auf 8. In Kurve 4 liegt die meiste Zeit.");
+  assert.equal(amSatzende("Ein einziger sehr langer Satz ohne Punkt der einfach immer weiter geht", 30), "Ein einziger sehr langer Satz …");
+  // von der KI abgebrochen (max_tokens): bis zum letzten ganzen Satz, auch wenn die Länge passt
+  assert.equal(amSatzende("Gute Pace heute. Am Ende hast du in Kurve 6 noch etwas verlo", 500, true), "Gute Pace heute.");
+  assert.ok(!/\s\S{1,3}$/.test(amSatzende(text, 101)) || amSatzende(text, 101).endsWith("."), "kein abgeschnittenes Wortende");
 });

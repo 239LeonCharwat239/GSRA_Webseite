@@ -11,7 +11,7 @@ import { angemeldet, beiKontoWechsel, hinweis, kontoStarten } from "./konto-ansi
 import { aufnahmeAbspielen, beiFehlenderStimme, funkBeschaeftigt, funkLaden, funkSpeichern, piepen, sprechen, spotterSprechen, stimmenFuer, systemTonSetzen } from "./funk.ts";
 import { absicht, ansage, mitPunkt, nichtVerstanden, nochDran, zahlIn } from "./ansagen.ts";
 import { spracheName, spracheVonText } from "./sprachen.ts";
-import { kiFragen, kiVerfuegbar, merkenSpeichern, persoenlichkeitLaden, type Persoenlichkeit } from "./ki.ts";
+import { gedaechtnisVerdichten, kiFragen, kiVerfuegbar, merkenSpeichern, persoenlichkeitLaden, type Persoenlichkeit } from "./ki.ts";
 import { messwerteKodieren } from "../../src/stint-messwerte.ts";
 import { bremspunkte, sparAuswerten, sparBasis, sparText, sparTipp, type Bremspunkt, type SparAuswertung, type SparBasis } from "./sparen.ts";
 import { Chat, pruefSatz, pruefSaetze } from "./chat.ts";
@@ -657,8 +657,13 @@ function berichtLage(): Record<string, unknown> {
     end_platz: b.endPlatz,
     sprit_pro_runde_l: runden3(b.sprit),
     boxenstopps: b.stopps,
+    // Kurven in Fahrtrichtung (Kurve 1 zuerst); „rang“ = wo am meisten Zeit liegt (Fund 28.11.: KI las die nach Verlust
+    // sortierte Liste als Reihenfolge – „nach Kurve 6 folgt Kurve 5“)
+    kurven_anzahl: alleKurven.length,
+    kurven_zaehlung: "Kurve 1 ist die erste Kurve nach Start/Ziel, dann in Fahrtrichtung weiter; kann von der offiziellen Nummerierung abweichen",
     zeitverlust_kurven: b.kurven.filter((k) => k.runden > 0 && k.schnitt > 0.005).slice(0, 6)
-      .map((k) => ({ kurve: `Kurve ${k.kurve.nr}`, schnitt_verlust_s: runden3(k.schnitt), tipp: k.tipp || null })),
+      .map((k, i) => ({ kurve: `Kurve ${k.kurve.nr}`, nr: k.kurve.nr, rang: i + 1, bei_m: Math.round((k.kurve.scheitel / RASTER) * (laenge() ?? 4000)), schnitt_verlust_s: runden3(k.schnitt), tipp: k.tipp || null }))
+      .sort((x, y) => x.nr - y.nr),
     zweikaempfe: b.kaempfe.slice(0, 8).map((k) => ({
       gegner: k.name, runden: k.dauerRunden, knappster_abstand_s: runden3(k.minAbstand),
       ueberholungen: k.ueberholungen.slice(0, 4).map((u) => ({ ich_vorbei: u.ichVorbei, wo: stelleText(Math.round(u.anteil * RASTER), alleKurven) })),
@@ -722,6 +727,8 @@ async function nachbesprechung(automatisch: boolean) {
         if (e.merken?.length) {
           const n = await merkenSpeichern(e.merken);
           if (n) hinweis(`Dein Renningenieur hat sich ${n === 1 ? "einen Punkt" : `${n} Punkte`} für das nächste Mal gemerkt.`, "ok");
+          // ab 10 eigenen Einträgen verdichtet er sein Gedächtnis (still; die Datenbank entscheidet, ob es nötig ist)
+          void gedaechtnisVerdichten().then((v) => { if (v) hinweis(`Dein Renningenieur hat sein Gedächtnis aufgeräumt: ${v} Punkte zusammengefasst.`, "ok"); });
         }
         return;
       }
@@ -929,7 +936,7 @@ function chatLage(): Record<string, unknown> {
     vor_mir: vor,
     hinter_mir: hinter,
     letzte_runde_groesster_verlust: letzterBefund ? { stelle: kurvenName(letzterBefund.kurve, laenge() ?? 4000), verlust_s: runden3(letzterBefund.verlust), ursachen: letzterBefund.ursachen.slice(0, 3), tipp: letzterBefund.tipp } : null,
-    im_schnitt_verlust: b ? b.kurven.filter((k) => k.runden > 0 && k.schnitt > 0.005).slice(0, 3).map((k) => ({ kurve: `Kurve ${k.kurve.nr}`, schnitt_verlust_s: runden3(k.schnitt), tipp: k.tipp || null })) : [],
+    im_schnitt_verlust: b ? b.kurven.filter((k) => k.runden > 0 && k.schnitt > 0.005).slice(0, 3).map((k, i) => ({ kurve: `Kurve ${k.kurve.nr}`, nr: k.kurve.nr, rang: i + 1, schnitt_verlust_s: runden3(k.schnitt), tipp: k.tipp || null })).sort((x, y) => x.nr - y.nr) : [],
     zweikaempfe: b ? b.kaempfe.slice(-3).map((k) => ({ gegner: k.name, runden: k.dauerRunden, knappster_abstand_s: runden3(k.minAbstand) })) : [],
     sparen: sparLage(),
     gegen_schnellsten: gegenSchnellstenLage(),
@@ -1491,8 +1498,11 @@ function gegenSchnellstenLage(): Record<string, unknown> | null {
   return {
     fahrer: `${g.nummer ? `#${g.nummer} ` : ""}${g.name}`, seine_zeit_s: runden3(g.zeit), seine_zeit_text: zeitText(g.zeit),
     meine_bestzeit_s: runden3(g.meine), meine_bestzeit_text: zeitText(g.meine), rueckstand_s: runden3(g.rueckstand),
-    groesste_verluste: g.verluste.filter((v) => v.verlust > 0.02).slice(0, 3).map((v) => ({ kurve: `Kurve ${v.kurve}`, verlust_s: runden3(v.verlust) })),
-    hier_schneller: g.verluste.filter((v) => v.verlust < -0.02).slice(-2).map((v) => ({ kurve: `Kurve ${v.kurve}`, gewinn_s: runden3(-v.verlust) })),
+    // nach Kurvennummer (Fahrtrichtung) sortiert, „rang“ = wo am meisten liegt (Fund 28.11.: „nach Kurve 6 folgt Kurve 5“)
+    groesste_verluste: g.verluste.filter((v) => v.verlust > 0.02).slice(0, 3).map((v, i) => ({ kurve: `Kurve ${v.kurve}`, rang: i + 1, verlust_s: runden3(v.verlust) }))
+      .sort((a, b) => Number(a.kurve.slice(6)) - Number(b.kurve.slice(6))),
+    hier_schneller: g.verluste.filter((v) => v.verlust < -0.02).slice(-2).map((v) => ({ kurve: `Kurve ${v.kurve}`, gewinn_s: runden3(-v.verlust) }))
+      .sort((a, b) => Number(a.kurve.slice(6)) - Number(b.kurve.slice(6))),
   };
 }
 

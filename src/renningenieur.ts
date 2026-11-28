@@ -27,7 +27,7 @@ const THEMEN: Record<Thema, { text: string; icon: string }> = {
   coaching: { text: "Coaching-Tipps", icon: "fa-graduation-cap" },
   wetter: { text: "Wetter", icon: "fa-cloud-rain" },
 };
-const ARTEN_GEDAECHTNIS: Record<string, string> = { vorliebe: "Vorliebe", ziel: "Ziel", staerke: "Stärke", schwaeche: "Daran arbeite ich", notiz: "Notiz" };
+const ARTEN_GEDAECHTNIS: Record<string, string> = { vorliebe: "Vorliebe", ziel: "Ziel", staerke: "Stärke", schwaeche: "Daran übst du", notiz: "Notiz" };
 const STANDARD: Einstellungen = { name: "Kim", rufname: null, art: "kumpel", gespraechig: "normal", stimme: "ruhig", sprache: "de",
   themen: { sprit: true, abstaende: true, flaggen: true, reifen: true, coaching: true, wetter: true } };
 
