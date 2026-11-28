@@ -39,6 +39,11 @@ export class Mitfahrer {
   private readonly laengeM: number;
   private readonly vorlaufS: number;
   private gepiept = new Set<number>();
+  // eigene Bremsungen dieser Runde je Bremspunkt (Meter: negativ = früher gebremst als die Referenz)
+  private bremsungen = new Map<number, number>();
+  private vorherBremse = 0;
+  /** Bilanz der zuletzt beendeten Runde (null = noch keine) */
+  letzteBilanz: Bilanz | null = null;
 
   constructor(stellen: number[], laengeM: number, vorlaufS = 0.08) {
     this.stellen = [...stellen].sort((x, y) => x - y);
@@ -46,14 +51,28 @@ export class Mitfahrer {
     this.vorlaufS = vorlaufS;
   }
 
-  /** anteil 0…1, tempo in m/s; true = jetzt piepen */
-  aufnehmen(anteil: number, tempo: number): boolean {
+  /** anteil 0…1, tempo in m/s, bremse 0…1; true = jetzt piepen */
+  aufnehmen(anteil: number, tempo: number, bremse = 0): boolean {
     if (!Number.isFinite(anteil) || anteil < 0 || anteil > 1.0001) return false;
     const vorher = this.vorher;
     this.vorher = anteil;
+    const bremstVorher = this.vorherBremse;
+    this.vorherBremse = Number.isFinite(bremse) ? bremse : 0;
     if (vorher == null) return false;
-    if (anteil < vorher - 0.5) this.gepiept.clear(); // neue Runde
+    if (anteil < vorher - 0.5) {
+      // neue Runde: Bilanz der alten, dann von vorn
+      if (this.bremsungen.size) this.letzteBilanz = this.auswerten();
+      this.gepiept.clear();
+      this.bremsungen.clear();
+    }
     if (anteil < vorher) return false; // rückwärts / zurückgesetzt
+    // Wo bremst du selbst? Im Fenster ±80 m um jeden Bremspunkt der erste Tritt auf die Bremse
+    if (bremstVorher < 0.3 && this.vorherBremse >= 0.3) {
+      for (let i = 0; i < this.stellen.length; i++) {
+        const meter = (anteil - this.stellen[i]) * this.laengeM;
+        if (Math.abs(meter) <= 80 && !this.bremsungen.has(i)) this.bremsungen.set(i, Math.round(meter));
+      }
+    }
     const vorlauf = Math.max(0, tempo) * this.vorlaufS / this.laengeM;
     for (let i = 0; i < this.stellen.length; i++) {
       const s = this.stellen[i];
@@ -66,6 +85,27 @@ export class Mitfahrer {
     }
     return false;
   }
+
+  private auswerten(): Bilanz {
+    const werte = [...this.bremsungen.entries()];
+    const passend = werte.filter(([, m]) => Math.abs(m) <= 10).length;
+    const frueh = werte.filter(([, m]) => m < -10).length;
+    const spaet = werte.filter(([, m]) => m > 10).length;
+    const g = werte.reduce<[number, number] | null>((b, x) => (!b || Math.abs(x[1]) > Math.abs(b[1]) ? x : b), null);
+    return { gemessen: werte.length, von: this.stellen.length, passend, frueh, spaet, groesste: g && Math.abs(g[1]) > 10 ? { nr: g[0] + 1, meter: g[1] } : null };
+  }
+}
+
+export type Bilanz = { gemessen: number; von: number; passend: number; frueh: number; spaet: number; groesste: { nr: number; meter: number } | null };
+
+/** Kurze Rückmeldung nach der Runde (Deutsch oder Englisch) */
+export function bilanzSatz(b: Bilanz, en: boolean): string {
+  const g = b.groesste;
+  const wo = g ? (en ? ` Biggest gap at braking point ${g.nr}: ${Math.abs(g.meter)} metres ${g.meter < 0 ? "too early" : "too late"}.`
+    : ` Am deutlichsten am ${g.nr}. Bremspunkt: ${Math.abs(g.meter)} Meter zu ${g.meter < 0 ? "früh" : "spät"}.`) : "";
+  return en
+    ? `Braking points: ${b.passend} of ${b.gemessen} spot on${b.frueh ? `, ${b.frueh} too early` : ""}${b.spaet ? `, ${b.spaet} too late` : ""}.${wo}`
+    : `Bremspunkte: ${b.passend} von ${b.gemessen} passen${b.frueh ? `, ${b.frueh} zu früh` : ""}${b.spaet ? `, ${b.spaet} zu spät` : ""}.${wo}`;
 }
 
 // Funk-Befehl (Deutsch und Englisch) – wird VOR der KI ausgewertet (chat.ts „befehl“)

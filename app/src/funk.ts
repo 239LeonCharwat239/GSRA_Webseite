@@ -15,7 +15,7 @@ export type Stimmlage = "ruhig" | "energisch" | "tief" | "hell";
 export type FunkEinstellungen = { vorlesen: boolean; klang: boolean; lautstaerke: number; stimme: string; spotter: boolean; namenAnKi: boolean };
 
 const SPEICHER = "gsra_funk";
-const STANDARD: FunkEinstellungen = { vorlesen: false, klang: true, lautstaerke: 0.8, stimme: "", spotter: true, namenAnKi: true };
+const STANDARD: FunkEinstellungen = { vorlesen: true, klang: true, lautstaerke: 0.8, stimme: "", spotter: true, namenAnKi: true };
 
 export function funkLaden(): FunkEinstellungen {
   try {

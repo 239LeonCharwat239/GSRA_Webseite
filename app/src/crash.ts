@@ -112,7 +112,10 @@ export function schadenBild(p: Probe | null, einschlag: Einschlag | null, jetzt:
         ...(aus.topspeedJetztKmh != null ? { topspeed_vorher_kmh: aus.topspeedVorherKmh, topspeed_jetzt_kmh: aus.topspeedJetztKmh } : {}),
       }
     : null;
-  const nichts = pflicht <= 0 && optional <= 0 && !fleischball && !warnungen.length && !einschlagText && !spuerbar;
+  const laeuft = aus?.messung && (!aus.messung.lenkung || !aus.messung.topspeed)
+    ? `Auswirkung am Auto wird noch gemessen: ${[!aus.messung.lenkung ? "Lenkung nach ein paar Sekunden Vollgas geradeaus" : null, !aus.messung.topspeed ? "Topspeed nach der nächsten ganzen Runde" : null].filter(Boolean).join(", ")}`
+    : null;
+  const nichts = pflicht <= 0 && optional <= 0 && !fleischball && !warnungen.length && !einschlagText && !spuerbar && !laeuft;
   if (nichts) {
     const bekannt = p.reparatur != null || p.flaggen != null || p.motorWarnung != null;
     return bekannt ? "kein Schaden gemeldet und kein Einschlag gemessen" : null;
@@ -124,6 +127,7 @@ export function schadenBild(p: Probe | null, einschlag: Einschlag | null, jetzt:
     ...(warnungen.length ? { motor_warnungen: warnungen } : {}),
     ...(einschlagText ? { letzter_einschlag: einschlagText } : {}),
     ...(spuerbar ? { am_auto_gemessen: spuerbar } : {}),
+    ...(laeuft ? { messung_laeuft: laeuft } : {}),
     hinweis: "iRacing zeigt die genaue Reparaturzeit oft erst in der Box. Nach einem harten Einschlag ist Schaden an Aufhängung oder Lenkung wahrscheinlich.",
   };
 }
@@ -170,7 +174,11 @@ const GERADE_TEMPO = 27; // m/s (~100 km/h)
 const GERADE_QUER = 1.5; // m/s² – kaum Querkraft
 const LENK_FENSTER = 900; // Messpunkte (~15 s Geradeaus-Fahrt bei 60 Hz)
 
-export type Auswirkung = { lenkungSchiefGrad: number | null; topspeedVorherKmh: number | null; topspeedJetztKmh: number | null; ausfluege: number };
+export type Auswirkung = {
+  lenkungSchiefGrad: number | null; topspeedVorherKmh: number | null; topspeedJetztKmh: number | null; ausfluege: number;
+  /** nach einem Einschlag: was schon gemessen ist (null = kein Einschlag) */
+  messung: { lenkung: boolean; topspeed: boolean } | null;
+};
 
 export class Fahrverhalten {
   private vorCrash: number[] = []; // Lenkwinkel geradeaus vor dem Einschlag (rad)
@@ -241,6 +249,33 @@ export class Fahrverhalten {
     const vorher = this.topVorher > 0 ? Math.round(this.topVorher * 3.6) : null;
     const jetzt = this.topLetzte != null ? Math.round(this.topLetzte * 3.6) : null;
     const verlust = vorher != null && jetzt != null && vorher - jetzt >= 4;
-    return { lenkungSchiefGrad: schief, topspeedVorherKmh: verlust ? vorher : null, topspeedJetztKmh: verlust ? jetzt : null, ausfluege: this.ausfluege };
+    return {
+      lenkungSchiefGrad: schief, topspeedVorherKmh: verlust ? vorher : null, topspeedJetztKmh: verlust ? jetzt : null, ausfluege: this.ausfluege,
+      messung: this.crash ? { lenkung: this.nachCrash.length >= 120, topspeed: this.topLetzte != null } : null,
+    };
   }
+}
+
+/** Nach einem Einschlag das Messergebnis von selbst ansagen (wie der Crew Chief in iRacing: „aero damage is slowing
+ *  you“) – jedes Ergebnis einmal; gesagt merkt sich, was schon angesagt ist. Deutsch oder Englisch. */
+export function schadenMeldung(a: Auswirkung, gesagt: Set<string>, en: boolean): string | null {
+  if (!a.messung) return null;
+  if (a.lenkungSchiefGrad != null && !gesagt.has("lenkung")) {
+    gesagt.add("lenkung");
+    const g = String(a.lenkungSchiefGrad).replace(".", en ? "." : ",");
+    return en ? `Damage check: on the straights your steering is ${g} degrees off centre – the alignment is bent, the car will pull. If it gets worse, box.`
+      : `Schaden-Check: Auf den Geraden steht dein Lenkrad ${g} Grad schief – Spur oder Aufhängung sind verbogen, das Auto zieht. Wird es schlimmer, komm an die Box.`;
+  }
+  if (a.topspeedJetztKmh != null && a.topspeedVorherKmh != null && !gesagt.has("topspeed")) {
+    gesagt.add("topspeed");
+    const d = a.topspeedVorherKmh - a.topspeedJetztKmh;
+    return en ? `Damage check: you've lost about ${d} km/h of top speed (${a.topspeedJetztKmh} instead of ${a.topspeedVorherKmh}) – probably aero or engine damage.`
+      : `Schaden-Check: Dir fehlen etwa ${d} km/h Topspeed (${a.topspeedJetztKmh} statt ${a.topspeedVorherKmh}) – wahrscheinlich Aero- oder Motorschaden.`;
+  }
+  if (a.messung.lenkung && a.messung.topspeed && a.lenkungSchiefGrad == null && a.topspeedJetztKmh == null && !gesagt.has("ok")) {
+    gesagt.add("ok");
+    return en ? "Good news: after the hit I can't measure anything wrong with the car – steering straight, top speed as before."
+      : "Gute Nachricht: Nach dem Einschlag messe ich am Auto nichts Auffälliges – Lenkung gerade, Topspeed wie vorher.";
+  }
+  return null;
 }

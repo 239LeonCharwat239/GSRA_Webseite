@@ -18,8 +18,9 @@ import { Chat, pruefSatz, pruefSaetze } from "./chat.ts";
 import { Spotter, spotterSatz } from "./spotter.ts";
 import { abstandSatz, type Gegner } from "./vorlagen.ts";
 import { Feldrunden, deltaZu, verlustIn, type FeldRunde } from "./feldreferenz.ts";
-import { CrashWaechter, crashSatz, Fahrverhalten, schadenBild, type Einschlag } from "./crash.ts";
-import { bremsStellen, bremsStellenAusReferenz, Mitfahrer, mitfahrBefehl } from "./mitfahren.ts";
+import { CrashWaechter, crashSatz, Fahrverhalten, schadenBild, schadenMeldung, type Einschlag } from "./crash.ts";
+import { bilanzSatz, bremsStellen, bremsStellenAusReferenz, Mitfahrer, mitfahrBefehl } from "./mitfahren.ts";
+import { boxAntwort, boxBefehle, boxEnglisch, boxFrage, boxStand, boxVerlustMessen, boxWunschLesen, empfehlung, spritBisZiel, type BoxLage } from "./boxenfunk.ts";
 import { referenzAnsicht } from "./referenz-ansicht.ts";
 import { fahrerSatz, NachbarWaechter, StrafenWaechter, strafeAus, strafeSatz, werMitInfo, type Strafe } from "./fahrer-info.ts";
 import { eigeneRundeTeilen, feldRundeTeilen, referenzenLaden, referenzLoeschen, type Referenz, type SitzungsInfo } from "./referenz.ts";
@@ -165,35 +166,107 @@ function neueNachbarnMelden(f: Feld) {
 /** „Fahr eine Runde mit mir“: Piepton an den Bremspunkten (mitfahren.ts). Referenz: schnellste GSRA-Referenzrunde mit
  *  Pedalen, wenn sie schneller ist als deine Bestzeit – sonst deine Bestzeit */
 let mitfahrer: Mitfahrer | null = null;
-function mitfahrenUmschalten(an = !mitfahrer): string {
-  const en = ansageSprache() !== "de";
-  const knopf = $("lMitfahren");
-  const info = $("lMitfahrenText");
-  if (!an) {
-    mitfahrer = null;
-    knopf.setAttribute("aria-pressed", "false");
-    knopf.textContent = "Fahr eine Runde mit mir";
-    info.textContent = "";
-    return en ? "Okay, no more beeps." : "Alles klar, kein Piepen mehr.";
-  }
+let mitfahrQuelle: "referenz" | "eigene" | null = null;
+let mitfahrenGeplant = false; // „die nächste Runde auf Piepton“: startet an der Ziellinie
+/** Bremspunkte aus der besten Vorlage: GSRA-Referenz mit Pedalen (wenn schneller) oder deine Bestzeit */
+function mitfahrVorlage(en: boolean): { stellen: number[]; quelle: string; art: "referenz" | "eigene" } | null {
   const L = laenge();
+  if (!L) return null;
   const eigene = zaehler.beste && zaehler.beste.punkte.length > 10 ? zaehler.beste : null;
   const ref = referenzen.find((r) => r.bremse);
-  let stellen: number[] = [];
-  let quelle = "";
-  if (L && ref?.bremse && (!eigene || ref.zeit < eigene.zeit)) {
-    stellen = bremsStellenAusReferenz(ref.bremse, L);
-    quelle = `${en ? "the GSRA reference lap" : "der GSRA-Referenzrunde"} ${zeitText(ref.zeit)}`;
-  } else if (L && eigene) {
-    stellen = bremsStellen(eigene.punkte.map((x) => x.a), eigene.punkte.map((x) => x.b), L);
-    quelle = `${en ? "your best lap" : "deiner Bestzeit"} ${zeitText(eigene.zeit)}`;
+  if (ref?.bremse && (!eigene || ref.zeit < eigene.zeit)) {
+    return { stellen: bremsStellenAusReferenz(ref.bremse, L), quelle: `${en ? "the GSRA reference lap" : "der GSRA-Referenzrunde"} ${zeitText(ref.zeit)}`, art: "referenz" };
   }
-  if (!L || !stellen.length) return en ? "Do one clean lap first – then I can beep at the braking points." : "Fahr erst eine saubere Runde – dann piepe ich dir an den Bremspunkten.";
-  mitfahrer = new Mitfahrer(stellen, L);
-  knopf.setAttribute("aria-pressed", "true");
-  knopf.textContent = "Piepton aus";
-  info.textContent = `${stellen.length} Bremspunkte · ${quelle}`;
-  return en ? `Got it – I will beep at ${stellen.length} braking points from ${quelle}.` : `Alles klar – ich piepe an ${stellen.length} Bremspunkten aus ${quelle}.`;
+  if (eigene) return { stellen: bremsStellen(eigene.punkte.map((x) => x.a), eigene.punkte.map((x) => x.b), L), quelle: `${en ? "your best lap" : "deiner Bestzeit"} ${zeitText(eigene.zeit)}`, art: "eigene" };
+  return null;
+}
+function mitfahrenAnzeigen() {
+  const knopf = $("lMitfahren");
+  const an = Boolean(mitfahrer) || mitfahrenGeplant;
+  knopf.setAttribute("aria-pressed", String(an));
+  knopf.textContent = an ? "Piepton aus" : "Fahr eine Runde mit mir";
+  $("lMitfahrenText").textContent = mitfahrer ? `${mitfahrer.stellen.length} Bremspunkte` : mitfahrenGeplant ? "ab der nächsten Runde" : "";
+}
+function mitfahrenStarten(v: { stellen: number[]; art: "referenz" | "eigene" }) {
+  const L = laenge();
+  if (!L) return;
+  mitfahrer = new Mitfahrer(v.stellen, L);
+  mitfahrQuelle = v.art;
+  mitfahrenGeplant = false;
+  mitfahrenAnzeigen();
+}
+/** an/aus; naechsteRunde = erst an der Ziellinie beginnen (Wunsch 29.11.: „die nächste Runde auf Piepton“) */
+function mitfahrenUmschalten(an = !(mitfahrer || mitfahrenGeplant), naechsteRunde = false): string {
+  const en = ansageSprache() !== "de";
+  if (!an) {
+    mitfahrer = null;
+    mitfahrQuelle = null;
+    mitfahrenGeplant = false;
+    mitfahrenAnzeigen();
+    return en ? "Okay, no more beeps." : "Alles klar, kein Piepen mehr.";
+  }
+  const v = mitfahrVorlage(en);
+  if (!v || !v.stellen.length) return en ? "Do one clean lap first – then I can beep at the braking points." : "Fahr erst eine saubere Runde – dann piepe ich dir an den Bremspunkten.";
+  const mitten = (zaehler.jetzt?.anteil ?? 0) > 0.05;
+  if (naechsteRunde && mitten) {
+    mitfahrer = null;
+    mitfahrenGeplant = true;
+    mitfahrenAnzeigen();
+    return en ? `Got it – from the next lap I'll beep at ${v.stellen.length} braking points from ${v.quelle}. Say "beep off" to stop.`
+      : `Alles klar – ab der nächsten Runde piepe ich an ${v.stellen.length} Bremspunkten aus ${v.quelle}. Sag „Piepton aus“, wenn ich aufhören soll.`;
+  }
+  mitfahrenStarten(v);
+  return en ? `Got it – I'll beep at ${v.stellen.length} braking points from ${v.quelle}, every lap until you say "beep off".${mitten ? " This lap from the next braking point." : ""}`
+    : `Alles klar – ich piepe an ${v.stellen.length} Bremspunkten aus ${v.quelle}, jede Runde, bis du „Piepton aus“ sagst.${mitten ? " In dieser Runde ab dem nächsten Bremspunkt." : ""}`;
+}
+/** An der Ziellinie: geplanten Piepton starten, bei neuer eigener Bestzeit nachlernen, Bremspunkt-Bilanz ansagen */
+function mitfahrenRunde(r: Runde, beste: Runde | null) {
+  const en = ansageSprache() !== "de";
+  if (mitfahrenGeplant) {
+    const v = mitfahrVorlage(en);
+    if (v?.stellen.length) mitfahrenStarten(v);
+    return;
+  }
+  if (!mitfahrer) return;
+  const satz: string[] = [];
+  const b = mitfahrer.letzteBilanz;
+  if (b && b.gemessen >= 2) satz.push(bilanzSatz(b, en));
+  if (mitfahrQuelle === "eigene" && beste === r) {
+    const v = mitfahrVorlage(en);
+    if (v?.art === "eigene" && v.stellen.length) {
+      mitfahrenStarten(v);
+      satz.push(en ? "New best lap – I'm using its braking points from now on." : "Neue Bestzeit – ab jetzt piepe ich an ihren Bremspunkten.");
+    }
+  }
+  if (satz.length) chat?.melden(satz.join(" "));
+}
+/** Boxenstopp per Zuruf (boxenfunk.ts / boxenfunk.rs): Lage für die Sprit-Empfehlung */
+function boxLage(): BoxLage {
+  const p = zaehler.jetzt;
+  return {
+    sprit: p?.sprit ?? null, verbrauch: verbrauchProRunde(zaehler.runden), rundenzeit: rundenzeitSchnitt(zaehler.runden),
+    anteil: p?.anteil ?? null, restZeit: p?.restZeit ?? null, restRunden: p?.restRunden ?? null,
+    tank: sitzung?.tankL ?? null, boxVerlust: boxVerlustMessen(zaehler.runden),
+  };
+}
+/** Box-Zuruf oder Frage zur Box: stellt die Box in iRacing ein bzw. antwortet; null = kein Box-Thema */
+function boxFunk(frage: string): string | null {
+  // eingestellte Sprache des Renningenieurs; bei „Automatisch“ aus den Wörtern des Zurufs („Box“ sagen alle)
+  const eingestellt = persoenlichkeit?.sprache;
+  const en = eingestellt && eingestellt !== "auto" ? eingestellt !== "de" : boxEnglisch(frage);
+  const art = boxFrage(frage);
+  if (art === "stand") return boxStand(zaehler.jetzt?.boxHaken, zaehler.jetzt?.boxSprit, en) ?? (en ? "I can't see the pit settings right now." : "Die Box-Einstellung sehe ich gerade nicht.");
+  if (art === "sprit") return empfehlung(boxLage(), en) ?? (en ? "I need a few clean laps to know your fuel use and the laps left." : "Dafür brauche ich ein paar Runden Verbrauch und die Restzeit oder Restrunden des Rennens.");
+  const wunsch = boxWunschLesen(frage);
+  if (!wunsch) return null;
+  if (!istApp || demo.laeuft || !status?.verbunden) return en ? "I can only set the box while iRacing is running." : "Die Box kann ich nur einstellen, wenn iRacing läuft.";
+  const lage = boxLage();
+  const { befehle, liter } = boxBefehle(wunsch, lage);
+  if (!befehle.length) return boxAntwort(wunsch, lage, liter, en);
+  void import("@tauri-apps/api/core")
+    .then(({ invoke }) => invoke<number>("box_befehle", { befehle }))
+    .catch((e) => hinweis(`Box nicht eingestellt: ${e instanceof Error ? e.message : String(e)}`, "fehler"));
+  return boxAntwort(wunsch, lage, liter, en);
 }
 
 /** Eigene Strafe, Verwarnung oder Fleischball sofort ansagen */
@@ -397,12 +470,13 @@ function proben(liste: Probe[]) {
     const einschlag = demo.laeuft ? null : crashWaechter.aufnehmen(p);
     if (einschlag) {
       fahrverhalten.einschlag();
+      schadenGesagt.clear();
       nachEinschlag(einschlag);
     }
     if (!demo.laeuft) fahrverhalten.aufnehmen(p);
-    if (mitfahrer && p.anteil != null && mitfahrer.aufnehmen(p.anteil, p.tempo ?? 0)) piepen(funkE);
+    if (mitfahrer && p.anteil != null && mitfahrer.aufnehmen(p.anteil, p.tempo ?? 0, p.bremse ?? 0)) piepen(funkE);
     const strafe = demo.laeuft ? null : strafenWaechter.pruefen(p.flaggen);
-    if (strafe) chat?.melden(fahrerSatz(ansageSprache(), strafe === "strafe" ? "duStrafe" : strafe === "verwarnung" ? "duVerwarnung" : "duReparatur"));
+    if (strafe) chat?.melden(fahrerSatz(ansageSprache(), strafe === "strafe" ? "duStrafe" : strafe === "verwarnung" ? "duVerwarnung" : "duReparatur"), "", true);
     const r = zaehler.aufnehmen(p);
     if (p.meter != null && p.meter > groessterMeter && p.meter < 100_000) groessterMeter = p.meter;
     verlauf.tempo.push(p.tempo ?? 0);
@@ -424,11 +498,18 @@ function proben(liste: Probe[]) {
  *  oder weiterfährt; höchstens einmal pro Minute */
 const crashWaechter = new CrashWaechter();
 const fahrverhalten = new Fahrverhalten(); // Schaden aus dem Fahrverhalten (schiefe Lenkung, Topspeed) und eigene Ausflug-Zählung
+// Ergebnis der Schadensmessung nach einem Einschlag von selbst ansagen (einmal je Ergebnis, alle 2 s geprüft)
+const schadenGesagt = new Set<string>();
+window.setInterval(() => {
+  if (demo.laeuft || !crashWaechter.letzter) return;
+  const satz = schadenMeldung(fahrverhalten.auswirkung(), schadenGesagt, ansageSprache() !== "de");
+  if (satz) chat?.melden(satz, "", true);
+}, 2000);
 let crashGefragt = -Infinity;
 function nachEinschlag(e: Einschlag) {
   if (e.zeit - crashGefragt < 60 && e.zeit >= crashGefragt) return;
   crashGefragt = e.zeit;
-  window.setTimeout(() => chat?.melden(crashSatz(ansageSprache())), 2200);
+  window.setTimeout(() => chat?.melden(crashSatz(ansageSprache()), "", true), 2200);
 }
 
 /** Rundenmeldung in anderen Sprachen als Deutsch: kurz, ohne die (deutsche) Kurvenanalyse – die formuliert
@@ -485,6 +566,7 @@ function rundeFertig(r: Runde) {
     ? [sparSatz ?? text, schnellster, abstandSatz(persoenlichkeit?.art ?? "kumpel", gegner.vor, gegner.hinter)].filter(Boolean).join(" ")
     : rundenSatz(code, r, beste, gegner);
   funkMelden(vorlage, { ...rundenLage(r, befund), vor_mir: gegner.vor, hinter_mir: gegner.hinter });
+  mitfahrenRunde(r, beste);
   // Karte aus der ersten gültigen Runde mit Fahrtrichtung; Kurvennummern aus der Bestzeit
   if (!karte && r.gueltig) karte = karteBauen(r.punkte);
   if (beste && beste.punkte.length > 10) kurvenMarken = kurvenFinden(spur(beste), laenge() ?? 4000).map((k) => ({ i: k.scheitel, text: String(k.nr) }));
@@ -946,7 +1028,24 @@ function chatLage(): Record<string, unknown> {
     gegen_schnellsten: gegenSchnellstenLage(),
     schaden: schadenLage(),
     ich: meineFahrerLage(),
+    boxenstopp: boxenstoppLage(),
     vergleich: vergleichFuerKi,
+  };
+}
+
+/** Box und Sprit-Strategie für die KI (die App stellt die Box per Zuruf selbst ein) */
+function boxenstoppLage(): Record<string, unknown> | null {
+  const l = boxLage();
+  const b = spritBisZiel(l);
+  const p = zaehler.jetzt;
+  if (!b && p?.boxHaken == null) return null;
+  return {
+    eingestellt: boxStand(p?.boxHaken, p?.boxSprit, false),
+    runden_bis_ziel: b?.runden ?? null,
+    sprit_bis_ziel_noch_l: b?.fehlt ?? null,
+    tank_l: l.tank, rest_zeit_s: l.restZeit != null ? Math.round(l.restZeit) : null,
+    fast_repair_frei: p?.fastRepairFrei ?? null,
+    stopp_kostet_s: l.boxVerlust,
   };
 }
 
@@ -1014,13 +1113,18 @@ function chatEinrichten() {
     art: () => persoenlichkeit?.art ?? "kumpel",
     name: () => persoenlichkeit?.name ?? "Renningenieur",
     lokal: lokaleAntwort,
-    befehl: (frage) => { const b = mitfahrBefehl(frage); return b ? mitfahrenUmschalten(b === "an") : null; },
+    befehl: (frage) => {
+      const b = mitfahrBefehl(frage);
+      if (b) return mitfahrenUmschalten(b === "an", /n(ä|ae)chste\w*\s+runde|next\s+lap/i.test(frage));
+      return boxFunk(frage);
+    },
     sprache: (frage) => ansageSprache(frage),
     // „Moment, ich schau nach“ nur, wenn die Antwort auch gesprochen wird (Frage per Sprechtaste oder Vorlesen an)
     warten: (text) => { if (funkE.vorlesen || Date.now() - sprachfrageZeit < 120_000) void vorlesen(text); },
-    vorlesen: (text) => {
+    vorlesen: (text, wichtig) => {
       const perSprache = Date.now() - sprachfrageZeit < 120_000;
-      if (funkE.vorlesen || perSprache) void vorlesen(text);
+      // Wichtiges (Crash, Strafe, Schaden) auch ohne „Vorlesen“, sobald in dieser Sitzung per Sprechtaste gefunkt wurde
+      if (funkE.vorlesen || perSprache || (wichtig && sprachfrageZeit > 0)) void vorlesen(text);
       if (perSprache && aktiverReiter !== "chat") hinweis(`${persoenlichkeit?.name ?? "Renningenieur"}: ${text.slice(0, 220)}`, "ok");
     },
     sparenStarten: () => {

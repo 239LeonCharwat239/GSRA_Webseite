@@ -37,6 +37,15 @@ export type Probe = {
   flaggen?: number | null;
   /** Motor-Warnungen (Bitfeld: 1 Wasser, 2 Benzindruck, 4 Öldruck, 8 abgewürgt, 0x40 Öltemperatur) */
   motorWarnung?: number | null;
+  /** In der Box eingestellt (Bitfeld: 1/2/4/8 Reifen VL/VR/HL/HR, 0x10 tanken, 0x20 Scheibe, 0x40 Fast Repair) */
+  boxHaken?: number | null;
+  /** eingestellte Spritmenge in Litern */
+  boxSprit?: number | null;
+  /** noch verfügbare Fast Repairs */
+  fastRepairFrei?: number | null;
+  /** Restzeit (s) und Restrunden der Sitzung – fehlen bei unbegrenzt */
+  restZeit?: number | null;
+  restRunden?: number | null;
 };
 
 export type FahrerInfo = {
@@ -54,6 +63,8 @@ export type Sitzung = {
   sitzungsart: string | null;
   /** Teilnehmer (ohne Pace-Car und Zuschauer); fehlt bei älteren Ständen */
   fahrer?: FahrerInfo[];
+  /** nutzbare Tankgröße in Litern */
+  tankL?: number | null;
 };
 
 /** Stand aller Autos (Index = Auto im Feld der Simulation); viermal pro Sekunde */

@@ -17,7 +17,8 @@ export type ChatUmgebung = {
   lokal: (frage: string) => string | null;
   /** Sprache der Antwort (eingestellte Sprache; bei „Automatisch“ die Sprache der Frage) */
   sprache: (frage?: string) => string;
-  vorlesen: (text: string) => void;
+  /** wichtig = Crash, Strafe, Schaden: auch sprechen, wenn „Vorlesen“ aus ist, aber per Sprechtaste gefunkt wird */
+  vorlesen: (text: string, wichtig?: boolean) => void;
   /** Die Antwort dauert: kurzer Zwischenspruch („Moment, ich schau nach.“) – nur sprechen, nicht in den Verlauf */
   warten?: (text: string) => void;
   /** „Ich möchte Sprit sparen“: Spar-Modus einschalten; gibt eine kurze Rückmeldung (oder null) */
@@ -81,11 +82,11 @@ export class Chat {
     return el;
   }
 
-  private sagen(text: string, klasse = "") {
+  private sagen(text: string, klasse = "", wichtig = false) {
     const b: ChatBeitrag = { wer: "ingenieur", text };
     this.verlauf.push(b);
     this.blase(b, klasse);
-    this.u.vorlesen(text);
+    this.u.vorlesen(text, wichtig);
   }
 
   leeren() {
@@ -94,8 +95,8 @@ export class Chat {
   }
 
   /** Der Renningenieur meldet sich von selbst (z. B. mit der Nachbesprechung nach der Sitzung) */
-  melden(text: string, klasse = "") {
-    this.sagen(text, klasse);
+  melden(text: string, klasse = "", wichtig = false) {
+    this.sagen(text, klasse, wichtig);
   }
 
   async senden(eingabe: string): Promise<void> {

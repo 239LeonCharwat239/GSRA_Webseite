@@ -19,9 +19,10 @@ import { abstandSatz, rufname } from "../src/vorlagen.ts";
 import { Feldrunden, deltaZu, verlustIn } from "../src/feldreferenz.ts";
 import { namenErsetzen } from "../src/datenschutz.ts";
 import { aufRaster, PUNKTE, verdichten, zeitverlauf } from "../src/referenz.ts";
-import { CRASH_SAETZE, CrashWaechter, Fahrverhalten, schadenBild } from "../src/crash.ts";
+import { CRASH_SAETZE, CrashWaechter, Fahrverhalten, schadenBild, schadenMeldung } from "../src/crash.ts";
 import { FAHRER_SAETZE, NachbarWaechter, StrafenWaechter, strafeAus, werMitInfo } from "../src/fahrer-info.ts";
-import { bremsStellen, bremsStellenAusReferenz, Mitfahrer, mitfahrBefehl } from "../src/mitfahren.ts";
+import { bilanzSatz, bremsStellen, bremsStellenAusReferenz, Mitfahrer, mitfahrBefehl } from "../src/mitfahren.ts";
+import { boxAntwort, boxBefehle, boxEnglisch, boxFrage, boxStand, boxVerlustMessen, boxWunschLesen, empfehlung, spritBisZiel, type BoxLage } from "../src/boxenfunk.ts";
 import { amSatzende } from "../src/kuerzen.ts";
 import { spracheVonText, SPRECH_SPRACHEN, LAENDERCODE } from "../src/sprachen.ts";
 import { aufraeumen, entpacken, packen, streckenKarten, BESTE_JE_AUTO, LETZTE_JE_AUTO, type ArchivRunde } from "../src/rundenarchiv.ts";
@@ -812,4 +813,88 @@ test("Schaden aus dem Fahrverhalten: Lenkrad schief und Topspeed weg nach dem Ei
   lagen.forEach((l, i) => g.aufnehmen(p(i * 0.5, 1, 100, 0, { lage: l })));
   for (let i = 0; i < 20; i++) g.aufnehmen(p(10 + i * 0.5, 1, 100, 0, { lage: i === 5 ? 0 : 3 }));
   assert.equal(g.ausfluege, 2);
+});
+
+test("Boxenstopp per Zuruf: Sätze verstehen, Feststellungen und Fragen nicht als Befehl", () => {
+  const w = boxWunschLesen("Box: 20 Liter, vier neue Reifen, kein Fast Repair")!;
+  assert.deepEqual(w.sprit, { art: "liter", liter: 20 });
+  assert.deepEqual(w.reifen, ["vl", "vr", "hl", "hr"]);
+  assert.equal(w.fastRepair, false);
+  assert.equal(boxWunschLesen("Hey Lars, Reifen vorne wechseln und Fast Repair")?.reifen?.toString(), "vl,vr");
+  assert.equal(boxWunschLesen("neue Reifen hinten links")?.reifen?.toString(), "hl");
+  assert.deepEqual(boxWunschLesen("Box, volltanken")?.sprit, { art: "voll" });
+  assert.deepEqual(boxWunschLesen("Tank so viel wie nötig")?.sprit, { art: "noetig" });
+  assert.deepEqual(boxWunschLesen("Box, nicht tanken, keine Reifen")?.sprit, { art: "kein" });
+  assert.equal(boxWunschLesen("Box, nicht tanken, keine Reifen")?.reifen, "keine");
+  assert.equal(boxWunschLesen("Pit: 15 litres, new tyres, no fast repair")?.fastRepair, false);
+  assert.equal(boxWunschLesen("Box zurücksetzen")?.loeschen, true);
+  // keine Befehle
+  for (const t of ["Meine Reifen sind kaputt", "Wie viel Sprit habe ich?", "Soll ich nachtanken?", "Wer ist vor mir?", "Reifenschaden"]) assert.equal(boxWunschLesen(t), null, t);
+  assert.equal(boxFrage("Wie viel soll ich nachtanken?"), "sprit");
+  assert.equal(boxFrage("Lohnt sich ein Stopp?"), "sprit");
+  assert.equal(boxFrage("Was ist in der Box eingestellt?"), "stand");
+  assert.equal(boxFrage("Wer ist hinter mir?"), null);
+  // Sprache: „Box“ und „Fast Repair“ sagen alle
+  assert.equal(boxEnglisch("Box: 20 Liter, vier neue Reifen, kein Fast Repair"), false);
+  assert.equal(boxEnglisch("Box, fast repair"), false, "unklar: Deutsch");
+  assert.equal(boxEnglisch("Pit: 15 litres, new tyres, no fast repair"), true);
+});
+
+test("Boxenstopp: Sprit bis ins Ziel, ehrlicher Rat, Befehle für iRacing", () => {
+  const lage: BoxLage = { sprit: 30, verbrauch: 2.5, rundenzeit: 100, anteil: 0.5, restZeit: 120, restRunden: null, tank: 100, boxVerlust: 28 };
+  // 2 Minuten Rest, 30 Liter im Tank: reicht locker – vom Stopp abraten
+  const b = spritBisZiel(lage)!;
+  assert.equal(b.fehlt, 0);
+  assert.match(empfehlung(lage, false)!, /keinen Sprit.*Nur zum Tanken würde ich nicht reinkommen/);
+  assert.match(empfehlung(lage, false)!, /28 Sekunden/);
+  // langes Rennen: Liter ausrechnen, „so viel wie nötig“ stellt genau das ein
+  const lang: BoxLage = { ...lage, restZeit: 3000 };
+  const l = spritBisZiel(lang)!;
+  assert.ok(l.fehlt > 40 && l.fehlt < 60, JSON.stringify(l));
+  const { befehle, liter } = boxBefehle(boxWunschLesen("Box, Sprit so viel wie nötig, vier Reifen")!, lang);
+  assert.equal(liter, l.fehlt);
+  assert.deepEqual(befehle.map((x) => x.art), ["tanken", "reifen_vl", "reifen_vr", "reifen_hl", "reifen_hr"]);
+  // zu wenig angesagt: ehrlich sagen
+  assert.match(boxAntwort(boxWunschLesen("Box 10 Liter")!, lang, 10, false), /10 Liter reichen dafür nicht/);
+  // voll: nur so viel, wie in den Tank passt
+  assert.equal(boxBefehle(boxWunschLesen("Box, volltanken")!, lang).liter, 70);
+  // nur Reifen vorne: erst alle Häkchen aus, dann vorne
+  assert.deepEqual(boxBefehle(boxWunschLesen("Box, Reifen vorne")!, lang).befehle.map((x) => x.art), ["keine_reifen", "reifen_vl", "reifen_vr"]);
+  // Rundenrennen
+  assert.equal(spritBisZiel({ ...lage, restZeit: null, restRunden: 10, anteil: 0 })?.runden, 11);
+  // Stand der Box aus iRacing
+  assert.equal(boxStand(0x10 | 0x0f | 0x40, 22, false), "In der Box eingestellt: 22 Liter, vier Reifen, Fast Repair.");
+  assert.equal(boxStand(0, 0, true), "Currently in the box: no fuel, no tyres.");
+  // Zeitverlust eines Stopps aus eigenen Runden: Einfahrt + Ausfahrt gegen normale Runde
+  const runden = [100, 100.5, 99.8].map((zeit) => ({ zeit, inBox: false, gueltig: true }))
+    .concat([{ zeit: 112, inBox: true, gueltig: false }, { zeit: 118, inBox: true, gueltig: false }], [{ zeit: 100.2, inBox: false, gueltig: true }]);
+  assert.equal(boxVerlustMessen(runden), 30);
+  assert.equal(boxVerlustMessen(runden.filter((r) => !r.inBox)), null);
+});
+
+test("Piepton: Bremspunkt-Bilanz nach der Runde; Schaden-Check meldet jedes Ergebnis einmal", () => {
+  const L = 4000;
+  const m = new Mitfahrer([0.25, 0.5, 0.75], L);
+  // Runde: am 1. Punkt 20 m zu früh, am 2. passend, am 3. 30 m zu spät
+  const brems = (a: number) => (a >= 0.245 && a < 0.27) || (a >= 0.501 && a < 0.52) || (a >= 0.7575 && a < 0.78) ? 1 : 0;
+  let a = 0;
+  for (let i = 0; i < 2 * 4800; i++) { a = (a + 50 / 60 / L) % 1; m.aufnehmen(a, 50, brems(a)); }
+  const b = m.letzteBilanz!;
+  assert.equal(b.gemessen, 3);
+  assert.equal(b.passend, 1);
+  assert.equal(b.frueh, 1);
+  assert.equal(b.spaet, 1);
+  assert.equal(b.groesste?.nr, 3);
+  assert.match(bilanzSatz(b, false), /1 von 3 passen, 1 zu früh, 1 zu spät\. Am deutlichsten am 3\. Bremspunkt: 3\d Meter zu spät\./);
+  // Schaden-Check
+  const gesagt = new Set<string>();
+  const basis = { lenkungSchiefGrad: null, topspeedVorherKmh: null, topspeedJetztKmh: null, ausfluege: 0 };
+  assert.equal(schadenMeldung({ ...basis, messung: { lenkung: false, topspeed: false } }, gesagt, false), null, "noch nichts gemessen");
+  assert.match(schadenMeldung({ ...basis, lenkungSchiefGrad: 4.5, messung: { lenkung: true, topspeed: false } }, gesagt, false)!, /4,5 Grad schief/);
+  assert.equal(schadenMeldung({ ...basis, lenkungSchiefGrad: 4.5, messung: { lenkung: true, topspeed: false } }, gesagt, false), null, "nur einmal");
+  const ok = new Set<string>();
+  assert.match(schadenMeldung({ ...basis, messung: { lenkung: true, topspeed: true } }, ok, false)!, /Gute Nachricht/);
+  // „gleich weiß ich mehr“: Messung läuft steht im Schadensbild
+  const bild = schadenBild({ zeit: 10, reparatur: 0, flaggen: 0 } as Probe, null, 10, { ...basis, messung: { lenkung: false, topspeed: false } }) as Record<string, unknown>;
+  assert.match(String(bild.messung_laeuft), /Lenkung.*Topspeed/);
 });

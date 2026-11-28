@@ -3,6 +3,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod anmeldung;
+mod boxenfunk;
 mod lenkrad;
 mod live;
 mod simulation;
@@ -57,7 +58,8 @@ fn main() {
             stimme::stimme_sprechen,
             stimme::stimme_vorbereiten,
             stimme::stimme_abbrechen,
-            systemstimme::systemstimme
+            systemstimme::systemstimme,
+            boxenfunk::box_befehle
         ])
         .setup(|app| {
             live::starten(app.handle().clone());

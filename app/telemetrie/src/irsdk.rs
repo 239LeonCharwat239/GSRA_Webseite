@@ -300,7 +300,7 @@ pub struct Feld {
 }
 
 /// Die Werte, die die App braucht (Namen wie im iRacing-SDK)
-const NAMEN: [&str; 28] = [
+const NAMEN: [&str; 33] = [
     "SessionTime",
     "Lap",
     "LapDistPct",
@@ -335,21 +335,26 @@ const NAMEN: [&str; 28] = [
     // Vorfallpunkte auch als Fahrer- und Team-Zähler (Fund 28.11.: die App sah 0 X) – es zählt der höchste
     "PlayerCarDriverIncidentCount",
     "PlayerCarTeamIncidentCount",
+    // Boxenstopp per Zuruf (Wunsch 29.11.): was in der Box eingestellt ist, Fast Repair, Restzeit und Restrunden
+    "PitSvFlags",
+    "PitSvFuel",
+    "FastRepairAvailable",
+    "SessionTimeRemain",
+    "SessionLapsRemainEx",
 ];
 
 /// Zuordnung Name → Variable (fehlende Werte bleiben leer)
 #[derive(Debug, Clone, Default)]
 pub struct Karte {
-    felder: [Option<Variable>; 28],
+    // Vec statt Array: Arrays über 32 Einträge haben kein Default (je Name aus NAMEN ein Platz, gleiche Reihenfolge)
+    felder: Vec<Option<Variable>>,
     feld: [Option<Variable>; 8],
 }
 
 impl Karte {
     pub fn aus(vars: &[Variable]) -> Karte {
         let mut k = Karte::default();
-        for (i, name) in NAMEN.iter().enumerate() {
-            k.felder[i] = vars.iter().find(|v| v.name == *name).cloned();
-        }
+        k.felder = NAMEN.iter().map(|name| vars.iter().find(|v| v.name == *name).cloned()).collect();
         for (i, name) in FELD_NAMEN.iter().enumerate() {
             k.feld[i] = vars.iter().find(|v| v.name == *name).cloned();
         }
@@ -376,7 +381,7 @@ impl Karte {
         self.felder.iter().filter(|f| f.is_some()).count()
     }
     fn zahl(&self, zeile: &[u8], i: usize) -> Option<f64> {
-        self.felder[i].as_ref().and_then(|v| wert(zeile, v))
+        self.felder.get(i).and_then(|f| f.as_ref()).and_then(|v| wert(zeile, v))
     }
 
     pub fn probe(&self, zeile: &[u8], tick: i32) -> Probe {
@@ -415,6 +420,11 @@ impl Karte {
             lage: z(23).map(|x| x as i32).filter(|x| (-1..=3).contains(x)),
             flaggen: z(24).filter(|x| x.is_finite()).map(|x| x as i64 as u32),
             motor_warnung: z(25).filter(|x| x.is_finite()).map(|x| (x as i64 as u32) & 0xff),
+            box_haken: z(28).filter(|x| x.is_finite() && *x >= 0.0).map(|x| (x as i64 as u32) & 0xffff),
+            box_sprit: z(29).filter(|x| x.is_finite() && (0.0..1000.0).contains(x)),
+            fast_repair_frei: z(30).filter(|x| x.is_finite() && (0.0..100.0).contains(x)).map(|x| x as i32),
+            rest_zeit: z(31).filter(|x| x.is_finite() && (0.0..604_000.0).contains(x)),
+            rest_runden: z(32).filter(|x| x.is_finite() && (0.0..32_000.0).contains(x)).map(|x| x as i32),
         }
     }
 }
@@ -459,6 +469,16 @@ pub struct Probe {
     pub flaggen: Option<u32>,
     /// Motor-Warnungen (EngineWarnings): 1 Wassertemperatur, 2 Benzindruck, 4 Öldruck, 8 abgewürgt, 0x40 Öltemperatur
     pub motor_warnung: Option<u32>,
+    /// In der Box eingestellt (PitSvFlags): 1/2/4/8 Reifen VL/VR/HL/HR, 0x10 tanken, 0x20 Scheibe, 0x40 Fast Repair
+    pub box_haken: Option<u32>,
+    /// eingestellte Spritmenge in Litern (PitSvFuel)
+    pub box_sprit: Option<f64>,
+    /// noch verfügbare Fast Repairs (FastRepairAvailable)
+    pub fast_repair_frei: Option<i32>,
+    /// Restzeit der Sitzung in Sekunden (SessionTimeRemain; fehlt bei unbegrenzt)
+    pub rest_zeit: Option<f64>,
+    /// Restrunden der Sitzung (SessionLapsRemainEx; fehlt bei unbegrenzt)
+    pub rest_runden: Option<i32>,
 }
 
 /// Strecke und Fahrzeug aus der Sitzungsinfo (nur, was die App anzeigt)
@@ -471,6 +491,8 @@ pub struct Sitzung {
     pub sitzungsart: Option<String>,
     /// Teilnehmer (ohne Pace-Car und Zuschauer) – für Zweikämpfe im Rennbericht
     pub fahrer: Vec<FahrerInfo>,
+    /// nutzbare Tankgröße in Litern (für „volltanken“ und die Sprit-Empfehlung)
+    pub tank_l: Option<f64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Default)]
@@ -606,7 +628,12 @@ pub fn sitzung_lesen(yaml: &str) -> Sitzung {
         }
         None
     });
-    Sitzung { strecke, streckenlaenge_m, fahrzeug, sitzungsart, fahrer: fahrer_lesen(yaml) }
+    // Tankgröße: „DriverCarFuelMaxLtr: 120.000 l“ mal „DriverCarMaxFuelPct: 1.000 %“ (Anteil 0…1, Serie kann begrenzen)
+    let zahl_vor = |name: &str| yaml_wert(yaml.lines(), name).and_then(|w| w.split_whitespace().next().and_then(|z| z.parse::<f64>().ok()));
+    let tank_l = zahl_vor("DriverCarFuelMaxLtr")
+        .map(|l| l * zahl_vor("DriverCarMaxFuelPct").filter(|p| *p > 0.0 && *p <= 1.0).unwrap_or(1.0))
+        .filter(|l| l.is_finite() && *l > 1.0 && *l < 1000.0);
+    Sitzung { strecke, streckenlaenge_m, fahrzeug, sitzungsart, fahrer: fahrer_lesen(yaml), tank_l }
 }
 
 #[cfg(test)]
@@ -892,6 +919,8 @@ mod tests {
     fn sitzungsinfo_strecke_fahrzeug_art() {
         let yaml = "---\nWeekendInfo:\n TrackName: spa\n TrackDisplayName: Circuit de Spa-Francorchamps\n TrackLength: 6.93 km\nSessionInfo:\n CurrentSessionNum: 1\n Sessions:\n - SessionNum: 0\n   SessionType: Practice\n - SessionNum: 1\n   SessionType: Race\nDriverInfo:\n DriverCarIdx: 2\n Drivers:\n - CarIdx: 0\n   CarScreenName: Pace Car\n - CarIdx: 2\n   CarScreenName: \"Porsche 911 GT3 R\"\n";
         let s = sitzung_lesen(yaml);
+        assert_eq!(sitzung_lesen("DriverCarFuelMaxLtr: 120.000 l\nDriverCarMaxFuelPct: 0.500 %\n").tank_l, Some(60.0));
+        assert_eq!(sitzung_lesen("DriverCarFuelMaxLtr: 0.5 l\n").tank_l, None);
         assert_eq!(s.strecke.as_deref(), Some("Circuit de Spa-Francorchamps"));
         assert_eq!(s.streckenlaenge_m, Some(6930.0));
         assert_eq!(s.fahrzeug.as_deref(), Some("Porsche 911 GT3 R"));
