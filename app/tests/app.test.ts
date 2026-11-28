@@ -19,9 +19,9 @@ import { abstandSatz, rufname } from "../src/vorlagen.ts";
 import { Feldrunden, deltaZu, verlustIn } from "../src/feldreferenz.ts";
 import { namenErsetzen } from "../src/datenschutz.ts";
 import { aufRaster, PUNKTE, verdichten, zeitverlauf } from "../src/referenz.ts";
-import { CRASH_SAETZE, CrashWaechter, schadenBild } from "../src/crash.ts";
+import { CRASH_SAETZE, CrashWaechter, Fahrverhalten, schadenBild } from "../src/crash.ts";
 import { FAHRER_SAETZE, NachbarWaechter, StrafenWaechter, strafeAus, werMitInfo } from "../src/fahrer-info.ts";
-import { bremsStellen, bremsStellenAusReferenz, Mitfahrer } from "../src/mitfahren.ts";
+import { bremsStellen, bremsStellenAusReferenz, Mitfahrer, mitfahrBefehl } from "../src/mitfahren.ts";
 import { amSatzende } from "../src/kuerzen.ts";
 import { spracheVonText, SPRECH_SPRACHEN, LAENDERCODE } from "../src/sprachen.ts";
 import { aufraeumen, entpacken, packen, streckenKarten, BESTE_JE_AUTO, LETZTE_JE_AUTO, type ArchivRunde } from "../src/rundenarchiv.ts";
@@ -732,9 +732,12 @@ test("Referenz teilen: Runde neben der Strecke oder mit Vorfallpunkten ist gespe
   const abseits = runde(120, (a) => (a > 0.4 && a < 0.45 ? { lage: 0 } : {}));
   const x = runde(180, (a) => (a > 0.5 ? { vorfaelle: 2 } : {}));
   assert.equal(sauber?.sperre ?? null, null);
-  assert.equal(abseits?.gueltig, true, "zählt weiter als Runde …");
-  assert.equal(abseits?.sperre, "Neben der Strecke", "… aber nicht als Referenz");
+  assert.equal(abseits?.gueltig, false, "neben der Strecke zählt nicht (Fund 28.11.) …");
+  assert.equal(abseits?.grund, "Neben der Strecke");
+  assert.equal(abseits?.sperre, "Neben der Strecke", "… und ist keine Referenz");
+  assert.equal(sauber?.gueltig, true);
   assert.equal(x?.sperre, "Vorfallpunkte in der Runde");
+  assert.equal(x?.gueltig, false, "neue X: Runde zählt nicht");
 });
 
 test("Fahr eine Runde mit mir: Bremspunkte finden und genau dort piepen", () => {
@@ -778,4 +781,35 @@ test("Kürzen: nie mitten im Wort oder Satz (Nachbesprechung brach ab)", () => {
   // von der KI abgebrochen (max_tokens): bis zum letzten ganzen Satz, auch wenn die Länge passt
   assert.equal(amSatzende("Gute Pace heute. Am Ende hast du in Kurve 6 noch etwas verlo", 500, true), "Gute Pace heute.");
   assert.ok(!/\s\S{1,3}$/.test(amSatzende(text, 101)) || amSatzende(text, 101).endsWith("."), "kein abgeschnittenes Wortende");
+});
+
+test("Funk-Befehl Piepton wird erkannt (vor der KI) – auch mit Signalwort und Spracherkennung", () => {
+  for (const f of ["Fahr eine Runde mit mir", "Hey Lars, fahre eine Runde mit mir.", "fahr ne runde mit mir", "Zeig mir die Bremspunkte", "Piepton an", "Ride along with me", "drive a lap with me"]) assert.equal(mitfahrBefehl(f), "an", f);
+  for (const f of ["Piepton aus", "Kein Piepen mehr bitte", "Mitfahren beenden", "beep off"]) assert.equal(mitfahrBefehl(f), "aus", f);
+  for (const f of ["Wie war meine Runde?", "Wer ist vor mir?", "Wie viel Sprit habe ich?"]) assert.equal(mitfahrBefehl(f), null, f);
+});
+
+test("Schaden aus dem Fahrverhalten: Lenkrad schief und Topspeed weg nach dem Einschlag, Ausflüge gezählt", () => {
+  const f = new Fahrverhalten();
+  const p = (zeit: number, runde: number, kmh: number, lenkung: number, extra: Partial<Probe> = {}): Probe =>
+    ({ zeit, runde, tempo: kmh / 3.6, lenkung, querBeschl: 0.3, gas: 1, bremse: 0, aufStrecke: true, inBox: false, lage: 3, ...extra }) as Probe;
+  let t = 0;
+  // vorher: geradeaus mit 0° Lenkung, Topspeed 240
+  for (let r = 1; r <= 2; r++) for (let i = 0; i < 600; i++) f.aufnehmen(p((t += 1 / 60), r, 200 + (i % 300) / 7.5, 0));
+  assert.equal(f.auswirkung().lenkungSchiefGrad, null);
+  f.einschlag();
+  // nachher: Lenkrad 5° schief auf Geraden, Topspeed nur noch ~225
+  for (let r = 3; r <= 4; r++) for (let i = 0; i < 600; i++) f.aufnehmen(p((t += 1 / 60), r, 185 + (i % 300) / 7.5, (5 * Math.PI) / 180));
+  f.aufnehmen(p((t += 1 / 60), 5, 150, 0.087));
+  const a = f.auswirkung();
+  assert.ok(a.lenkungSchiefGrad != null && Math.abs(a.lenkungSchiefGrad - 5) < 0.3, JSON.stringify(a));
+  assert.ok(a.topspeedJetztKmh != null && a.topspeedVorherKmh != null && a.topspeedVorherKmh - a.topspeedJetztKmh >= 10, JSON.stringify(a));
+  const bild = schadenBild(p(t, 5, 150, 0, { reparatur: 0, flaggen: 0 }), null, t, a) as Record<string, unknown>;
+  assert.ok(bild.am_auto_gemessen, JSON.stringify(bild));
+  // Ausflüge neben die Strecke: jeder Ausflug einmal (nicht jeder Messpunkt), kurzes Flackern zählt nicht doppelt
+  const g = new Fahrverhalten();
+  const lagen = [3, 3, 0, 0, 0, 3, 0, 3, 3];
+  lagen.forEach((l, i) => g.aufnehmen(p(i * 0.5, 1, 100, 0, { lage: l })));
+  for (let i = 0; i < 20; i++) g.aufnehmen(p(10 + i * 0.5, 1, 100, 0, { lage: i === 5 ? 0 : 3 }));
+  assert.equal(g.ausfluege, 2);
 });

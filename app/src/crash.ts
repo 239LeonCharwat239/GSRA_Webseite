@@ -90,7 +90,7 @@ export class CrashWaechter {
 
 /** Schaden für den Renningenieur: Reparaturzeit (falls iRacing sie schon meldet), Fleischball, Motor-Warnungen und
  *  der letzte Einschlag. null = keine Angaben (Simulation liefert nichts). */
-export function schadenBild(p: Probe | null, einschlag: Einschlag | null, jetzt: number | null): Record<string, unknown> | string | null {
+export function schadenBild(p: Probe | null, einschlag: Einschlag | null, jetzt: number | null, aus: Auswirkung | null = null): Record<string, unknown> | string | null {
   if (!p) return null;
   const pflicht = Math.round(p.reparatur ?? 0);
   const optional = Math.round(p.reparaturOptional ?? 0);
@@ -106,7 +106,13 @@ export function schadenBild(p: Probe | null, einschlag: Einschlag | null, jetzt:
   const einschlagText = einschlag && vor != null && vor <= 20 * 60
     ? { vor_s: vor, staerke_g: einschlag.g, tempo_vorher_kmh: einschlag.tempoVorherKmh, vorfallpunkte_dazu: einschlag.vorfaelle }
     : null;
-  const nichts = pflicht <= 0 && optional <= 0 && !fleischball && !warnungen.length && !einschlagText;
+  const spuerbar = aus && (aus.lenkungSchiefGrad != null || aus.topspeedJetztKmh != null)
+    ? {
+        ...(aus.lenkungSchiefGrad != null ? { lenkrad_auf_geraden_schief_grad: aus.lenkungSchiefGrad } : {}),
+        ...(aus.topspeedJetztKmh != null ? { topspeed_vorher_kmh: aus.topspeedVorherKmh, topspeed_jetzt_kmh: aus.topspeedJetztKmh } : {}),
+      }
+    : null;
+  const nichts = pflicht <= 0 && optional <= 0 && !fleischball && !warnungen.length && !einschlagText && !spuerbar;
   if (nichts) {
     const bekannt = p.reparatur != null || p.flaggen != null || p.motorWarnung != null;
     return bekannt ? "kein Schaden gemeldet und kein Einschlag gemessen" : null;
@@ -117,6 +123,7 @@ export function schadenBild(p: Probe | null, einschlag: Einschlag | null, jetzt:
     ...(fleischball ? { fleischball_flagge: "Pflicht-Reparatur: sofort an die Box" } : {}),
     ...(warnungen.length ? { motor_warnungen: warnungen } : {}),
     ...(einschlagText ? { letzter_einschlag: einschlagText } : {}),
+    ...(spuerbar ? { am_auto_gemessen: spuerbar } : {}),
     hinweis: "iRacing zeigt die genaue Reparaturzeit oft erst in der Box. Nach einem harten Einschlag ist Schaden an Aufhängung oder Lenkung wahrscheinlich.",
   };
 }
@@ -153,3 +160,87 @@ export const CRASH_SAETZE: Record<string, string> = {
   mt: "Kollox sew? Dik kienet daqqa qawwija. Jekk il-karozza tiġbed jew tħossha stramba, idħol fil-pits.",
 };
 export const crashSatz = (sprache: string) => CRASH_SAETZE[sprache] ?? CRASH_SAETZE.de;
+
+// ---------------------------------------------------------------- Schaden aus dem Fahrverhalten (Fund 28.11.)
+// iRacing meldet die Reparaturzeit (PitRepairLeft) meist erst in der Box – „womöglich Schaden, aber ich sehe nichts“.
+// Was man im Fahren SIEHT: Nach einem Einschlag steht das Lenkrad auf Geraden schief (Spur/Aufhängung verbogen) und
+// der Topspeed fällt (Aero, Motor). Beides misst die App selbst und vergleicht mit der Zeit vor dem Einschlag.
+
+const GERADE_TEMPO = 27; // m/s (~100 km/h)
+const GERADE_QUER = 1.5; // m/s² – kaum Querkraft
+const LENK_FENSTER = 900; // Messpunkte (~15 s Geradeaus-Fahrt bei 60 Hz)
+
+export type Auswirkung = { lenkungSchiefGrad: number | null; topspeedVorherKmh: number | null; topspeedJetztKmh: number | null; ausfluege: number };
+
+export class Fahrverhalten {
+  private vorCrash: number[] = []; // Lenkwinkel geradeaus vor dem Einschlag (rad)
+  private nachCrash: number[] = [];
+  private topVorher = 0; // höchstes Tempo vor dem Einschlag (m/s)
+  private topRunde = 0; // höchstes Tempo seit dem Einschlag in der aktuellen Runde
+  private topLetzte: number | null = null; // höchstes Tempo der letzten ganzen Runde nach dem Einschlag
+  private crash = false;
+  private runde: number | null = null;
+  private vorherLage: number | null = null;
+  private ausflugZeit = -Infinity;
+  ausfluege = 0;
+
+  zuruecksetzen() {
+    this.vorCrash = [];
+    this.nachCrash = [];
+    this.topVorher = 0;
+    this.topRunde = 0;
+    this.topLetzte = null;
+    this.crash = false;
+    this.runde = null;
+    this.vorherLage = null;
+    this.ausflugZeit = -Infinity;
+    this.ausfluege = 0;
+  }
+
+  /** Einschlag erkannt: ab jetzt wird „nachher“ gemessen */
+  einschlag() {
+    this.crash = true;
+    this.nachCrash = [];
+    this.topRunde = 0;
+    this.topLetzte = null;
+  }
+
+  aufnehmen(p: Probe): void {
+    // eigene Zählung der Ausflüge neben die Strecke (iRacing zählt X nicht in jeder Sitzungsart)
+    if (p.lage === 0 && this.vorherLage !== 0 && p.zeit != null && p.zeit - this.ausflugZeit > 3) {
+      this.ausfluege++;
+      this.ausflugZeit = p.zeit;
+    }
+    if (p.lage != null) this.vorherLage = p.lage;
+    if (p.inBox || p.aufStrecke === false) return;
+    const v = p.tempo ?? 0;
+    if (p.runde != null && p.runde !== this.runde) {
+      if (this.crash && this.runde != null && this.topRunde > 0) this.topLetzte = this.topRunde;
+      this.topRunde = 0;
+      this.runde = p.runde;
+    }
+    if (this.crash) this.topRunde = Math.max(this.topRunde, v);
+    else this.topVorher = Math.max(this.topVorher, v);
+    const geradeaus = v > GERADE_TEMPO && p.querBeschl != null && Math.abs(p.querBeschl) < GERADE_QUER
+      && (p.gas ?? 0) > 0.8 && (p.bremse ?? 0) < 0.05 && p.lenkung != null && Math.abs(p.lenkung) < 0.5;
+    if (!geradeaus) return;
+    const ziel = this.crash ? this.nachCrash : this.vorCrash;
+    ziel.push(p.lenkung as number);
+    if (ziel.length > LENK_FENSTER) ziel.shift();
+  }
+
+  /** Was man am Auto merkt; null-Werte = (noch) nichts Auffälliges oder zu wenig Daten */
+  auswirkung(): Auswirkung {
+    const mittel = (w: number[]) => w.reduce((a, b) => a + b, 0) / w.length;
+    let schief: number | null = null;
+    if (this.crash && this.nachCrash.length >= 120) {
+      const basis = this.vorCrash.length >= 120 ? mittel(this.vorCrash) : 0;
+      const grad = ((mittel(this.nachCrash) - basis) * 180) / Math.PI;
+      if (Math.abs(grad) >= 2) schief = Math.round(Math.abs(grad) * 10) / 10;
+    }
+    const vorher = this.topVorher > 0 ? Math.round(this.topVorher * 3.6) : null;
+    const jetzt = this.topLetzte != null ? Math.round(this.topLetzte * 3.6) : null;
+    const verlust = vorher != null && jetzt != null && vorher - jetzt >= 4;
+    return { lenkungSchiefGrad: schief, topspeedVorherKmh: verlust ? vorher : null, topspeedJetztKmh: verlust ? jetzt : null, ausfluege: this.ausfluege };
+  }
+}

@@ -18,8 +18,8 @@ import { Chat, pruefSatz, pruefSaetze } from "./chat.ts";
 import { Spotter, spotterSatz } from "./spotter.ts";
 import { abstandSatz, type Gegner } from "./vorlagen.ts";
 import { Feldrunden, deltaZu, verlustIn, type FeldRunde } from "./feldreferenz.ts";
-import { CrashWaechter, crashSatz, schadenBild, type Einschlag } from "./crash.ts";
-import { bremsStellen, bremsStellenAusReferenz, Mitfahrer } from "./mitfahren.ts";
+import { CrashWaechter, crashSatz, Fahrverhalten, schadenBild, type Einschlag } from "./crash.ts";
+import { bremsStellen, bremsStellenAusReferenz, Mitfahrer, mitfahrBefehl } from "./mitfahren.ts";
 import { referenzAnsicht } from "./referenz-ansicht.ts";
 import { fahrerSatz, NachbarWaechter, StrafenWaechter, strafeAus, strafeSatz, werMitInfo, type Strafe } from "./fahrer-info.ts";
 import { eigeneRundeTeilen, feldRundeTeilen, referenzenLaden, referenzLoeschen, type Referenz, type SitzungsInfo } from "./referenz.ts";
@@ -195,8 +195,6 @@ function mitfahrenUmschalten(an = !mitfahrer): string {
   info.textContent = `${stellen.length} Bremspunkte · ${quelle}`;
   return en ? `Got it – I will beep at ${stellen.length} braking points from ${quelle}.` : `Alles klar – ich piepe an ${stellen.length} Bremspunkten aus ${quelle}.`;
 }
-const MITFAHREN_AN = /fahr\w*\s+(eine\s+|ne\s+)?runde\s+mit|mitfahren|bremspunkt\w*\s+piep|ride\s+along|(drive|do)\s+a\s+lap\s+with\s+me|beep\s+(at\s+)?(the\s+)?brak/i;
-const MITFAHREN_AUS = /(piep\w*|mitfahren|beep\w*)\s*(aus|stopp?|off|beenden)|kein\s+piep|no\s+more\s+beep/i;
 
 /** Eigene Strafe, Verwarnung oder Fleischball sofort ansagen */
 const strafenWaechter = new StrafenWaechter();
@@ -381,6 +379,7 @@ function statusSetzen(s: Status) {
     void nachbesprechung(true);
   }
   if (!demo.laeuft && s.sitzung) {
+    if (sitzung && (sitzung.strecke !== s.sitzung.strecke || sitzung.fahrzeug !== s.sitzung.fahrzeug || sitzung.sitzungsart !== s.sitzung.sitzungsart)) fahrverhalten.zuruecksetzen();
     sitzung = s.sitzung;
     void referenzenAktualisieren();
   }
@@ -396,7 +395,11 @@ function proben(liste: Probe[]) {
       spotter.aufnehmen(p.seite, p.zeit);
     }
     const einschlag = demo.laeuft ? null : crashWaechter.aufnehmen(p);
-    if (einschlag) nachEinschlag(einschlag);
+    if (einschlag) {
+      fahrverhalten.einschlag();
+      nachEinschlag(einschlag);
+    }
+    if (!demo.laeuft) fahrverhalten.aufnehmen(p);
     if (mitfahrer && p.anteil != null && mitfahrer.aufnehmen(p.anteil, p.tempo ?? 0)) piepen(funkE);
     const strafe = demo.laeuft ? null : strafenWaechter.pruefen(p.flaggen);
     if (strafe) chat?.melden(fahrerSatz(ansageSprache(), strafe === "strafe" ? "duStrafe" : strafe === "verwarnung" ? "duVerwarnung" : "duReparatur"));
@@ -420,6 +423,7 @@ function proben(liste: Probe[]) {
 /** Nach einem Einschlag fragt der Renningenieur nach (fertiger Satz, keine KI-Kosten) – kurz warten, bis das Auto steht
  *  oder weiterfährt; höchstens einmal pro Minute */
 const crashWaechter = new CrashWaechter();
+const fahrverhalten = new Fahrverhalten(); // Schaden aus dem Fahrverhalten (schiefe Lenkung, Topspeed) und eigene Ausflug-Zählung
 let crashGefragt = -Infinity;
 function nachEinschlag(e: Einschlag) {
   if (e.zeit - crashGefragt < 60 && e.zeit >= crashGefragt) return;
@@ -516,7 +520,7 @@ function kiLage(roh: Record<string, unknown>): Record<string, unknown> {
  *  Einschlag (crash.ts); null = Simulation liefert nichts */
 function schadenLage(): Record<string, unknown> | string | null {
   const p = zaehler.jetzt;
-  return schadenBild(p ?? null, crashWaechter.letzter, p?.zeit ?? null);
+  return schadenBild(p ?? null, crashWaechter.letzter, p?.zeit ?? null, fahrverhalten.auswirkung());
 }
 
 /** Nur gemessene Fakten nach einer Runde – daraus formuliert die KI den Funkspruch */
@@ -955,7 +959,12 @@ function meineFahrerLage(): Record<string, unknown> {
   return {
     irating: info?.irating ?? null,
     lizenz: info?.lizenz || null,
-    vorfallpunkte_x: p?.vorfaelle ?? info?.vorfaelle ?? null,
+    // höchster Wert aus Telemetrie (eigener/Fahrer/Team-Zähler) und Fahrerliste der Sitzung
+    vorfallpunkte_x: Math.max(p?.vorfaelle ?? -1, info?.vorfaelle ?? -1) >= 0 ? Math.max(p?.vorfaelle ?? -1, info?.vorfaelle ?? -1) : null,
+    // eigene Zählung der App (iRacing zählt X nicht in jeder Sitzungsart, z. B. nicht im Test Drive)
+    ausfluege_neben_strecke_gezaehlt: fahrverhalten.ausfluege,
+    einschlaege_gemessen: crashWaechter.letzter ? 1 : 0,
+    ungueltige_runden: zaehler.runden.filter((r) => !r.gueltig && r.grund && /Strecke|Vorfall/.test(r.grund)).length,
     strafe: strafe === "strafe" ? "Strafe offen (schwarze Flagge) – Details in der Black Box" : strafe === "verwarnung" ? "Verwarnung (schwarz-weiße Flagge)" : strafe === "reparatur" ? "Fleischball: Pflicht-Reparatur" : p?.flaggen != null ? "keine" : null,
   };
 }
@@ -964,8 +973,8 @@ function meineFahrerLage(): Record<string, unknown> {
 function lokaleAntwort(frage: string): string | null {
   // In der Sprache der Antwort; erkannt wird die Frage in jeder Sprache (Stichwörter aus ansagen.ts)
   const code = ansageSprache(frage);
-  if (MITFAHREN_AUS.test(frage)) return mitfahrenUmschalten(false);
-  if (MITFAHREN_AN.test(frage)) return mitfahrenUmschalten(true);
+  const befehl = mitfahrBefehl(frage);
+  if (befehl) return mitfahrenUmschalten(befehl === "an");
   const a = absicht(frage, code);
   if (!a) return null;
   const z = (x: number, stellen = 1) => zahlIn(code, x, stellen);
@@ -1005,6 +1014,7 @@ function chatEinrichten() {
     art: () => persoenlichkeit?.art ?? "kumpel",
     name: () => persoenlichkeit?.name ?? "Renningenieur",
     lokal: lokaleAntwort,
+    befehl: (frage) => { const b = mitfahrBefehl(frage); return b ? mitfahrenUmschalten(b === "an") : null; },
     sprache: (frage) => ansageSprache(frage),
     // „Moment, ich schau nach“ nur, wenn die Antwort auch gesprochen wird (Frage per Sprechtaste oder Vorlesen an)
     warten: (text) => { if (funkE.vorlesen || Date.now() - sprachfrageZeit < 120_000) void vorlesen(text); },
@@ -1760,6 +1770,38 @@ $("sStintKnopf").addEventListener("click", async () => {
 });
 
 $("lMitfahren").addEventListener("click", () => hinweis(mitfahrenUmschalten(), "ok"));
+
+// Prüf-Fenster „Werte aus iRacing“ (Fund 28.11.: X und Schaden kamen beim Renningenieur nicht an) – nur wenn aufgeklappt
+const LAGE_TEXT: Record<string, string> = { "-1": "nicht im Auto", "0": "neben der Strecke", "1": "Box-Platz", "2": "Boxeneinfahrt", "3": "auf der Strecke" };
+window.setInterval(() => {
+  const roh = document.getElementById("lRoh") as HTMLDetailsElement | null;
+  if (!roh?.open) return;
+  const p = zaehler.jetzt;
+  const ich = letztesFeld?.ich;
+  const info = ich != null ? (sitzung?.fahrer ?? []).find((x) => x.idx === ich) : undefined;
+  const a = fahrverhalten.auswirkung();
+  const e = crashWaechter.letzter;
+  const g = p?.querBeschl != null && p.laengsBeschl != null ? Math.hypot(p.querBeschl, p.laengsBeschl) / 9.81 : null;
+  const s = strafeAus(p?.flaggen);
+  const w = p?.motorWarnung ?? 0;
+  const letzte = zaehler.runden.at(-1);
+  const zeilen: Array<[string, string]> = [
+    ["X (Telemetrie)", p?.vorfaelle != null ? `${p.vorfaelle} X` : "– (liefert iRacing nicht)"],
+    ["X (Fahrerliste)", info?.vorfaelle != null ? `${info.vorfaelle} X` : "–"],
+    ["Ausflüge (selbst gezählt)", String(a.ausfluege)],
+    ["Lage", p?.lage != null ? (LAGE_TEXT[String(p.lage)] ?? String(p.lage)) : "–"],
+    ["Flaggen", p?.flaggen != null ? (s === "strafe" ? "Strafe offen" : s === "verwarnung" ? "Verwarnung" : s === "reparatur" ? "Fleischball" : "keine") : "–"],
+    ["Reparatur (Pflicht/optional)", p?.reparatur != null || p?.reparaturOptional != null ? `${Math.round(p?.reparatur ?? 0)} s / ${Math.round(p?.reparaturOptional ?? 0)} s` : "–"],
+    ["Motor-Warnungen", p?.motorWarnung != null ? ([w & 1 ? "Wasser" : "", w & 2 ? "Benzindruck" : "", w & 4 ? "Öldruck" : "", w & 0x40 ? "Öltemperatur" : ""].filter(Boolean).join(", ") || "keine") : "–"],
+    ["Beschleunigung", g != null ? `${zahl(g, 1)} g` : "–"],
+    ["Letzter Einschlag", e && p?.zeit != null ? `vor ${Math.round(p.zeit - e.zeit)} s, ${zahl(e.g, 1)} g, vorher ${e.tempoVorherKmh} km/h` : "keiner"],
+    ["Lenkrad auf Geraden", a.lenkungSchiefGrad != null ? `${zahl(a.lenkungSchiefGrad, 1)}° schief` : "gerade"],
+    ["Topspeed", a.topspeedJetztKmh != null ? `${a.topspeedJetztKmh} km/h (vorher ${a.topspeedVorherKmh})` : "unverändert"],
+    ["Letzte Runde", letzte ? (letzte.gueltig ? "gültig" : `ungültig – ${letzte.grund ?? ""}`) : "–"],
+    ["Piepton", mitfahrer ? `an – ${mitfahrer.stellen.length} Bremspunkte` : "aus"],
+  ];
+  $("lRohListe").replaceChildren(...zeilen.flatMap(([k, v]) => [neu("dt", "", k), neu("dd", "", v)]));
+}, 500);
 $("sForm").addEventListener("input", () => spritZeigen());
 $("sForm").addEventListener("submit", (e) => e.preventDefault());
 

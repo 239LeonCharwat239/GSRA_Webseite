@@ -22,6 +22,9 @@ export type ChatUmgebung = {
   warten?: (text: string) => void;
   /** „Ich möchte Sprit sparen“: Spar-Modus einschalten; gibt eine kurze Rückmeldung (oder null) */
   sparenStarten: () => string | null;
+  /** Befehle, die die App selbst ausführt („Fahr eine Runde mit mir“, später Boxenstopp) – IMMER vor der KI
+   *  (Fund 28.11.: mit KI ging der Befehl an die KI, die keinen Piepton hat); null = kein Befehl */
+  befehl?: (frage: string) => string | null;
 };
 
 const SCHWIERIG = /\b(warum|wieso|weshalb|wie kann ich|wie werde ich|was mache ich|was mach ich|analys|vergleich|verbesser|strategie|setup|abstimmung|wo verliere|wo lasse|wo lass|erklär|schneller werden|besser werden|trail|reifenverschleiß|untersteuer|übersteuer)/i;
@@ -103,6 +106,12 @@ export class Chat {
     const vorher = this.verlauf.slice(-8);
     this.verlauf.push({ wer: "fahrer", text: frage });
     this.blase({ wer: "fahrer", text: frage });
+
+    const befehl = this.u.befehl?.(frage) ?? null;
+    if (befehl) {
+      this.sagen(befehl);
+      return;
+    }
 
     let sparHinweis: string | null = null;
     if (willSparen(frage)) sparHinweis = this.u.sparenStarten();

@@ -151,11 +151,13 @@ export class Rundenzaehler {
         l.inBox = true;
         l.grund ??= "Boxengasse";
       }
-      const gueltig = l.grund == null && zeit >= MIN_RUNDE;
-      const sprit = !l.nachgetankt && l.spritStart != null && spritLinie != null && l.spritStart - spritLinie >= 0 ? l.spritStart - spritLinie : null;
+      // Fund 28.11.: Runden neben der Strecke oder mit neuen X galten als gültig – jetzt zählen sie nicht (wie in iRacing)
       const vorfaelle = l.vorfaelleStart != null && p.vorfaelle != null && p.vorfaelle > l.vorfaelleStart ? "Vorfallpunkte in der Runde" : null;
-      fertig = { nr: l.nr, zeit, gueltig, grund: l.grund ?? (zeit < MIN_RUNDE ? "Zu kurz" : null), sprit, spritEnde: spritLinie, inBox: l.inBox, punkte: l.punkte,
-        sperre: gueltig ? (l.abseits ?? vorfaelle) : (l.grund ?? "Ungültig") };
+      const sperrGrund = l.abseits ?? vorfaelle;
+      const gueltig = l.grund == null && zeit >= MIN_RUNDE && !sperrGrund;
+      const sprit = !l.nachgetankt && l.spritStart != null && spritLinie != null && l.spritStart - spritLinie >= 0 ? l.spritStart - spritLinie : null;
+      fertig = { nr: l.nr, zeit, gueltig, grund: l.grund ?? (zeit < MIN_RUNDE ? "Zu kurz" : sperrGrund), sprit, spritEnde: spritLinie, inBox: l.inBox, punkte: l.punkte,
+        sperre: gueltig ? null : (l.grund ?? sperrGrund ?? "Ungültig") };
       this.runden.push(fertig);
       // Speicher begrenzen: alte Runden verlieren ihre Punkte (Zeit und Sprit bleiben), die beste behält sie
       if (this.runden.length > this.max) {

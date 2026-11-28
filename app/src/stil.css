@@ -764,3 +764,10 @@ body.signalwort-an .verbindung::after { content: "Mikro an (Signalwort)"; margin
 .ref-liste .ref-zeit { font-variant-numeric: tabular-nums; color: var(--gelb); min-width: 82px; }
 .ref-liste small { color: var(--leise); }
 .ref-liste .knopf { margin-left: auto; }
+
+/* Prüf-Fenster „Werte aus iRacing“ (Live) */
+.roh-werte summary { cursor: pointer; font-weight: 700; }
+.roh-werte summary small { margin-left: 8px; font-weight: 400; color: var(--leise); }
+.roh-liste { display: grid; grid-template-columns: minmax(150px, max-content) 1fr; gap: 4px 14px; margin: 12px 0 0; font-size: 13px; }
+.roh-liste dt { color: var(--leise); }
+.roh-liste dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }

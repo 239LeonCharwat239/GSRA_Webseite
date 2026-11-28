@@ -67,3 +67,14 @@ export class Mitfahrer {
     return false;
   }
 }
+
+// Funk-Befehl (Deutsch und Englisch) – wird VOR der KI ausgewertet (chat.ts „befehl“)
+const MITFAHREN_AN = /fahr\w*\s+(eine\s+|ne\s+|einer\s+)?runde\s+mit|mitfahren|bremspunkt|piepton\s*(an|ein)|piep\w*\s+(mir|an\s+den)|ride\s+along|(drive|do)\s+a\s+lap\s+with\s+me|beep\s+(at\s+)?(the\s+)?brak|braking\s+points?/i;
+const MITFAHREN_AUS = /(piep\w*|mitfahren|beep\w*)\s*(aus|stopp?|off|beenden)|kein\s+piep|no\s+more\s+beep/i;
+
+/** „Fahr eine Runde mit mir“ → "an", „Piepton aus“ → "aus", sonst null */
+export function mitfahrBefehl(frage: string): "an" | "aus" | null {
+  if (MITFAHREN_AUS.test(frage)) return "aus";
+  if (MITFAHREN_AN.test(frage)) return "an";
+  return null;
+}

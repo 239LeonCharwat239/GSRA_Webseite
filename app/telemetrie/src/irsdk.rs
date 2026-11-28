@@ -300,7 +300,7 @@ pub struct Feld {
 }
 
 /// Die Werte, die die App braucht (Namen wie im iRacing-SDK)
-const NAMEN: [&str; 26] = [
+const NAMEN: [&str; 28] = [
     "SessionTime",
     "Lap",
     "LapDistPct",
@@ -332,12 +332,15 @@ const NAMEN: [&str; 26] = [
     "PlayerTrackSurface",
     "SessionFlags",
     "EngineWarnings",
+    // Vorfallpunkte auch als Fahrer- und Team-Zähler (Fund 28.11.: die App sah 0 X) – es zählt der höchste
+    "PlayerCarDriverIncidentCount",
+    "PlayerCarTeamIncidentCount",
 ];
 
 /// Zuordnung Name → Variable (fehlende Werte bleiben leer)
 #[derive(Debug, Clone, Default)]
 pub struct Karte {
-    felder: [Option<Variable>; 26],
+    felder: [Option<Variable>; 28],
     feld: [Option<Variable>; 8],
 }
 
@@ -403,7 +406,12 @@ impl Karte {
             reparatur_optional: z(19).filter(|x| x.is_finite() && *x >= 0.0),
             quer_beschl: z(20).filter(|x| x.is_finite() && x.abs() < 2000.0),
             laengs_beschl: z(21).filter(|x| x.is_finite() && x.abs() < 2000.0),
-            vorfaelle: z(22).filter(|x| x.is_finite() && (0.0..100_000.0).contains(x)).map(|x| x as i32),
+            vorfaelle: [z(22), z(26), z(27)]
+                .into_iter()
+                .flatten()
+                .filter(|x| x.is_finite() && (0.0..100_000.0).contains(x))
+                .map(|x| x as i32)
+                .max(),
             lage: z(23).map(|x| x as i32).filter(|x| (-1..=3).contains(x)),
             flaggen: z(24).filter(|x| x.is_finite()).map(|x| x as i64 as u32),
             motor_warnung: z(25).filter(|x| x.is_finite()).map(|x| (x as i64 as u32) & 0xff),
@@ -643,6 +651,8 @@ pub mod testdaten {
                 ("PlayerTrackSurface", Typ::Ganzzahl),
                 ("SessionFlags", Typ::Ganzzahl),
                 ("EngineWarnings", Typ::Ganzzahl),
+                ("PlayerCarDriverIncidentCount", Typ::Ganzzahl),
+                ("PlayerCarTeamIncidentCount", Typ::Ganzzahl),
             ] {
                 vars.push((n.to_string(), t, o));
                 o += t.groesse();
@@ -718,11 +728,11 @@ mod tests {
         let b = bau.bauen(1, &[("Speed", 50.0)]);
         let k = kopf_lesen(&b).unwrap();
         assert!(k.verbunden());
-        assert_eq!(k.anzahl_variablen, 24);
+        assert_eq!(k.anzahl_variablen, 26);
         assert_eq!(k.neueste_zeile(), 1);
         k.pruefen(b.len()).unwrap();
-        let vars = variablen_lesen(&b[VAR_START..], 24, bau.zeilen_laenge).unwrap();
-        assert_eq!(vars.len(), 24);
+        let vars = variablen_lesen(&b[VAR_START..], 26, bau.zeilen_laenge).unwrap();
+        assert_eq!(vars.len(), 26);
         assert_eq!(vars[0].name, "SessionTime");
         assert_eq!(vars[0].typ, Typ::Doppelt);
     }
@@ -744,9 +754,9 @@ mod tests {
             ("CarLeftRight", 2.0),
         ]);
         let k = kopf_lesen(&b).unwrap();
-        let vars = variablen_lesen(&b[VAR_START..], 24, bau.zeilen_laenge).unwrap();
+        let vars = variablen_lesen(&b[VAR_START..], 26, bau.zeilen_laenge).unwrap();
         let karte = Karte::aus(&vars);
-        assert_eq!(karte.vorhanden(), 24);
+        assert_eq!(karte.vorhanden(), 26);
         let i = k.neueste_zeile();
         let o = k.puffer[i].offset as usize;
         let p = karte.probe(&b[o..o + bau.zeilen_laenge], k.puffer[i].tick);
@@ -776,13 +786,17 @@ mod tests {
             ("EngineWarnings", 1.0 + 4.0 + 16.0),
         ]);
         let k = kopf_lesen(&b).unwrap();
-        let vars = variablen_lesen(&b[VAR_START..], 24, bau.zeilen_laenge).unwrap();
+        let vars = variablen_lesen(&b[VAR_START..], 26, bau.zeilen_laenge).unwrap();
         let karte = Karte::aus(&vars);
         let o = k.puffer[0].offset as usize;
         let p = karte.probe(&b[o..o + bau.zeilen_laenge], 1);
         assert_eq!(p.quer_beschl, Some(-12.5));
         assert_eq!(p.laengs_beschl, Some(-95.0));
         assert_eq!(p.vorfaelle, Some(4));
+        // höchster der drei Zähler (eigener, Fahrer, Team)
+        let b2 = bau.bauen(0, &[("PlayerCarMyIncidentCount", 0.0), ("PlayerCarDriverIncidentCount", 6.0), ("PlayerCarTeamIncidentCount", 2.0)]);
+        let o2 = kopf_lesen(&b2).unwrap().puffer[0].offset as usize;
+        assert_eq!(karte.probe(&b2[o2..o2 + bau.zeilen_laenge], 1).vorfaelle, Some(6));
         assert_eq!(p.lage, Some(0), "neben der Strecke");
         assert_eq!(p.flaggen.map(|f| f & 0x0010_0000 != 0), Some(true), "Fleischball");
         assert_eq!(p.motor_warnung, Some(21));
@@ -791,7 +805,7 @@ mod tests {
     #[test]
     fn spotter_nur_bekannte_werte() {
         let bau = Bau::standard();
-        let vars = variablen_lesen(&bau.bauen(0, &[])[VAR_START..], 24, bau.zeilen_laenge).unwrap();
+        let vars = variablen_lesen(&bau.bauen(0, &[])[VAR_START..], 26, bau.zeilen_laenge).unwrap();
         let karte = Karte::aus(&vars);
         for (roh, erwartet) in [(0.0, Some(0)), (1.0, Some(1)), (6.0, Some(6)), (7.0, None), (-3.0, None), (99999.0, None)] {
             let b = bau.bauen(0, &[("CarLeftRight", roh)]);
@@ -820,7 +834,7 @@ mod tests {
     fn unendliche_und_nan_werte_werden_verworfen() {
         let bau = Bau::standard();
         let b = bau.bauen(0, &[("Speed", f64::NAN), ("SessionTime", f64::INFINITY)]);
-        let vars = variablen_lesen(&b[VAR_START..], 24, bau.zeilen_laenge).unwrap();
+        let vars = variablen_lesen(&b[VAR_START..], 26, bau.zeilen_laenge).unwrap();
         let k = kopf_lesen(&b).unwrap();
         let o = k.puffer[0].offset as usize;
         let p = Karte::aus(&vars).probe(&b[o..o + bau.zeilen_laenge], 1);

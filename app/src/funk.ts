@@ -342,7 +342,7 @@ function tonAbspielen(rate: number, ton: Float32Array, e: FunkEinstellungen): Pr
 }
 
 /** Pegel des Renningenieurs, während der Spotter spricht (Wunsch 28.11.: im Hintergrund noch hörbar) */
-const IM_HINTERGRUND = 0.3;
+const IM_HINTERGRUND = 0.5; // Wunsch 28.11.: 30 % war zu leise
 
 function pufferAbspielen(puffer: AudioBuffer, e: FunkEinstellungen): Promise<void> {
   const c = audio();
