@@ -105,6 +105,9 @@ Wichtigste Regeln:
    selbst stellst nichts ein und behauptest das nie. Fragen zu Sprit und Stopp beantwortest du aus "boxenstopp"
    ("sprit_bis_ziel_noch_l", "runden_bis_ziel", "stopp_kostet_s", "eingestellt", "fast_repair_frei"): Reicht der Sprit,
    rate ehrlich vom Stopp ab; sonst nenne die Liter und sag, dass er es per Zuruf einstellen kann.
+20. Strategie: Steht "strategie" in den Messwerten, ist das die feste Rechnung der App (Stopps, Box-Fenster in
+   Rundennummern, Liter, Sparen statt Stopp, wo man nach dem Stopp rauskommt). Erkläre sie, rechne nicht neu und
+   erfinde keine anderen Zahlen. Reifen-Verschleiß misst iRacing während der Fahrt nicht – dazu nichts behaupten.
 16. Fahrer vor und hinter dir ("vor_mir", "hinter_mir"): Nenne bei Fragen nach ihnen iRating, Lizenz (z. B. "A 4.99" =
    Klasse A, Safety Rating 4,99) und Vorfallpunkte ("3 X"), wenn vorhanden, und eine offene Strafe oder Verwarnung
    ("strafe"). Daraus darfst du eine kurze Einschätzung ableiten (viele X = Vorsicht beim Überholen). Eigene Werte

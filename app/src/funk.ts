@@ -460,6 +460,25 @@ export function spotterSprechen(text: string, e: FunkEinstellungen, sprache: str
   const aktuellesEnde = spotterEnde;
   window.speechSynthesis.speak(u);
 }
+/** Signalton der Sprechtaste (Wunsch 29.11.): „an“ = Mikrofon hört zu (Taste gedrückt, angetippt oder Signalwort
+ *  gehört) – zwei kurze steigende Töne; „aus“ = Frage aufgenommen, wird verstanden – ein tiefer, weicher Ton.
+ *  Leise und kurz, damit er im Rennen nicht stört, aber im Kopfhörer klar zu hören ist. */
+export function signalton(art: "an" | "aus", e: FunkEinstellungen): void {
+  const c = audio();
+  const laut = 0.16 * Math.max(0.25, Math.min(1, e.lautstaerke));
+  const toene = art === "an" ? [[880, 0], [1320, 0.07]] : [[660, 0]];
+  for (const [frequenz, versatz] of toene) {
+    const t = c.currentTime + 0.005 + versatz;
+    const ton = new OscillatorNode(c, { type: "sine", frequency: frequenz });
+    const g = new GainNode(c, { gain: 0 });
+    ton.connect(g).connect(c.destination);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(laut, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0008, t + (art === "an" ? 0.07 : 0.12));
+    ton.start(t);
+    ton.stop(t + 0.14);
+  }
+}
 /** Kurzer Piepton (Bremspunkt, „Fahr eine Runde mit mir“): direkt, ohne Funk-Filter, auch während jemand spricht */
 export function piepen(e: FunkEinstellungen): void {
   const c = audio();

@@ -22,6 +22,7 @@ import { aufRaster, PUNKTE, verdichten, zeitverlauf } from "../src/referenz.ts";
 import { CRASH_SAETZE, CrashWaechter, Fahrverhalten, schadenBild, schadenMeldung } from "../src/crash.ts";
 import { FAHRER_SAETZE, NachbarWaechter, StrafenWaechter, strafeAus, werMitInfo } from "../src/fahrer-info.ts";
 import { bilanzSatz, bremsStellen, bremsStellenAusReferenz, Mitfahrer, mitfahrBefehl } from "../src/mitfahren.ts";
+import { istStrategieFrage, planen, planSatz, StrategieWaechter, wiedereinstieg, wiedereinstiegSatz } from "../src/strategie.ts";
 import { boxAntwort, boxBefehle, boxEnglisch, boxFrage, boxStand, boxVerlustMessen, boxWunschLesen, empfehlung, spritBisZiel, type BoxLage } from "../src/boxenfunk.ts";
 import { amSatzende } from "../src/kuerzen.ts";
 import { spracheVonText, SPRECH_SPRACHEN, LAENDERCODE } from "../src/sprachen.ts";
@@ -897,4 +898,42 @@ test("Piepton: Bremspunkt-Bilanz nach der Runde; Schaden-Check meldet jedes Erge
   // „gleich weiß ich mehr“: Messung läuft steht im Schadensbild
   const bild = schadenBild({ zeit: 10, reparatur: 0, flaggen: 0 } as Probe, null, 10, { ...basis, messung: { lenkung: false, topspeed: false } }) as Record<string, unknown>;
   assert.match(String(bild.messung_laeuft), /Lenkung.*Topspeed/);
+});
+
+test("Strategie: Stopps, Box-Fenster, Sparen statt Stopp, Wiedereinstieg, Ansagen von selbst", () => {
+  // 60-Minuten-Rennen, 100-s-Runden, 3 L/Runde, 60-L-Tank, 40 L drin, Runde 5 zur Hälfte
+  const lage = { sprit: 40, verbrauch: 3, rundenzeit: 100, anteil: 0.5, restZeit: 3000, restRunden: null, tank: 60, boxVerlust: 30, runde: 5 };
+  const p = planen(lage)!;
+  assert.equal(p.stopps, 1);
+  // Sprit reicht für (40 - 1,5) / 3 = 12,8 Runden ab jetzt → spätestens Ende Runde 5 + floor(12,8 - 0,5) = 17
+  assert.equal(p.fensterBis, 17);
+  assert.ok(p.fensterVon! >= 5 && p.fensterVon! <= p.fensterBis!, JSON.stringify(p));
+  assert.ok(p.liter! > 40 && p.liter! <= 59, JSON.stringify(p));
+  assert.equal(p.sparenL, null, "zu viel zum Sparen");
+  assert.match(planSatz(p, false), /ein Stopp, Box-Fenster Runde \d+ bis 17, etwa \d+ Liter/);
+  // knapp: 6 % sparen reicht – mit Grenze aus dem Stopp-Verlust
+  const knapp = planen({ ...lage, sprit: 52, restZeit: 1700, tank: 54 })!;
+  assert.equal(knapp.stopps, 1);
+  assert.ok(knapp.sparenL != null && knapp.sparenProzent! <= 12, JSON.stringify(knapp));
+  assert.match(planSatz(knapp, false), /Oder du sparst .* Liter pro Runde .* ohne Stopp durch – lohnt sich, solange es dich weniger als .* Sekunden pro Runde kostet/);
+  // reicht: kein Stopp; zwei Stopps bei kleinem Tank
+  assert.equal(planen({ ...lage, restZeit: 600 })!.stopps, 0);
+  assert.equal(planen({ ...lage, restZeit: 3600, tank: 45 })!.stopps, 2);
+  // Wiedereinstieg: 30 s Verlust, Autos 12 s, 25 s und 41 s hinter dir → Platz 4 + 2 = 6, vor dem mit 41 s
+  const w = wiedereinstieg(4, [{ name: "#7 Becker", abstand: 41 }, { name: "#3 Ali", abstand: 12 }, { name: "#9 Kim", abstand: 25 }], 30)!;
+  assert.deepEqual([w.platz, w.vor?.name, w.hinter?.name], [6, "#9 Kim", "#7 Becker"]);
+  assert.equal(wiedereinstiegSatz(w, false), "Kommst du jetzt rein, kommst du etwa auf Platz 6 raus – hinter #9 Kim, knapp vor #7 Becker.");
+  // Wächter: Plan einmal, Fenster offen, „diese Runde rein“ (wichtig), nichts doppelt
+  const wa = new StrategieWaechter();
+  const plan = { ...p, fensterVon: 10, fensterBis: 17 };
+  assert.equal(wa.pruefen(plan, 6, false).length, 1, "Plan beim ersten Mal");
+  assert.equal(wa.pruefen(plan, 7, false).length, 0, "nicht jede Runde");
+  assert.match(wa.pruefen(plan, 10, false)[0].text, /Box-Fenster ist offen/);
+  const muss = wa.pruefen(plan, 17, false);
+  assert.ok(muss[0].wichtig && /Diese Runde musst du rein/.test(muss[0].text));
+  assert.equal(wa.pruefen(plan, 17, false).length, 0);
+  assert.match(wa.pruefen({ ...plan, stopps: 0 }, 18, false)[0].text, /kein Stopp nötig/, "Plan geändert (z. B. durch Sparen)");
+  // Fragen
+  for (const f of ["Was ist die Strategie?", "Wann soll ich rein?", "Wie viele Stopps brauche ich?", "When should I pit?"]) assert.ok(istStrategieFrage(f), f);
+  assert.ok(!istStrategieFrage("Wer ist vor mir?"));
 });

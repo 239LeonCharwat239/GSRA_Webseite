@@ -56,9 +56,11 @@ export interface SprechtasteSteuerung {
  * @param beiText erkannter Text (wie eine getippte Frage)
  * @param hinweis kurze Meldung unten (auch wenn gerade ein anderer Bereich offen ist)
  * @param nichtVerstanden gesprochen, aber nichts verstanden (oder Signalwort ohne Frage) – der Renningenieur sagt es
+ * @param ton Signalton: „an“ = hört zu (gedrückt, angetippt, Signalwort gehört), „aus“ = Frage aufgenommen
  */
 export async function sprechtasteEinrichten(istApp: boolean, beiText: (text: string) => void,
-  hinweis: (t: string, art?: "ok" | "fehler") => void, name: () => string, nichtVerstanden?: () => void): Promise<SprechtasteSteuerung> {
+  hinweis: (t: string, art?: "ok" | "fehler") => void, name: () => string, nichtVerstanden?: () => void,
+  ton?: (art: "an" | "aus") => void): Promise<SprechtasteSteuerung> {
   const knopf = $<HTMLButtonElement>("sKnopf");
   const status = $("sStatus");
   const leer: SprechtasteSteuerung = { nameGeaendert: () => {}, vorbereiten: () => {} };
@@ -257,8 +259,14 @@ export async function sprechtasteEinrichten(istApp: boolean, beiText: (text: str
   });
 
   // Was gerade passiert (Knopf in der App, Tastatur, Lenkrad, Signalwort)
+  let letzterAnTon = 0;
   await listen<Meldung>("gsra://sprache", (e) => {
     const m = e.payload;
+    // Signaltöne (Wunsch 29.11.): Signalwort meldet „signal“ und gleich danach „hoert“ – dann nur einmal piepen
+    if (m.zustand === "signal" || (m.zustand === "hoert" && Date.now() - letzterAnTon > 600)) {
+      letzterAnTon = Date.now();
+      ton?.("an");
+    } else if (m.zustand === "erkennt") ton?.("aus");
     if (m.zustand === "dauerhaft" || m.zustand === "dauerhaft-aus") {
       document.body.classList.toggle("signalwort-an", m.zustand === "dauerhaft");
       return;

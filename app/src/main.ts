@@ -8,7 +8,7 @@ import { DemoQuelle } from "./demo.ts";
 import { Diagramme, verlaufZeichnen, type Plot } from "./diagramm.ts";
 import type { Feld, Probe, Sitzung, Status } from "./typen.ts";
 import { angemeldet, beiKontoWechsel, hinweis, kontoStarten } from "./konto-ansicht.ts";
-import { aufnahmeAbspielen, beiFehlenderStimme, funkBeschaeftigt, funkLaden, funkSpeichern, piepen, sprechen, spotterSprechen, stimmenFuer, systemTonSetzen } from "./funk.ts";
+import { aufnahmeAbspielen, beiFehlenderStimme, funkBeschaeftigt, funkLaden, funkSpeichern, piepen, signalton, sprechen, spotterSprechen, stimmenFuer, systemTonSetzen } from "./funk.ts";
 import { absicht, ansage, mitPunkt, nichtVerstanden, nochDran, zahlIn } from "./ansagen.ts";
 import { spracheName, spracheVonText } from "./sprachen.ts";
 import { gedaechtnisVerdichten, kiFragen, kiVerfuegbar, merkenSpeichern, persoenlichkeitLaden, type Persoenlichkeit } from "./ki.ts";
@@ -20,6 +20,7 @@ import { abstandSatz, type Gegner } from "./vorlagen.ts";
 import { Feldrunden, deltaZu, verlustIn, type FeldRunde } from "./feldreferenz.ts";
 import { CrashWaechter, crashSatz, Fahrverhalten, schadenBild, schadenMeldung, type Einschlag } from "./crash.ts";
 import { bilanzSatz, bremsStellen, bremsStellenAusReferenz, Mitfahrer, mitfahrBefehl } from "./mitfahren.ts";
+import { istStrategieFrage, planen, planSatz, StrategieWaechter, wiedereinstieg, wiedereinstiegSatz, type Hintermann, type Plan, type StrategieLage } from "./strategie.ts";
 import { boxAntwort, boxBefehle, boxEnglisch, boxFrage, boxStand, boxVerlustMessen, boxWunschLesen, empfehlung, spritBisZiel, type BoxLage } from "./boxenfunk.ts";
 import { referenzAnsicht } from "./referenz-ansicht.ts";
 import { fahrerSatz, NachbarWaechter, StrafenWaechter, strafeAus, strafeSatz, werMitInfo, type Strafe } from "./fahrer-info.ts";
@@ -112,6 +113,7 @@ let referenzen: Referenz[] = [];
 let referenzFuer = "";
 const geteilt = new Set<string>();
 const geteilteRunden = new WeakMap<object, string>(); // eigene Runden, die geteilt wurden (Knopf zeigt „zurücknehmen“)
+const signaltoeneAn = () => { try { return localStorage.getItem("gsra-signaltoene") !== "0"; } catch { return true; } };
 const feldTeilenAn = () => { try { return localStorage.getItem("gsra-feld-teilen") !== "0"; } catch { return true; } };
 const sitzungsInfo = (): SitzungsInfo => ({ strecke: sitzung?.strecke ?? null, fahrzeug: sitzung?.fahrzeug ?? null, laengeM: laenge() });
 /** GSRA-Referenzrunden für Strecke und Auto laden (angemeldet, echte Sitzung) */
@@ -249,11 +251,45 @@ function boxLage(): BoxLage {
     tank: sitzung?.tankL ?? null, boxVerlust: boxVerlustMessen(zaehler.runden),
   };
 }
+/** Strategie (strategie.ts): Plan aus Verbrauch, Restzeit/-runden, Tank und gemessenem Stopp-Verlust */
+const strategieWaechter = new StrategieWaechter();
+function strategieLage(): StrategieLage {
+  return { ...boxLage(), runde: zaehler.laufend?.nr ?? zaehler.jetzt?.runde ?? null };
+}
+/** erst mit ein paar Runden Verbrauch – sonst wird nichts behauptet */
+function strategiePlan(): Plan | null {
+  if (zaehler.runden.filter((r) => r.sprit != null && !r.inBox).length < 2) return null;
+  return planen(strategieLage());
+}
+/** Autos hinter dir (gleiche oder Vorrunde) mit Abstand in Sekunden – für „wo komme ich nach dem Stopp raus?“ */
+function hinterMir(): Hintermann[] {
+  const f = letztesFeld;
+  if (!f || f.ich == null) return [];
+  const fahrer = sitzung?.fahrer ?? [];
+  const fortschritt = (i: number) => (f.runde[i] ?? 0) + Math.max(0, f.anteil[i] ?? 0);
+  const ich = fortschritt(f.ich);
+  const rz = typischeRundenzeit();
+  return f.anteil.flatMap((a, i) => {
+    if (i === f.ich || a == null || a < 0 || (f.platz[i] ?? 0) <= 0) return [];
+    const d = ich - fortschritt(i);
+    if (d <= 0 || d >= 1) return [];
+    const info = fahrer.find((x) => x.idx === i);
+    return [{ name: info ? `${info.nummer ? `#${info.nummer} ` : ""}${info.name}` : `Auto ${i}`, abstand: d * rz }];
+  });
+}
+function strategieAntwort(en: boolean): string {
+  const p = strategiePlan();
+  if (!p) return en ? "I need a couple of laps of fuel data and the remaining time or laps of the race." : "Dafür brauche ich ein paar Runden Verbrauch und die Restzeit oder Restrunden des Rennens.";
+  const w = istRennen(sitzung?.sitzungsart ?? null) ? wiedereinstieg(platzJetzt(), hinterMir(), boxLage().boxVerlust) : null;
+  return [planSatz(p, en), p.stopps > 0 && w ? wiedereinstiegSatz(w, en) : null].filter(Boolean).join(" ");
+}
+
 /** Box-Zuruf oder Frage zur Box: stellt die Box in iRacing ein bzw. antwortet; null = kein Box-Thema */
 function boxFunk(frage: string): string | null {
   // eingestellte Sprache des Renningenieurs; bei „Automatisch“ aus den Wörtern des Zurufs („Box“ sagen alle)
   const eingestellt = persoenlichkeit?.sprache;
   const en = eingestellt && eingestellt !== "auto" ? eingestellt !== "de" : boxEnglisch(frage);
+  if (istStrategieFrage(frage)) return strategieAntwort(en);
   const art = boxFrage(frage);
   if (art === "stand") return boxStand(zaehler.jetzt?.boxHaken, zaehler.jetzt?.boxSprit, en) ?? (en ? "I can't see the pit settings right now." : "Die Box-Einstellung sehe ich gerade nicht.");
   if (art === "sprit") return empfehlung(boxLage(), en) ?? (en ? "I need a few clean laps to know your fuel use and the laps left." : "Dafür brauche ich ein paar Runden Verbrauch und die Restzeit oder Restrunden des Rennens.");
@@ -452,7 +488,10 @@ function statusSetzen(s: Status) {
     void nachbesprechung(true);
   }
   if (!demo.laeuft && s.sitzung) {
-    if (sitzung && (sitzung.strecke !== s.sitzung.strecke || sitzung.fahrzeug !== s.sitzung.fahrzeug || sitzung.sitzungsart !== s.sitzung.sitzungsart)) fahrverhalten.zuruecksetzen();
+    if (sitzung && (sitzung.strecke !== s.sitzung.strecke || sitzung.fahrzeug !== s.sitzung.fahrzeug || sitzung.sitzungsart !== s.sitzung.sitzungsart)) {
+      fahrverhalten.zuruecksetzen();
+      strategieWaechter.zuruecksetzen();
+    }
     sitzung = s.sitzung;
     void referenzenAktualisieren();
   }
@@ -567,6 +606,11 @@ function rundeFertig(r: Runde) {
     : rundenSatz(code, r, beste, gegner);
   funkMelden(vorlage, { ...rundenLage(r, befund), vor_mir: gegner.vor, hinter_mir: gegner.hinter });
   mitfahrenRunde(r, beste);
+  // Strategie meldet sich von selbst: Plan, Box-Fenster offen, „diese Runde rein“ (nur im Rennen)
+  if (!demo.laeuft && istRennen(sitzung?.sitzungsart ?? null)) {
+    const en = ansageSprache() !== "de";
+    for (const a of strategieWaechter.pruefen(strategiePlan(), zaehler.laufend?.nr ?? r.nr + 1, en)) chat?.melden(a.text, "", a.wichtig);
+  }
   // Karte aus der ersten gültigen Runde mit Fahrtrichtung; Kurvennummern aus der Bestzeit
   if (!karte && r.gueltig) karte = karteBauen(r.punkte);
   if (beste && beste.punkte.length > 10) kurvenMarken = kurvenFinden(spur(beste), laenge() ?? 4000).map((k) => ({ i: k.scheitel, text: String(k.nr) }));
@@ -694,6 +738,13 @@ function funkEinrichten() {
     funkSpeichern(funkE);
   };
   for (const f of [vorlesenFeld, klangFeld, spotterFeld, namenFeld, laut, $("fStimme")]) f.addEventListener("change", merken);
+  // Signaltöne der Sprechtaste (Wunsch 29.11.) – eigener Schalter, nur auf diesem PC gemerkt
+  const toeneFeld = $<HTMLInputElement>("fSignaltoene");
+  toeneFeld.checked = signaltoeneAn();
+  toeneFeld.addEventListener("change", () => {
+    try { localStorage.setItem("gsra-signaltoene", toeneFeld.checked ? "1" : "0"); } catch { /* egal */ }
+    if (toeneFeld.checked) signalton("an", funkE);
+  });
   // Referenzrunden aus dem Feld anonym teilen (SQL 060) – eigener Schalter, nur auf diesem PC gemerkt
   const teilenFeld = $<HTMLInputElement>("fFeldTeilen");
   teilenFeld.checked = feldTeilenAn();
@@ -1029,7 +1080,21 @@ function chatLage(): Record<string, unknown> {
     schaden: schadenLage(),
     ich: meineFahrerLage(),
     boxenstopp: boxenstoppLage(),
+    strategie: strategieLageKi(),
     vergleich: vergleichFuerKi,
+  };
+}
+
+/** Strategie für die KI (feste Rechnung der App – die KI erklärt sie nur) */
+function strategieLageKi(): Record<string, unknown> | null {
+  const p = strategiePlan();
+  if (!p) return null;
+  const w = istRennen(sitzung?.sitzungsart ?? null) ? wiedereinstieg(platzJetzt(), hinterMir(), boxLage().boxVerlust) : null;
+  return {
+    stopps: p.stopps, box_fenster_von_runde: p.fensterVon, box_fenster_bis_runde: p.fensterBis, liter_beim_stopp: p.liter,
+    ohne_stopp_sparen_l_pro_runde: p.sparenL, sparen_prozent: p.sparenProzent, sparen_lohnt_unter_s_pro_runde: p.sparenGrenzeS,
+    nach_stopp_platz: w?.platz ?? null, nach_stopp_vor: w?.hinter?.name ?? null, nach_stopp_hinter: w?.vor?.name ?? null,
+    zusammenfassung: planSatz(p, false),
   };
 }
 
@@ -1971,7 +2036,7 @@ const sprechtaste = sprechtasteEinrichten(istApp, (text) => {
   const satz = nichtVerstanden(code);
   if (aktiverReiter !== "chat") hinweis(satz, "fehler");
   void sprechen(satz, { ...funkE, vorlesen: true }, { sprache: code, stimmlage: persoenlichkeit?.stimme ?? "ruhig" });
-}).catch(() => null);
+}, (art) => { if (signaltoeneAn()) signalton(art, funkE); }).catch(() => null);
 
 // Eigene Stimme (geklont aus einer Aufnahme mit Zustimmung, nur auf dem PC)
 void eigeneStimmeEinrichten(istApp, hinweis, () => funkE, () => persoenlichkeit?.name ?? "Kim",
