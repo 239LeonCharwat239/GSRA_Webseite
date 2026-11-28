@@ -14,11 +14,14 @@ import { Rennbeobachter, berichtErstellen } from "../src/rennbericht.ts";
 import type { Feld } from "../src/typen.ts";
 import { messwerteKodieren, messwerteLesen } from "../../src/stint-messwerte.ts";
 import { bremspunkte, liftMeter, sparAuswerten, sparBasis, sparText, sparTipp } from "../src/sparen.ts";
-import { SPOTTER_SAETZE, Spotter, seiteAus, spotterSatz } from "../src/spotter.ts";
+import { SPOTTER_SAETZE, Spotter, seiteAus, spotterSatz, type Seite } from "../src/spotter.ts";
 import { abstandSatz, rufname } from "../src/vorlagen.ts";
 import { Feldrunden, deltaZu, verlustIn } from "../src/feldreferenz.ts";
 import { namenErsetzen } from "../src/datenschutz.ts";
 import { aufRaster, PUNKTE, verdichten, zeitverlauf } from "../src/referenz.ts";
+import { CRASH_SAETZE, CrashWaechter, schadenBild } from "../src/crash.ts";
+import { FAHRER_SAETZE, NachbarWaechter, StrafenWaechter, strafeAus, werMitInfo } from "../src/fahrer-info.ts";
+import { bremsStellen, bremsStellenAusReferenz, Mitfahrer } from "../src/mitfahren.ts";
 import { spracheVonText, SPRECH_SPRACHEN, LAENDERCODE } from "../src/sprachen.ts";
 import { aufraeumen, entpacken, packen, streckenKarten, BESTE_JE_AUTO, LETZTE_JE_AUTO, type ArchivRunde } from "../src/rundenarchiv.ts";
 import { ANSAGE_SPRACHEN, absicht, ansage, FERTIGE_SAETZE, nichtVerstanden, ordnungWort, pruefenIn, zahlenAusschreiben, zahlIn, zahlWort, zumSprechen } from "../src/ansagen.ts";
@@ -312,6 +315,11 @@ test("Spotter: sofort bei Auto daneben, „Frei“ erst nach echtem Nebeneinande
   assert.deepEqual(gesagt, ["links", "frei", "rechts"]);
   folge([[5, 4], [5.1, 5], [5.2, 0], [5.3, 99]]); // beidseitig, zwei links; 0 = Spotter aus, Unsinn wird ignoriert
   assert.deepEqual(gesagt.slice(3), ["beide", "zweiLinks"]);
+  // lange nebeneinander: nach 2 s „Noch da“, danach nur alle 3,2 s (2,5 s Ruhe nach dem Satz) statt im 2-s-Takt
+  const lang: Seite[] = [];
+  const s2 = new Spotter((x) => lang.push(x));
+  for (let t = 0; t <= 12; t += 0.1) s2.aufnehmen(2, Math.round(t * 10) / 10);
+  assert.deepEqual(lang, ["links", "noch", "noch", "noch", "noch"], "links bei 0, noch bei 2 / 5,2 / 8,4 / 11,6");
   assert.equal(seiteAus(6), "zweiRechts");
   assert.equal(seiteAus(0), null);
   // Alle 12 Sprachen haben alle 6 Ansagen
@@ -644,4 +652,119 @@ test("Referenzrunden: 201 Stützstellen hin und zurück, Zeitverlauf beginnt bei
   const r = aufRaster(zeitverlauf(t));
   assert.equal(r.length, RASTER + 1);
   for (const i of [0, Math.floor(RASTER / 3), RASTER]) assert.ok(Math.abs(r[i] - (t[i] - 3)) < 0.01, `Punkt ${i}`);
+});
+
+test("Crash: Einschlag wird erkannt, Kurven und hartes Bremsen nicht; Schaden für die KI", () => {
+  const w = new CrashWaechter();
+  const p = (zeit: number, kmh: number, quer: number, laengs: number, extra: Partial<Probe> = {}): Probe =>
+    ({ zeit, tempo: kmh / 3.6, querBeschl: quer, laengsBeschl: laengs, aufStrecke: true, inBox: false, lage: 3, vorfaelle: 0, ...extra }) as Probe;
+  const ereignisse: number[] = [];
+  const fahren = (von: number, bis: number, f: (t: number) => Probe) => {
+    for (let t = von; t < bis; t += 1 / 60) { const e = w.aufnehmen(f(Math.round(t * 600) / 600)); if (e) ereignisse.push(e.zeit); }
+  };
+  // 10 s schnelle Kurven (bis 4 g, langsam aufgebaut) und Vollbremsung mit 4 g: kein Einschlag
+  fahren(0, 5, (t) => p(t, 220, 40 * Math.sin(t), -2));
+  fahren(5, 7, (t) => p(t, 280 - (t - 5) * 140, 3, -39));
+  assert.deepEqual(ereignisse, [], "Kurven und Bremsen sind kein Crash");
+  // Einschlag in die Mauer: Spitze 18 g, Tempo von 160 auf 40 km/h
+  fahren(7, 8, (t) => p(t, 160, 5, 0));
+  fahren(8, 8.1, (t) => p(t, 40, 30, -176));
+  fahren(8.1, 12, (t) => p(t, 30, 1, 0));
+  assert.equal(ereignisse.length, 1, "ein Ereignis, nicht mehrere Messpunkte");
+  assert.ok(w.letzter && w.letzter.g >= 15 && w.letzter.tempoVorherKmh >= 150, JSON.stringify(w.letzter));
+  // nur Vorfallpunkte (+4, harter Kontakt ohne gemessene Spitze) nach der Ruhezeit
+  fahren(30, 31, (t) => p(t, 150, 2, 0, { vorfaelle: 4 }));
+  fahren(31, 32, (t) => p(t, 150, 2, 0, { vorfaelle: 8 }));
+  assert.equal(ereignisse.length, 2);
+  // im Stand in der Box oder beim Abschleppen nie
+  const w2 = new CrashWaechter();
+  for (let t = 0; t < 1; t += 1 / 60) assert.equal(w2.aufnehmen(p(t, t < 0.5 ? 200 : 0, 0, 0, { aufStrecke: false, lage: -1 })), null);
+  // Schaden-Bild: Einschlag, Fleischball, Motor-Warnung; ohne alles ehrlich „kein Schaden“
+  const bild = schadenBild(p(40, 100, 0, 0, { reparatur: 0, flaggen: 0x100000, motorWarnung: 0x05 }), w.letzter, 40) as Record<string, unknown>;
+  assert.ok(bild.letzter_einschlag && bild.fleischball_flagge, JSON.stringify(bild));
+  assert.deepEqual(bild.motor_warnungen, ["Wassertemperatur", "Öldruck"]);
+  assert.equal(schadenBild(p(5, 100, 0, 0, { reparatur: 0, flaggen: 0 }), null, 5), "kein Schaden gemeldet und kein Einschlag gemessen");
+  assert.equal(schadenBild(p(5, 100, 0, 0), null, 5), null, "Simulation liefert nichts");
+  // „Alles okay?“ in allen 28 Sprachen
+  assert.deepEqual(Object.keys(CRASH_SAETZE).sort(), Object.keys(LAENDERCODE).sort());
+});
+
+test("Fahrer-Infos: iRating, Lizenz, X und Strafen; neuer Vorder-/Hintermann; eigene Strafe einmal", () => {
+  assert.equal(werMitInfo("Anna Beispiel", "27", { irating: 2345, lizenz: "A 4.99", vorfaelle: 3 }), "#27 Anna Beispiel (iRating 2345, A 4.99, 3 X)");
+  assert.equal(werMitInfo("Ben", "", null), "Ben");
+  assert.equal(strafeAus(0x10000), "strafe");
+  assert.equal(strafeAus(0x80000), "verwarnung");
+  assert.equal(strafeAus(0x100000 | 0x4), "reparatur");
+  assert.equal(strafeAus(0x4), null);
+  assert.equal(strafeAus(null), null);
+  // eigene Strafe: nur beim Dazukommen, nicht bei jedem Messpunkt
+  const s = new StrafenWaechter();
+  assert.deepEqual([0, 0x10000, 0x10000, 0, 0x80000].map((f) => s.pruefen(f)), [null, "strafe", null, null, "verwarnung"]);
+  // neuer Nachbar: erster still, dann erst nach 3 s stabil und bis 2,5 s Abstand; höchstens alle 15 s
+  const w = new NachbarWaechter();
+  const lauf = (von: number, bis: number, vor: number | null, abstand = 1) => {
+    const raus: string[] = [];
+    for (let t = von; t <= bis; t += 0.5) raus.push(...w.pruefen(t, { vor: vor == null ? null : { idx: vor, abstand }, hinter: null }));
+    return raus;
+  };
+  assert.deepEqual(lauf(0, 5, 7), [], "der erste nach dem Start wird still übernommen");
+  assert.deepEqual(lauf(5.5, 7, 9), [], "noch nicht 3 s stabil");
+  assert.deepEqual(lauf(7.5, 10, 9), ["vor"]);
+  assert.deepEqual(lauf(10.5, 20, 4), [], "Sperre 15 s");
+  assert.deepEqual(lauf(20.5, 40, 5, 6), [], "zu weit weg");
+  // alle 28 Sprachen mit Platzhalter
+  assert.deepEqual(Object.keys(FAHRER_SAETZE).sort(), Object.keys(LAENDERCODE).sort());
+  for (const [code, x] of Object.entries(FAHRER_SAETZE)) for (const k of ["neuVor", "neuHinter", "strafe", "verwarnung"] as const) assert.ok(x[k].includes("{wer}"), `${code}.${k}`);
+});
+
+test("Referenz teilen: Runde neben der Strecke oder mit Vorfallpunkten ist gesperrt", () => {
+  const z = new Rundenzaehler();
+  const p = (zeit: number, anteil: number, extra: Partial<Probe> = {}): Probe =>
+    ({ zeit, anteil, tempo: 50, gas: 1, bremse: 0, sprit: 50, aufStrecke: true, inBox: false, lage: 3, vorfaelle: 0, ...extra }) as Probe;
+  const runde = (start: number, extra: (a: number) => Partial<Probe>) => {
+    let fertig = null;
+    for (let i = 0; i <= 100; i++) { const a = (i % 100) / 100 + 0.0001; const r = z.aufnehmen(p(start + i * 0.6, i === 100 ? 0.0002 : a, extra(a))); if (r) fertig = r; }
+    return fertig;
+  };
+  runde(0, () => ({}));
+  const sauber = runde(60, () => ({}));
+  const abseits = runde(120, (a) => (a > 0.4 && a < 0.45 ? { lage: 0 } : {}));
+  const x = runde(180, (a) => (a > 0.5 ? { vorfaelle: 2 } : {}));
+  assert.equal(sauber?.sperre ?? null, null);
+  assert.equal(abseits?.gueltig, true, "zählt weiter als Runde …");
+  assert.equal(abseits?.sperre, "Neben der Strecke", "… aber nicht als Referenz");
+  assert.equal(x?.sperre, "Vorfallpunkte in der Runde");
+});
+
+test("Fahr eine Runde mit mir: Bremspunkte finden und genau dort piepen", () => {
+  // 4-km-Runde: Bremszonen bei 25 % und 70 %, dazwischen kurzes Antippen (zählt nicht, zu nah)
+  const L = 4000;
+  const a = Array.from({ length: 2001 }, (_, i) => i / 2000);
+  const b = a.map((x) => (x >= 0.25 && x < 0.28) || (x >= 0.7 && x < 0.74) || (x >= 0.285 && x < 0.287) ? 0.9 : 0);
+  const stellen = bremsStellen(a, b, L);
+  assert.equal(stellen.length, 2, JSON.stringify(stellen));
+  assert.ok(Math.abs(stellen[0] - 0.25) * L < 3 && Math.abs(stellen[1] - 0.7) * L < 3, "auf wenige Meter genau");
+  // aus der Datenbank (201 Stützstellen, Prozent): Übergang wird eingerechnet
+  const ref = Array.from({ length: 201 }, (_, i) => (i >= 50 && i < 56 ? 80 : 0));
+  const r = bremsStellenAusReferenz(ref, L);
+  assert.equal(r.length, 1);
+  assert.ok(Math.abs(r[0] - 0.25) * L < 25, `${r[0] * L} m`);
+  // Mitfahren: 50 m/s, 60 Messpunkte pro Sekunde, zwei Runden – je Bremspunkt genau ein Piep, kurz vor dem Punkt
+  const m = new Mitfahrer(stellen, L);
+  const pieps: number[] = [];
+  let anteil = 0;
+  for (let i = 0; i < 2 * 80 * 60; i++) {
+    anteil = (anteil + 50 / 60 / L) % 1;
+    if (m.aufnehmen(anteil, 50)) pieps.push(anteil);
+  }
+  assert.equal(pieps.length, 4, "zwei Bremspunkte, zwei Runden");
+  for (const p of pieps) {
+    const naechste = stellen.reduce((x, y) => (Math.abs(y - p) < Math.abs(x - p) ? y : x));
+    const vorMeter = (naechste - p) * L;
+    assert.ok(vorMeter >= -1 && vorMeter <= 5, `Piep ${vorMeter.toFixed(1)} m vor dem Bremspunkt`);
+  }
+  // Sprung (zurückgesetzt, Box): kein Piep für übersprungene Punkte
+  const m2 = new Mitfahrer(stellen, L);
+  m2.aufnehmen(0.1, 50);
+  assert.equal(m2.aufnehmen(0.5, 50), false);
 });

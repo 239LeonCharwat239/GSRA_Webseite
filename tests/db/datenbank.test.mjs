@@ -11,9 +11,9 @@ import { fileURLToPath } from "node:url";
 
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "supabase", "migrations");
 const BY_NUMBER = Object.fromEntries(readdirSync(MIGRATIONS).filter(f => /^\d{3}_.+\.sql$/.test(f)).map(f => [f.slice(0, 3), join(MIGRATIONS, f)]));
-const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL, KARRIERE_SQL, STINTPLAN_SQL, LIVERIES_SQL, CHATSICHER_SQL, AUFRAEUMEN_SQL, ONLINE_SQL, RE_STIL_SQL, APP_LOGIN_SQL, RE_KI_SQL, RE_CHAT_SQL, RE_MERKEN_SQL, LAENGER_SQL, STARTSEITE_SQL, ALTREGELN_SQL, HINWEIS_SQL, RE_SPRACHEN_SQL, REFERENZ_SQL] =
-    Array.from({ length: 60 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
-const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 60);
+const [ROLES_SQL, GUARD_SQL, AUSBAU_SQL, AUSBAU2_SQL, AUSBAU3_SQL, SICHERHEIT_SQL, NAMEN_SQL, ORT_SQL, MARKT_SQL, UMKREIS_SQL, ZAHLUNG_SQL, ZAHLUNG2_SQL, KUENDIGUNG_SQL, SETUPHUB_SQL, PRONUR_SQL, SICHERHEIT2_SQL, ADVISOR_SQL, ADMIN_MFA_SQL, MFA_PFLICHT_SQL, LIMITS_SQL, MODERATION_SQL, EVENTS_SQL, BEWERTUNGEN_SQL, COACHING_SQL, BEZAHLUNG_SQL, LIZENZ_SQL, PRO_SQL, ROLLE_SQL, SPRACHEN_SQL, KALENDER_SQL, ALLE_SPRACHEN_SQL, ANHAENGE_SQL, ERINNERUNG_SQL, FEHLER_SQL, REKLAMATION_SQL, COACH_SPERRE_SQL, URLAUB_SQL, VARIANTEN_SQL, ZAEHLER_SQL, SUCHE_SQL, CHAT_SETUPS_SQL, GERAET_SQL, UNTERSTUETZER_SQL, KARRIERE_SQL, STINTPLAN_SQL, LIVERIES_SQL, CHATSICHER_SQL, AUFRAEUMEN_SQL, ONLINE_SQL, RE_STIL_SQL, APP_LOGIN_SQL, RE_KI_SQL, RE_CHAT_SQL, RE_MERKEN_SQL, LAENGER_SQL, STARTSEITE_SQL, ALTREGELN_SQL, HINWEIS_SQL, RE_SPRACHEN_SQL, REFERENZ_SQL, KARTEN_SQL] =
+    Array.from({ length: 61 }, (_, i) => BY_NUMBER[String(i + 1).padStart(3, "0")]);
+const unknown = Object.keys(BY_NUMBER).filter(n => Number(n) > 61);
 if (unknown.length) console.log(`Hinweis: Skripte ${unknown.join(", ")} sind noch nicht im Test berücksichtigt.\n`);
 // ALT_SETUPS=1: Tabelle setups wie in der echten Datenbank ohne uploader_id (und weitere Spalten der Seite)
 const ALT_SETUPS = process.env.ALT_SETUPS === "1";
@@ -4230,6 +4230,50 @@ if (REFERENZ_SQL) {
     for (let i = 0; i < 10; i++) await add(U.lena, { strecke: "Imola", zeit: 100 + i, quelle: "eigen" });
     const grenze = await add(U.lena, { strecke: "Imola", zeit: 99, quelle: "eigen" });
     check("060: höchstens 60 Uploads am Tag", /genug Runden/.test(grenze.error || ""), grenze.error || "durchgelassen!");
+
+    // --- 061: Kärtchen-Übersicht, Löschen durch Admins ---
+    if (KARTEN_SQL) {
+        await db.exec(readFileSync(KARTEN_SQL, "utf8"));
+        const ctl61 = await db.exec(readFileSync(KARTEN_SQL, "utf8")); // zweiter Lauf
+        console.log("Kontrollabfrage 061:\n  " + ctl61[ctl61.length - 1].rows.map(r => `${r.pruefung}: ${r.ergebnis}`).join("\n  "), "\n");
+        check("061: Kontrollabfrage meldet bereit", ctl61[ctl61.length - 1].rows.every(r => r.ergebnis === "bereit" || r.ergebnis === "ja"));
+        await add(U.max, { strecke: "Monza", zeit: 107.5, quelle: "eigen" });
+        await add(U.anna, { strecke: "Monza", zeit: 106.9, quelle: "feld" });
+        const karten = await as(U.lena, () => q(`select * from public.reference_laps_overview()`));
+        const monza = karten.rows.find(r => r.strecke === "Monza");
+        const schnellste = Number((await one(`select min(zeit_s) as z from public.reference_laps where strecke = 'Monza' and fahrzeug = '${monza?.fahrzeug}'`)).z);
+        check("061: Kärtchen je Strecke und Auto mit Anzahl, offiziell/aus Rennen und Bestzeit",
+            karten.error === null && monza && monza.offiziell >= 1 && monza.aus_rennen >= 1 && Math.abs(Number(monza.bestzeit_s) - schnellste) < 0.01 && monza.mit_pedalen === true,
+            karten.error || JSON.stringify(monza));
+        check("061: Kärtchen verraten nicht, wer hochgeladen hat", karten.rows.every(r => !Object.values(r).includes(U.max) && !Object.values(r).includes(U.anna)));
+        check("061: Datum nur tagesgenau", karten.rows.every(r => new Date(r.zuletzt).getUTCHours() === 0 || String(r.zuletzt).includes("00:00:00")), JSON.stringify(karten.rows.map(r => r.zuletzt)));
+        const ziel = (await one(`select id::text as id from public.reference_laps where strecke = 'Monza' and quelle = 'feld' limit 1`)).id;
+        const alsAal = async (uid, aal, fn) => as(uid, async () => {
+            await db.exec(`set request.jwt.claims = '${JSON.stringify({ sub: uid, aal })}'`);
+            try { return await fn(); } finally { await db.exec(`set request.jwt.claims = ''`); }
+        });
+        // verboten: Mitglied, Admin ohne Zwei-Faktor, Gast, Gesperrter
+        for (const [text, wer, aal] of [["Mitglied", U.max, "aal2"], ["Admin ohne Zwei-Faktor", U.admin, "aal1"], ["Gesperrter", U.seller, "aal2"]]) {
+            const r = await alsAal(wer, aal, () => q(`select public.reference_lap_admin_delete('${ziel}') as ok`));
+            check(`061 verboten: ${text} löscht fremde Referenzrunde`, r.error !== null || r.rows[0]?.ok !== true, r.error || "durchgelassen!");
+        }
+        const gast = await as(null, () => q(`select public.reference_lap_admin_delete('${ziel}') as ok`));
+        check("061 verboten: Gast löscht", gast.error !== null, gast.error || "durchgelassen!");
+        const gastKarten = await as(null, () => q(`select * from public.reference_laps_overview()`));
+        check("061 verboten: Gäste sehen keine Kärtchen", gastKarten.error !== null || gastKarten.rows.length === 0, gastKarten.error || "durchgelassen!");
+        const darfMax = await alsAal(U.max, "aal2", () => q(`select public.reference_laps_darf_loeschen() as d`));
+        const darfAdmin = await alsAal(U.admin, "aal2", () => q(`select public.reference_laps_darf_loeschen() as d`));
+        check("061: Löschen-Knöpfe nur für Admins mit Zwei-Faktor", darfMax.rows[0]?.d === false && darfAdmin.rows[0]?.d === true, JSON.stringify([darfMax.rows, darfAdmin.rows, darfMax.error, darfAdmin.error]));
+        // erlaubt: Admin mit Zwei-Faktor, mit Protokoll ohne Hochlader
+        const vorher = (await one(`select count(*)::int as n from public.reference_laps where id = '${ziel}'`)).n;
+        const weg = await alsAal(U.admin, "aal2", () => q(`select public.reference_lap_admin_delete('${ziel}') as ok`));
+        const nachher = (await one(`select count(*)::int as n from public.reference_laps where id = '${ziel}'`)).n;
+        check("061: Admin mit Zwei-Faktor löscht eine Referenzrunde", vorher === 1 && weg.rows[0]?.ok === true && nachher === 0, weg.error || JSON.stringify(weg.rows));
+        const log = await one(`select action, details, target_user from public.moderation_log where action = 'referenzrunde_geloescht' order by id desc limit 1`);
+        check("061: Löschen steht im Moderationsprotokoll (ohne Hochlader)", log && log.details.strecke === "Monza" && log.target_user === null && !JSON.stringify(log.details).includes(U.anna), JSON.stringify(log));
+    } else {
+        check("061 fehlt im Ordner supabase/migrations", false);
+    }
     await db.exec(`delete from public.reference_laps`);
 }
 

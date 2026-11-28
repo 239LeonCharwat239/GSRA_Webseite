@@ -51,6 +51,9 @@ const FREI_NACH = 0.45; // s – so lange muss es frei bleiben
 const MIN_NEBEN = 0.6; // s – nur nach echtem Nebeneinander „Frei“ sagen
 const NICHT_WIEDERHOLEN = 1.5; // s – dieselbe Ansage nicht öfter
 const NOCH_NACH = 2; // s – so lange nebeneinander, dann „Noch da“ (Wunsch 27.11.: wie „Still there“ in iRacing, nach 1,5–2 s)
+// Danach nicht im Takt von 2 s (Fund 28.11.: „noch da, noch da, noch da“ – pures Zuspammen), sondern nach dem
+// Satz (~0,7 s) jeweils 2,5 s Ruhe
+const NOCH_WIEDER = 3.2;
 
 export class Spotter {
   private aktuell: Seite = "frei";
@@ -81,7 +84,7 @@ export class Spotter {
       if (s !== this.aktuell) {
         this.aktuell = s;
         if (!(this.zuletzt && this.zuletzt.seite === s && zeit - this.zuletzt.zeit < NICHT_WIEDERHOLEN)) this.melden(s, zeit);
-      } else if (this.zuletzt && zeit - this.zuletzt.zeit >= NOCH_NACH) {
+      } else if (this.zuletzt && zeit - this.zuletzt.zeit >= (this.zuletzt.seite === "noch" ? NOCH_WIEDER : NOCH_NACH)) {
         this.melden("noch", zeit); // immer noch nebeneinander
       }
       return;

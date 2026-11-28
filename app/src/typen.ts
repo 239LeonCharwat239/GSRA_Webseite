@@ -26,9 +26,26 @@ export type Probe = {
   /** Schaden: anstehende Pflicht- bzw. optionale Reparatur in Sekunden (0 = keine) */
   reparatur?: number | null;
   reparaturOptional?: number | null;
+  /** Beschleunigung quer / längs in m/s² (Crash-Erkennung) */
+  querBeschl?: number | null;
+  laengsBeschl?: number | null;
+  /** eigene Vorfallpunkte der Sitzung */
+  vorfaelle?: number | null;
+  /** Lage: -1 nicht im Auto, 0 neben der Strecke, 1 Box-Platz, 2 Boxeneinfahrt, 3 Strecke */
+  lage?: number | null;
+  /** Flaggen (Bitfeld; 0x100000 = Fleischball) */
+  flaggen?: number | null;
+  /** Motor-Warnungen (Bitfeld: 1 Wasser, 2 Benzindruck, 4 Öldruck, 8 abgewürgt, 0x40 Öltemperatur) */
+  motorWarnung?: number | null;
 };
 
-export type FahrerInfo = { idx: number; name: string; nummer: string; /** Auto des Fahrers (fehlt bei älteren Ständen) */ fahrzeug?: string };
+export type FahrerInfo = {
+  idx: number; name: string; nummer: string;
+  /** Auto des Fahrers (fehlt bei älteren Ständen) */
+  fahrzeug?: string;
+  /** iRating, Lizenz mit Safety Rating („A 4.99“), Vorfallpunkte („X“) – Wunsch 28.11. */
+  irating?: number | null; lizenz?: string; vorfaelle?: number | null;
+};
 
 export type Sitzung = {
   strecke: string | null;
@@ -51,6 +68,8 @@ export type Feld = {
   /** letzte und beste Rundenzeit je Auto (Sekunden; ≤ 0 = noch keine) – fehlt bei älteren Ständen */
   letzte?: Array<number | null>;
   beste?: Array<number | null>;
+  /** Flaggen je Auto (Strafe, Verwarnung, Fleischball) – fehlt bei älteren Ständen */
+  flaggen?: Array<number | null>;
 };
 
 export type Status = {

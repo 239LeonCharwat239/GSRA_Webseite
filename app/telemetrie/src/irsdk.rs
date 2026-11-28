@@ -267,7 +267,7 @@ pub fn werte(zeile: &[u8], v: &Variable, max: usize) -> Vec<Option<f64>> {
 pub const MAX_AUTOS: usize = 64;
 
 /// Werte je Auto für Rennbericht und Zweikämpfe (Namen wie im iRacing-SDK)
-const FELD_NAMEN: [&str; 7] = [
+const FELD_NAMEN: [&str; 8] = [
     "PlayerCarIdx",
     "CarIdxLapDistPct",
     "CarIdxLap",
@@ -275,6 +275,8 @@ const FELD_NAMEN: [&str; 7] = [
     "CarIdxOnPitRoad",
     "CarIdxLastLapTime",
     "CarIdxBestLapTime",
+    // Flaggen je Auto (Strafe = schwarze Flagge, Verwarnung, Fleischball) – Wunsch 28.11.
+    "CarIdxSessionFlags",
 ];
 
 /// Stand aller Autos (Index = Startnummer-unabhängiger Platz im Feld der Simulation, „CarIdx“)
@@ -293,10 +295,12 @@ pub struct Feld {
     /// letzte und beste Rundenzeit je Auto (Sekunden; -1 oder 0 = noch keine)
     pub letzte: Vec<Option<f64>>,
     pub beste: Vec<Option<f64>>,
+    /// Flaggen je Auto (Bitfeld wie SessionFlags); leer, wenn die Simulation sie nicht liefert
+    pub flaggen: Vec<Option<f64>>,
 }
 
 /// Die Werte, die die App braucht (Namen wie im iRacing-SDK)
-const NAMEN: [&str; 20] = [
+const NAMEN: [&str; 26] = [
     "SessionTime",
     "Lap",
     "LapDistPct",
@@ -319,13 +323,22 @@ const NAMEN: [&str; 20] = [
     // Schaden (Wunsch 27.11.): Sekunden Pflicht- bzw. optionale Reparatur, die gerade anstehen (0 = kein Schaden)
     "PitRepairLeft",
     "PitOptRepairLeft",
+    // Crash und Schaden (Fund 28.11.: Achsen gebrochen, aber PitRepairLeft blieb leer – iRacing füllt es oft erst in
+    // der Box): Beschleunigung quer/längs (m/s²), eigene Vorfallpunkte, Lage (neben der Strecke …), Flaggen
+    // (Fleischball = Pflicht-Reparatur), Motor-Warnungen (Wasser, Öldruck …)
+    "LatAccel",
+    "LongAccel",
+    "PlayerCarMyIncidentCount",
+    "PlayerTrackSurface",
+    "SessionFlags",
+    "EngineWarnings",
 ];
 
 /// Zuordnung Name → Variable (fehlende Werte bleiben leer)
 #[derive(Debug, Clone, Default)]
 pub struct Karte {
-    felder: [Option<Variable>; 20],
-    feld: [Option<Variable>; 7],
+    felder: [Option<Variable>; 26],
+    feld: [Option<Variable>; 8],
 }
 
 impl Karte {
@@ -353,6 +366,7 @@ impl Karte {
             in_box: alle(4),
             letzte: alle(5),
             beste: alle(6),
+            flaggen: alle(7),
         })
     }
     pub fn vorhanden(&self) -> usize {
@@ -387,6 +401,12 @@ impl Karte {
             seite: z(17).map(|x| x as i32).filter(|x| (0..=6).contains(x)),
             reparatur: z(18).filter(|x| x.is_finite() && *x >= 0.0),
             reparatur_optional: z(19).filter(|x| x.is_finite() && *x >= 0.0),
+            quer_beschl: z(20).filter(|x| x.is_finite() && x.abs() < 2000.0),
+            laengs_beschl: z(21).filter(|x| x.is_finite() && x.abs() < 2000.0),
+            vorfaelle: z(22).filter(|x| x.is_finite() && (0.0..100_000.0).contains(x)).map(|x| x as i32),
+            lage: z(23).map(|x| x as i32).filter(|x| (-1..=3).contains(x)),
+            flaggen: z(24).filter(|x| x.is_finite()).map(|x| x as i64 as u32),
+            motor_warnung: z(25).filter(|x| x.is_finite()).map(|x| (x as i64 as u32) & 0xff),
         }
     }
 }
@@ -420,6 +440,17 @@ pub struct Probe {
     pub reparatur: Option<f64>,
     /// Schaden: anstehende optionale Reparatur in Sekunden (PitOptRepairLeft)
     pub reparatur_optional: Option<f64>,
+    /// Beschleunigung quer / längs in m/s² (LatAccel, LongAccel) – ein Einschlag zeigt sich als Spitze
+    pub quer_beschl: Option<f64>,
+    pub laengs_beschl: Option<f64>,
+    /// Eigene Vorfallpunkte der Sitzung (PlayerCarMyIncidentCount)
+    pub vorfaelle: Option<i32>,
+    /// Lage des Autos (PlayerTrackSurface): -1 nicht im Auto, 0 neben der Strecke, 1 Box-Platz, 2 Boxeneinfahrt, 3 Strecke
+    pub lage: Option<i32>,
+    /// Flaggen (SessionFlags, Bitfeld; 0x0010_0000 = Fleischball / Pflicht-Reparatur)
+    pub flaggen: Option<u32>,
+    /// Motor-Warnungen (EngineWarnings): 1 Wassertemperatur, 2 Benzindruck, 4 Öldruck, 8 abgewürgt, 0x40 Öltemperatur
+    pub motor_warnung: Option<u32>,
 }
 
 /// Strecke und Fahrzeug aus der Sitzungsinfo (nur, was die App anzeigt)
@@ -442,6 +473,12 @@ pub struct FahrerInfo {
     pub nummer: String,
     /// Auto dieses Fahrers (CarScreenName) – in Rennen mit mehreren Klassen fährt nicht jeder dasselbe Auto
     pub fahrzeug: String,
+    /// iRating (IRating) – Wunsch 28.11.: beim Vorder- und Hintermann ansagen
+    pub irating: Option<i32>,
+    /// Lizenz wie „A 4.99“ (LicString)
+    pub lizenz: String,
+    /// Vorfallpunkte („X“) in dieser Sitzung (CurDriverIncidentCount); fehlt, wenn iRacing sie nicht zeigt
+    pub vorfaelle: Option<i32>,
 }
 
 /// Fahrerliste aus dem Block „Drivers:“ (je Eintrag „- CarIdx: …“, „UserName: …“, „CarNumber: …“)
@@ -469,6 +506,12 @@ fn fahrer_lesen(yaml: &str) -> Vec<FahrerInfo> {
             f.nummer = sauber(w).map(|s| s.chars().filter(|c| c.is_ascii_alphanumeric()).take(4).collect()).unwrap_or_default();
         } else if let Some(w) = t.strip_prefix("CarScreenName:") {
             f.fahrzeug = sauber(w).map(|s| s.chars().take(80).collect()).unwrap_or_default();
+        } else if let Some(w) = t.strip_prefix("IRating:") {
+            f.irating = w.trim().parse::<i32>().ok().filter(|x| (1..20_000).contains(x));
+        } else if let Some(w) = t.strip_prefix("LicString:") {
+            f.lizenz = sauber(w).map(|s| s.chars().filter(|c| c.is_ascii_alphanumeric() || *c == ' ' || *c == '.').take(12).collect()).unwrap_or_default();
+        } else if let Some(w) = t.strip_prefix("CurDriverIncidentCount:") {
+            f.vorfaelle = w.trim().parse::<i32>().ok().filter(|x| (0..1000).contains(x));
         } else if t.starts_with("CarIsPaceCar: 1") || t.starts_with("IsSpectator: 1") {
             *aus = true;
         } else if !t.is_empty() && !z.starts_with(' ') {
@@ -594,6 +637,12 @@ pub mod testdaten {
                 ("OnPitRoad", Typ::Bool),
                 ("YawNorth", Typ::Zahl),
                 ("CarLeftRight", Typ::Ganzzahl),
+                ("LatAccel", Typ::Zahl),
+                ("LongAccel", Typ::Zahl),
+                ("PlayerCarMyIncidentCount", Typ::Ganzzahl),
+                ("PlayerTrackSurface", Typ::Ganzzahl),
+                ("SessionFlags", Typ::Ganzzahl),
+                ("EngineWarnings", Typ::Ganzzahl),
             ] {
                 vars.push((n.to_string(), t, o));
                 o += t.groesse();
@@ -669,11 +718,11 @@ mod tests {
         let b = bau.bauen(1, &[("Speed", 50.0)]);
         let k = kopf_lesen(&b).unwrap();
         assert!(k.verbunden());
-        assert_eq!(k.anzahl_variablen, 18);
+        assert_eq!(k.anzahl_variablen, 24);
         assert_eq!(k.neueste_zeile(), 1);
         k.pruefen(b.len()).unwrap();
-        let vars = variablen_lesen(&b[VAR_START..], 18, bau.zeilen_laenge).unwrap();
-        assert_eq!(vars.len(), 18);
+        let vars = variablen_lesen(&b[VAR_START..], 24, bau.zeilen_laenge).unwrap();
+        assert_eq!(vars.len(), 24);
         assert_eq!(vars[0].name, "SessionTime");
         assert_eq!(vars[0].typ, Typ::Doppelt);
     }
@@ -695,9 +744,9 @@ mod tests {
             ("CarLeftRight", 2.0),
         ]);
         let k = kopf_lesen(&b).unwrap();
-        let vars = variablen_lesen(&b[VAR_START..], 18, bau.zeilen_laenge).unwrap();
+        let vars = variablen_lesen(&b[VAR_START..], 24, bau.zeilen_laenge).unwrap();
         let karte = Karte::aus(&vars);
-        assert_eq!(karte.vorhanden(), 18);
+        assert_eq!(karte.vorhanden(), 24);
         let i = k.neueste_zeile();
         let o = k.puffer[i].offset as usize;
         let p = karte.probe(&b[o..o + bau.zeilen_laenge], k.puffer[i].tick);
@@ -712,12 +761,37 @@ mod tests {
         assert_eq!(p.richtung, Some(1.5));
         assert_eq!(p.seite, Some(2), "Spotter: Auto links");
         assert_eq!(p.tick, 100);
+        assert_eq!(p.vorfaelle, Some(0), "nicht gesetzt = 0 in der Zeile");
+    }
+
+    #[test]
+    fn crash_und_schaden_werte() {
+        let bau = Bau::standard();
+        let b = bau.bauen(0, &[
+            ("LatAccel", -12.5),
+            ("LongAccel", -95.0),
+            ("PlayerCarMyIncidentCount", 4.0),
+            ("PlayerTrackSurface", 0.0),
+            ("SessionFlags", 1_048_576.0 + 4.0),
+            ("EngineWarnings", 1.0 + 4.0 + 16.0),
+        ]);
+        let k = kopf_lesen(&b).unwrap();
+        let vars = variablen_lesen(&b[VAR_START..], 24, bau.zeilen_laenge).unwrap();
+        let karte = Karte::aus(&vars);
+        let o = k.puffer[0].offset as usize;
+        let p = karte.probe(&b[o..o + bau.zeilen_laenge], 1);
+        assert_eq!(p.quer_beschl, Some(-12.5));
+        assert_eq!(p.laengs_beschl, Some(-95.0));
+        assert_eq!(p.vorfaelle, Some(4));
+        assert_eq!(p.lage, Some(0), "neben der Strecke");
+        assert_eq!(p.flaggen.map(|f| f & 0x0010_0000 != 0), Some(true), "Fleischball");
+        assert_eq!(p.motor_warnung, Some(21));
     }
 
     #[test]
     fn spotter_nur_bekannte_werte() {
         let bau = Bau::standard();
-        let vars = variablen_lesen(&bau.bauen(0, &[])[VAR_START..], 18, bau.zeilen_laenge).unwrap();
+        let vars = variablen_lesen(&bau.bauen(0, &[])[VAR_START..], 24, bau.zeilen_laenge).unwrap();
         let karte = Karte::aus(&vars);
         for (roh, erwartet) in [(0.0, Some(0)), (1.0, Some(1)), (6.0, Some(6)), (7.0, None), (-3.0, None), (99999.0, None)] {
             let b = bau.bauen(0, &[("CarLeftRight", roh)]);
@@ -746,7 +820,7 @@ mod tests {
     fn unendliche_und_nan_werte_werden_verworfen() {
         let bau = Bau::standard();
         let b = bau.bauen(0, &[("Speed", f64::NAN), ("SessionTime", f64::INFINITY)]);
-        let vars = variablen_lesen(&b[VAR_START..], 18, bau.zeilen_laenge).unwrap();
+        let vars = variablen_lesen(&b[VAR_START..], 24, bau.zeilen_laenge).unwrap();
         let k = kopf_lesen(&b).unwrap();
         let o = k.puffer[0].offset as usize;
         let p = Karte::aus(&vars).probe(&b[o..o + bau.zeilen_laenge], 1);
@@ -860,10 +934,10 @@ mod tests {
 
     #[test]
     fn fahrerliste_ohne_pace_car_und_zuschauer() {
-        let yaml = "DriverInfo:\n DriverCarIdx: 1\n Drivers:\n - CarIdx: 0\n   UserName: Pace Car\n   CarNumber: \"0\"\n   CarIsPaceCar: 1\n - CarIdx: 1\n   UserName: Anna Beispiel\n   CarNumber: \"27\"\n   CarScreenName: BMW M4 GT3\n   CarIsPaceCar: 0\n   IsSpectator: 0\n - CarIdx: 2\n   UserName: <script>alert(1)</script>\u{0007}Böse\n   CarNumber: \"7<b>\"\n - CarIdx: 3\n   UserName: Zuschauer Zoe\n   IsSpectator: 1\n - CarIdx: 99\n   UserName: Zu Hoch\nSplitTimeInfo:\n Sectors:\n - CarIdx: 5\n";
+        let yaml = "DriverInfo:\n DriverCarIdx: 1\n Drivers:\n - CarIdx: 0\n   UserName: Pace Car\n   CarNumber: \"0\"\n   CarIsPaceCar: 1\n - CarIdx: 1\n   UserName: Anna Beispiel\n   CarNumber: \"27\"\n   CarScreenName: BMW M4 GT3\n   IRating: 2345\n   LicString: A 4.99\n   CurDriverIncidentCount: 3\n   CarIsPaceCar: 0\n   IsSpectator: 0\n - CarIdx: 2\n   UserName: <script>alert(1)</script>\u{0007}Böse\n   CarNumber: \"7<b>\"\n - CarIdx: 3\n   UserName: Zuschauer Zoe\n   IsSpectator: 1\n - CarIdx: 99\n   UserName: Zu Hoch\nSplitTimeInfo:\n Sectors:\n - CarIdx: 5\n";
         let f = fahrer_lesen(yaml);
         assert_eq!(f.len(), 2, "{f:?}");
-        assert_eq!(f[0], FahrerInfo { idx: 1, name: "Anna Beispiel".into(), nummer: "27".into(), fahrzeug: "BMW M4 GT3".into() });
+        assert_eq!(f[0], FahrerInfo { idx: 1, name: "Anna Beispiel".into(), nummer: "27".into(), fahrzeug: "BMW M4 GT3".into(), irating: Some(2345), lizenz: "A 4.99".into(), vorfaelle: Some(3) });
         assert_eq!(f[1].idx, 2);
         assert!(!f[1].name.contains('\u{7}'));
         assert_eq!(f[1].nummer, "7b");

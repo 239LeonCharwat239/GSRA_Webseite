@@ -8,7 +8,7 @@ import { DemoQuelle } from "./demo.ts";
 import { Diagramme, verlaufZeichnen, type Plot } from "./diagramm.ts";
 import type { Feld, Probe, Sitzung, Status } from "./typen.ts";
 import { angemeldet, beiKontoWechsel, hinweis, kontoStarten } from "./konto-ansicht.ts";
-import { aufnahmeAbspielen, beiFehlenderStimme, funkBeschaeftigt, funkLaden, funkSpeichern, sprechen, spotterSprechen, stimmenFuer } from "./funk.ts";
+import { aufnahmeAbspielen, beiFehlenderStimme, funkBeschaeftigt, funkLaden, funkSpeichern, piepen, sprechen, spotterSprechen, stimmenFuer, systemTonSetzen } from "./funk.ts";
 import { absicht, ansage, mitPunkt, nichtVerstanden, nochDran, zahlIn } from "./ansagen.ts";
 import { spracheName, spracheVonText } from "./sprachen.ts";
 import { kiFragen, kiVerfuegbar, merkenSpeichern, persoenlichkeitLaden, type Persoenlichkeit } from "./ki.ts";
@@ -18,6 +18,10 @@ import { Chat, pruefSatz, pruefSaetze } from "./chat.ts";
 import { Spotter, spotterSatz } from "./spotter.ts";
 import { abstandSatz, type Gegner } from "./vorlagen.ts";
 import { Feldrunden, deltaZu, verlustIn, type FeldRunde } from "./feldreferenz.ts";
+import { CrashWaechter, crashSatz, schadenBild, type Einschlag } from "./crash.ts";
+import { bremsStellen, bremsStellenAusReferenz, Mitfahrer } from "./mitfahren.ts";
+import { referenzAnsicht } from "./referenz-ansicht.ts";
+import { fahrerSatz, NachbarWaechter, StrafenWaechter, strafeAus, strafeSatz, werMitInfo, type Strafe } from "./fahrer-info.ts";
 import { eigeneRundeTeilen, feldRundeTeilen, referenzenLaden, referenzLoeschen, type Referenz, type SitzungsInfo } from "./referenz.ts";
 import { namenErsetzen } from "./datenschutz.ts";
 import { karteBauen, karteZeichnen, verlustJeAbschnitt, type Karte } from "./strecke.ts";
@@ -134,6 +138,7 @@ function feldAufnehmen(f: Feld) {
   feldRef.laengeSetzen(laenge());
   feldRef.aufnehmen(f);
   feldRundeMelden(f);
+  neueNachbarnMelden(f);
   // neue Referenzrunde? Dann den Vergleich auffrischen
   const s = feldRef.schnellste();
   const kennung = s ? s.idx * 1e6 + Math.round(s.zeit * 1000) : 0;
@@ -142,6 +147,59 @@ function feldAufnehmen(f: Feld) {
     if (aktiverReiter === "vergleich") feldRefZeigen();
   }
 }
+
+/** Neuer Vorder- oder Hintermann im Rennen: Name mit iRating, Lizenz und X ansagen (Wunsch 28.11.) */
+const nachbarWaechter = new NachbarWaechter();
+function neueNachbarnMelden(f: Feld) {
+  if (f.zeit == null || !istRennen(sitzung?.sitzungsart ?? (demo.laeuft ? "Rennen" : null))) return;
+  const n = nachbarn();
+  const kurz = (x: Nachbar) => (x ? { idx: x.idx, abstand: x.abstand_s } : null);
+  for (const seite of nachbarWaechter.pruefen(f.zeit, { vor: kurz(n.vor), hinter: kurz(n.hinter) })) {
+    const x = n[seite];
+    if (!x) continue;
+    const code = ansageSprache();
+    const wer = werMitInfo(x.name, x.nummer, x);
+    chat?.melden([fahrerSatz(code, seite === "vor" ? "neuVor" : "neuHinter", wer), strafeSatz(code, x.strafe, `#${x.nummer || x.idx}`)].filter(Boolean).join(" "));
+  }
+}
+/** „Fahr eine Runde mit mir“: Piepton an den Bremspunkten (mitfahren.ts). Referenz: schnellste GSRA-Referenzrunde mit
+ *  Pedalen, wenn sie schneller ist als deine Bestzeit – sonst deine Bestzeit */
+let mitfahrer: Mitfahrer | null = null;
+function mitfahrenUmschalten(an = !mitfahrer): string {
+  const en = ansageSprache() !== "de";
+  const knopf = $("lMitfahren");
+  const info = $("lMitfahrenText");
+  if (!an) {
+    mitfahrer = null;
+    knopf.setAttribute("aria-pressed", "false");
+    knopf.textContent = "Fahr eine Runde mit mir";
+    info.textContent = "";
+    return en ? "Okay, no more beeps." : "Alles klar, kein Piepen mehr.";
+  }
+  const L = laenge();
+  const eigene = zaehler.beste && zaehler.beste.punkte.length > 10 ? zaehler.beste : null;
+  const ref = referenzen.find((r) => r.bremse);
+  let stellen: number[] = [];
+  let quelle = "";
+  if (L && ref?.bremse && (!eigene || ref.zeit < eigene.zeit)) {
+    stellen = bremsStellenAusReferenz(ref.bremse, L);
+    quelle = `${en ? "the GSRA reference lap" : "der GSRA-Referenzrunde"} ${zeitText(ref.zeit)}`;
+  } else if (L && eigene) {
+    stellen = bremsStellen(eigene.punkte.map((x) => x.a), eigene.punkte.map((x) => x.b), L);
+    quelle = `${en ? "your best lap" : "deiner Bestzeit"} ${zeitText(eigene.zeit)}`;
+  }
+  if (!L || !stellen.length) return en ? "Do one clean lap first – then I can beep at the braking points." : "Fahr erst eine saubere Runde – dann piepe ich dir an den Bremspunkten.";
+  mitfahrer = new Mitfahrer(stellen, L);
+  knopf.setAttribute("aria-pressed", "true");
+  knopf.textContent = "Piepton aus";
+  info.textContent = `${stellen.length} Bremspunkte · ${quelle}`;
+  return en ? `Got it – I will beep at ${stellen.length} braking points from ${quelle}.` : `Alles klar – ich piepe an ${stellen.length} Bremspunkten aus ${quelle}.`;
+}
+const MITFAHREN_AN = /fahr\w*\s+(eine\s+|ne\s+)?runde\s+mit|mitfahren|bremspunkt\w*\s+piep|ride\s+along|(drive|do)\s+a\s+lap\s+with\s+me|beep\s+(at\s+)?(the\s+)?brak/i;
+const MITFAHREN_AUS = /(piep\w*|mitfahren|beep\w*)\s*(aus|stopp?|off|beenden)|kein\s+piep|no\s+more\s+beep/i;
+
+/** Eigene Strafe, Verwarnung oder Fleischball sofort ansagen */
+const strafenWaechter = new StrafenWaechter();
 
 const demo = new DemoQuelle((liste) => proben(liste), (f) => feldAufnehmen(f));
 // Messenger: der Messenger der Webseite (1:1, Wunsch 27.11.) – in der App nur der rote Punkt für neue Nachrichten
@@ -337,6 +395,11 @@ function proben(liste: Probe[]) {
       letzteSeite = p.seite;
       spotter.aufnehmen(p.seite, p.zeit);
     }
+    const einschlag = demo.laeuft ? null : crashWaechter.aufnehmen(p);
+    if (einschlag) nachEinschlag(einschlag);
+    if (mitfahrer && p.anteil != null && mitfahrer.aufnehmen(p.anteil, p.tempo ?? 0)) piepen(funkE);
+    const strafe = demo.laeuft ? null : strafenWaechter.pruefen(p.flaggen);
+    if (strafe) chat?.melden(fahrerSatz(ansageSprache(), strafe === "strafe" ? "duStrafe" : strafe === "verwarnung" ? "duVerwarnung" : "duReparatur"));
     const r = zaehler.aufnehmen(p);
     if (p.meter != null && p.meter > groessterMeter && p.meter < 100_000) groessterMeter = p.meter;
     verlauf.tempo.push(p.tempo ?? 0);
@@ -352,6 +415,16 @@ function proben(liste: Probe[]) {
       live();
     });
   }
+}
+
+/** Nach einem Einschlag fragt der Renningenieur nach (fertiger Satz, keine KI-Kosten) – kurz warten, bis das Auto steht
+ *  oder weiterfährt; höchstens einmal pro Minute */
+const crashWaechter = new CrashWaechter();
+let crashGefragt = -Infinity;
+function nachEinschlag(e: Einschlag) {
+  if (e.zeit - crashGefragt < 60 && e.zeit >= crashGefragt) return;
+  crashGefragt = e.zeit;
+  window.setTimeout(() => chat?.melden(crashSatz(ansageSprache())), 2200);
 }
 
 /** Rundenmeldung in anderen Sprachen als Deutsch: kurz, ohne die (deutsche) Kurvenanalyse – die formuliert
@@ -439,13 +512,11 @@ function kiLage(roh: Record<string, unknown>): Record<string, unknown> {
   return namenErsetzen(lage, sitzung?.fahrer ?? []) as Record<string, unknown>;
 }
 
-/** Schaden am Auto aus iRacing (Wunsch 27.11.): anstehende Reparaturzeiten; null = Simulation liefert nichts */
+/** Schaden am Auto (Wunsch 27.11., Fund 28.11.): Reparaturzeit, Fleischball, Motor-Warnungen und der zuletzt gemessene
+ *  Einschlag (crash.ts); null = Simulation liefert nichts */
 function schadenLage(): Record<string, unknown> | string | null {
   const p = zaehler.jetzt;
-  if (p?.reparatur == null && p?.reparaturOptional == null) return null;
-  const pflicht = Math.round(p?.reparatur ?? 0);
-  const optional = Math.round(p?.reparaturOptional ?? 0);
-  return pflicht > 0 || optional > 0 ? { pflicht_reparatur_s: pflicht, optionale_reparatur_s: optional } : "kein Schaden gemeldet";
+  return schadenBild(p ?? null, crashWaechter.letzter, p?.zeit ?? null);
 }
 
 /** Nur gemessene Fakten nach einer Runde – daraus formuliert die KI den Funkspruch */
@@ -783,7 +854,10 @@ $("spKnopf").addEventListener("click", () => {
 });
 
 // ---------------------------------------------------------------- Chat mit dem Renningenieur
-type Nachbar = { idx: number; name: string; nummer: string; abstand_s: number | null } | null;
+type Nachbar = {
+  idx: number; name: string; nummer: string; abstand_s: number | null;
+  irating: number | null; lizenz: string | null; vorfaelle: number | null; strafe: Strafe;
+} | null;
 
 // Abstände der letzten Runde je Auto – daraus die Tendenz („holt 0,3 pro Runde“)
 let letzteAbstaende = new Map<number, number>();
@@ -811,7 +885,10 @@ function nachbarn(): { vor: Nachbar; hinter: Nachbar } {
     if (i == null || i < 0) return null;
     const info = fahrer.find((x) => x.idx === i);
     const abstand = Math.abs(fortschritt(i) - fortschritt(f.ich!)) * typischeRundenzeit();
-    return { idx: i, name: info?.name ?? `Auto ${i}`, nummer: info?.nummer ?? "", abstand_s: Number.isFinite(abstand) ? Math.round(abstand * 10) / 10 : null };
+    return {
+      idx: i, name: info?.name ?? `Auto ${i}`, nummer: info?.nummer ?? "", abstand_s: Number.isFinite(abstand) ? Math.round(abstand * 10) / 10 : null,
+      irating: info?.irating ?? null, lizenz: info?.lizenz || null, vorfaelle: info?.vorfaelle ?? null, strafe: strafeAus(f.flaggen?.[i]),
+    };
   };
   // Im Rennen live (Fund 27.11.: der offizielle Platz von iRacing gilt erst ab der Ziellinie), sonst offiziell
   if (istRennen(sitzung?.sitzungsart ?? (demo.laeuft ? "Rennen" : null))) {
@@ -857,7 +934,22 @@ function chatLage(): Record<string, unknown> {
     sparen: sparLage(),
     gegen_schnellsten: gegenSchnellstenLage(),
     schaden: schadenLage(),
+    ich: meineFahrerLage(),
     vergleich: vergleichFuerKi,
+  };
+}
+
+/** Eigene iRating, Lizenz, Vorfallpunkte und offene Strafe (für „Wie viele X habe ich?“, „Habe ich eine Strafe?“) */
+function meineFahrerLage(): Record<string, unknown> {
+  const p = zaehler.jetzt;
+  const ich = letztesFeld?.ich;
+  const info = ich != null ? (sitzung?.fahrer ?? []).find((x) => x.idx === ich) : undefined;
+  const strafe = strafeAus(p?.flaggen);
+  return {
+    irating: info?.irating ?? null,
+    lizenz: info?.lizenz || null,
+    vorfallpunkte_x: p?.vorfaelle ?? info?.vorfaelle ?? null,
+    strafe: strafe === "strafe" ? "Strafe offen (schwarze Flagge) – Details in der Black Box" : strafe === "verwarnung" ? "Verwarnung (schwarz-weiße Flagge)" : strafe === "reparatur" ? "Fleischball: Pflicht-Reparatur" : p?.flaggen != null ? "keine" : null,
   };
 }
 
@@ -865,6 +957,8 @@ function chatLage(): Record<string, unknown> {
 function lokaleAntwort(frage: string): string | null {
   // In der Sprache der Antwort; erkannt wird die Frage in jeder Sprache (Stichwörter aus ansagen.ts)
   const code = ansageSprache(frage);
+  if (MITFAHREN_AUS.test(frage)) return mitfahrenUmschalten(false);
+  if (MITFAHREN_AN.test(frage)) return mitfahrenUmschalten(true);
   const a = absicht(frage, code);
   if (!a) return null;
   const z = (x: number, stellen = 1) => zahlIn(code, x, stellen);
@@ -873,7 +967,9 @@ function lokaleAntwort(frage: string): string | null {
     const n = nachbarn()[a];
     if (!n) return ansage(code, "niemand");
     if (n.abstand_s == null) return ansage(code, "nochNichts");
-    return ansage(code, a, { wer: `${n.nummer ? `#${n.nummer} ` : ""}${n.name}`, s: z(n.abstand_s) });
+    // mit iRating, Lizenz/SR und X (Wunsch 28.11.) und – falls offen – Strafe oder Verwarnung
+    const satz = ansage(code, a, { wer: werMitInfo(n.name, n.nummer, n), s: z(n.abstand_s) });
+    return [satz, strafeSatz(code, n.strafe, n.nummer ? `#${n.nummer}` : n.name)].filter(Boolean).join(" ");
   }
   if (a === "sprit") {
     const v = verbrauchProRunde(zaehler.runden);
@@ -998,6 +1094,8 @@ function live() {
 function rundenZeigen() {
   const runden = zaehler.runden;
   const beste = zaehler.beste;
+  // schnellste Runde ohne Sperre (neben der Strecke, Vorfallpunkte) – nur die darf Referenz werden
+  const besteSauber = zaehler.runden.filter((x) => x.gueltig && !x.sperre && x.punkte.length > 10).reduce<Runde | null>((b, x) => (!b || x.zeit < b.zeit ? x : b), null);
   $("rundenAnzahl").textContent = String(runden.length);
   $("rLeer").hidden = runden.length > 0;
   $("rTabelle").hidden = runden.length === 0;
@@ -1034,8 +1132,17 @@ function rundenZeigen() {
     zustand.append(neu("span", `etikett ${r.gueltig ? "ok" : "warn"}`, r.gueltig ? "gültig" : (r.grund ?? "ungültig")));
     tr.append(zustand);
     const td = neu("td", "r-aktionen");
-    // Teilen nur für die Bestzeit (langsamere Runden helfen niemandem als Referenz)
-    if ((r === beste || geteilteRunden.has(r)) && r.gueltig && r.punkte.length > 10 && istApp && !demo.laeuft && angemeldet() && sitzung?.strecke && sitzung.fahrzeug) {
+    // Teilen nur für die schnellste SAUBERE Runde (Wunsch 28.11.: ungültige Runden blockieren – neben der Strecke,
+    // Vorfallpunkte); ist die Bestzeit selbst nicht sauber, steht dort der Grund
+    const teilbar = istApp && !demo.laeuft && angemeldet() && Boolean(sitzung?.strecke && sitzung.fahrzeug);
+    if (teilbar && r === beste && r.sperre && r !== besteSauber) {
+      const gesperrt = neu("button", "knopf leise", "Nicht teilbar");
+      gesperrt.type = "button";
+      gesperrt.disabled = true;
+      gesperrt.title = `Diese Runde kann keine Referenz sein: ${r.sperre}.${besteSauber ? ` Teilbar ist Runde ${besteSauber.nr}.` : ""}`;
+      td.append(gesperrt);
+    }
+    if ((r === besteSauber || geteilteRunden.has(r)) && teilbar && r.gueltig && !r.sperre && r.punkte.length > 10 && sitzung?.strecke && sitzung.fahrzeug) {
       const teilen = neu("button", "knopf leise", "Als Referenz teilen");
       teilen.type = "button";
       teilen.title = "Diese Runde anonym als GSRA-Referenzrunde teilen (mit Tempo, Gas und Bremse)";
@@ -1389,7 +1496,18 @@ function gegenSchnellstenLage(): Record<string, unknown> | null {
   };
 }
 
+// GSRA-Referenzrunden als Kärtchen (SQL 061) – lädt höchstens einmal pro Minute nach
+const refAnsicht = referenzAnsicht({
+  angemeldet: () => angemeldet() && !demo.laeuft,
+  zeitText: (s) => zeitText(s),
+  aktuell: () => ({ strecke: sitzung?.strecke ?? null, fahrzeug: sitzung?.fahrzeug ?? null }),
+  hinweis: (t, art) => hinweis(t, art ?? "ok"),
+  geaendert: () => void referenzenAktualisieren(true),
+});
+beiKontoWechsel(() => void refAnsicht.zeigen(true).catch(() => undefined));
+
 function feldRefZeigen() {
+  void refAnsicht.zeigen().catch(() => undefined);
   const g = gegenSchnellsten();
   const text = $("fRefText");
   const liste = $("fRefListe");
@@ -1631,6 +1749,7 @@ $("sStintKnopf").addEventListener("click", async () => {
   }
 });
 
+$("lMitfahren").addEventListener("click", () => hinweis(mitfahrenUmschalten(), "ok"));
 $("sForm").addEventListener("input", () => spritZeigen());
 $("sForm").addEventListener("submit", (e) => e.preventDefault());
 
@@ -1648,6 +1767,13 @@ for (const id of ["dsKnopf", "dsKnopf2"]) $(id).addEventListener("click", () => 
 $("dsZu").addEventListener("click", () => $<HTMLDialogElement>("dsDialog").close());
 
 funkEinrichten();
+// Windows-Stimme als Ton (systemstimme.rs): Spotter vorne, Renningenieur leiser im Hintergrund statt abgebrochen
+if (istApp) {
+  systemTonSetzen(async (text, stimme, tempo, hoehe) => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return invoke<ArrayBuffer>("systemstimme", { text, stimme: stimme.name, sprache: stimme.lang, tempo, hoehe });
+  });
+}
 void webEinrichten(istApp);
 // Automatische Updates (signiert, von GitHub); ein bereitliegendes Update installiert sich beim Schließen
 const aktualisierung = aktualisierungEinrichten(istApp, hinweis, () => !status?.verbunden && !demo.laeuft && !funkBeschaeftigt()).catch(() => null);

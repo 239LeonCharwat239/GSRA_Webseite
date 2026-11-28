@@ -8,6 +8,7 @@ mod live;
 mod simulation;
 mod sprache;
 mod stimme;
+mod systemstimme;
 mod webbereich;
 
 fn main() {
@@ -55,7 +56,8 @@ fn main() {
             stimme::stimme_referenz_loeschen,
             stimme::stimme_sprechen,
             stimme::stimme_vorbereiten,
-            stimme::stimme_abbrechen
+            stimme::stimme_abbrechen,
+            systemstimme::systemstimme
         ])
         .setup(|app| {
             live::starten(app.handle().clone());

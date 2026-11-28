@@ -239,6 +239,7 @@
           <h2>Funk <small id="lFunkQuelle">Kurz gesagt</small></h2>
         </div>
         <p id="lFunkText">Fahr eine Runde – danach sage ich dir, wo du Zeit liegen lässt.</p>
+        <div class="mitfahren"><button type="button" class="knopf leise" id="lMitfahren" aria-pressed="false" title="Piepton genau an den Bremspunkten der Referenzrunde (GSRA-Referenz mit Pedalen oder deine Bestzeit) – auch per Funk: „Fahr eine Runde mit mir“">Fahr eine Runde mit mir</button><small id="lMitfahrenText"></small></div>
         <p class="hinweis">Vorlesen, Stimme, Lautstärke und Spotter stellst du im <button type="button" class="link-knopf" data-gehe="funkEinstellungen">Renningenieur</button> ein.</p>
       </div>
     </section>
@@ -319,6 +320,12 @@
           <h2>Wo du gegen ihn verlierst <small><span class="punkt rot"></span>verloren <span class="punkt gruen"></span>gewonnen</small></h2>
           <canvas id="fRefStrecke" class="strecke"></canvas>
         </div>
+      </div>      <!-- GSRA-Referenzrunden als Kärtchen (SQL 060/061, Wunsch 28.11.) – src/referenz-ansicht.ts -->
+      <div class="karte gsra-referenzen">
+        <h2>GSRA-Referenzrunden <small>je Strecke und Auto · alle ohne Namen</small></h2>
+        <p class="hinweis" id="gRefText">Melde dich an, um die Referenzrunden der GSRA zu sehen.</p>
+        <div class="strecken-karten" id="gRefKarten"></div>
+        <ol class="ref-liste" id="gRefListe" hidden></ol>
       </div>
     </section>
 

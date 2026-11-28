@@ -1,8 +1,8 @@
--- GSRA: Prüfung der Live-Datenbank gegen den getesteten Stand (Skripte 001–060)
+-- GSRA: Prüfung der Live-Datenbank gegen den getesteten Stand (Skripte 001–061)
 -- NUR LESEN: ändert nichts. Im Supabase SQL Editor komplett einfügen und ausführen („Run“).
 -- Ergebnis: erste Zeile „GESAMT“. Steht dort nicht „Alles in Ordnung“, das Ergebnis bitte an Claude schicken.
 -- Erzeugt automatisch aus dem Nachbau (tests/db/datenbank.test.mjs, PRUEFUNG_SCHREIBEN=1) – nicht von Hand ändern.
--- Erfasst: 209 Funktionen, 67 Tabellen, 0 Spalten-Rechte, 233 Zugriffsregeln,
+-- Erfasst: 212 Funktionen, 67 Tabellen, 0 Spalten-Rechte, 233 Zugriffsregeln,
 --          274 Prüfregeln, 46 Trigger, 8 Speicher, 5 Zeitpläne.
 with
 ef(sig, name, h, secdef, cfg, anon, auth, mig) as (values
@@ -156,9 +156,12 @@ ef(sig, name, h, secdef, cfg, anon, auth, mig) as (values
     ('public.race_engineer_turn(_art text)', 'race_engineer_turn', 'ddba496ef84465e3fde4eed8d15041a7', true, 'search_path=public', false, true, true),
     ('public.rate_seller(_listing_id text, _rating integer, _tags text[], _comment text)', 'rate_seller', 'dd2aba9c580e9b8b4bf828422bb0eab1', true, 'search_path=public', false, true, true),
     ('public.reference_lap_add(_strecke text, _fahrzeug text, _laenge_m real, _zeit_s real, _quelle text, _zeitverlauf real[], _tempo real[], _gas real[], _bremse real[])', 'reference_lap_add', '3c354c8d685f6acddcec229fff2cec9f', true, 'search_path=public', false, true, true),
+    ('public.reference_lap_admin_delete(_id uuid)', 'reference_lap_admin_delete', 'c900583052ed94ae752f5a0b6998adf3', true, 'search_path=public', false, true, true),
     ('public.reference_lap_delete(_id uuid)', 'reference_lap_delete', '657b5f9ee62d8769ad99524cf35119ae', true, 'search_path=public', false, true, true),
     ('public.reference_lap_reihe_ok(_werte real[], _min real, _max real)', 'reference_lap_reihe_ok', 'b6ae3205662d0c8cb3c7f0b98275cf1e', false, 'search_path=public', false, false, true),
+    ('public.reference_laps_darf_loeschen()', 'reference_laps_darf_loeschen', '8b0836a3321dce33a52a555c0bece371', true, 'search_path=public', false, true, true),
     ('public.reference_laps_get(_strecke text, _fahrzeug text, _anzahl integer)', 'reference_laps_get', 'f9cb16802b3ff6150f3f1cf3cc957a82', true, 'search_path=public', false, true, true),
+    ('public.reference_laps_overview(_strecke text)', 'reference_laps_overview', '8859d95880e8a8a00158aa80001173e1', true, 'search_path=public', false, true, true),
     ('public.remove_friend(_other uuid)', 'remove_friend', '910c883d91e218d0a4d496fe2ff61ea4', true, 'search_path=public', false, true, true),
     ('public.remove_group_member(_chat_id uuid, _user_id uuid)', 'remove_group_member', '3a628831608e176ef78327ed2612434b', true, 'search_path=public', false, true, true),
     ('public.report_listing(_listing_id text, _reason text, _details text)', 'report_listing', '1cf6887923f917ffa1dc76abe04b6fcd', true, 'search_path=public', false, true, true),
@@ -1039,7 +1042,7 @@ select nr, bereich, objekt, status, details from (
          else 'Bitte an Claude schicken' end as status,
     count(*) filter (where status = 'FEHLER') || ' Fehler, ' || count(*) filter (where status = 'WARNUNG') || ' Warnungen, '
       || count(*) filter (where status = 'ABWEICHUNG') || ' Abweichungen, ' || count(*) filter (where status = 'HINWEIS') || ' Hinweise – '
-      || count(*) || ' Prüfungen gegen den getesteten Stand nach Skript 060' as details, 0 as rang
+      || count(*) || ' Prüfungen gegen den getesteten Stand nach Skript 061' as details, 0 as rang
   from befunde
   union all
   select 1, bereich, count(*) || ' geprüft', case when count(*) filter (where status <> 'ok' and status <> 'HINWEIS') = 0 then 'ok' else 'prüfen' end,

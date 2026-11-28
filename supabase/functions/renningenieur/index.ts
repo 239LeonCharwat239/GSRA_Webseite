@@ -92,7 +92,15 @@ Wichtigste Regeln:
 14. Beim Vergleichen und bei "Wo verliere ich Zeit?": Steht "gegen_schnellsten" in den Messwerten, vergleiche zuerst
    mit dem Schnellsten im Feld – dort liegt die echte Zeit. Die eigene Bestzeit nur ergänzend.
 15. Steht "schaden" in den Messwerten, nenne die nötige Reparaturzeit, wenn danach gefragt wird oder wenn sie neu ist
-   (Pflicht-Reparatur muss in der Box erledigt werden, optionale kostet Zeit, bringt aber Tempo zurück).
+   (Pflicht-Reparatur muss in der Box erledigt werden, optionale kostet Zeit, bringt aber Tempo zurück). Steht dort
+   "letzter_einschlag", sag bei Fragen nach Schaden ehrlich: harter Einschlag vor X Sekunden mit Y g gemessen – Schaden an
+   Aufhängung oder Lenkung ist wahrscheinlich, auch wenn iRacing die Reparaturzeit erst in der Box zeigt; frag, ob das
+   Auto zieht oder vibriert, und empfiehl bei Zweifel die Box. "fleischball_flagge" oder "motor_warnungen": sofort Box.
+16. Fahrer vor und hinter dir ("vor_mir", "hinter_mir"): Nenne bei Fragen nach ihnen iRating, Lizenz (z. B. "A 4.99" =
+   Klasse A, Safety Rating 4,99) und Vorfallpunkte ("3 X"), wenn vorhanden, und eine offene Strafe oder Verwarnung
+   ("strafe"). Daraus darfst du eine kurze Einschätzung ableiten (viele X = Vorsicht beim Überholen). Eigene Werte
+   stehen unter "ich": "Wie viele X habe ich?", "Habe ich eine Strafe?" beantwortest du daraus; fehlt ein Wert, sag
+   ehrlich, dass iRacing ihn gerade nicht liefert.
 
 Arten (so klingst du – genau eine gilt, siehe <persoenlichkeit>):
 - kumpel: freundlich, locker-kollegial, duzt, ermutigt nebenbei. Beispiel: "Sprit sieht gut aus – reicht noch für sieben Runden. Wir holen dich in Runde 23 rein, alles entspannt."
@@ -256,6 +264,9 @@ Deno.serve(async (req) => {
             system,
             messages,
           });
+    // Kontrolle Prompt-Caching (nur Zahlen, keine Inhalte): „gelesen“ > 0 heißt, die Grundregeln kamen zu 10 % des Preises
+    const u = nachricht.usage;
+    console.log(`Renningenieur ${art}: Cache gelesen ${u.cache_read_input_tokens ?? 0}, geschrieben ${u.cache_creation_input_tokens ?? 0}, neu ${u.input_tokens}, Antwort ${u.output_tokens}`);
     if (nachricht.stop_reason === "refusal") return antwort({ fehler: "Dazu sagt der Renningenieur nichts.", grund: "abgelehnt" }, 422);
     const kiText = nachricht.content.filter((b) => b.type === "text").map((b) => (b as { text: string }).text).join(" ");
     // Nur die Nachbesprechung darf sich etwas merken; aus allen anderen Antworten werden solche Zeilen entfernt

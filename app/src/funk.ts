@@ -138,6 +138,15 @@ export function eigeneStimmeSetzen(s: EigeneStimme | null): void {
   tonSpeicher.clear();
 }
 
+/** Windows-Stimme als Ton aus der App (systemstimme.rs, Wunsch 28.11.): dann spielt der Renningenieur über WebAudio –
+ *  durch den echten Funk-Filter, und der Spotter kann dazwischenrufen, während er leiser weiterspricht.
+ *  null = nur die Sprachausgabe des Browsers (z. B. Vorschau im Browser). */
+export type SystemTon = (text: string, stimme: { name: string; lang: string }, tempo: number, hoehe: number) => Promise<ArrayBuffer>;
+let systemTon: SystemTon | null = null;
+export function systemTonSetzen(f: SystemTon | null): void {
+  systemTon = f;
+}
+
 /** Text für die eigene Stimme: wie zum Vorlesen aufbereitet, Zahlen in Worten (die Stimme liest keine Ziffern) */
 const fuerEigene = (satz: string, sprache: string) => zahlenAusschreiben(zumSprechen(satz, sprache));
 
@@ -207,7 +216,8 @@ export function stueckeFuerEigene(liste: string[], fertig: (s: string) => boolea
 // ---------------------------------------------------------------- Warteschlange (Fund 26.11.: Sprüche schnitten sich ab)
 // Sprüche laufen nacheinander. Wartet mehr als MAX_WARTEND, fällt der älteste wartende weg (veraltete Rundenmeldung).
 // Nur funkStoppen() und Sprüche mit „sofort“ (Probe-Knöpfe) brechen den laufenden ab. Der Spotter ruft dazwischen:
-// Die Systemstimme wiederholt danach den unterbrochenen Satz, die eigene Stimme wird währenddessen nur leiser.
+// Der Renningenieur spricht währenddessen leiser im Hintergrund weiter (eigene Stimme und Windows-Stimme als Ton);
+// nur wenn es die Stimme nicht als Ton gibt, bricht der Satz ab und es geht mit dem nächsten weiter.
 export type SprechOptionen = { sprache?: string; stimmlage?: Stimmlage; sofort?: boolean };
 type Auftrag = { saetze: string[]; sprache: string; e: FunkEinstellungen; opt: SprechOptionen; index: number; abgebrochen: boolean; fertig: () => void };
 const MAX_WARTEND = 3;
@@ -327,9 +337,17 @@ function tonAbspielen(rate: number, ton: Float32Array, e: FunkEinstellungen): Pr
   const c = audio();
   const puffer = c.createBuffer(1, ton.length, rate);
   puffer.copyToChannel(ton as Float32Array<ArrayBuffer>, 0);
+  return pufferAbspielen(puffer, e);
+}
+
+/** Pegel des Renningenieurs, während der Spotter spricht (Wunsch 28.11.: im Hintergrund noch hörbar) */
+const IM_HINTERGRUND = 0.3;
+
+function pufferAbspielen(puffer: AudioBuffer, e: FunkEinstellungen): Promise<void> {
+  const c = audio();
   const ausgang = new GainNode(c, { gain: Math.max(0, Math.min(1, e.lautstaerke)) });
   ausgang.connect(c.destination);
-  const pegel = new GainNode(c, { gain: spotterAktiv ? 0.25 : 1 });
+  const pegel = new GainNode(c, { gain: spotterAktiv ? IM_HINTERGRUND : 1 });
   pegel.connect(ausgang);
   ingenieurPegel = pegel;
   const quelle = new AudioBufferSourceNode(c, { buffer: puffer });
@@ -344,7 +362,8 @@ function tonAbspielen(rate: number, ton: Float32Array, e: FunkEinstellungen): Pr
   });
 }
 
-/** Systemstimme: Satz für Satz; unterbricht der Spotter, kommt der unterbrochene Satz danach noch einmal */
+/** Systemstimme: Satz für Satz. In der App als Ton (Spotter ruft dazwischen, der Renningenieur wird nur leiser);
+ *  sonst über die Sprachausgabe des Browsers – dort bricht der Spotter den Satz ab und es geht mit dem nächsten weiter. */
 async function systemSprechen(a: Auftrag, beginnen: () => Promise<void>): Promise<void> {
   if (stimmeFehlt(a.sprache)) {
     fehltMelden?.(a.sprache);
@@ -353,6 +372,15 @@ async function systemSprechen(a: Auftrag, beginnen: () => Promise<void>): Promis
   const alle = stimmenFuer(a.sprache);
   const gewaehlt = (a.opt.sprache === "auto" ? undefined : alle.find((v) => v.voiceURI === a.e.stimme)) || alle[0];
   const [tempo, hoehe] = { ruhig: [1.0, 1], energisch: [1.1, 1.08], tief: [0.96, 0.78], hell: [1.03, 1.25] }[a.opt.stimmlage || "ruhig"];
+  const erzeuger = systemTon;
+  if (erzeuger && gewaehlt && gewaehlt.localService) {
+    try {
+      await systemTonSprechen(a, erzeuger, { name: gewaehlt.name, lang: gewaehlt.lang }, tempo, hoehe, beginnen);
+      return;
+    } catch {
+      if (a.abgebrochen) return; // sonst: Rest über die Sprachausgabe des Browsers
+    }
+  }
   await beginnen();
   while (a.index < a.saetze.length && !a.abgebrochen) {
     while (spotterAktiv) await spotterEnde;
@@ -375,9 +403,33 @@ async function systemSprechen(a: Auftrag, beginnen: () => Promise<void>): Promis
   }
 }
 
+/** Windows-Stimme als Ton: der nächste Satz entsteht, während der aktuelle läuft (Windows braucht ~0,1 s je Satz) */
+async function systemTonSprechen(a: Auftrag, erzeuger: SystemTon, stimme: { name: string; lang: string }, tempo: number, hoehe: number,
+  beginnen: () => Promise<void>): Promise<void> {
+  const c = audio();
+  const puffer: Promise<AudioBuffer>[] = [];
+  let kette: Promise<unknown> = Promise.resolve();
+  for (let i = a.index; i < a.saetze.length; i++) {
+    const text = zumSprechen(a.saetze[i], a.sprache);
+    const p = kette.then(() => (a.abgebrochen ? Promise.reject(new Error("abgebrochen")) : erzeuger(text, stimme, tempo, hoehe)))
+      .then((wav) => c.decodeAudioData(wav));
+    p.catch(() => undefined);
+    puffer[i] = p;
+    kette = p.catch(() => undefined);
+  }
+  for (let i = a.index; i < a.saetze.length; i++) {
+    const ton = await puffer[i]; // Fehler: weiter über die Browser-Stimme ab diesem Satz
+    if (a.abgebrochen) return;
+    await beginnen();
+    await pufferAbspielen(ton, a.e);
+    if (a.abgebrochen) return;
+    a.index = i + 1;
+  }
+}
+
 /** Spotter-Ansage: sofort, kurz, hat Vorrang (Sicherheit). Eigene, zweite Stimme, damit man Spotter und
- *  Renningenieur auseinanderhält. Der Renningenieur macht danach mit dem nächsten Satz weiter (der unterbrochene
- *  Satz wird nicht wiederholt). */
+ *  Renningenieur auseinanderhält. Spricht der Renningenieur als Ton (App), läuft er leiser im Hintergrund weiter;
+ *  nur die Browser-Stimme muss abbrechen (sie kann nicht zwei Sätze gleichzeitig). */
 export function spotterSprechen(text: string, e: FunkEinstellungen, sprache: string): void {
   if (!e.spotter || !text || !("speechSynthesis" in window)) return;
   const code = sprache === "auto" ? "de" : sprache; // Spotter-Sätze kommen aus festen Vorlagen
@@ -392,7 +444,7 @@ export function spotterSprechen(text: string, e: FunkEinstellungen, sprache: str
   u.volume = Math.max(0, Math.min(1, e.lautstaerke));
   spotterAktiv = true;
   if (window.speechSynthesis.speaking || window.speechSynthesis.pending) window.speechSynthesis.cancel();
-  if (ingenieurPegel) ingenieurPegel.gain.setTargetAtTime(0.25, audio().currentTime, 0.03);
+  if (ingenieurPegel) ingenieurPegel.gain.setTargetAtTime(IM_HINTERGRUND, audio().currentTime, 0.03);
   spotterEnde = new Promise((ok) => {
     const ende = () => {
       if (spotterEnde === aktuellesEnde) {
@@ -407,6 +459,22 @@ export function spotterSprechen(text: string, e: FunkEinstellungen, sprache: str
   const aktuellesEnde = spotterEnde;
   window.speechSynthesis.speak(u);
 }
+/** Kurzer Piepton (Bremspunkt, „Fahr eine Runde mit mir“): direkt, ohne Funk-Filter, auch während jemand spricht */
+export function piepen(e: FunkEinstellungen): void {
+  const c = audio();
+  const t = c.currentTime + 0.005;
+  const laut = 0.3 * Math.max(0.2, Math.min(1, e.lautstaerke));
+  const ton = new OscillatorNode(c, { type: "sine", frequency: 1320 });
+  const g = new GainNode(c, { gain: 0 });
+  ton.connect(g).connect(c.destination);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(laut, t + 0.006);
+  g.gain.setValueAtTime(laut, t + 0.09);
+  g.gain.linearRampToValueAtTime(0, t + 0.11);
+  ton.start(t);
+  ton.stop(t + 0.12);
+}
+
 // ---------------------------------------------------------------- Testaufnahme durch den Funk-Filter
 let aktiveAufnahme: AudioBufferSourceNode | null = null;
 export const AUFNAHME_MAX_BYTES = 20 * 1024 * 1024;

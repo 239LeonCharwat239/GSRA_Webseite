@@ -751,3 +751,16 @@ body.signalwort-an .verbindung::after { content: "Mikro an (Signalwort)"; margin
 .st-liste li.mittel strong { color: var(--gelb); }
 .st-liste li.schlecht strong { color: var(--rot); }
 .st-liste li small { display: block; margin-top: 3px; color: var(--leise); }
+
+/* Fahr eine Runde mit mir: Piepton-Knopf im Funk der Live-Seite */
+.mitfahren { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 6px 0 10px; }
+.mitfahren small { opacity: 0.75; }
+#lMitfahren[aria-pressed="true"] { border-color: var(--gelb); color: var(--gelb); }
+
+/* GSRA-Referenzrunden (Kärtchen und Liste, SQL 061) */
+.gsra-referenzen { margin-top: 14px; }
+.ref-liste { margin: 12px 0 0; padding-left: 22px; display: grid; gap: 6px; }
+.ref-liste li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.ref-liste .ref-zeit { font-variant-numeric: tabular-nums; color: var(--gelb); min-width: 82px; }
+.ref-liste small { color: var(--leise); }
+.ref-liste .knopf { margin-left: auto; }

@@ -22,6 +22,8 @@ export type Runde = {
   spritEnde: number | null;
   inBox: boolean;
   punkte: Punkt[];
+  /** Warum die Runde nicht als Referenz geteilt werden darf (neben der Strecke, Vorfallpunkte); null = sauber */
+  sperre?: string | null;
 };
 
 type Laufend = {
@@ -32,6 +34,8 @@ type Laufend = {
   spritStart: number | null;
   nachgetankt: boolean;
   inBox: boolean;
+  abseits: string | null;
+  vorfaelleStart: number | null;
 };
 
 const MAX_LUECKE = 1.0; // Sekunden ohne Daten → Runde ungültig
@@ -123,6 +127,10 @@ export class Rundenzaehler {
         l.grund ??= "Boxengasse";
       }
       if (p.aufStrecke === false) l.grund ??= "Nicht auf der Strecke";
+      // Für Referenzrunden (Wunsch 28.11.): alle vier Räder neben der Strecke oder neue Vorfallpunkte → nicht teilbar
+      if (p.lage === 0) l.abseits ??= "Neben der Strecke";
+      if (l.vorfaelleStart == null && p.vorfaelle != null) l.vorfaelleStart = p.vorfaelle;
+      else if (p.vorfaelle != null && l.vorfaelleStart != null && p.vorfaelle > l.vorfaelleStart) l.abseits ??= "Vorfallpunkte in der Runde";
       if (p.sprit != null && q.sprit != null && p.sprit > q.sprit + 0.3) l.nachgetankt = true;
       const letzter = l.punkte[l.punkte.length - 1];
       if (!letzter || p.anteil > letzter.a) l.punkte.push(punkt(p, p.anteil, p.zeit - l.start));
@@ -145,7 +153,9 @@ export class Rundenzaehler {
       }
       const gueltig = l.grund == null && zeit >= MIN_RUNDE;
       const sprit = !l.nachgetankt && l.spritStart != null && spritLinie != null && l.spritStart - spritLinie >= 0 ? l.spritStart - spritLinie : null;
-      fertig = { nr: l.nr, zeit, gueltig, grund: l.grund ?? (zeit < MIN_RUNDE ? "Zu kurz" : null), sprit, spritEnde: spritLinie, inBox: l.inBox, punkte: l.punkte };
+      const vorfaelle = l.vorfaelleStart != null && p.vorfaelle != null && p.vorfaelle > l.vorfaelleStart ? "Vorfallpunkte in der Runde" : null;
+      fertig = { nr: l.nr, zeit, gueltig, grund: l.grund ?? (zeit < MIN_RUNDE ? "Zu kurz" : null), sprit, spritEnde: spritLinie, inBox: l.inBox, punkte: l.punkte,
+        sperre: gueltig ? (l.abseits ?? vorfaelle) : (l.grund ?? "Ungültig") };
       this.runden.push(fertig);
       // Speicher begrenzen: alte Runden verlieren ihre Punkte (Zeit und Sprit bleiben), die beste behält sie
       if (this.runden.length > this.max) {
@@ -162,6 +172,8 @@ export class Rundenzaehler {
       spritStart: spritLinie,
       nachgetankt: false,
       inBox: !!p.inBox,
+      abseits: p.lage === 0 ? "Neben der Strecke" : null,
+      vorfaelleStart: p.vorfaelle ?? null,
     };
     return fertig;
   }
